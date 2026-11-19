@@ -1,45 +1,45 @@
-# Revisão de segurança dos serviços públicos — 24/08/2026
+# Security review of the public services — 2026-08-24
 
-Escopo do item `F8-001`: `apps/web`, `apps/game-api`, a API local de
-`apps/bot-discord` e os contratos consumidos pelo launcher. Esta rodada foi
-feita sem MariaDB; ela cobre inspeção estática e testes com os doubles já
-existentes, não substitui teste integrado em staging.
+Scope of item `F8-001`: `apps/web`, `apps/game-api`, the local API of
+`apps/bot-discord` and the contracts consumed by the launcher. This round was
+done without MariaDB; it covers static inspection and tests with the existing
+doubles, and does not replace integrated testing in staging.
 
-## Resultado desta rodada
+## Result of this round
 
-| Superfície | Estado | Evidência |
+| Surface | Status | Evidence |
 |---|---|---|
-| Rate limits | **Corrigido localmente** | Os três serviços agora limitam tanto o número de buckets (10.000) quanto o contador de uma origem. 9 testes exercitam janela, cardinalidade adversarial e insistência de uma origem. |
-| CORS e proxy | **Revisado** | `apps/web` mantém allowlist em `PANEL_PUBLIC_URL`. `trust proxy` só é ligado por `TRUST_PROXY=true`; `NODE_ENV=production` sozinho não aceita `X-Forwarded-For`. O auditor de produção exige a configuração explícita. |
-| Sessão web | **Parcial** | Cookies são `httpOnly`, `sameSite=lax`, `secure` em produção e expiram em 8 h. O `MemoryStore` do `express-session` continua inadequado para múltiplas instâncias/restart (`F2-004`). |
-| Segredo interno | **Revisado** | Game API e bot comparam `X-Internal-Secret` em tempo constante; o auditor verifica força e igualdade entre os serviços. A API do bot continua presa em `127.0.0.1`. |
-| Entradas e uploads | **Revisado/corrigido** | JSON tem teto de 512 KiB no painel e 64 KiB nas outras APIs; crash reports limitam quantidade/tamanho, sanitizam nomes e têm retenção. `discord_id` agora exige snowflake decimal de 17–20 dígitos. |
-| Exposição HTTP | **Corrigido** | Painel, Game API e bot não publicam `X-Powered-By`. |
-| Updates | **Revisado** | Manifestos de cliente/modpack falham fechado e exigem SHA-256; a UI embarcada é verificada/reparada antes de jogar. |
-| Replay | **Pendente** | Tickets da fila são de uso único por `UPDATE` condicional. A Master API ainda aceita resolver a mesma `game_session` mais de uma vez (`PLAT-15`); mudar isso exige validar o comportamento de reconexão do SkyMP em staging. |
+| Rate limits | **Fixed locally** | The three services now limit both the number of buckets (10,000) and a single origin's counter. 9 tests exercise the window, adversarial cardinality and a single origin's persistence. |
+| CORS and proxy | **Reviewed** | `apps/web` keeps an allowlist in `PANEL_PUBLIC_URL`. `trust proxy` is only enabled by `TRUST_PROXY=true`; `NODE_ENV=production` alone does not accept `X-Forwarded-For`. The production auditor requires the explicit setting. |
+| Web session | **Partial** | Cookies are `httpOnly`, `sameSite=lax`, `secure` in production and expire after 8 h. `express-session`'s `MemoryStore` remains unsuitable for multiple instances/restarts (`F2-004`). |
+| Internal secret | **Reviewed** | Game API and bot compare `X-Internal-Secret` in constant time; the auditor checks strength and equality across services. The bot API remains bound to `127.0.0.1`. |
+| Inputs and uploads | **Reviewed/fixed** | JSON is capped at 512 KiB on the panel and 64 KiB on the other APIs; crash reports limit count/size, sanitize names and have retention. `discord_id` now requires a 17–20 digit decimal snowflake. |
+| HTTP exposure | **Fixed** | Panel, Game API and bot do not publish `X-Powered-By`. |
+| Updates | **Reviewed** | Client/modpack manifests fail closed and require SHA-256; the embedded UI is verified/repaired before playing. |
+| Replay | **Pending** | Queue tickets are single-use via a conditional `UPDATE`. The Master API still accepts resolving the same `game_session` more than once (`PLAT-15`); changing this requires validating SkyMP's reconnection behavior in staging. |
 
-## Modelo e limites do rate limiter
+## Rate limiter model and limits
 
-O rate limiter é local a cada processo. Isso protege uma instância contra
-crescimento de memória e abuso básico, mas não soma tráfego entre réplicas.
-Antes de escalar horizontalmente, mover a contagem para o proxy/edge ou para um
-store compartilhado. O teto de buckets impede memory DoS; ao atingir o teto, a
-entrada mais antiga é descartada em O(1).
+The rate limiter is local to each process. This protects an instance against
+memory growth and basic abuse, but does not sum traffic across replicas.
+Before scaling horizontally, move the counting to the proxy/edge or to a
+shared store. The bucket cap prevents memory DoS; when the cap is reached, the
+oldest entry is discarded in O(1).
 
-## Pendências para concluir F8-001
+## Remaining work to complete F8-001
 
-1. Trocar o `MemoryStore` de sessão por store persistente e testar restart e
-   duas instâncias (`F2-004`, depende de MariaDB/staging).
-2. Exercitar replay e reconexão da Master API dentro do jogo antes de tornar
-   `game_session` estritamente single-use (`PLAT-15`).
-3. Colocar o painel e a Game API atrás de HTTPS/proxy real e validar IP, cookies,
-   CORS e limites ponta a ponta.
-4. Rodar teste de upload chunked e retenção em staging, incluindo filesystem
-   cheio e concorrência de poda.
+1. Replace the session `MemoryStore` with a persistent store and test restart and
+   two instances (`F2-004`, depends on MariaDB/staging).
+2. Exercise Master API replay and reconnection in-game before making
+   `game_session` strictly single-use (`PLAT-15`).
+3. Put the panel and the Game API behind real HTTPS/proxy and validate IP, cookies,
+   CORS and limits end to end.
+4. Run the chunked upload and retention test in staging, including a full
+   filesystem and pruning concurrency.
 
-## Verificação automatizada
+## Automated verification
 
-- `apps/web`: 52 testes.
-- `apps/game-api`: 59 testes.
-- `apps/bot-discord`: 45 testes.
-- Nenhum dos testes desta rodada exige MariaDB ou Discord reais.
+- `apps/web`: 52 tests.
+- `apps/game-api`: 59 tests.
+- `apps/bot-discord`: 45 tests.
+- None of the tests in this round require a real MariaDB or Discord.

@@ -1,168 +1,168 @@
-# Rubrica de Whitelist Heavy RP
+# Heavy RP Whitelist Rubric
 
-## 1. Objetivo
+## 1. Goal
 
-A whitelist deve filtrar maturidade de roleplay, nao apenas memorizacao de regras.
+The whitelist should filter for roleplay maturity, not just memorization of rules.
 
-Um bom candidato entende consequencias, limites de personagem, tom de lore e narrativa colaborativa.
+A good candidate understands consequences, character limits, lore tone and collaborative storytelling.
 
-## 2. Resultados de Revisao
+## 2. Review Outcomes
 
-- Aprovado: jogador pode entrar depois de aceitar as regras.
-- Precisa Revisar: jogador pode atualizar a aplicacao.
-- Entrevista Obrigatoria: staff deve conversar com o candidato.
-- Rejeitado: jogador deve aguardar antes de aplicar novamente.
-- Proibido de Aplicar: usado apenas para aplicacoes hostis, abusivas ou claramente de ma-fe.
+- Approved: the player may join after accepting the rules.
+- Needs Revision: the player may update the application.
+- Interview Required: staff must talk to the candidate.
+- Rejected: the player must wait before applying again.
+- Banned From Applying: used only for hostile, abusive or clearly bad-faith applications.
 
-## 3. Pontuacao
+## 3. Scoring
 
-Use nota de 0 a 3 para cada categoria.
+Use a score from 0 to 3 for each category.
 
-- 0: inaceitavel.
-- 1: fraco, arriscado ou vago.
-- 2: aceitavel.
-- 3: forte.
+- 0: unacceptable.
+- 1: weak, risky or vague.
+- 2: acceptable.
+- 3: strong.
 
-Limiar recomendado de aprovacao: 18 de 24, sem nota 0 em categorias criticas.
+Recommended approval threshold: 18 out of 24, with no 0 in critical categories.
 
-## 4. Categorias
+## 4. Categories
 
-### Entendimento das Regras
+### Understanding of the Rules
 
-Verifica se o candidato entende metagaming, powergaming, fail RP, escalada e consequencias.
+Checks whether the candidate understands metagaming, powergaming, fail RP, escalation and consequences.
 
-Sinais de alerta:
+Red flags:
 
-- Define regras com texto copiado, mas nao consegue aplicar exemplos.
-- Trata regras de RP como obstaculos.
-- Diz que vai "jogar normal" sem entender Heavy RP.
+- Defines rules with copied text but cannot apply examples.
+- Treats RP rules as obstacles.
+- Says they will "play normally" without understanding Heavy RP.
 
-### Conceito de Personagem
+### Character Concept
 
-Verifica se o personagem combina com Skyrim e cria roleplay.
+Checks whether the character fits Skyrim and creates roleplay.
 
-Sinais de alerta:
+Red flags:
 
-- Comeca como Dragonborn, heroi lendario, campeao Daedrico ou lider de faccao.
-- Personagem nao tem falhas.
-- Personagem existe apenas para lutar.
-- Historia vaga demais para avaliar.
+- Starts as the Dragonborn, a legendary hero, a Daedric champion or a faction leader.
+- The character has no flaws.
+- The character exists only to fight.
+- The backstory is too vague to evaluate.
 
-### Adequacao a Lore
+### Lore Fit
 
-Verifica se o candidato respeita o tom de Elder Scrolls sem exigir conhecimento enciclopedico de lore.
+Checks whether the candidate respects the Elder Scrolls tone without requiring encyclopedic lore knowledge.
 
-Sinais de alerta:
+Red flags:
 
-- Conceitos modernos sem adaptacao.
-- Raca, poder, origem ou titulo quebrando lore.
-- Alega controle direto sobre NPCs ou faccoes canonicas importantes.
+- Modern concepts without adaptation.
+- Race, power, origin or title that breaks lore.
+- Claims direct control over important canonical NPCs or factions.
 
-### Prontidao Para Consequencias
+### Readiness for Consequences
 
-Verifica se o candidato aceita ferimento, perda, prisao, consequencias sociais e possivel morte do personagem.
+Checks whether the candidate accepts injury, loss, imprisonment, social consequences and possible character death.
 
-Sinais de alerta:
+Red flags:
 
-- Recusa perder.
-- Diz que vai ignorar resultados injustos em vez de reportar.
-- Trata morte como respawn rapido sem regras de memoria ou consequencia.
+- Refuses to lose.
+- Says they will ignore unfair outcomes instead of reporting them.
+- Treats death as a quick respawn without memory or consequence rules.
 
-### Maturidade em Conflito
+### Maturity in Conflict
 
-Verifica se o candidato consegue criar conflito sem griefing.
+Checks whether the candidate can create conflict without griefing.
 
-Sinais de alerta:
+Red flags:
 
-- Quer ser criminoso apenas para roubar e matar.
-- Quer autoridade apenas para dominar outros jogadores.
-- Escala ofensas pequenas para violencia letal.
+- Wants to be a criminal only to rob and kill.
+- Wants authority only to dominate other players.
+- Escalates small offenses to lethal violence.
 
-### Qualidade de Comunicacao
+### Communication Quality
 
-Verifica se o candidato consegue se comunicar claramente com staff e jogadores.
+Checks whether the candidate can communicate clearly with staff and players.
 
-Sinais de alerta:
+Red flags:
 
-- Tom hostil.
-- Respostas de meme.
-- Recusa responder perguntas simples.
-- Mostra impaciencia com revisao.
+- Hostile tone.
+- Meme answers.
+- Refuses to answer simple questions.
+- Shows impatience with the review.
 
-### Seguranca da Comunidade
+### Community Safety
 
-Verifica se o jogador parece respeitar limites e processo da staff.
+Checks whether the player seems to respect boundaries and the staff process.
 
-Sinais de alerta:
+Red flags:
 
-- Historico de assedio.
-- Discriminacao.
-- Ameacas.
-- Evasao de ban.
-- Tentativa de burlar whitelist.
+- History of harassment.
+- Discrimination.
+- Threats.
+- Ban evasion.
+- Attempt to bypass the whitelist.
 
-### Prontidao Tecnica
+### Technical Readiness
 
-Verifica se o jogador consegue instalar o cliente/modlist exigidos e seguir instrucoes de atualizacao.
+Checks whether the player can install the required client/modlist and follow update instructions.
 
-Sinais de alerta:
+Red flags:
 
-- Recusa launcher/modlist aprovada.
-- Quer usar mods que alteram gameplay.
-- Admite uso de cheats ou automacao.
+- Refuses the approved launcher/modlist.
+- Wants to use gameplay-altering mods.
+- Admits to using cheats or automation.
 
-## 5. Motivos de Rejeicao Automatica
+## 5. Automatic Rejection Reasons
 
-- Conceito ou ameaca de violencia sexual.
-- Discurso de odio.
-- Evasao de ban.
-- Uso de cheat.
-- Intencao explicita de trollar.
-- Conceito de personagem criado para griefing.
-- Recusa em seguir a modlist aprovada.
-- Tentativa de subornar, ameacar ou pressionar staff.
+- Sexual violence concept or threat.
+- Hate speech.
+- Ban evasion.
+- Cheat use.
+- Explicit intent to troll.
+- Character concept created for griefing.
+- Refusal to follow the approved modlist.
+- Attempt to bribe, threaten or pressure staff.
 
-## 6. Perguntas de Entrevista
+## 6. Interview Questions
 
-Use entrevistas para candidatos promissores, mas incertos.
+Use interviews for promising but uncertain candidates.
 
-Perguntas sugeridas:
+Suggested questions:
 
-- Explique metagaming com um exemplo de Skyrim RP.
-- Seu personagem perde uma luta e e capturado. O que voce faz?
-- Um guarda prende seu personagem e voce acha que o guarda esta errado. Como voce lida com isso?
-- Seu amigo te diz no Discord que esta sendo roubado. O que seu personagem pode fazer?
-- O que seu personagem quer, e que fraqueza torna isso dificil?
-- Que tipo de cenas voce quer criar para outros jogadores?
+- Explain metagaming with a Skyrim RP example.
+- Your character loses a fight and is captured. What do you do?
+- A guard arrests your character and you think the guard is wrong. How do you handle it?
+- Your friend tells you on Discord that they are being robbed. What can your character do?
+- What does your character want, and what weakness makes it hard?
+- What kind of scenes do you want to create for other players?
 
-## 7. Notas de Aprovacao
+## 7. Approval Notes
 
-A staff deve registrar:
+Staff must record:
 
-- Revisor.
-- Data.
-- Resultado.
-- Pontuacao.
-- Motivo principal.
-- Restricoes obrigatorias de personagem.
-- Observacoes futuras.
+- Reviewer.
+- Date.
+- Outcome.
+- Score.
+- Main reason.
+- Mandatory character restrictions.
+- Future notes.
 
-Exemplo:
+Example:
 
 ```text
-Aprovado com restricao: candidato pode jogar como mercenario, mas nao como capitao de faccao ou personagem sobrenatural no lancamento. Boa nocao de consequencias. Precisa de lembrete sobre limites de OOC.
+Approved with restriction: candidate may play as a mercenary, but not as a faction captain or supernatural character at launch. Good sense of consequences. Needs a reminder about OOC boundaries.
 ```
 
-## 8. Notas de Revisao
+## 8. Revision Notes
 
-Use revisao quando o jogador parecer compativel, mas a aplicacao estiver incompleta.
+Use revision when the player seems compatible but the application is incomplete.
 
-Motivos comuns de revisao:
+Common revision reasons:
 
-- Historia poderosa demais.
-- Falta de falha.
-- Entendimento fraco de metagaming.
-- Objetivo do personagem vago.
-- Precisa de ajuste de lore.
+- Backstory too powerful.
+- Lack of a flaw.
+- Weak understanding of metagaming.
+- Vague character goal.
+- Needs lore adjustment.
 
-Mensagens de revisao devem ser especificas e acionaveis.
+Revision messages should be specific and actionable.
