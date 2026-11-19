@@ -221,7 +221,7 @@ describe('skymp-adapter — capacidades', () => {
     const { mp } = fakeMp();
     const adapter = createAdapter({ mp });
 
-    assert.match(adapter.explain('espmLoadOrder'), /getEspmLoadOrder existe/);
+    assert.match(adapter.explain('espmLoadOrder'), /getEspmLoadOrder exists/);
     assert.match(adapter.explain('headlessBot'), /ausente/);
     assert.match(adapter.explain('playerSpawnHook'), /EventEmitter|spawn\.ts/);
     assert.match(adapter.explain('playerSpawnHook'), /d85f18d8/);
