@@ -1,6 +1,6 @@
-# Roda uma sessao headless diaria do Claude Code no projeto skymp-heavy-rp.
-# Chamado pela Tarefa Agendada "Skymp-DailyClaude". So rascunha: commit/push
-# ficam bloqueados por .claude/settings.json (permissions.deny), nao por este
+# Runs a daily headless Claude Code session on the skymp-heavy-rp project.
+# Called by the "Skymp-DailyClaude" Scheduled Task. It only drafts: commit/push
+# are blocked by .claude/settings.json (permissions.deny), not by this
 # script.
 
 $projectDir = 'C:\Users\Vinicius\Desktop\skymp-heavy-rp'
