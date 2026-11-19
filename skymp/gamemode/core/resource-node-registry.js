@@ -1,38 +1,38 @@
 /**
  * core/resource-node-registry.js
  *
- * O vocabulário de tipos de nó de recurso, e nada além disso.
+ * The vocabulary of resource node types, and nothing else.
  *
- * ─── Por que isto NÃO é um catálogo rico, ao contrário de profession-registry ──
+ * ─── Why this is NOT a rich catalog, unlike profession-registry ─────────────
  *
- * `core/profession-registry.js` guarda treze entradas nomeadas porque
- * "minerador" e "lenhador" têm identidade própria — label, categoria — que se
- * repete em todo personagem que a tem. Um nó de recurso não: um veio de ferro e
- * um veio de prata são o mesmo TIPO (`ORE`) com configuração diferente
- * (capacidade, regeneração, item entregue), e essa configuração mora na
- * INSTÂNCIA (`resource_nodes`, em `resource-node-service.js`), não num
- * catálogo de tipos.
+ * `core/profession-registry.js` holds thirteen named entries because
+ * "miner" and "lumberjack" have an identity of their own — label, category — that
+ * repeats on every character who has it. A resource node does not: an iron vein and
+ * a silver vein are the same TYPE (`ORE`) with a different configuration
+ * (capacity, regeneration, item delivered), and that configuration lives in the
+ * INSTANCE (`resource_nodes`, in `resource-node-service.js`), not in a
+ * catalog of types.
  *
- * Criar uma segunda camada de catálogo aqui — "veio de ferro", "veio de
- * prata", cada um com label e regras — duplicaria o que a linha do banco já
- * guarda, pelo mesmo motivo que `migration-v18-professions.sql` não criou uma
- * tabela `professions`: catálogo sem grau de liberdade a mais é espelho, não
- * abstração.
+ * Creating a second catalog layer here — "iron vein", "silver
+ * vein", each with a label and rules — would duplicate what the DB row already
+ * stores, for the same reason `migration-v18-professions.sql` did not create a
+ * `professions` table: a catalog with no extra degree of freedom is a mirror, not an
+ * abstraction.
  *
- * O que precisa ser fechado é só a CATEGORIA (§7 do briefing de profissões:
- * "ORE, TREE, HERB, CROP, FISHING") — fechada porque `resource-node-service.js`
- * decide comportamento por ela (hoje, só validação; no futuro, talvez efeito
- * sonoro ou animação por categoria), e uma categoria livre teria o mesmo
- * destino que `details TEXT` já teve em `audit_logs`: quatro grafias para a
- * mesma coisa.
+ * What needs to be closed is only the CATEGORY (§7 of the professions briefing:
+ * "ORE, TREE, HERB, CROP, FISHING") — closed because `resource-node-service.js`
+ * decides behavior by it (today, only validation; in the future, maybe a sound
+ * effect or animation per category), and a free-form category would meet the same
+ * fate `details TEXT` already met in `audit_logs`: four spellings for the
+ * same thing.
  */
 
 'use strict';
 
 /**
- * As cinco categorias planejadas no briefing original. Nova categoria entra
- * aqui, sob revisão — é a mesma decisão de design de `core/audit-event
- * .CATEGORIES` e de `core/profession-registry.CATEGORIES`.
+ * The five categories planned in the original briefing. A new category comes in
+ * here, under review — it is the same design decision as `core/audit-event
+ * .CATEGORIES` and `core/profession-registry.CATEGORIES`.
  */
 const NODE_TYPES = Object.freeze({
   ORE: 'ORE',

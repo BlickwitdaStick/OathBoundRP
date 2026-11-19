@@ -1,4 +1,4 @@
-/** Máquina de estados pura das execuções de Trabalho Público. */
+/** Pure state machine for Public Work runs. */
 'use strict';
 
 const STATUSES = Object.freeze({
