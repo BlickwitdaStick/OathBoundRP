@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * Valida `patches/manifest.json`.
+ * Validates `patches/manifest.json`.
  *
- * O ponto não é checar tipo por checar. É que um registro de patch incompleto
- * é pior que nenhum: ele parece controle e não é. Os dois campos que existem
- * por experiência do ecossistema, e não por gosto por schema, são:
+ * The point is not type checking for its own sake. It is that an incomplete patch
+ * record is worse than none: it looks like control and is not. The two fields that
+ * exist because of ecosystem experience, and not out of a taste for schemas, are:
  *
- * - `loss_condition`, porque patch que some em silêncio vira bug novo meses
- *   depois sem ninguém ligar uma coisa à outra;
- * - `upstream_pr`, que aceita `null` mas exige `notes` explicando — patch que
- *   deveria virar PR e nunca vira é um fork começando devagar.
+ * - `loss_condition`, because a patch that vanishes silently turns into a new bug
+ *   months later without anyone connecting the two;
+ * - `upstream_pr`, which accepts `null` but requires `notes` explaining why — a patch
+ *   that should become a PR and never does is a fork starting slowly.
  *
- * E o pin: `upstream.pin` declara o commit contra o qual TODOS os patches se
- * aplicam. A regra parece burocrática e não é — é o que impede um patch
- * validado contra um commit de janeiro de conviver com outro validado contra um
- * de agosto, dando a impressão de que os dois foram conferidos ao mesmo tempo.
+ * And the pin: `upstream.pin` declares the commit that ALL patches apply
+ * against. The rule looks bureaucratic and is not — it is what stops a patch
+ * validated against a January commit from coexisting with another validated against
+ * an August one, giving the impression that both were checked at the same time.
  *
- * Sem dependências de propósito: roda na CI com `node patches/validate.js`,
- * sem `npm ci`.
+ * No dependencies on purpose: it runs in CI with `node patches/validate.js`,
+ * without `npm ci`.
  */
 
 'use strict';
@@ -27,10 +27,10 @@ const path = require('path');
 
 const TARGETS = ['skymp', 'skyrim-platform'];
 
-/** SHA-1 completo de commit. */
-const SHA_COMPLETO = /^[0-9a-f]{40}$/i;
-/** Prefixo aceitável de SHA: 7 caracteres é o que o `git log --oneline` mostra. */
-const SHA_PREFIXO = /^[0-9a-f]{7,40}$/i;
+/** Full commit SHA-1. */
+const FULL_SHA = /^[0-9a-f]{40}$/i;
+/** Acceptable SHA prefix: 7 characters is what `git log --oneline` shows. */
+const SHA_PREFIX = /^[0-9a-f]{7,40}$/i;
 
 const REQUIRED_STRINGS = [
   'id', 'target', 'file', 'upstream_commit', 'reason',
@@ -42,38 +42,38 @@ function isNonEmptyString(value) {
 }
 
 /**
- * Valida o manifesto já parseado. `fileExists` é injetado para o teste não
- * precisar tocar o disco.
+ * Validates the already-parsed manifest. `fileExists` is injected so the test does
+ * not need to touch the disk.
  *
- * Devolve `{ ok, errors }` em vez de lançar: um manifesto pode ter vários
- * problemas, e mostrar todos de uma vez economiza rodadas.
+ * Returns `{ ok, errors }` instead of throwing: a manifest can have several
+ * problems, and showing them all at once saves rounds.
  */
 function validateManifest(manifest, { fileExists }) {
   const errors = [];
   const err = (msg) => errors.push(msg);
 
   if (!manifest || typeof manifest !== 'object') {
-    return { ok: false, errors: ['manifest.json não é um objeto'] };
+    return { ok: false, errors: ['manifest.json is not an object'] };
   }
   if (manifest.version !== 1) {
-    err(`version deve ser 1, veio ${JSON.stringify(manifest.version)}`);
+    err(`version must be 1, got ${JSON.stringify(manifest.version)}`);
   }
   if (!Array.isArray(manifest.patches)) {
-    return { ok: false, errors: errors.concat('patches deve ser uma lista') };
+    return { ok: false, errors: errors.concat('patches must be a list') };
   }
 
-  // O pin só é exigido quando existe patch. Um manifesto vazio não precisa
-  // declarar contra o que zero diffs se aplicam.
+  // The pin is only required when a patch exists. An empty manifest does not need
+  // to declare what zero diffs apply against.
   const pin = manifest.upstream && manifest.upstream.pin;
   if (manifest.patches.length > 0) {
-    if (!isNonEmptyString(pin) || !SHA_COMPLETO.test(pin)) {
+    if (!isNonEmptyString(pin) || !FULL_SHA.test(pin)) {
       err(
-        'upstream.pin é obrigatório quando há patch, e precisa ser o SHA-1 completo ' +
-        'do commit upstream contra o qual todos eles se aplicam'
+        'upstream.pin is required when there is a patch, and must be the full SHA-1 ' +
+        'of the upstream commit all of them apply against'
       );
     }
-  } else if (pin !== undefined && !SHA_COMPLETO.test(String(pin))) {
-    err('upstream.pin, quando presente, precisa ser um SHA-1 completo');
+  } else if (pin !== undefined && !FULL_SHA.test(String(pin))) {
+    err('upstream.pin, when present, must be a full SHA-1');
   }
 
   const seen = new Set();
@@ -82,72 +82,72 @@ function validateManifest(manifest, { fileExists }) {
     const label = isNonEmptyString(patch && patch.id) ? `patches[${i}] (${patch.id})` : `patches[${i}]`;
 
     if (!patch || typeof patch !== 'object') {
-      err(`${label}: não é um objeto`);
+      err(`${label}: is not an object`);
       return;
     }
 
     for (const field of REQUIRED_STRINGS) {
       if (!isNonEmptyString(patch[field])) {
-        err(`${label}: campo obrigatório "${field}" ausente ou vazio`);
+        err(`${label}: required field "${field}" missing or empty`);
       }
     }
 
     if (isNonEmptyString(patch.id)) {
-      if (seen.has(patch.id)) err(`${label}: id duplicado`);
+      if (seen.has(patch.id)) err(`${label}: duplicate id`);
       seen.add(patch.id);
       if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(patch.id)) {
-        err(`${label}: id deve ser kebab-case`);
+        err(`${label}: id must be kebab-case`);
       }
     }
 
     if (patch.target !== undefined && !TARGETS.includes(patch.target)) {
-      err(`${label}: target deve ser um de ${TARGETS.join(', ')}`);
+      err(`${label}: target must be one of ${TARGETS.join(', ')}`);
     }
 
     if (isNonEmptyString(patch.file) && !fileExists(patch.file)) {
-      err(`${label}: arquivo "${patch.file}" não existe`);
+      err(`${label}: file "${patch.file}" does not exist`);
     }
 
-    // Todo patch aponta para o mesmo commit. Dois patches conferidos contra
-    // commits diferentes num mesmo manifesto é a situação que o pin existe para
-    // impedir: parece controle e não é.
+    // Every patch points to the same commit. Two patches checked against
+    // different commits in the same manifest is the situation the pin exists to
+    // prevent: it looks like control and is not.
     if (isNonEmptyString(patch.upstream_commit)) {
-      if (!SHA_PREFIXO.test(patch.upstream_commit)) {
-        err(`${label}: upstream_commit "${patch.upstream_commit}" não parece um SHA (mínimo 7 hex)`);
-      } else if (isNonEmptyString(pin) && SHA_COMPLETO.test(pin)) {
+      if (!SHA_PREFIX.test(patch.upstream_commit)) {
+        err(`${label}: upstream_commit "${patch.upstream_commit}" does not look like a SHA (at least 7 hex)`);
+      } else if (isNonEmptyString(pin) && FULL_SHA.test(pin)) {
         if (!pin.toLowerCase().startsWith(patch.upstream_commit.toLowerCase())) {
           err(
-            `${label}: upstream_commit "${patch.upstream_commit}" não bate com upstream.pin ` +
-            `"${pin.slice(0, 12)}…". Subir o pin obriga a reavaliar todo patch`
+            `${label}: upstream_commit "${patch.upstream_commit}" does not match upstream.pin ` +
+            `"${pin.slice(0, 12)}…". Raising the pin forces every patch to be re-evaluated`
           );
         }
       }
     }
 
     if (!Array.isArray(patch.files_touched) || patch.files_touched.length === 0) {
-      err(`${label}: files_touched deve ser uma lista não vazia`);
+      err(`${label}: files_touched must be a non-empty list`);
     }
 
-    // `test` pode ser null, mas então `notes` precisa justificar. Patch sem
-    // teste e sem justificativa é exatamente o que a regra §34 proíbe.
+    // `test` may be null, but then `notes` must justify it. A patch with no
+    // test and no justification is exactly what rule §34 forbids.
     if (!isNonEmptyString(patch.test) && patch.test !== null) {
-      err(`${label}: test deve ser uma string ou null`);
+      err(`${label}: test must be a string or null`);
     }
     if (patch.test === null && !isNonEmptyString(patch.notes)) {
-      err(`${label}: test é null, então notes precisa explicar por quê`);
+      err(`${label}: test is null, so notes must explain why`);
     }
 
-    // Idem para upstream_pr: null é aceitável, silêncio não.
+    // Same for upstream_pr: null is acceptable, silence is not.
     if (!Object.prototype.hasOwnProperty.call(patch, 'upstream_pr')) {
-      err(`${label}: upstream_pr é obrigatório (use null com notes se não couber upstream)`);
+      err(`${label}: upstream_pr is required (use null with notes if it does not fit upstream)`);
     } else if (patch.upstream_pr !== null && !isNonEmptyString(patch.upstream_pr)) {
-      err(`${label}: upstream_pr deve ser uma URL ou null`);
+      err(`${label}: upstream_pr must be a URL or null`);
     } else if (patch.upstream_pr === null && !isNonEmptyString(patch.notes)) {
-      err(`${label}: upstream_pr é null, então notes precisa explicar por quê`);
+      err(`${label}: upstream_pr is null, so notes must explain why`);
     }
 
     if (isNonEmptyString(patch.added) && !/^\d{4}-\d{2}-\d{2}$/.test(patch.added)) {
-      err(`${label}: added deve ser uma data ISO (AAAA-MM-DD)`);
+      err(`${label}: added must be an ISO date (YYYY-MM-DD)`);
     }
   });
 
@@ -162,7 +162,7 @@ function main() {
   try {
     manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   } catch (e) {
-    console.error(`[patches] Não consegui ler manifest.json: ${e.message}`);
+    console.error(`[patches] Could not read manifest.json: ${e.message}`);
     process.exit(1);
   }
 
@@ -171,7 +171,7 @@ function main() {
   });
 
   if (!ok) {
-    console.error('[patches] manifest.json inválido:');
+    console.error('[patches] invalid manifest.json:');
     for (const e of errors) console.error(`  - ${e}`);
     process.exit(1);
   }
@@ -179,8 +179,8 @@ function main() {
   const n = manifest.patches.length;
   console.log(
     n === 0
-      ? '[patches] Nenhum patch registrado — é a situação preferida.'
-      : `[patches] ${n} patch(es) registrado(s), manifesto válido.`
+      ? '[patches] No patch registered — that is the preferred situation.'
+      : `[patches] ${n} patch(es) registered, manifest valid.`
   );
 }
 
