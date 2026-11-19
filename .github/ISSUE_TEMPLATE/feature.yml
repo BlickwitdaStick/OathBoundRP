@@ -1,44 +1,44 @@
-name: Ideia ou melhoria
-description: Sugerir um sistema, mecânica ou mudança
+name: Idea or improvement
+description: Suggest a system, mechanic or change
 labels: [enhancement]
 body:
   - type: textarea
-    id: problema
+    id: problem
     attributes:
-      label: Que problema isso resolve
+      label: What problem does this solve
       description: |
-        O problema importa mais que a solução. Descrever a situação em que a
-        falta disso incomoda ajuda mais do que descrever a feature pronta.
+        The problem matters more than the solution. Describing the situation in
+        which the lack of this hurts helps more than describing the finished feature.
     validations:
       required: true
 
   - type: textarea
-    id: proposta
+    id: proposal
     attributes:
-      label: O que você propõe
+      label: What you propose
 
   - type: dropdown
-    id: tipo
+    id: kind
     attributes:
-      label: Tipo
+      label: Kind
       options:
-        - Mecânica de RP (gameplay)
-        - Ferramenta de staff / moderação
-        - Infraestrutura ou performance
-        - Interface (in-game ou painel)
-        - Documentação
+        - RP mechanic (gameplay)
+        - Staff / moderation tool
+        - Infrastructure or performance
+        - Interface (in-game or panel)
+        - Documentation
     validations:
       required: true
 
   - type: checkboxes
-    id: autoridade
+    id: authority
     attributes:
-      label: Autoridade do servidor
+      label: Server authority
       description: |
-        A regra de ouro do projeto é que o servidor decide e o cliente exibe
-        (ver [MODDING_GUIDELINES](../blob/main/docs/MODDING_GUIDELINES.md)).
-        Proposta que dependa do cliente decidir alguma coisa precisa de outro
-        desenho.
+        The project's golden rule is that the server decides and the client displays
+        (see [MODDING_GUIDELINES](../blob/main/docs/MODDING_GUIDELINES.md)).
+        A proposal that depends on the client deciding something needs a different
+        design.
       options:
-        - label: A proposta mantém a decisão no servidor
-        - label: Não tenho certeza — quero discutir
+        - label: The proposal keeps the decision on the server
+        - label: Not sure — I want to discuss it

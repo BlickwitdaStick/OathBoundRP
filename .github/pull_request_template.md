@@ -1,43 +1,43 @@
-## O que muda
+## What changes
 
-<!-- Uma ou duas frases. O "porquê" importa mais que o "o quê" — o diff já mostra o quê. -->
+<!-- One or two sentences. The "why" matters more than the "what" — the diff already shows the what. -->
 
-## Serviços tocados
+## Services touched
 
-<!-- Marque o que você mexeu. Ajuda quem revisa a saber onde olhar. -->
+<!-- Tick what you changed. It helps the reviewer know where to look. -->
 
 - [ ] `skymp/gamemode`
-- [ ] `apps/web` (painel)
-- [ ] `apps/game-api` (porta 7758)
+- [ ] `apps/web` (panel)
+- [ ] `apps/game-api` (port 7758)
 - [ ] `apps/bot-discord`
 - [ ] `apps/launcher`
 - [ ] Schema / migrations
-- [ ] Só documentação
+- [ ] Documentation only
 
-## Como você verificou
+## How you verified it
 
-<!-- Cole a saída dos testes, ou diga o que rodou manualmente. -->
+<!-- Paste the test output, or say what you ran by hand. -->
 
-- [ ] Testes passam nos serviços tocados
-- [ ] `npm run typecheck` limpo (gamemode e/ou launcher)
-- [ ] Teste novo cobrindo o comportamento novo
+- [ ] Tests pass in the services touched
+- [ ] `npm run typecheck` clean (gamemode and/or launcher)
+- [ ] New test covering the new behavior
 
-**Isto foi validado em jogo?**
+**Was this validated in game?**
 
-- [ ] Sim, rodei numa sessão real
-- [ ] Não — só teste automatizado
+- [ ] Yes, I ran it in a real session
+- [ ] No — automated tests only
 
-> Se marcou "não", tudo bem: quase tudo neste projeto está nessa situação. Só é importante ser explícito, porque o `mp` mockado aceita qualquer coisa e teste verde não prova que funciona em jogo.
+> If you ticked "no", that is fine: almost everything in this project is in that situation. It just matters to be explicit, because the mocked `mp` accepts anything and a green test does not prove it works in game.
 
 ## Checklist
 
-- [ ] Nenhum segredo, `.env` real ou asset da Bethesda no diff
-- [ ] Ouro e item passam pelo `core/transaction-service` (se aplicável)
-- [ ] Chamada Papyrus usa `actorRef`/`baseRef` (se aplicável)
-- [ ] Documentação atualizada, se mudou comportamento ou arquitetura
-- [ ] Li o [CONTRIBUTING.md](../CONTRIBUTING.md) §3 — as regras que não são óbvias
+- [ ] No secret, real `.env` or Bethesda asset in the diff
+- [ ] Gold and items go through `core/transaction-service` (if applicable)
+- [ ] Papyrus calls use `actorRef`/`baseRef` (if applicable)
+- [ ] Documentation updated, if behavior or architecture changed
+- [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md) §3 — the rules that are not obvious
 
-## Notas para quem revisa
+## Notes for the reviewer
 
-<!-- Alguma decisão que você tomou e que merece discussão? Alguma parte que você -->
-<!-- não teve certeza? Dizer isso agora economiza uma rodada de review. -->
+<!-- Any decision you made that deserves discussion? Any part you were -->
+<!-- not sure about? Saying so now saves a review round. -->

@@ -1,67 +1,67 @@
 name: Bug
-description: Algo não funciona como deveria
+description: Something does not work the way it should
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Antes de abrir: se for **falha de segurança**, não use este formulário —
-        veja [SECURITY.md](../blob/main/SECURITY.md).
+        Before opening: if this is a **security flaw**, do not use this form —
+        see [SECURITY.md](../blob/main/SECURITY.md).
 
   - type: dropdown
-    id: servico
+    id: service
     attributes:
-      label: Onde acontece
+      label: Where it happens
       options:
-        - gamemode (dentro do jogo)
-        - painel web (apps/web)
-        - api do jogo / fila (apps/game-api)
-        - bot do Discord
+        - gamemode (in game)
+        - web panel (apps/web)
+        - game API / queue (apps/game-api)
+        - Discord bot
         - launcher
-        - banco de dados / migrations
-        - não sei
+        - database / migrations
+        - not sure
     validations:
       required: true
 
   - type: textarea
-    id: esperado
+    id: expected
     attributes:
-      label: O que você esperava
+      label: What you expected
     validations:
       required: true
 
   - type: textarea
-    id: aconteceu
+    id: actual
     attributes:
-      label: O que aconteceu
-      description: Se houver mensagem de erro ou log, cole aqui.
+      label: What happened
+      description: If there is an error message or log, paste it here.
     validations:
       required: true
 
   - type: textarea
-    id: reproduzir
+    id: reproduce
     attributes:
-      label: Como reproduzir
+      label: How to reproduce
       placeholder: |
-        1. Liguei ENABLE_GOVERNANCE_SERVICE=true
-        2. Entrei com dois jogadores
-        3. Usei /prender no outro
+        1. Turned on ENABLE_GOVERNANCE_SERVICE=true
+        2. Joined with two players
+        3. Arrested the other one through the guard interaction menu
         4. ...
 
   - type: textarea
-    id: ambiente
+    id: environment
     attributes:
-      label: Ambiente
+      label: Environment
       placeholder: |
         Node: v20.x
-        Banco: MariaDB 11
-        Flags ENABLE_* ligadas: governance, market-stalls
+        Database: MariaDB 11
+        ENABLE_* flags on: governance, market-stalls
         Commit: a16670e
 
   - type: checkboxes
-    id: confirmacoes
+    id: confirmations
     attributes:
-      label: Antes de enviar
+      label: Before submitting
       options:
-        - label: Conferi o [QA_REPORT](../blob/main/docs/technical/QA_REPORT_2026-08.md) — pode já estar documentado como conhecido
-        - label: Não colei nenhum segredo, token ou senha acima
+        - label: I checked the [QA_REPORT](../blob/main/docs/technical/QA_REPORT_2026-08.md) — it may already be documented as known
+        - label: I did not paste any secret, token or password above

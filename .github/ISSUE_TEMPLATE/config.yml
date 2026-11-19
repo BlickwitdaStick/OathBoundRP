@@ -1,25 +1,25 @@
-# Issue é pra bug e proposta concreta. Pergunta, ideia solta e pedido de ajuda
-# vão pra Discussions — mantém o rastreador limpo e a conversa num lugar onde
-# outras pessoas encontram a resposta depois.
+# Issues are for bugs and concrete proposals. Questions, loose ideas and help
+# requests go to Discussions — it keeps the tracker clean and the conversation in
+# a place where other people can find the answer later.
 blank_issues_enabled: false
 
 contact_links:
-  - name: Dúvida ou pedido de ajuda
+  - name: Question or help request
     url: https://github.com/vinicius3232/skymp-heavy-rp/discussions/categories/q-a
-    about: Não conseguiu subir o servidor, dúvida sobre a API do SkyMP, ou algo que não entendeu na documentação. Pergunte aqui — a resposta fica visível pra quem vier depois.
+    about: Could not get the server running, a question about the SkyMP API, or something you did not understand in the docs. Ask here — the answer stays visible to whoever comes next.
 
-  - name: Ideia ou discussão de design
+  - name: Idea or design discussion
     url: https://github.com/vinicius3232/skymp-heavy-rp/discussions/categories/ideas
-    about: Ideia de mecânica de RP, sugestão de arquitetura, ou algo que você quer discutir antes de virar proposta.
+    about: An RP mechanic idea, an architecture suggestion, or something you want to discuss before it becomes a proposal.
 
-  - name: Mostre o que você fez
+  - name: Show what you made
     url: https://github.com/vinicius3232/skymp-heavy-rp/discussions/categories/show-and-tell
-    about: Rodou um servidor com esta base? Fez um módulo? Conta pra gente — serve de referência pra comunidade.
+    about: Ran a server on this base? Built a module? Tell us — it becomes a reference for the community.
 
-  - name: Falha de segurança
+  - name: Security flaw
     url: https://github.com/vinicius3232/skymp-heavy-rp/security/advisories/new
-    about: NÃO abra issue nem discussion pública. Use o canal privado de Security Advisory.
+    about: Do NOT open a public issue or discussion. Use the private Security Advisory channel.
 
-  - name: English · Русский · Español
-    url: https://github.com/vinicius3232/skymp-heavy-rp/blob/main/README.en.md
-    about: Entry points exist in English, Russian and Spanish (README, CONTRIBUTING, SECURITY). Deep technical docs are Portuguese-only — ask in Discussions if a specific document blocks you.
+  - name: Documentation
+    url: https://github.com/vinicius3232/skymp-heavy-rp/blob/main/README.md
+    about: Start with the README (README, CONTRIBUTING and SECURITY are the entry points). If a specific document blocks you, ask in Discussions.
