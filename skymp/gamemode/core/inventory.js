@@ -1,42 +1,42 @@
 /**
- * core/inventory.js — a API central de movimentação de item
+ * core/inventory.js — the central item-movement API
  *
- * **Nenhum módulo de gameplay escreve em tabela de inventário.** Item se move
- * por `inventory.transfer()`, que valida, trava, move as duas pontas e grava o
- * razão numa transação só.
+ * **No gameplay module writes to an inventory table.** Items move
+ * through `inventory.transfer()`, which validates, locks, moves both ends and writes the
+ * ledger in a single transaction.
  *
- * ─── O problema que isto resolve ────────────────────────────────────────────
+ * ─── The problem this solves ────────────────────────────────────────────────
  *
- * `core/transaction-service.js` é bom e faz o que promete — mas só sabe falar
- * de **um** dono: personagem. Toda vez que um item precisou ir para outro lugar,
- * quem precisou disso escreveu o outro lado à mão:
+ * `core/transaction-service.js` is good and does what it promises — but it can only talk
+ * about **one** owner: a character. Every time an item had to go somewhere else,
+ * whoever needed it wrote the other side by hand:
  *
- *   - `housing-service.depositItem` — `removeItem()` (transação própria, já
- *     commitada) seguido de dois `db.query` soltos no container. Se o segundo
- *     falha, o item **sumiu**.
- *   - `market-stalls.addItem` — `removeItem()` commitado, depois uma segunda
- *     transação para o anúncio, com `giveItem()` compensatório no `catch`.
- *     Compensação só cobre falha que este processo chega a observar.
- *   - `market-stalls.packStall` — devolve N itens em N transações
- *     independentes, com os N já marcados `removed`.
+ *   - `housing-service.depositItem` — `removeItem()` (its own transaction, already
+ *     committed) followed by two loose `db.query` calls on the container. If the second
+ *     one fails, the item **vanished**.
+ *   - `market-stalls.addItem` — `removeItem()` committed, then a second
+ *     transaction for the listing, with a compensating `giveItem()` in the `catch`.
+ *     Compensation only covers failures this process gets to observe.
+ *   - `market-stalls.packStall` — returns N items in N independent
+ *     transactions, with all N already marked `removed`.
  *
- * As três têm a forma do `economy-service.transfer` (`removeGold` seguido de
- * `addGold`, sem transação), que foi apagado em 06/08/2026, e a forma do
- * `craftItem` pré-Fase 3. Não é coincidência: é o que acontece quando a API só
- * sabe falar de um lado. Diagnóstico completo em
- * `docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md` §2 a §5.
+ * All three have the shape of `economy-service.transfer` (`removeGold` followed by
+ * `addGold`, no transaction), which was deleted on 2026-08-06, and the shape of the
+ * pre-Phase-3 `craftItem`. It is not a coincidence: it is what happens when the API only
+ * knows how to talk about one side. Full diagnosis in
+ * `docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md` §2 to §5.
  *
- * ─── O que este arquivo NÃO faz, e por quê ──────────────────────────────────
+ * ─── What this file does NOT do, and why ────────────────────────────────────
  *
- * - **Não mede distância.** Quem mede é o pipeline de interação
- *   (`core/interaction-service.js` §7 do fluxo), que já tem ator, alvo e
- *   `assertRange`. Medir aqui também significaria medir num momento diferente do
- *   que autorizou — duas respostas para a mesma pergunta. Quem chama revalida
- *   *imediatamente antes* de chamar; o `trade-service` faz isso.
- * - **Não checa permissão.** Mesma razão: permissão é do módulo que ofereceu a
- *   ação. Esta API é o notário, não o juiz.
- * - **Não fala com o cliente durante a transação.** `applyToClient` roda depois
- *   do `commit`, sempre — o banco é a fonte de verdade
+ * - **It does not measure distance.** That is the interaction pipeline's job
+ *   (`core/interaction-service.js` §7 of the flow), which already has the actor, the target and
+ *   `assertRange`. Measuring here too would mean measuring at a different moment from
+ *   the one that authorized — two answers to the same question. The caller revalidates
+ *   *immediately before* calling; `trade-service` does that.
+ * - **It does not check permissions.** Same reason: permission belongs to the module that offered the
+ *   action. This API is the notary, not the judge.
+ * - **It does not talk to the client during the transaction.** `applyToClient` runs after
+ *   the `commit`, always — the DB is the source of truth
  *   (`docs/technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md`).
  */
 
@@ -53,27 +53,27 @@ const { OWNER_TYPES } = ownerLib;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Quantos `base_id` distintos uma transferência pode mover.
+ * How many distinct `base_id`s a transfer can move.
  *
- * Cada item gera duas linhas de razão e até dois locks, então o teto é o
- * orçamento de uma transação. 32 cobre com folga a maior troca plausível de
- * Heavy RP; uma "troca" de 500 itens é um script, não uma cena.
+ * Each item produces two ledger rows and up to two locks, so the cap is the
+ * budget of one transaction. 32 comfortably covers the largest plausible Heavy RP
+ * trade; a "trade" of 500 items is a script, not a scene.
  */
 const MAX_ITEMS_PER_TRANSFER = 32;
 
-/** Teto por item numa única operação. Não é o teto da pilha (esse é do banco). */
+/** Per-item cap in a single operation. It is not the stack cap (that one is the DB's). */
 const MAX_QUANTITY_PER_ITEM = 1_000_000;
 
-/** `requestId`: 8 a 96, alfanumérico com `_ : . -`. Mesmo espírito do §7 do Interaction Framework. */
+/** `requestId`: 8 to 96, alphanumeric with `_ : . -`. Same spirit as §7 of the Interaction Framework. */
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9_:.-]{8,96}$/;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Adaptadores de armazenamento
+// Storage adapters
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Um adaptador diz **onde mora** o estoque de um tipo de dono. Ele não decide
- * nada: recebe uma conexão com transação já aberta e aplica o delta, ou lança.
+ * An adapter says **where** an owner type's stock **lives**. It decides
+ * nothing: it receives a connection with a transaction already open and applies the delta, or throws.
  *
  * @typedef {object} StorageAdapter
  * @property {(conn: object, owner: object, baseId: number, delta: number) => Promise<void>} applyDelta
@@ -85,9 +85,9 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9_:.-]{8,96}$/;
 const _adapters = new Map();
 
 /**
- * Personagem: `character_inventory`, escrito pela primitiva do
- * `transaction-service` — a mesma que `giveItem`/`removeItem` usam por dentro.
- * Não há segunda implementação de "como mexer no inventário de personagem".
+ * Character: `character_inventory`, written by the `transaction-service`
+ * primitive — the same one `giveItem`/`removeItem` use internally.
+ * There is no second implementation of "how to touch a character's inventory".
  */
 _adapters.set(OWNER_TYPES.CHARACTER, {
   applyDelta: (conn, owner, baseId, delta) =>
@@ -102,12 +102,12 @@ _adapters.set(OWNER_TYPES.CHARACTER, {
 });
 
 /**
- * Baú registrado: `container_inventory`, chaveado por `containers.id`.
+ * Registered chest: `container_inventory`, keyed by `containers.id`.
  *
- * `assertOwner` existe porque um `containers.id` inventado passaria pela FK
- * apenas no `INSERT` — e o erro chegaria como falha de SQL crua, sem dizer que o
- * baú não existe. Conferir dentro da transação também impede a corrida "o baú
- * foi apagado entre a validação e a escrita".
+ * `assertOwner` exists because a made-up `containers.id` would only hit the FK
+ * on the `INSERT` — and the error would arrive as a raw SQL failure, without saying the
+ * chest does not exist. Checking inside the transaction also prevents the race "the chest
+ * was deleted between validation and the write".
  */
 _adapters.set(OWNER_TYPES.CONTAINER, {
   applyDelta: (conn, owner, baseId, delta) =>
@@ -126,32 +126,32 @@ _adapters.set(OWNER_TYPES.CONTAINER, {
 });
 
 /**
- * Registra o adaptador de um tipo de dono que ainda não tem.
+ * Registers the adapter for an owner type that does not have one yet.
  *
- * Chamado no `initialize()` de quem for dono daquele tipo, exatamente como
- * `interactionTargets.registerResolver`. O core não precisa saber que ele
- * existe, e um tipo sem adaptador falha fechado e por nome.
+ * Called in the `initialize()` of whoever owns that type, exactly like
+ * `interactionTargets.registerResolver`. The core does not need to know it
+ * exists, and a type without an adapter fails closed and by name.
  *
  * @param {string} ownerType
  * @param {StorageAdapter} adapter
  */
 function registerAdapter(ownerType, adapter) {
   if (!(/** @type {string[]} */ (Object.values(OWNER_TYPES))).includes(ownerType)) {
-    throw new Error(`[inventory] tipo de dono desconhecido: ${JSON.stringify(ownerType)}`);
+    throw new Error(`[inventory] unknown owner type: ${JSON.stringify(ownerType)}`);
   }
   if (ownerType === OWNER_TYPES.SYSTEM) {
-    throw new Error('[inventory] o dono `system` nao tem armazenamento por definicao');
+    throw new Error('[inventory] the `system` owner has no storage by definition');
   }
   if (!adapter || typeof adapter.applyDelta !== 'function' || typeof adapter.list !== 'function') {
-    throw new Error(`[inventory] adaptador de '${ownerType}' precisa de applyDelta e list`);
+    throw new Error(`[inventory] adapter for '${ownerType}' needs applyDelta and list`);
   }
   if (_adapters.has(ownerType)) {
-    throw new Error(`[inventory] '${ownerType}' ja tem adaptador`);
+    throw new Error(`[inventory] '${ownerType}' already has an adapter`);
   }
   _adapters.set(ownerType, adapter);
 }
 
-/** Tipos que sabem guardar item hoje. `system` não entra: ele é o nada. */
+/** Types that can store items today. `system` is not one: it is the void. */
 function supportedOwnerTypes() {
   return [...Object.values(OWNER_TYPES)].filter(t => t === OWNER_TYPES.SYSTEM || _adapters.has(t));
 }
@@ -164,18 +164,18 @@ function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
 }
 
-/** `mysql2` devolve `count` como número; um driver diferente devolveria string. */
+/** `mysql2` returns `count` as a number; a different driver would return a string. */
 function normalizeRows(rows) {
   return (rows || []).map(r => ({ baseId: Number(r.base_id), count: Number(r.count) }));
 }
 
 /**
- * Um `requestId` novo, para quem não recebeu um do cliente.
+ * A new `requestId`, for whoever did not receive one from the client.
  *
- * O prefixo é do chamador e vai no log; o aleatório é o que torna a chave única.
- * Um `Date.now()` **não** serve — foi exatamente o defeito do `craftItem`
- * (auditoria §5): duas chamadas seguidas produziam chaves diferentes, e a
- * idempotência que o comentário prometia nunca existiu.
+ * The prefix is the caller's and goes into the log; the random part is what makes the key unique.
+ * A `Date.now()` does **not** work — that was exactly the defect in `craftItem`
+ * (audit §5): two consecutive calls produced different keys, and the
+ * idempotency the comment promised never existed.
  *
  * @param {string} prefix
  */
@@ -185,11 +185,11 @@ function newRequestId(prefix = 'inv') {
 }
 
 /**
- * Confere e normaliza a lista de itens.
+ * Checks and normalizes the item list.
  *
- * Soma quantidades do mesmo `base_id` em vez de recusar: `[{A,2},{A,3}]` é um
- * pedido legítimo de uma UI que somou duas pilhas, e mantê-los separados criaria
- * dois locks para a mesma linha dentro da mesma transação.
+ * Sums quantities of the same `base_id` instead of refusing: `[{A,2},{A,3}]` is a
+ * legitimate request from a UI that added up two stacks, and keeping them separate would create
+ * two locks for the same row inside the same transaction.
  *
  * @param {unknown} raw
  * @returns {{ok: boolean, code: string|null, reason: string|null, items: ItemPedido[]}}
@@ -215,8 +215,8 @@ function normalizeItems(raw) {
     const baseId = entrada.baseId;
     const quantity = entrada.quantity;
 
-    // `Number.isSafeInteger` recusa NaN, Infinity, 1.5 e 1e400 de uma vez. É a
-    // barreira que o §19 do pedido chama de "negative quantity, NaN, overflow".
+    // `Number.isSafeInteger` rejects NaN, Infinity, 1.5 and 1e400 in one go. It is the
+    // barrier §19 of the request calls "negative quantity, NaN, overflow".
     if (!Number.isSafeInteger(baseId) || baseId <= 0) {
       return recusar('INVALID_ITEM', 'Invalid FormID.');
     }
@@ -227,9 +227,9 @@ function normalizeItems(raw) {
       return recusar('INVALID_QUANTITY', `Quantity above the maximum (${MAX_QUANTITY_PER_ITEM}).`);
     }
 
-    // `pareceItem` devolve `ok` quando não sabe (sem `mp`, servidor antigo). Só
-    // nega quando a API respondeu e respondeu que aquele FormID não vai para
-    // inventário. É diagnóstico de digitação, não autoridade — ver core/espm.js.
+    // `pareceItem` returns `ok` when it does not know (no `mp`, old server). It only
+    // refuses when the API answered and said that FormID does not go into an
+    // inventory. It is a typo diagnostic, not an authority — see core/espm.js.
     const veredito = espm.pareceItem(baseId);
     if (!veredito.ok) {
       return recusar('UNKNOWN_FORMID', `Invalid item: ${veredito.motivo}.`);
@@ -250,11 +250,11 @@ function normalizeItems(raw) {
 }
 
 /**
- * A chave de idempotência da **primeira** linha de razão da transferência.
+ * The idempotency key of the transfer's **first** ledger row.
  *
- * A âncora precisa ser determinística porque é ela que o replay procura, e
- * precisa ser única porque é ela que o `UNIQUE (idempotency_key)` protege. As
- * demais linhas ganham `#1`, `#2`, … pelo mesmo prefixo.
+ * The anchor must be deterministic because it is what the replay looks for, and
+ * it must be unique because it is what `UNIQUE (idempotency_key)` protects. The
+ * other rows get `#1`, `#2`, … with the same prefix.
  *
  * @param {string} requestId
  * @param {number} indice
@@ -267,7 +267,7 @@ function ledgerKey(requestId, indice) {
 // A API
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Quantas pernas uma troca pode ter. Duas cobrem troca e craft; oito é folga. */
+/** How many legs an exchange can have. Two cover trade and craft; eight is headroom. */
 const MAX_LEGS = 8;
 
 /**
@@ -276,32 +276,32 @@ const MAX_LEGS = 8;
  */
 
 /**
- * O resultado de qualquer movimento, numa **forma só**.
+ * The result of any movement, in a **single shape**.
  *
- * ─── Por que não é uma união discriminada ───────────────────────────────────
+ * ─── Why it is not a discriminated union ────────────────────────────────────
  *
- * `{ok: true, …} | {ok: false, code, reason}` seria a modelagem natural, e é a
- * que estava aqui primeiro. O `jsconfig.json` deste pacote roda com
- * `strictNullChecks: false` — deliberadamente, e a razão está escrita lá: o
- * código existente não foi escrito com tipos em mente, e ligar `strict` de uma
- * vez produziria centenas de erros que ninguém leria.
+ * `{ok: true, …} | {ok: false, code, reason}` would be the natural modeling, and it is the
+ * one that was here first. This package's `jsconfig.json` runs with
+ * `strictNullChecks: false` — deliberately, and the reason is written there: the
+ * existing code was not written with types in mind, and turning on `strict` all at
+ * once would produce hundreds of errors nobody would read.
  *
- * Sem `strictNullChecks`, o TypeScript **não estreita** união por literal, então
- * todo `if (!r.ok) return r.reason` vira erro no `npm run typecheck` — no
- * chamador, não aqui. Uma API cujo uso correto acende o verificador de tipos é
- * uma API que ensina a ignorar o verificador.
+ * Without `strictNullChecks`, TypeScript **does not narrow** a union by literal, so
+ * every `if (!r.ok) return r.reason` becomes an error in `npm run typecheck` — in the
+ * caller, not here. An API whose correct use lights up the type checker is
+ * an API that teaches people to ignore the type checker.
  *
- * A forma única resolve sem mentir: os campos de falha são `null` no sucesso e
- * os de sucesso são vazios na falha. Quem consome lê `ok` e segue.
+ * The single shape solves it without lying: the failure fields are `null` on success and
+ * the success fields are empty on failure. Whoever consumes it reads `ok` and moves on.
  *
  * @typedef {object} ResultadoDeInventario
  * @property {boolean} ok
- * @property {string|null} code        código estável para o chamador ramificar
- * @property {string|null} reason      frase que o jogador pode ver
- * @property {string|null} transferId  UUID que agrupa as pernas no razão
- * @property {boolean} duplicate       o pedido já tinha sido aplicado antes
+ * @property {string|null} code        stable code for the caller to branch on
+ * @property {string|null} reason      sentence the player may see
+ * @property {string|null} transferId  UUID grouping the legs in the ledger
+ * @property {boolean} duplicate       the request had already been applied before
  * @property {PernaResolvida[]} legs
- * @property {ItemPedido[]} items      atalho para a primeira perna
+ * @property {ItemPedido[]} items      shortcut to the first leg
  */
 
 /**
@@ -328,36 +328,36 @@ function sucesso(transferId, duplicate, legs) {
 }
 
 /**
- * Move item entre **vários pares** de donos, numa transação só.
+ * Moves items between **several pairs** of owners, in a single transaction.
  *
- * ─── Por que a primitiva é esta, e não `transfer` ───────────────────────────
+ * ─── Why the primitive is this one, and not `transfer` ──────────────────────
  *
- * As duas operações que motivaram este arquivo têm mais de uma perna, em
- * direções diferentes:
+ * The two operations that motivated this file have more than one leg, in
+ * different directions:
  *
- *   - **Craft** consome ingredientes (personagem → `system:consume`) e entrega
- *     o resultado (`system:craft` → personagem). Duas chamadas de `transfer`
- *     seriam duas transações — exatamente o defeito que o `craftItem` levou até
- *     a Fase 3, com o jogador perdendo o ingrediente e não recebendo nada.
- *   - **Troca** move os itens de A para B *e* os de B para A. Se as duas pernas
- *     não commitam juntas, uma delas é doação.
+ *   - **Craft** consumes ingredients (character → `system:consume`) and delivers
+ *     the result (`system:craft` → character). Two `transfer` calls
+ *     would be two transactions — exactly the defect `craftItem` carried until
+ *     Phase 3, with the player losing the ingredient and receiving nothing.
+ *   - **Trade** moves A's items to B *and* B's items to A. If the two legs
+ *     do not commit together, one of them is a donation.
  *
- * `transfer` continua existindo porque a maioria das chamadas tem uma perna só,
- * e é ela que se lê melhor no lugar de chamada.
+ * `transfer` still exists because most calls have a single leg,
+ * and it is the one that reads better at the call site.
  *
  * @param {object} opts
  * @param {Array<{from: object, to: object, items: any}>} opts.legs
- * @param {string} opts.reason    motivo curto, vai para o razão
- * @param {string} opts.module    módulo de origem
- * @param {string} opts.requestId chave de idempotência — **obrigatória**
+ * @param {string} opts.reason    short reason, goes into the ledger
+ * @param {string} opts.module    source module
+ * @param {string} opts.requestId idempotency key — **mandatory**
  * @returns {Promise<ResultadoDeInventario>}
  */
 async function exchange(opts) {
   const { legs: legsRaw, reason, module: mod, requestId } = opts || {};
 
-  // ── Validação fora da transação ──────────────────────────────────────────
-  // Tudo o que dá para recusar sem tocar no banco é recusado antes de pegar
-  // conexão do pool. Um payload malformado não deve custar um `getConnection`.
+  // ── Validation outside the transaction ─────────────────────────────────
+  // Everything that can be refused without touching the DB is refused before taking a
+  // connection from the pool. A malformed payload should not cost a `getConnection`.
 
   if (!Array.isArray(legsRaw) || legsRaw.length === 0) {
     return falha('EMPTY', 'No legs in the transfer.');
@@ -391,9 +391,9 @@ async function exchange(opts) {
     }
     for (const lado of [from, to]) {
       if (!ownerLib.isVoid(lado) && !_adapters.has(lado.type)) {
-        // Mesma resposta do Interaction Framework para tipo de alvo sem
-        // resolvedor: fechada, nomeada, sem ensinar a sondar o servidor.
-        console.warn(`[inventory] sem adaptador para dono '${lado.type}'`);
+        // Same answer as the Interaction Framework gives for a target type without a
+        // resolver: closed, named, without teaching anyone how to probe the server.
+        console.warn(`[inventory] no adapter for owner '${lado.type}'`);
         return falha('NO_ADAPTER', 'Unsupported owner type.');
       }
     }
@@ -409,17 +409,17 @@ async function exchange(opts) {
     legs.push({ from, to, items: normalizados.items });
   }
 
-  // ── Ordem global de lock ─────────────────────────────────────────────────
+  // ── Global lock order ───────────────────────────────────────────────────
   //
-  // Uma transferência A→B e outra B→A rodando ao mesmo tempo travariam em
-  // ordem oposta e fariam deadlock. Ordenar as operações por (chave do dono,
-  // base_id) dá a **toda** transferência do servidor a mesma ordem de aquisição
-  // de lock, o que torna o ciclo impossível em vez de improvável.
+  // A transfer A→B and another B→A running at the same time would lock in
+  // opposite order and deadlock. Ordering the operations by (owner key,
+  // base_id) gives **every** transfer on the server the same lock acquisition
+  // order, which makes the cycle impossible instead of unlikely.
   //
-  // O `Map` acumula deltas do mesmo (dono, item) vindos de pernas diferentes:
-  // uma troca em que os dois lados oferecem a mesma poção precisa de **um**
-  // lock por lado, não de dois, senão a segunda espera a primeira dentro da
-  // própria transação.
+  // The `Map` accumulates deltas for the same (owner, item) coming from different legs:
+  // a trade where both sides offer the same potion needs **one**
+  // lock per side, not two, otherwise the second waits on the first inside its
+  // own transaction.
   /** @type {Map<string, {owner: object, baseId: number, delta: number}>} */
   const porLinha = new Map();
   for (const leg of legs) {
@@ -449,18 +449,18 @@ async function exchange(opts) {
   try {
     await conn.beginTransaction();
 
-    // ── Replay DENTRO da transação ─────────────────────────────────────────
+    // ── Replay INSIDE the transaction ──────────────────────────────────────
     //
-    // Auditoria §7: `giveItem` e `removeItem` conferem a chave por `db.query`,
-    // numa conexão diferente da que abre a transação. Duas chamadas
-    // concorrentes com a mesma chave leem zero nas duas, ambas seguem, e o
-    // `UNIQUE` mata a segunda no INSERT — o item não duplica, mas o retorno
-    // vira `false`, e um chamador com compensação (o `addItem` da barraca)
-    // devolveria item por uma operação que deu certo.
+    // Audit §7: `giveItem` and `removeItem` check the key with `db.query`,
+    // on a different connection from the one that opens the transaction. Two
+    // concurrent calls with the same key both read zero, both proceed, and the
+    // `UNIQUE` kills the second on INSERT — the item does not duplicate, but the return
+    // becomes `false`, and a caller with compensation (the stall's `addItem`)
+    // would refund items for an operation that succeeded.
     //
-    // Aqui o `SELECT ... FOR UPDATE` sobre a chave única segura o gap: a
-    // segunda chamada **espera** a primeira e depois lê o resultado dela.
-    // É o que o `findPurchaseReplay` da barraca já fazia.
+    // Here the `SELECT ... FOR UPDATE` on the unique key holds the gap: the
+    // second call **waits** for the first and then reads its result.
+    // It is what the stall's `findPurchaseReplay` already did.
     const [replay] = await conn.query(
       'SELECT transfer_id FROM inventory_transactions WHERE idempotency_key = ? FOR UPDATE',
       [ancora]
@@ -471,8 +471,8 @@ async function exchange(opts) {
       return sucesso(replay[0].transfer_id, true, legs);
     }
 
-    // Dono existe? Só para tipos que sabem responder. Dentro da transação, para
-    // que a resposta ainda valha quando for usada.
+    // Does the owner exist? Only for types that can answer. Inside the transaction, so
+    // the answer is still valid when it is used.
     const jaConferidos = new Set();
     for (const leg of legs) {
       for (const lado of [leg.from, leg.to]) {
@@ -493,17 +493,17 @@ async function exchange(opts) {
       await _adapters.get(op.owner.type).applyDelta(conn, op.owner, op.baseId, op.delta);
     }
 
-    // ── Razão: as duas pernas, sempre ──────────────────────────────────────
+    // ── Ledger: both legs, always ──────────────────────────────────────────
     //
-    // Inclusive a perna `system`. Isso é o que dá ao razão o invariante que ele
-    // não tinha: para qualquer `transfer_id`, a soma dos `delta` é zero. Sem a
-    // perna do nada, criar e destruir item ficariam indistinguíveis de erro de
-    // contabilidade.
+    // Including the `system` leg. That is what gives the ledger the invariant it
+    // did not have: for any `transfer_id`, the sum of the `delta`s is zero. Without the
+    // void's leg, creating and destroying items would be indistinguishable from an
+    // accounting error.
     //
-    // As linhas são por **perna declarada**, não por linha de banco tocada: uma
-    // troca em que os dois lados oferecem a mesma poção mexe numa linha só de
-    // cada lado (o `Map` acima somou), mas o razão precisa registrar as duas
-    // ofertas, senão o extrato não conta o que aconteceu.
+    // Rows are per **declared leg**, not per DB row touched: a
+    // trade where both sides offer the same potion touches a single row on
+    // each side (the `Map` above summed them), but the ledger has to record both
+    // offers, otherwise the statement does not tell what happened.
     let indice = 0;
     for (const leg of legs) {
       for (const item of leg.items) {
@@ -535,8 +535,8 @@ async function exchange(opts) {
     const regra = err instanceof RegraViolada
       || /insufficient|does not own|Stack full|Owner not found/i.test(err.message);
     if (!regra) {
-      // Erro de SQL carrega nome de tabela e coluna. Ele vai para o log, nunca
-      // para a tela — mesma correção que a compra em barraca já levou.
+      // An SQL error carries table and column names. It goes to the log, never
+      // to the screen — the same fix the stall purchase already got.
       console.error(`[inventory] exchange falhou (${requestId}):`, err.message);
     }
     return falha(
@@ -547,10 +547,10 @@ async function exchange(opts) {
     conn.release();
   }
 
-  // ── Depois do commit: o cliente ──────────────────────────────────────────
+  // ── After the commit: the client ────────────────────────────────────────
   //
-  // O banco já é a fonte de verdade. Uma falha aqui deixa o cliente divergente
-  // e é reconciliada no próximo login — nunca desfaz o que commitou.
+  // The DB is already the source of truth. A failure here leaves the client diverging
+  // and is reconciled on the next login — it never undoes what was committed.
   for (const leg of legs) {
     for (const item of leg.items) {
       if (leg.from.type === OWNER_TYPES.CHARACTER && leg.from.actorId) {
@@ -568,12 +568,12 @@ async function exchange(opts) {
 }
 
 /**
- * Move item entre dois donos. A forma de uma perna só do `exchange`, que é o
- * caso da grande maioria das chamadas.
+ * Moves items between two owners. The single-leg form of `exchange`, which is the
+ * case for the vast majority of calls.
  *
  * @param {object} opts
- * @param {object} opts.from   dono de origem (`core/inventory-owner.js`)
- * @param {object} opts.to     dono de destino
+ * @param {object} opts.from   source owner (`core/inventory-owner.js`)
+ * @param {object} opts.to     destination owner
  * @param {Array<{baseId:number, quantity:number}>|{baseId:number, quantity:number}} opts.items
  * @param {string} opts.reason
  * @param {string} opts.module
@@ -585,9 +585,9 @@ function transfer({ from, to, items, reason, module: mod, requestId }) {
 }
 
 /**
- * Erro de **regra**, que o jogador pode ver. Separado de erro de infraestrutura,
- * que ele não pode: a distinção existe desde a correção da compra em barraca, e
- * aqui ela ganha um tipo em vez de depender só de casar a mensagem.
+ * A **rule** error, which the player may see. Separate from an infrastructure error,
+ * which they may not: the distinction exists since the stall purchase fix, and
+ * here it gets a type instead of depending only on matching the message.
  */
 class RegraViolada extends Error {
   /** @param {string} message @param {string} code */
@@ -599,7 +599,7 @@ class RegraViolada extends Error {
 }
 
 /**
- * Cria item. Açúcar sobre `transfer` com origem `system`.
+ * Creates items. Sugar over `transfer` with a `system` source.
  * @param {{to: object, items: any, source: string, reason: string, module: string, requestId: string}} opts
  */
 function mint({ to, items, source, reason, module: mod, requestId }) {
@@ -607,7 +607,7 @@ function mint({ to, items, source, reason, module: mod, requestId }) {
 }
 
 /**
- * Destrói item. Açúcar sobre `transfer` com destino `system`.
+ * Destroys items. Sugar over `transfer` with a `system` destination.
  * @param {{from: object, items: any, source: string, reason: string, module: string, requestId: string}} opts
  */
 function burn({ from, items, source, reason, module: mod, requestId }) {
@@ -615,9 +615,9 @@ function burn({ from, items, source, reason, module: mod, requestId }) {
 }
 
 /**
- * Estoque de um item para um dono. Leitura sem transação — serve para montar
- * tela, **nunca** para decidir se a operação cabe: entre esta leitura e a
- * escrita o valor pode mudar, e quem garante é o `FOR UPDATE` do `applyDelta`.
+ * Stock of an item for an owner. A read without a transaction — good for building a
+ * screen, **never** for deciding whether the operation fits: between this read and the
+ * write the value can change, and what guarantees it is the `FOR UPDATE` in `applyDelta`.
  *
  * @param {object} owner
  * @param {number} baseId
@@ -631,7 +631,7 @@ async function getStack(owner, baseId) {
 }
 
 /**
- * Todo o estoque de um dono.
+ * All of an owner's stock.
  * @param {object} owner
  * @returns {Promise<Array<{baseId:number, count:number}>>}
  */
@@ -643,10 +643,10 @@ async function list(owner) {
 }
 
 /**
- * O extrato de um dono: as duas pontas de cada movimento que o tocou.
+ * An owner's statement: both ends of every movement that touched it.
  *
- * É a query que a auditoria §2 dizia ser impossível — *"este item apareceu de
- * onde?"* — e que a `migration-v14` tornou possível ao dar nome ao outro lado.
+ * It is the query audit §2 said was impossible — *"where did this item
+ * come from?"* — and that `migration-v14` made possible by naming the other side.
  *
  * @param {object} owner
  * @param {number} [limit]
@@ -664,7 +664,7 @@ async function history(owner, limit = 50) {
   );
 }
 
-/** Só para teste: devolve o registro de adaptadores ao estado de fábrica. */
+/** Test only: resets the adapter registry to its factory state. */
 function _resetAdapters() {
   for (const tipo of [..._adapters.keys()]) {
     if (tipo !== OWNER_TYPES.CHARACTER && tipo !== OWNER_TYPES.CONTAINER) _adapters.delete(tipo);
@@ -672,7 +672,7 @@ function _resetAdapters() {
 }
 
 module.exports = {
-  // vocabulário
+  // vocabulary
   OWNER_TYPES,
   SYSTEM_SOURCES: ownerLib.SYSTEM_SOURCES,
   owner: ownerLib.owner,
@@ -692,7 +692,7 @@ module.exports = {
   list,
   history,
 
-  // extensão
+  // extension
   registerAdapter,
   supportedOwnerTypes,
 
@@ -702,7 +702,7 @@ module.exports = {
   MAX_ITEMS_PER_TRANSFER,
   MAX_QUANTITY_PER_ITEM,
 
-  // teste
+  // tests
   _normalizeItems: normalizeItems,
   _resetAdapters
 };
