@@ -1,25 +1,25 @@
 /**
- * apps/game-api — API do servidor de jogo (porta 7758)
+ * apps/game-api — game server API (port 7758)
  *
- * O launcher já chamava estes endpoints desde sempre; o serviço é que não
- * existia. Enquanto isso, `verify-mods` sempre falhava com "servidor offline" e
- * a fila nunca respondia — ou seja, a verificação de paridade de modpack, que é
- * a base da regra de Autoridade do Servidor, nunca chegou a rodar.
+ * The launcher had always called these endpoints; the service just didn't
+ * exist. Meanwhile, `verify-mods` always failed with "server offline" and the
+ * queue never answered — meaning the modpack parity check, which is the basis
+ * of the Server Authority rule, never actually ran.
  *
- * Endpoints públicos (chamados pelo launcher do jogador):
- *   GET  /mods.json             → manifesto de paridade { mods, loadOrder }
- *   POST /api/queue/join        → { ticket } → entra na fila
- *   POST /api/queue/status      → { ticket } → posição ou ticket de sessão
- *   GET  /health                → diagnóstico
+ * Public endpoints (called by the player's launcher):
+ *   GET  /mods.json             → parity manifest { mods, loadOrder }
+ *   POST /api/queue/join        → { ticket } → joins the queue
+ *   POST /api/queue/status      → { ticket } → position or session ticket
+ *   GET  /health                → diagnostics
  *
- * Endpoints internos (X-Internal-Secret, chamados pelo gamemode):
- *   POST /internal/session/resolve   → valida ticket de sessão e marca conectado
- *   POST /internal/session/release   → libera o slot na desconexão
+ * Internal endpoints (X-Internal-Secret, called by the gamemode):
+ *   POST /internal/session/resolve   → validates a session ticket and marks it connected
+ *   POST /internal/session/release   → frees the slot on disconnect
  *
- * Por que a fila não aceita `discordId` direto: `discordId` é público. O
- * launcher apresenta um ticket emitido pelo painel (que é quem tem o client
- * secret do Discord e portanto é o único capaz de provar que aquele Discord
- * autenticou de fato). Ver migration-v6-launch-tickets.sql.
+ * Why the queue doesn't accept `discordId` directly: `discordId` is public. The
+ * launcher presents a ticket issued by the panel (which holds the Discord
+ * client secret and is therefore the only one able to prove that Discord user
+ * really authenticated). See migration-v6-launch-tickets.sql.
  */
 
 const path = require('path');
@@ -74,21 +74,21 @@ const queue = createQueue({ capacity: parseInt(process.env.QUEUE_CAPACITY || '40
 
 const makeSessionTicket = () => crypto.randomBytes(32).toString('hex');
 
-// Quanto tempo a sessão de jogo vale. Precisa cobrir uma sessão inteira, com
-// folga pra reconectar depois de um crash — o servidor de jogo consulta o
-// master a cada conexão.
+// How long the game session is valid. It has to cover a whole session, with
+// room to reconnect after a crash — the game server queries the master on
+// every connection.
 const GAME_SESSION_TTL_SECONDS = parseInt(process.env.GAME_SESSION_TTL_SECONDS || String(12 * 60 * 60), 10);
 
 /**
- * Grava a sessão que o servidor de jogo vai resolver contra o master API
+ * Stores the session the game server will resolve against the master API
  * (`apps/web`, `GET /api/servers/:masterKey/sessions/:session`).
  *
- * É este registro que faz o `profileId` deixar de ser uma declaração do
- * cliente: o SkyMP com `offlineMode: false` não lê o `profileId` do
- * `skymp_config.json`, ele pergunta ao master quem é o dono da sessão.
+ * This record is what stops `profileId` from being a client claim: SkyMP with
+ * `offlineMode: false` doesn't read `profileId` from `skymp_config.json`, it
+ * asks the master who owns the session.
  *
- * Guardamos só o hash — se o banco vazar, as sessões em voo não viram
- * credencial. Mesmo critério de `launch_tickets`.
+ * We only store the hash — if the database leaks, in-flight sessions don't
+ * become credentials. Same rule as `launch_tickets`.
  */
 async function persistGameSession(token, accountId, discordId) {
   await db(
@@ -99,13 +99,13 @@ async function persistGameSession(token, accountId, discordId) {
 }
 
 /**
- * Persiste a sessão de quem acabou de ser admitido.
+ * Persists the session of whoever was just admitted.
  *
- * A fila é síncrona e em memória (pra ser testável sem banco), então a
- * gravação acontece aqui, depois. Se falhar, a admissão é desfeita: entrar na
- * fila e receber um ticket que o servidor de jogo vai recusar seria pior que
- * um erro honesto — o jogador ficaria olhando o Skyrim não conectar sem
- * entender por quê.
+ * The queue is synchronous and in-memory (so it can be tested without a
+ * database), so the write happens here, afterwards. If it fails, the admission
+ * is rolled back: joining the queue and getting a ticket the game server will
+ * refuse would be worse than an honest error — the player would be left
+ * watching Skyrim fail to connect without understanding why.
  */
 async function persistAdmission(result, identity) {
   if (result.status !== 'success' || !result.ticket) return result;
@@ -113,13 +113,13 @@ async function persistAdmission(result, identity) {
     await persistGameSession(result.ticket, identity.accountId, identity.discordId);
     return result;
   } catch (err) {
-    console.error('[game-api] Falha ao gravar game_session:', err.message);
+    console.error('[game-api] Failed to write game_session:', err.message);
     queue.release(identity.accountId, makeSessionTicket);
     return { status: 'error', message: 'session_persist_failed' };
   }
 }
 
-// ── Rate limiting em memória, com teto global e por bucket ──────────────────
+// ── In-memory rate limiting, with a global and per-bucket cap ───────────────
 const { isRateLimited } = createMemoryRateLimiter();
 
 function isValidInternalSecret(provided) {
@@ -143,12 +143,12 @@ function hashTicket(token) {
 }
 
 /**
- * Valida e consome um ticket de lançamento emitido pelo painel.
+ * Validates and consumes a launch ticket issued by the panel.
  *
- * O UPDATE condicional é o que garante uso único sob concorrência: dois
- * pedidos simultâneos com o mesmo ticket disputam a mesma linha e só um deles
- * vê `affectedRows === 1`. Checar-e-depois-marcar em dois passos deixaria uma
- * janela pra ambos passarem.
+ * The conditional UPDATE is what guarantees single use under concurrency: two
+ * simultaneous requests with the same ticket contend for the same row and only
+ * one of them sees `affectedRows === 1`. Check-then-mark in two steps would
+ * leave a window for both to get through.
  */
 async function consumeLaunchTicket(token) {
   if (typeof token !== 'string' || token.length < 32) return null;
@@ -167,9 +167,9 @@ async function consumeLaunchTicket(token) {
 }
 
 /**
- * Confere que a conta continua elegível a entrar. O ticket prova *quem* é a
- * pessoa; isto prova que ela ainda *pode* jogar — uma conta pode ter sido
- * banida entre o login no launcher e a entrada na fila.
+ * Checks that the account is still eligible to join. The ticket proves *who*
+ * the person is; this proves they still *may* play — an account may have been
+ * banned between the launcher login and joining the queue.
  */
 async function isEligible(accountId) {
   const rows = await db(
@@ -188,20 +188,20 @@ async function isEligible(accountId) {
   return { ok: true };
 }
 
-// ── Paridade de modpack ─────────────────────────────────────────────────────
+// ── Modpack parity ──────────────────────────────────────────────────────────
 
 app.get('/mods.json', (req, res) => {
   const result = manifestLoader.load();
   if (!result.ok) {
-    // 503 e não 200-com-lista-vazia: uma lista vazia passaria na verificação do
-    // launcher e deixaria qualquer modpack entrar.
-    console.error(`[game-api] Manifesto indisponivel: ${result.reason} (${MANIFEST_PATH})`);
-    return res.status(503).json({ error: 'Manifesto de mods indisponivel no servidor.' });
+    // 503 rather than 200-with-an-empty-list: an empty list would pass the
+    // launcher's check and let any modpack in.
+    console.error(`[game-api] Manifest unavailable: ${result.reason} (${MANIFEST_PATH})`);
+    return res.status(503).json({ error: 'Mod manifest unavailable on the server.' });
   }
   res.json(result.manifest);
 });
 
-// ── Fila ────────────────────────────────────────────────────────────────────
+// ── Queue ───────────────────────────────────────────────────────────────────
 
 app.post('/api/queue/join', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -222,8 +222,8 @@ app.post('/api/queue/join', async (req, res) => {
       identity
     );
 
-    // O launcher precisa reconsultar a fila, e o ticket de lançamento acabou de
-    // ser consumido — então devolvemos um ticket novo pro polling seguinte.
+    // The launcher has to poll the queue again, and the launch ticket was just
+    // consumed — so we return a fresh ticket for the next poll.
     if (result.status === 'queued') {
       result.pollTicket = await issuePollTicket(identity.accountId, identity.discordId, ip);
     }
@@ -236,20 +236,22 @@ app.post('/api/queue/join', async (req, res) => {
 });
 
 /**
- * POST e não GET, e o ticket vem no corpo e não na query string.
+ * POST rather than GET, and the ticket comes in the body, not the query string.
  *
- * O ticket é credencial: quem o tem entra na fila como aquela conta. Query
- * string entra em log de acesso de servidor e de proxy; corpo de POST não.
- * O `join` ao lado sempre leu do corpo — isto aqui lia da query, e eram dois
- * tratamentos diferentes pro mesmo segredo a catorze linhas de distância.
+ * The ticket is a credential: whoever has it joins the queue as that account.
+ * Query strings end up in server and proxy access logs; POST bodies don't. The
+ * `join` next door always read from the body — this one read from the query,
+ * and that was two different treatments of the same secret fourteen lines
+ * apart.
  *
- * O impacto era menor do que parece (o transporte já é HTTP puro, e os tickets
- * rotacionam e são de uso único), mas a inconsistência convidava a erro: o
- * próximo endpoint copiaria um dos dois, e metade das chances era a errada.
+ * The impact was smaller than it sounds (the transport is plain HTTP anyway,
+ * and tickets rotate and are single-use), but the inconsistency invited
+ * mistakes: the next endpoint would copy one of the two, and half the odds
+ * were the wrong one.
  *
- * `req.query` é deliberadamente ignorado. O teste de regressão em
- * `server.http.test.js` manda um ticket pela query e exige 401 — se alguém
- * reintroduzir a leitura por lá, aquele teste quebra.
+ * `req.query` is deliberately ignored. The regression test in
+ * `server.http.test.js` sends a ticket via the query and requires 401 — if
+ * someone reintroduces reading from there, that test breaks.
  */
 app.post('/api/queue/status', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -277,9 +279,9 @@ app.post('/api/queue/status', async (req, res) => {
 });
 
 /**
- * Emite o ticket da próxima consulta. Mantém a propriedade de uso único (um
- * ticket capturado não serve pra nada, porque já foi gasto) sem obrigar o
- * jogador a refazer o login do Discord a cada 5 segundos de polling.
+ * Issues the ticket for the next poll. Keeps the single-use property (a
+ * captured ticket is useless, because it has already been spent) without
+ * forcing the player to redo the Discord login every 5 seconds of polling.
  */
 async function issuePollTicket(accountId, discordId, ip) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -291,7 +293,7 @@ async function issuePollTicket(accountId, discordId, ip) {
   return token;
 }
 
-// ── Endpoints internos (gamemode) ───────────────────────────────────────────
+// ── Internal endpoints (gamemode) ───────────────────────────────────────────
 
 app.post('/internal/session/resolve', requireInternal, (req, res) => {
   const entry = queue.resolveSessionTicket((req.body || {}).ticket);
@@ -311,7 +313,7 @@ app.get('/internal/metrics', requireInternal, (req, res) => {
   res.json(runtimeMetrics.snapshot());
 });
 
-// ── Diagnóstico ─────────────────────────────────────────────────────────────
+// ── Diagnostics ─────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
   const manifest = manifestLoader.load();
@@ -326,14 +328,14 @@ app.get('/health', (req, res) => {
 
 if (require.main === module) {
   app.listen(PORT, HOST, () => {
-    console.log(`[game-api] Rodando em http://${HOST}:${PORT}`);
+    console.log(`[game-api] Running at http://${HOST}:${PORT}`);
     const manifest = manifestLoader.load();
     if (!manifest.ok) {
-      console.warn(`[game-api] ATENCAO: manifesto de mods indisponivel (${manifest.reason}).`);
-      console.warn('[game-api] Gere com: node scripts/generate-mods-manifest.js <caminho-do-Data>');
-      console.warn('[game-api] Ate la, /mods.json responde 503 e nenhum jogador consegue entrar.');
+      console.warn(`[game-api] WARNING: mod manifest unavailable (${manifest.reason}).`);
+      console.warn('[game-api] Generate it with: node scripts/generate-mods-manifest.js <path-to-Data>');
+      console.warn('[game-api] Until then, /mods.json returns 503 and no player can join.');
     } else {
-      console.log(`[game-api] Manifesto: ${manifest.manifest.mods.length} arquivos, ${manifest.manifest.loadOrder.length} plugins.`);
+      console.log(`[game-api] Manifest: ${manifest.manifest.mods.length} files, ${manifest.manifest.loadOrder.length} plugins.`);
     }
   });
 }

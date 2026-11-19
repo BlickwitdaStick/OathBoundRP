@@ -1,7 +1,7 @@
 {
   "name": "game-api",
   "version": "1.0.0",
-  "description": "API do servidor de jogo (paridade de modpack + fila de entrada)",
+  "description": "Game server API (modpack parity + entry queue)",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

@@ -2,19 +2,20 @@
 /**
  * generate-mods-manifest.js
  *
- * Gera o `mods.json` que o launcher usa pra verificar paridade de modpack,
- * a partir da pasta `Data/` de referência do servidor.
+ * Generates the `mods.json` the launcher uses to check modpack parity, from the
+ * server's reference `Data/` folder.
  *
- * Uso:
+ * Usage:
  *   node scripts/generate-mods-manifest.js "D:\\Skyrim Special Edition\\Data"
  *   node scripts/generate-mods-manifest.js <Data> --out ./mods.json --plugins-txt <plugins.txt>
  *
- * O manifesto declara SHA-256 e o launcher recusa algoritmos diferentes. Além
- * de detectar corrupção, o hash participa do gate de paridade contra alteração
- * deliberada dos arquivos distribuídos; por isso MD5 não é aceito.
+ * The manifest declares SHA-256 and the launcher rejects any other algorithm.
+ * Beyond detecting corruption, the hash is part of the parity gate against
+ * deliberate tampering with the distributed files; that is why MD5 is not
+ * accepted.
  *
- * A ordem em `loadOrder` importa muito mais que o conteúdo de `mods`: é ela que
- * fixa o índice de load order embutido em todo FormID.
+ * The order in `loadOrder` matters far more than the contents of `mods`: it is
+ * what fixes the load-order index embedded in every FormID.
  */
 
 const fs = require('fs');
@@ -22,10 +23,10 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PLUGIN_EXTENSIONS = ['.esm', '.esp', '.esl'];
-// Extensões que valem a pena verificar por hash. Não incluímos tudo: uma pasta
-// Data tem milhares de arquivos soltos e verificar textura por textura tornaria
-// o boot do launcher inviável sem ganho — divergência de textura não desloca
-// FormID nem quebra sincronização.
+// Extensions worth checking by hash. We don't include everything: a Data folder
+// has thousands of loose files, and checking texture by texture would make the
+// launcher boot unbearable for no gain — a texture mismatch neither shifts
+// FormIDs nor breaks sync.
 const HASHED_EXTENSIONS = [...PLUGIN_EXTENSIONS, '.bsa', '.bsl'];
 
 function parseArgs(argv) {
@@ -41,11 +42,11 @@ function parseArgs(argv) {
   return args;
 }
 
-// SHA-256 desde 23/08/2026. Era MD5, e MD5 tem colisao pratica: o modelo de
-// ameaca aqui nao e corrupcao acidental, e jogador alterando um mod de
-// proposito -- o unico caso em que colisao importa. O algoritmo vai DECLARADO
-// no manifesto para que um mods.json velho falhe dizendo a verdade em vez de
-// acusar todo mod de corrompido.
+// SHA-256 since 2026-08-23. It used to be MD5, and MD5 has practical
+// collisions: the threat model here is not accidental corruption but a player
+// deliberately altering a mod -- the only case where collisions matter. The
+// algorithm is DECLARED in the manifest so that an old mods.json fails by
+// telling the truth instead of flagging every mod as corrupt.
 const HASH_ALGORITHM = 'sha256';
 
 function hashFile(filePath) {
@@ -59,12 +60,13 @@ function hashFile(filePath) {
 }
 
 /**
- * Lê a ordem de plugins de um `plugins.txt` do Skyrim (formato do gerenciador
- * de mods: uma linha por plugin, `*` prefixando os ativos).
+ * Reads the plugin order from a Skyrim `plugins.txt` (mod-manager format: one
+ * line per plugin, `*` prefixing the active ones).
  *
- * Preferimos essa fonte quando disponível porque a ordem alfabética do
- * diretório NÃO é a load order real — e usar a ordem errada aqui produziria um
- * manifesto que reprova todo mundo, ou pior, que aprova uma ordem divergente.
+ * We prefer this source when available because the directory's alphabetical
+ * order is NOT the real load order — and using the wrong order here would
+ * produce a manifest that rejects everyone, or worse, one that approves a
+ * diverging order.
  */
 function readPluginsTxt(pluginsTxtPath) {
   const lines = fs.readFileSync(pluginsTxtPath, 'utf8').split(/\r?\n/);
@@ -85,62 +87,62 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (!args.dataDir) {
-    console.error('Uso: node scripts/generate-mods-manifest.js <caminho-do-Data> [--out mods.json] [--plugins-txt plugins.txt] [--only-load-order]');
+    console.error('Usage: node scripts/generate-mods-manifest.js <path-to-Data> [--out mods.json] [--plugins-txt plugins.txt] [--only-load-order]');
     process.exit(1);
   }
 
   const dataDir = path.resolve(args.dataDir);
   if (!fs.existsSync(dataDir) || !fs.statSync(dataDir).isDirectory()) {
-    console.error(`[manifest] Pasta Data nao encontrada: ${dataDir}`);
+    console.error(`[manifest] Data folder not found: ${dataDir}`);
     process.exit(1);
   }
 
   const outPath = path.resolve(args.out || path.join(__dirname, '..', 'mods.json'));
 
-  // Listagem completa da Data. Continua sendo a fonte da validacao da load
-  // order mesmo quando o que vai ser hasheado e um subconjunto.
-  const todosArquivos = fs.readdirSync(dataDir)
+  // Full listing of Data. It remains the source for validating the load order
+  // even when what gets hashed is a subset.
+  const allFiles = fs.readdirSync(dataDir)
     .filter((name) => HASHED_EXTENSIONS.includes(path.extname(name).toLowerCase()))
     .filter((name) => {
       try { return fs.statSync(path.join(dataDir, name)).isFile(); } catch { return false; }
     })
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-  if (todosArquivos.length === 0) {
-    console.error(`[manifest] Nenhum plugin ou BSA encontrado em ${dataDir}. Caminho errado?`);
+  if (allFiles.length === 0) {
+    console.error(`[manifest] No plugin or BSA found in ${dataDir}. Wrong path?`);
     process.exit(1);
   }
 
-  // `--only-load-order`: hasheia SO os plugins da load order, ignorando o resto
-  // da Data.
+  // `--only-load-order`: hashes ONLY the load-order plugins, ignoring the rest
+  // of Data.
   //
-  // Existe porque `compareMods` (apps/launcher/electron/parity.mjs) exige que
-  // TODO arquivo do manifesto exista no cliente com o mesmo hash. Gerar a
-  // partir de uma Data de trabalho, com dezenas de mods instalados, produz um
-  // manifesto que diz "tenha exatamente a minha maquina" — e reprova qualquer
-  // testador com instalacao limpa, com um "Mod faltando" sobre um mod que nao
-  // faz parte de nada.
+  // It exists because `compareMods` (apps/launcher/electron/parity.mjs)
+  // requires EVERY file in the manifest to exist on the client with the same
+  // hash. Generating from a working Data folder, with dozens of mods installed,
+  // produces a manifest that says "have exactly my machine" — and rejects any
+  // tester with a clean install, with a "Missing mod" about a mod that is not
+  // part of anything.
   //
-  // Enquanto o modpack oficial nao existe, o que precisa ser identico entre
-  // clientes e a LOAD ORDER, porque e dela que sai o indice embutido em todo
-  // FormID (MODS_AND_GAMEMODE_CONTRACT.md secao 3). Textura e mesh divergentes
-  // nao deslocam FormID — pelo mesmo motivo que este script ja nao hasheia a
-  // Data inteira, so plugins e BSAs.
+  // Until the official modpack exists, what has to be identical across clients
+  // is the LOAD ORDER, because that is where the index embedded in every FormID
+  // comes from (MODS_AND_GAMEMODE_CONTRACT.md section 3). Diverging textures
+  // and meshes don't shift FormIDs — for the same reason this script already
+  // doesn't hash all of Data, only plugins and BSAs.
   //
-  // Nao use em producao com modpack fechado: la o manifesto deve cobrir o
-  // conteudo tambem, e ai o padrao (sem a flag) e o certo.
-  let entries = todosArquivos;
+  // Don't use it in production with a locked modpack: there the manifest must
+  // cover content too, and then the default (no flag) is the right one.
+  let entries = allFiles;
   if (args.onlyLoadOrder) {
     if (!args.pluginsTxt) {
-      console.error('[manifest] --only-load-order exige --plugins-txt: sem ele nao ha load order pra restringir.');
+      console.error('[manifest] --only-load-order requires --plugins-txt: without it there is no load order to restrict to.');
       process.exit(1);
     }
-    const daOrdem = new Set(readPluginsTxt(path.resolve(args.pluginsTxt)).map((p) => p.toLowerCase()));
-    entries = todosArquivos.filter((name) => daOrdem.has(name.toLowerCase()));
-    console.log(`[manifest] --only-load-order: ${entries.length} de ${todosArquivos.length} arquivos entram no manifesto.`);
+    const inOrder = new Set(readPluginsTxt(path.resolve(args.pluginsTxt)).map((p) => p.toLowerCase()));
+    entries = allFiles.filter((name) => inOrder.has(name.toLowerCase()));
+    console.log(`[manifest] --only-load-order: ${entries.length} of ${allFiles.length} files go into the manifest.`);
   }
 
-  console.log(`[manifest] Hasheando ${entries.length} arquivos em ${dataDir}...`);
+  console.log(`[manifest] Hashing ${entries.length} files in ${dataDir}...`);
   const mods = [];
   for (const filename of entries) {
     const hash = await hashFile(path.join(dataDir, filename));
@@ -152,49 +154,49 @@ async function main() {
   if (args.pluginsTxt) {
     const pluginsTxtPath = path.resolve(args.pluginsTxt);
     if (!fs.existsSync(pluginsTxtPath)) {
-      console.error(`[manifest] plugins.txt nao encontrado: ${pluginsTxtPath}`);
+      console.error(`[manifest] plugins.txt not found: ${pluginsTxtPath}`);
       process.exit(1);
     }
     loadOrder = readPluginsTxt(pluginsTxtPath);
-    console.log(`[manifest] Load order lida de ${pluginsTxtPath}: ${loadOrder.length} plugins.`);
+    console.log(`[manifest] Load order read from ${pluginsTxtPath}: ${loadOrder.length} plugins.`);
 
-    // Valida contra a Data inteira, nao contra `entries`: com
-    // `--only-load-order` o `entries` foi derivado da propria load order, e
-    // comparar os dois faria a checagem concordar consigo mesma e nunca acusar
-    // um plugin ausente.
-    const known = new Set(todosArquivos.map((e) => e.toLowerCase()));
+    // Validate against all of Data, not against `entries`: with
+    // `--only-load-order`, `entries` was derived from the load order itself,
+    // and comparing the two would make the check agree with itself and never
+    // flag a missing plugin.
+    const known = new Set(allFiles.map((e) => e.toLowerCase()));
     const missing = loadOrder.filter((p) => !known.has(p.toLowerCase()));
     if (missing.length > 0) {
-      console.error(`[manifest] ERRO: plugins na load order que nao existem em Data/: ${missing.join(', ')}`);
+      console.error(`[manifest] ERROR: plugins in the load order that do not exist in Data/: ${missing.join(', ')}`);
       process.exit(1);
     }
   } else {
     loadOrder = entries.filter((name) => PLUGIN_EXTENSIONS.includes(path.extname(name).toLowerCase()));
-    console.warn('[manifest] AVISO: --plugins-txt nao informado.');
-    console.warn('[manifest] A load order foi inferida por ordem alfabetica do diretorio, que NAO e');
-    console.warn('[manifest] a load order real do Skyrim. Isso serve pra teste local, mas em producao');
-    console.warn('[manifest] gera um manifesto que reprova clientes corretos. Passe --plugins-txt.');
+    console.warn('[manifest] WARNING: --plugins-txt not given.');
+    console.warn('[manifest] The load order was inferred from the directory\'s alphabetical order, which is NOT');
+    console.warn('[manifest] the real Skyrim load order. Fine for local testing, but in production it');
+    console.warn('[manifest] produces a manifest that rejects correct clients. Pass --plugins-txt.');
   }
 
   const manifest = {
     generatedAt: new Date().toISOString(),
-    // Declarado de proposito: o launcher recusa manifesto de outro algoritmo
-    // com uma mensagem que aponta pra causa, em vez de acusar todo mod de
-    // corrompido.
+    // Declared on purpose: the launcher rejects a manifest using another
+    // algorithm with a message pointing at the cause, instead of flagging every
+    // mod as corrupt.
     hashAlgorithm: HASH_ALGORITHM,
     sourceDataDir: dataDir,
-    loadOrderSource: args.pluginsTxt ? 'plugins.txt' : 'directory-order (NAO CONFIAVEL)',
+    loadOrderSource: args.pluginsTxt ? 'plugins.txt' : 'directory-order (UNRELIABLE)',
     mods,
     loadOrder
   };
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2));
-  console.log(`\n[manifest] Escrito em ${outPath}`);
-  console.log(`[manifest] ${mods.length} arquivos verificados, ${loadOrder.length} plugins na ordem.`);
+  console.log(`\n[manifest] Written to ${outPath}`);
+  console.log(`[manifest] ${mods.length} files checked, ${loadOrder.length} plugins in the order.`);
 }
 
 main().catch((err) => {
-  console.error('[manifest] Falhou:', err.message);
+  console.error('[manifest] Failed:', err.message);
   process.exit(1);
 });

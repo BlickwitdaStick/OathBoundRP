@@ -1,18 +1,18 @@
 /**
  * modsManifest.js
  *
- * Carrega e serve o manifesto de paridade de modpack (`mods.json`).
+ * Loads and serves the modpack parity manifest (`mods.json`).
  *
- * Este é o arquivo que sustenta o contrato de FormID descrito em
- * `docs/technical/MODS_AND_GAMEMODE_CONTRACT.md`: o launcher compara o hash de
- * cada arquivo em `Data/` contra esta lista, e valida a ordem dos plugins
- * contra `loadOrder`. Sem os dois batendo, o mesmo `base_id` no banco pode
- * significar itens diferentes na tela de cada jogador.
+ * This is the file that backs the FormID contract described in
+ * `docs/technical/MODS_AND_GAMEMODE_CONTRACT.md`: the launcher compares the hash
+ * of each file in `Data/` against this list, and validates the plugin order
+ * against `loadOrder`. Unless both match, the same `base_id` in the database can
+ * mean different items on each player's screen.
  *
- * O manifesto é gerado offline por `scripts/generate-mods-manifest.js` a partir
- * da pasta `Data/` do servidor. Aqui só lemos e servimos — de propósito: gerar
- * hash sob demanda numa requisição HTTP seria lento e daria margem a servir um
- * manifesto inconsistente enquanto alguém copia arquivos pra pasta.
+ * The manifest is generated offline by `scripts/generate-mods-manifest.js` from
+ * the server's `Data/` folder. Here we only read and serve it — on purpose:
+ * hashing on demand inside an HTTP request would be slow and could serve an
+ * inconsistent manifest while someone is copying files into the folder.
  */
 
 const fs = require('fs');
@@ -29,13 +29,13 @@ function isValidManifest(data) {
 }
 
 /**
- * Lê o manifesto do disco, com cache invalidado por mtime.
+ * Reads the manifest from disk, with a cache invalidated by mtime.
  *
- * Retorna `{ ok: false, reason }` em vez de lançar ou de devolver um manifesto
- * vazio: um manifesto ausente ou corrompido precisa virar erro visível pro
- * launcher, não uma lista vazia — lista vazia passaria na verificação de
- * paridade e deixaria qualquer modpack entrar, que é exatamente o oposto do
- * que este arquivo existe pra impedir.
+ * Returns `{ ok: false, reason }` instead of throwing or returning an empty
+ * manifest: a missing or corrupt manifest has to become a visible error for the
+ * launcher, not an empty list — an empty list would pass the parity check and
+ * let any modpack in, which is exactly the opposite of what this file exists
+ * to prevent.
  */
 function createManifestLoader(manifestPath) {
   let cached = null;

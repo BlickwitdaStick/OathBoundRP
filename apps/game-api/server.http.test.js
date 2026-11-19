@@ -1,18 +1,18 @@
 /**
- * Testes em nível HTTP do `game-api`.
+ * HTTP-level tests for `game-api`.
  *
- * Existem porque `queue.test.js` testa o módulo de fila, não as rotas — então
- * o transporte da credencial (query string versus corpo, GET versus POST) não
- * tinha nenhuma rede de proteção. Foi assim que `SEC-QS-01` passou despercebido.
+ * They exist because `queue.test.js` tests the queue module, not the routes — so
+ * the credential transport (query string versus body, GET versus POST) had no
+ * safety net at all. That is how `SEC-QS-01` slipped through.
  *
- * ## Por que isto roda sem MariaDB
+ * ## Why this runs without MariaDB
  *
- * `consumeLaunchTicket` recusa ticket ausente, não-string ou com menos de 32
- * caracteres **antes** de tocar o banco. Todos os casos aqui caem nessa recusa
- * antecipada, então a suíte não precisa de banco e não fica instável na CI.
+ * `consumeLaunchTicket` rejects a missing, non-string or shorter-than-32-character
+ * ticket **before** touching the database. Every case here hits that early
+ * rejection, so the suite needs no database and doesn't get flaky in CI.
  *
- * O preço é o limite declarado abaixo: não dá pra testar o caminho feliz sem
- * um banco. Caminho feliz continua sendo trabalho da sessão de teste real.
+ * The price is the limitation stated below: the happy path can't be tested
+ * without a database. The happy path remains the job of a real test session.
  */
 
 process.env.INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET || 'test-secret-not-used-here';
@@ -28,8 +28,8 @@ let baseUrl;
 
 before(async () => {
   await new Promise((resolve) => {
-    // Porta 0 = o SO escolhe uma livre. Fixar porta faria a suíte brigar com
-    // um game-api rodando na máquina do dev.
+    // Port 0 = the OS picks a free one. A fixed port would make the suite fight
+    // with a game-api running on the dev's machine.
     server = app.listen(0, '127.0.0.1', resolve);
   });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -55,7 +55,7 @@ function request(method, path, { body, headers = {} } = {}) {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
           let parsed = null;
-          try { parsed = JSON.parse(data); } catch { /* corpo não-JSON é resultado válido de teste */ }
+          try { parsed = JSON.parse(data); } catch { /* a non-JSON body is a valid test result */ }
           resolve({ status: res.statusCode, body: parsed, raw: data });
         });
       }
@@ -66,36 +66,36 @@ function request(method, path, { body, headers = {} } = {}) {
   });
 }
 
-// Ticket com formato plausível: 64 hex, o mesmo tamanho que `makeSessionTicket`
-// produz. Se alguma rota voltar a ler da query string, este valor passa do
-// filtro de tamanho e o comportamento muda de forma observável.
+// A plausibly shaped ticket: 64 hex chars, the same length `makeSessionTicket`
+// produces. If any route goes back to reading the query string, this value gets
+// past the length filter and the behavior changes observably.
 const PLAUSIBLE_TICKET = 'a'.repeat(64);
 
-describe('SEC-QS-01 — o ticket não viaja em query string', () => {
-  test('GET /api/queue/status não existe mais', async () => {
+describe('SEC-QS-01 — the ticket does not travel in the query string', () => {
+  test('GET /api/queue/status no longer exists', async () => {
     const res = await request('GET', `/api/queue/status?ticket=${PLAUSIBLE_TICKET}`);
 
-    // 404 é a resposta do Express pra método sem rota registrada. Se isto voltar
-    // a ser 200/401/500, o GET foi reintroduzido e o ticket voltou pra URL.
-    assert.equal(res.status, 404, 'GET foi reintroduzido — o ticket voltou pra query string');
+    // 404 is Express's response for a method with no registered route. If this
+    // goes back to 200/401/500, the GET was reintroduced and the ticket is back in the URL.
+    assert.equal(res.status, 404, 'GET was reintroduced — the ticket is back in the query string');
   });
 
-  test('POST /api/queue/status ignora ticket vindo da query string', async () => {
+  test('POST /api/queue/status ignores a ticket coming from the query string', async () => {
     const res = await request('POST', `/api/queue/status?ticket=${PLAUSIBLE_TICKET}`, { body: {} });
 
     assert.equal(res.status, 401);
     assert.equal(res.body.message, 'invalid_ticket');
   });
 
-  test('query string não muda a resposta em relação a não mandar ticket nenhum', async () => {
-    const semTicket = await request('POST', '/api/queue/status', { body: {} });
-    const comQuery = await request('POST', `/api/queue/status?ticket=${PLAUSIBLE_TICKET}`, { body: {} });
+  test('the query string does not change the response compared with sending no ticket at all', async () => {
+    const noTicket = await request('POST', '/api/queue/status', { body: {} });
+    const withQuery = await request('POST', `/api/queue/status?ticket=${PLAUSIBLE_TICKET}`, { body: {} });
 
-    assert.deepEqual(comQuery.body, semTicket.body);
-    assert.equal(comQuery.status, semTicket.status);
+    assert.deepEqual(withQuery.body, noTicket.body);
+    assert.equal(withQuery.status, noTicket.status);
   });
 
-  test('POST /api/queue/join também ignora a query string', async () => {
+  test('POST /api/queue/join also ignores the query string', async () => {
     const res = await request('POST', `/api/queue/join?ticket=${PLAUSIBLE_TICKET}`, { body: {} });
 
     assert.equal(res.status, 401);
@@ -103,53 +103,53 @@ describe('SEC-QS-01 — o ticket não viaja em query string', () => {
   });
 });
 
-describe('fila — recusa antes de tocar o banco', () => {
-  for (const [nome, body] of [
-    ['corpo vazio', {}],
-    ['ticket nulo', { ticket: null }],
-    ['ticket numérico', { ticket: 12345678901234567890123456789012 }],
-    ['ticket curto demais', { ticket: 'abc' }],
-    ['ticket com 31 caracteres', { ticket: 'a'.repeat(31) }]
+describe('queue — rejects before touching the database', () => {
+  for (const [name, body] of [
+    ['empty body', {}],
+    ['null ticket', { ticket: null }],
+    ['numeric ticket', { ticket: 12345678901234567890123456789012 }],
+    ['ticket too short', { ticket: 'abc' }],
+    ['31-character ticket', { ticket: 'a'.repeat(31) }]
   ]) {
-    test(`status recusa ${nome} com 401`, async () => {
+    test(`status rejects ${name} with 401`, async () => {
       const res = await request('POST', '/api/queue/status', { body });
       assert.equal(res.status, 401);
       assert.equal(res.body.message, 'invalid_ticket');
     });
 
-    test(`join recusa ${nome} com 401`, async () => {
+    test(`join rejects ${name} with 401`, async () => {
       const res = await request('POST', '/api/queue/join', { body });
       assert.equal(res.status, 401);
       assert.equal(res.body.message, 'invalid_ticket');
     });
   }
 
-  test('requisição sem corpo nenhum não derruba a rota', async () => {
-    // `express.json()` deixa `req.body` indefinido quando não há corpo. A rota
-    // faz `(req.body || {}).ticket` justamente por isso; se alguém tirar esse
-    // guarda, isto vira 500.
+  test('a request with no body at all does not crash the route', async () => {
+    // `express.json()` leaves `req.body` undefined when there is no body. The
+    // route does `(req.body || {}).ticket` precisely for that; if someone removes
+    // that guard, this becomes a 500.
     const res = await request('POST', '/api/queue/status');
     assert.equal(res.status, 401);
   });
 });
 
-describe('endpoints internos exigem segredo', () => {
-  test('session/resolve sem X-Internal-Secret responde 401', async () => {
+describe('internal endpoints require the secret', () => {
+  test('session/resolve without X-Internal-Secret returns 401', async () => {
     const res = await request('POST', '/internal/session/resolve', { body: { session: 'x' } });
     assert.equal(res.status, 401);
   });
 
-  test('session/release sem X-Internal-Secret responde 401', async () => {
+  test('session/release without X-Internal-Secret returns 401', async () => {
     const res = await request('POST', '/internal/session/release', { body: { session: 'x' } });
     assert.equal(res.status, 401);
   });
 
-  test('métricas sem X-Internal-Secret respondem 401', async () => {
+  test('metrics without X-Internal-Secret return 401', async () => {
     const res = await request('GET', '/internal/metrics');
     assert.equal(res.status, 401);
   });
 
-  test('métricas autenticadas não expõem segredo e incluem processo/HTTP/DB', async () => {
+  test('authenticated metrics do not expose the secret and include process/HTTP/DB', async () => {
     const secret = process.env.INTERNAL_API_SECRET;
     const res = await request('GET', '/internal/metrics', {
       headers: { 'X-Internal-Secret': secret, 'X-Request-Id': 'metrics-test-request' }
@@ -163,25 +163,26 @@ describe('endpoints internos exigem segredo', () => {
   });
 });
 
-describe('/health responde sem banco', () => {
-  test('devolve o estado do manifesto e da fila', async () => {
+describe('/health responds without a database', () => {
+  test('returns the manifest and queue state', async () => {
     const res = await request('GET', '/health');
 
     assert.equal(res.status, 200);
     assert.ok(Object.prototype.hasOwnProperty.call(res.body, 'ok'));
-    assert.ok(res.body.queue, 'health precisa expor o estado da fila');
+    assert.ok(res.body.queue, 'health must expose the queue state');
   });
 });
 
 /**
- * ## O que esta suíte NÃO prova
+ * ## What this suite does NOT prove
  *
- * - **Nada do caminho feliz.** Todo caso aqui termina em recusa antecipada.
- *   Ticket válido, admissão, emissão de `pollTicket` e persistência de sessão
- *   exigem MariaDB e continuam sem cobertura automatizada.
- * - **Não prova ausência de leitura da query string quando há banco.** Com um
- *   banco disponível, uma regressão que lesse `req.query.ticket` também
- *   devolveria 401 (o ticket não existiria na tabela). O que trava a regressão
- *   de verdade é o teste do GET 404: reverter o transporte sem reverter o
- *   método é improvável, e o método é observável sem banco.
+ * - **Nothing on the happy path.** Every case here ends in an early rejection.
+ *   A valid ticket, admission, `pollTicket` issuance and session persistence
+ *   require MariaDB and still have no automated coverage.
+ * - **It doesn't prove the query string is never read when there is a
+ *   database.** With a database available, a regression that read
+ *   `req.query.ticket` would also return 401 (the ticket wouldn't exist in the
+ *   table). What really locks the regression down is the GET 404 test:
+ *   reverting the transport without reverting the method is unlikely, and the
+ *   method is observable without a database.
  */
