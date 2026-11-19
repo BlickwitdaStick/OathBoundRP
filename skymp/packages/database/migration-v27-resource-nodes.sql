@@ -15,9 +15,9 @@
 --     its own, because nothing in this phase creates a new type at runtime;
 --   * a gathering session / action token — that controls ONE gathering
 --     ATTEMPT (distance, tool, animation), which belongs to the concrete profession
--- Recipe names are player-facing; migration-v31-english-seed-labels.sql renames old rows.
---     genérico;
---   * qualquer coisa de Minerador, Lenhador ou Caçador especificamente.
+--     that consumes this framework (Miner etc.), not to the generic
+--     framework;
+--   * anything specific to Miner, Woodcutter or Hunter.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Why capacity is not updated by a tick

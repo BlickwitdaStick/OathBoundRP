@@ -402,7 +402,7 @@ addCheck('artefato SkyMP registra identidade e confere o pin', () => {
     'declaredUpstreamPin',
     'commitVerified',
     'Get-FileHash',
-    'diverge do pin declarado'
+    'differs from the declared pin'
   ]);
   assertFileContains(rel('scripts', 'phase0', 'Install-SkyMPServerArtifact.ps1'), [
     'Write-ServerBuildInfo.ps1'

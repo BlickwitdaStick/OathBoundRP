@@ -15,8 +15,8 @@
 -- launch_ticket), longer-lived, and good for ONE thing only — requesting a
 -- new launch_ticket. It does not replace the eligibility check (whitelist,
 -- ban), which still happens in apps/game-api at queue time; it only
--- Recipe names are player-facing; migration-v31-english-seed-labels.sql renames old rows.
--- `launch_tickets` ja provava, so que reutilizavel.
+-- proves "this Discord account authenticated in the last 30 days", the same thing
+-- `launch_tickets` already proved, only reusable.
 --
 -- Flow:
 --   1. POST /api/launcher/oauth/exchange (v6) now also issues a
