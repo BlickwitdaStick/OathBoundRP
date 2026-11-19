@@ -1,9 +1,9 @@
 /**
- * Movimentacoes entre tesouros institucionais.
+ * Movements between institutional treasuries.
  *
- * Ouro de Hold e de faccao nao pertence a um personagem, portanto nao deve
- * usar gold_transactions. Este servico cria sua propria fronteira atomica e
- * ledger, para que um debito nunca sobreviva sem o credito correspondente.
+ * Hold and faction gold does not belong to a character, so it must not
+ * use gold_transactions. This service creates its own atomic boundary and
+ * ledger, so that a debit never survives without the matching credit.
  */
 
 const crypto = require('crypto');
@@ -33,7 +33,7 @@ async function commitResult(conn, result) {
 }
 
 /**
- * Transfere tesouro de um Hold para sua faccao regente.
+ * Transfers treasury from a Hold to its ruling faction.
  *
  * @param {{characterId:number, holdId:string, amount:number|string, idempotencyKey?:string}} request
  * @param {{db?: typeof database, governance?: typeof governanceService}} [dependencies]
@@ -57,8 +57,8 @@ async function transferHoldTreasury(request, dependencies = {}) {
   try {
     await conn.beginTransaction();
 
-    // Todas as transferencias do mesmo Hold passam por esta trava. O cache nao
-    // participa da decisao financeira: ele pode estar alguns minutos atrasado.
+    // Every transfer from the same Hold goes through this lock. The cache does not
+    // take part in the financial decision: it may be a few minutes stale.
     const [holdRows] = await conn.query(
       'SELECT id, treasury, ruling_faction_id FROM holds WHERE id = ? FOR UPDATE',
       [request.holdId]
@@ -68,9 +68,9 @@ async function transferHoldTreasury(request, dependencies = {}) {
       return await commitResult(conn, { ok: false, code: 'hold_not_found' });
     }
 
-    // Repeticao da mesma requisicao devolve o resultado original sem mover ouro
-    // novamente. Como o Hold ja esta travado, duas chamadas concorrentes tambem
-    // se serializam neste ponto.
+    // Repeating the same request returns the original result without moving gold
+    // again. Since the Hold is already locked, two concurrent calls also
+    // serialize at this point.
     const [existingRows] = await conn.query(
       'SELECT transfer_id, faction_id, amount FROM institutional_treasury_transactions WHERE idempotency_key = ? LIMIT 1',
       [idempotencyKey]
@@ -89,8 +89,8 @@ async function transferHoldTreasury(request, dependencies = {}) {
       return await commitResult(conn, { ok: false, code: 'no_ruling_faction' });
     }
 
-    // A mesma conexao le o cargo durante a transacao. Assim a autorizacao e os
-    // saldos nao dependem de dois snapshots distintos do pool.
+    // The same connection reads the post during the transaction. That way authorization and
+    // balances do not depend on two different pool snapshots.
     const membership = await governance.getMembership(
       request.characterId,
       'faction',
@@ -114,7 +114,7 @@ async function transferHoldTreasury(request, dependencies = {}) {
       [amount, hold.ruling_faction_id]
     );
     if (credit.affectedRows !== 1) {
-      throw new Error(`Faccao regente ${hold.ruling_faction_id} nao existe para hold ${hold.id}`);
+      throw new Error(`Ruling faction ${hold.ruling_faction_id} does not exist for hold ${hold.id}`);
     }
 
     const transferId = uuid();
@@ -133,7 +133,7 @@ async function transferHoldTreasury(request, dependencies = {}) {
       amount
     });
   } catch (err) {
-    try { await conn.rollback(); } catch { /* preserva o erro original */ }
+    try { await conn.rollback(); } catch { /* keep the original error */ }
     throw err;
   } finally {
     conn.release();

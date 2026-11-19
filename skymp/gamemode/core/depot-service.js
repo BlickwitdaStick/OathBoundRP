@@ -1,43 +1,43 @@
 /**
  * core/depot-service.js
  *
- * Armazenamento regional de itens. Um depósito por (personagem, hold) —
- * itens guardados em Whiterun não aparecem em Solitude, porque são LINHAS
- * diferentes em `character_depots`, não um filtro sobre uma linha comum. Ver
- * `docs/technical/DEPOT_SERVICE_AUDIT.md` para os 15 pontos da §15.
+ * Regional item storage. One depot per (character, hold) —
+ * items stored in Whiterun do not show up in Solitude, because they are different
+ * ROWS in `character_depots`, not a filter over a shared row. See
+ * `docs/technical/DEPOT_SERVICE_AUDIT.md` for the 15 points of §15.
  *
- * ─── O que este arquivo explicitamente NÃO faz ──────────────────────────────
+ * ─── What this file explicitly does NOT do ──────────────────────────────────
  *
- * Nenhum ouro. `characters.gold` já é global por natureza (não existe "ouro
- * na mão" vs "ouro no banco" neste projeto — ver `core/economy-service.js`);
- * este arquivo só EXIBE o saldo existente (`getGoldBalance`), nunca cria uma
- * segunda reserva. Decisão tomada com o dono do produto antes de implementar.
+ * No gold. `characters.gold` is already global by nature (there is no "gold
+ * in hand" vs "gold in the bank" in this project — see `core/economy-service.js`);
+ * this file only DISPLAYS the existing balance (`getGoldBalance`), it never creates a
+ * second reserve. Decision made with the product owner before implementing.
  *
- * Nenhuma checagem de combate. O brief pedia "não pode usar em combate", mas
- * não existe sinal de combate ao vivo neste projeto: `core/hit-events.js` é
- * single-subscriber (já ocupado por `death-service.js`) e só informa DEPOIS
- * que o episódio fecha (10s de silêncio) — não serve como portão em tempo
- * real sem mexer em infra compartilhada de outro sistema. Adiado, e é um gap
- * conhecido, não esquecido — ver `DEPOT_SERVICE_AUDIT.md`.
+ * No combat check. The brief asked for "cannot be used in combat", but
+ * there is no live combat signal in this project: `core/hit-events.js` is
+ * single-subscriber (already taken by `death-service.js`) and only reports AFTER
+ * the episode closes (10s of silence) — it does not work as a real-time gate
+ * without touching another system's shared infrastructure. Postponed, and it is a known gap,
+ * not a forgotten one — see `DEPOT_SERVICE_AUDIT.md`.
  *
- * ─── Distância e alvo: primeiro consumidor real de TARGET_TYPES.OBJECT ──────
+ * ─── Distance and target: the first real consumer of TARGET_TYPES.OBJECT ────
  *
- * `core/interaction-targets.js` já resolve um `MpObjectReference` qualquer do
- * mundo (nasceu para o Minerador). A distância é enforced automaticamente
- * pelo Interaction Framework via `entry.distance` + `target.assertRange()`
- * (`core/interaction-service.js`) — nenhuma checagem manual aqui. A mesma
- * ressalva que `interaction-targets.js` já registra vale para este arquivo:
- * `locationalData` contra um objeto comum é **assumido a partir da
- * documentação oficial do SkyMP, não validado em jogo**.
+ * `core/interaction-targets.js` already resolves any `MpObjectReference` in the
+ * world (it was born for the Miner). Distance is enforced automatically
+ * by the Interaction Framework via `entry.distance` + `target.assertRange()`
+ * (`core/interaction-service.js`) — no manual check here. The same
+ * caveat `interaction-targets.js` already records applies to this file:
+ * `locationalData` against an ordinary object is **assumed from the
+ * official SkyMP documentation, not validated in game**.
  *
- * ─── Atomicidade de depósito/saque ───────────────────────────────────────────
+ * ─── Deposit/withdraw atomicity ─────────────────────────────────────────────
  *
- * Uma única transação, duas chamadas de `transactionService.tx.applyStackDelta`
- * (uma para `character_inventory`, uma para `depot_inventory`) — mesmo padrão
- * de `economy-service.transferInTransaction`. Falha em qualquer uma reverte as
- * duas. `depot_inventory` foi adicionada a `STACK_TABLES` em
- * `transaction-service.js` para isso funcionar; nenhuma lógica de transação
- * nova foi escrita — é reaproveitamento, não reimplementação.
+ * A single transaction, two calls to `transactionService.tx.applyStackDelta`
+ * (one for `character_inventory`, one for `depot_inventory`) — same pattern
+ * as `economy-service.transferInTransaction`. A failure in either one rolls back
+ * both. `depot_inventory` was added to `STACK_TABLES` in
+ * `transaction-service.js` for this to work; no new transaction logic
+ * was written — it is reuse, not reimplementation.
  */
 
 'use strict';
@@ -55,14 +55,14 @@ const inventoryOwner = require('./inventory-owner');
 const MODULE_ID = 'depot';
 
 /**
- * "3 metros" (brief) convertido para unidades do Skyrim. Não existe
- * conversão metro→unidade em nenhum outro lugar do projeto — todos os raios
- * existentes (`proximity-ranges.js`, `RESCUE_RANGE`, `STALL_INTERACTION_RANGE`)
- * já nascem em unidades Skyrim. Uso a constante de modding amplamente
- * documentada (~70,5 unidades por metro): 3 * 70.5 ≈ 211. Constante simples
- * (não server-option) pelo mesmo critério de `RESCUE_RANGE` em
- * `death-service.js` — é geometria física do baú, não balanceamento de
- * gameplay.
+ * "3 meters" (brief) converted to Skyrim units. There is no
+ * meter→unit conversion anywhere else in the project — every existing radius
+ * (`proximity-ranges.js`, `RESCUE_RANGE`, `STALL_INTERACTION_RANGE`)
+ * is already born in Skyrim units. I use the widely documented modding constant
+ * (~70.5 units per meter): 3 * 70.5 ≈ 211. A plain constant
+ * (not a server-option) by the same criterion as `RESCUE_RANGE` in
+ * `death-service.js` — it is the chest's physical geometry, not gameplay
+ * balancing.
  */
 const DEPOT_INTERACT_RANGE = 211;
 
@@ -74,12 +74,12 @@ function _deps(dependencies = {}) {
     serverOptions: dependencies.serverOptions || serverOptions,
     tx: dependencies.tx || transactionService.tx,
     economy: dependencies.economy || economyService,
-    // `inventory.list` é o mesmo adaptador que `character_inventory` usa em
-    // qualquer outro lugar do projeto (trade, loja) — nenhuma leitura nova.
+    // `inventory.list` is the same adapter `character_inventory` uses
+    // everywhere else in the project (trade, shop) — no new read.
     inventory: dependencies.inventory || inventory,
     logger: dependencies.logger || console,
-    // No-op por padrão (ex: chamadas diretas em teste) — quem liga a CEF de
-    // verdade é `phase0-basic.js`, via `registerInteractions({ sendModal })`.
+    // No-op by default (e.g. direct calls in tests) — whoever actually wires the CEF
+    // is `phase0-basic.js`, via `registerInteractions({ sendModal })`.
     sendModal: dependencies.sendModal || (() => {})
   };
 }
@@ -93,14 +93,14 @@ function _isPositiveInt(v) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Depósito (a linha em character_depots, não os itens dentro)
+// Depot (the row in character_depots, not the items inside it)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Lê e trava a linha do depósito dentro da transação do chamador. Cria com
- * `depot.defaultCapacity` se ainda não existir — só acontece na primeira vez
- * que o personagem visita aquele hold.
- * @param {object} conn conexão com transação ativa
+ * Reads and locks the depot row inside the caller's transaction. Creates it with
+ * `depot.defaultCapacity` if it does not exist yet — that only happens the first time
+ * the character visits that hold.
+ * @param {object} conn connection with an active transaction
  * @param {number} characterId
  * @param {string} holdId
  * @param {object} deps
@@ -160,7 +160,7 @@ async function getDepotContents(characterId, holdId, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Depósito / saque de item
+// Depositing / withdrawing items
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _currentStackCount(conn, table, ownerColumn, ownerId, baseId) {
@@ -180,13 +180,13 @@ async function _depotTotalCount(conn, depotId) {
 }
 
 /**
- * Move um item do inventário do personagem pro depósito da região.
+ * Moves an item from the character's inventory into the region's depot.
  *
- * Recusa (`{ok:false, code}`) SEM escrever nada quando o personagem não tem
- * estoque suficiente ou o depósito estouraria `capacity` — mesmo critério de
- * `profession-service.grantProfession` contra `maxPerCharacter`: a checagem
- * acontece sob a MESMA trava que a escrita usaria, então não há corrida entre
- * "decidiu que cabe" e "escreveu".
+ * Refuses (`{ok:false, code}`) WITHOUT writing anything when the character does not have
+ * enough stock or the depot would exceed `capacity` — same criterion as
+ * `profession-service.grantProfession` against `maxPerCharacter`: the check
+ * happens under the SAME lock the write would use, so there is no race between
+ * "decided it fits" and "wrote it".
  *
  * @param {object} opts
  * @param {number} opts.characterId
@@ -237,8 +237,8 @@ async function depositItem(opts, dependencies = {}) {
 }
 
 /**
- * Move um item do depósito da região de volta pro inventário do personagem.
- * Simétrico a `depositItem` — mesma transação única, mesma trava.
+ * Moves an item from the region's depot back into the character's inventory.
+ * Symmetric to `depositItem` — same single transaction, same lock.
  * @param {object} opts
  * @param {number} opts.characterId
  * @param {string} opts.holdId
@@ -290,7 +290,7 @@ async function withdrawItem(opts, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ouro — só leitura do saldo global existente, nenhuma reserva nova
+// Gold — read-only access to the existing global balance, no new reserve
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -304,22 +304,22 @@ async function getGoldBalance(characterId, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Terminais físicos — traduz FormID do objeto do mundo em hold
+// Physical terminals — translates a world object's FormID into a hold
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * @param {number} objectFormId FormID resolvido pelo Interaction Framework
+ * @param {number} objectFormId FormID resolved by the Interaction Framework
  *   (`ctx.target.formId`, `core/interaction-targets.js` TARGET_TYPES.OBJECT)
  * @param {object} [dependencies]
- * @returns {Promise<string|null>} hold_id, ou null se este objeto não é um terminal de depósito
+ * @returns {Promise<string|null>} hold_id, or null if this object is not a depot terminal
  */
 async function resolveTerminal(objectFormId, dependencies = {}) {
   const deps = _deps(dependencies);
   if (!_isPositiveInt(objectFormId)) return null;
-  // O terminal é identificado por FormDesc (`"hex:Skyrim.esm"`), não pelo
-  // FormID cru — mesma distinção que `containers.object_id` já usa. A tradução
-  // FormID→FormDesc é a mesma que `core/papyrus.js` faz para o `self` de uma
-  // chamada Papyrus: `mp.getDescFromId(formId)`.
+  // The terminal is identified by FormDesc (`"hex:Skyrim.esm"`), not by the
+  // raw FormID — the same distinction `containers.object_id` already uses. The
+  // FormID→FormDesc translation is the same one `core/papyrus.js` does for the `self` of a
+  // Papyrus call: `mp.getDescFromId(formId)`.
   if (typeof mp === 'undefined' || typeof mp.getDescFromId !== 'function') return null;
   const objectId = mp.getDescFromId(objectFormId);
   const rows = await deps.db.query('SELECT hold_id FROM depot_terminals WHERE object_id = ?', [objectId]);
@@ -351,9 +351,9 @@ function registerPhysicalAnchors(dependencies = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Monta o payload que a CEF usa pra desenhar o painel inteiro — mesma forma
- * na abertura (`depot:open`) e depois de cada depósito/saque (`depot:update`),
- * pra um único renderizador do lado do cliente servir os dois.
+ * Builds the payload the CEF uses to draw the whole panel — same shape
+ * when opening (`depot:open`) and after every deposit/withdrawal (`depot:update`),
+ * so a single client-side renderer serves both.
  * @param {number} characterId
  * @param {string} holdId
  * @param {number} targetFormId
@@ -365,19 +365,19 @@ async function _panelPayload(characterId, holdId, targetFormId, dependencies) {
   const contents = await getDepotContents(characterId, holdId, dependencies);
   const carried = await deps.inventory.list(inventoryOwner.character(characterId));
   const gold = await getGoldBalance(characterId, dependencies);
-  // `targetId` volta no payload pra CEF poder mandar `depot.deposit`/
-  // `depot.withdraw` sem depender do estado do menu de interação genérico —
-  // o painel do depósito é uma tela própria, não uma extensão dele.
+  // `targetId` comes back in the payload so the CEF can send `depot.deposit`/
+  // `depot.withdraw` without depending on the generic interaction menu's state —
+  // the depot panel is its own screen, not an extension of it.
   return { holdId, targetId: targetFormId, carried, contents, gold, capacity: depot.capacity };
 }
 
 /**
- * Registra as ações do depósito no Interaction Framework. Chamado do
- * `initialize()` do módulo — precisa do framework `interaction` já de pé, daí
- * `dependencies: ['interaction']` no `phase0-basic.js`.
- * @param {object} [dependencies] repassado a toda chamada de domínio — hoje só
- *   `sendModal` importa aqui (Tarefa 10: UI-Depot-Bridge), o resto vem do
- *   default de `_deps()`.
+ * Registers the depot actions in the Interaction Framework. Called from the
+ * module's `initialize()` — it needs the `interaction` framework already up, hence
+ * `dependencies: ['interaction']` in `phase0-basic.js`.
+ * @param {object} [dependencies] passed to every domain call — today only
+ *   `sendModal` matters here (Task 10: UI-Depot-Bridge), the rest comes from the
+ *   `_deps()` default.
  */
 function registerInteractions(dependencies = {}) {
   const deps = _deps(dependencies);
@@ -386,9 +386,9 @@ function registerInteractions(dependencies = {}) {
     target: interactionRegistry.TARGET_TYPES.OBJECT,
     section: 'deposito',
     distance: DEPOT_INTERACT_RANGE,
-    // O objeto só é um alvo válido de depósito se estiver em depot_terminals.
-    // Um MpObjectReference qualquer (uma pedra, um NPC morto) nunca aparece
-    // no menu de interação por este caminho.
+    // The object is only a valid depot target if it is in depot_terminals.
+    // An arbitrary MpObjectReference (a rock, a dead NPC) never shows up
+    // in the interaction menu through this path.
     canSee: async (ctx) => Boolean(await resolveTerminal(ctx.target.formId, dependencies))
   };
 
@@ -402,9 +402,9 @@ function registerInteractions(dependencies = {}) {
       const holdId = await resolveTerminal(ctx.target.formId, dependencies);
       if (!holdId) throw new Error('This object is not a depot terminal.');
       const payload = await _panelPayload(ctx.characterId, holdId, ctx.target.formId, dependencies);
-      // A CEF ainda não desenha nada a partir do retorno de `execute` (vira só
-      // uma notificação de chat — `interaction-service.js` handleUiEvent). O
-      // canal que abre a tela de verdade é `sendModal`, mesmo usado por
+      // The CEF does not draw anything from `execute`'s return value yet (it just becomes
+      // a chat notification — `interaction-service.js` handleUiEvent). The
+      // channel that actually opens the screen is `sendModal`, the same one used by
       // `interaction:actions`.
       deps.sendModal(ctx.actorId, 'depot:open', payload);
       return { message: null };
@@ -463,7 +463,7 @@ function registerInteractions(dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comando de chat — fallback enquanto não houver UI CEF dedicada (brief §6)
+// Chat command — fallback while there is no dedicated CEF UI (brief §6)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function commandDefs() {

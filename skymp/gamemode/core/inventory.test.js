@@ -605,7 +605,7 @@ describe('a primitiva de pilha valida o que o wrapper validava (auditoria §6)',
     it(`recusa delta ${nome}`, async () => {
       await assert.rejects(
         () => transactionService.tx.applyStackDelta(conexaoFalsa, 'character_inventory', 1, 10, delta),
-        /delta invalido/
+        /invalid delta/
       );
     });
   }
@@ -615,14 +615,14 @@ describe('a primitiva de pilha valida o que o wrapper validava (auditoria §6)',
     // um TypeError que escondia a causa real.
     await assert.rejects(
       () => transactionService.tx.applyStackDelta(conexaoFalsa, 'character_inventory', 1, 'abc', -1),
-      /baseId invalido/
+      /invalid baseId/
     );
   });
 
   it('recusa tabela fora da lista fechada', async () => {
     await assert.rejects(
       () => transactionService.tx.applyStackDelta(conexaoFalsa, 'characters; DROP TABLE x', 1, 10, 1),
-      /tabela de pilha desconhecida/
+      /unknown stack table/
     );
   });
 

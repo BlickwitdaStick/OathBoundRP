@@ -19,9 +19,9 @@ function idempotencyKey(value) {
   if (value === undefined || value === null) return uuid();
   if (typeof value !== 'string') return null;
   const key = value.trim();
-  // Os ledgers de ouro e inventario usam sufixos distintos desta chave. O
-  // limite deixa espaco para ambos dentro do VARCHAR(64) da tabela regional e
-  // continua aceitando UUIDs e requestIds normais da UI.
+  // The gold and inventory ledgers use different suffixes of this key. The
+  // limit leaves room for both within the regional table's VARCHAR(64) and
+  // still accepts normal UUIDs and UI requestIds.
   return key.length >= 8 && key.length <= 48 ? key : null;
 }
 
@@ -49,8 +49,8 @@ function validate(request) {
   if (!Number.isSafeInteger(request?.actorId) || request.actorId <= 0) return { code: 'invalid_actor' };
   if (typeof request?.holdId !== 'string' || request.holdId.length === 0 || request.holdId.length > 32) return { code: 'invalid_hold' };
   if (!Number.isSafeInteger(request?.baseId) || request.baseId <= 0) return { code: 'invalid_item' };
-  // O estoque e limitado a 100; permitir uma quantidade maior nao tem caso de
-  // uso e transforma um erro de UI em uma operacao desnecessariamente grande.
+  // Stock is capped at 100; allowing a larger quantity has no use
+  // case and turns a UI mistake into an unnecessarily large operation.
   if (!count || count > 100) return { code: 'invalid_count' };
   const key = idempotencyKey(request?.idempotencyKey);
   if (!key) return { code: 'invalid_idempotency_key' };
@@ -100,9 +100,9 @@ async function buy(request, dependencies = {}) {
 
     const unitPrice = buyPrice(priceEntry.stock, baseValue(priceEntry));
     const gross = unitPrice * valid.count;
-    // Comprar do mercado NPC destroi septim. Contra `system:regional_market`,
-    // esse dreno fica listado — um dreno nao declarado e indistinguivel de ouro
-    // sumindo por bug (auditoria §9).
+    // Buying from the NPC market destroys septims. Against `system:regional_market`,
+    // that drain is listed — an undeclared drain is indistinguishable from gold
+    // vanishing because of a bug (audit §9).
     const pagamento = await economy.transferInTransaction(conn, {
       from: { type: 'character', ref: request.characterId },
       to: { type: 'system', ref: 'regional_market' },
@@ -121,7 +121,7 @@ async function buy(request, dependencies = {}) {
       [valid.count, request.holdId, request.baseId, valid.count]
     );
     if (stockUpdate.affectedRows !== 1) throw new Error('Regional stock changed during the purchase');
-    // O ledger de ouro ja foi gravado pela transferencia acima.
+    // The gold ledger was already written by the transfer above.
     await tx.recordInventoryLedger(conn, { characterId: request.characterId, baseId: request.baseId, delta: valid.count, reason: 'regional_purchase', module: 'economy-regional', idempotencyKey: `${valid.key}:inventory` });
     const transactionId = await record(conn, { key: valid.key, characterId: request.characterId, holdId: request.holdId, direction: 'buy', baseId: request.baseId, count: valid.count, unitPrice, gross, tax: 0 });
     await conn.commit();
@@ -163,12 +163,12 @@ async function sell(request, dependencies = {}) {
     const tax = Math.ceil(gross * Number(hold.tax_rate || 0));
     const net = gross - tax;
     await tx.applyInventoryDelta(conn, request.characterId, request.baseId, -valid.count);
-    // O NPC paga o bruto contra `system:regional_market` — este e o ponto em que
-    // septim entra no mundo, e agora ele tem linha em vez de aparecer do nada.
-    // Depois o vendedor paga o imposto ao Hold, que e a segunda transferencia.
-    // Ate 13/08/2026 era `applyGoldDelta(net)` + `UPDATE holds SET treasury`
-    // solto: o liquido chegava sem dizer de onde, e o imposto entrava no tesouro
-    // sem nenhum rastro (Achado 2 de `ECONOMY_FRAMEWORK_AUDIT.md`).
+    // The NPC pays the gross amount against `system:regional_market` — this is the point where
+    // septims enter the world, and now they have a row instead of appearing out of nowhere.
+    // Then the seller pays the tax to the Hold, which is the second transfer.
+    // Until 2026-08-13 it was `applyGoldDelta(net)` + a loose `UPDATE holds SET treasury`:
+    // the net amount arrived without saying where from, and the tax went into the treasury
+    // without any trail (Finding 2 of `ECONOMY_FRAMEWORK_AUDIT.md`).
     const pagamento = await economy.transferInTransaction(conn, {
       from: { type: 'system', ref: 'regional_market' },
       to: { type: 'character', ref: request.characterId },
@@ -199,7 +199,7 @@ async function sell(request, dependencies = {}) {
       [request.holdId, request.baseId, unitPrice, buyPrice(stock, baseValue(priceEntry)), Math.min(100, 50 + valid.count), valid.count]
     );
     await tx.recordInventoryLedger(conn, { characterId: request.characterId, baseId: request.baseId, delta: -valid.count, reason: 'regional_sale', module: 'economy-regional', idempotencyKey: `${valid.key}:inventory` });
-    // O ledger de ouro ja foi gravado pelas duas transferencias acima.
+    // The gold ledger was already written by the two transfers above.
     const transactionId = await record(conn, { key: valid.key, characterId: request.characterId, holdId: request.holdId, direction: 'sell', baseId: request.baseId, count: valid.count, unitPrice, gross, tax });
     await conn.commit();
     committed = true;
@@ -220,7 +220,7 @@ async function finish(conn, result, committed) {
 }
 
 async function safeRollback(conn) {
-  try { await conn.rollback(); } catch { /* preserva o erro original */ }
+  try { await conn.rollback(); } catch { /* keep the original error */ }
 }
 
 function replayResult(row) {
