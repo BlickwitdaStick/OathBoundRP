@@ -10,20 +10,20 @@ const LATENCY_BUCKETS_MS = [25, 50, 100, 250, 500, 1000, 2500, 5000, Infinity];
 
 function usage() {
   return [
-    'Uso: node scripts/run-service-soak.js --url <health-url> [--url <url> ...]',
-    '  --duration-seconds <n>  duração total (default: 60)',
-    '  --workers <n>           clientes concorrentes por URL (default: 5)',
-    '  --interval-ms <n>       pausa mínima por worker (default: 1000)',
-    '  --timeout-ms <n>        timeout de cada GET (default: 5000)',
-    '  --max-error-rate <n>    fração 0..1 que define sucesso (default: 0.01)',
-    '  --output <arquivo>      relatório JSON (default: reports/soak-<data>.json)'
+    'Usage: node scripts/run-service-soak.js --url <health-url> [--url <url> ...]',
+    '  --duration-seconds <n>  total duration (default: 60)',
+    '  --workers <n>           concurrent clients per URL (default: 5)',
+    '  --interval-ms <n>       minimum pause per worker (default: 1000)',
+    '  --timeout-ms <n>        timeout of each GET (default: 5000)',
+    '  --max-error-rate <n>    0..1 fraction that defines success (default: 0.01)',
+    '  --output <file>         JSON report (default: reports/soak-<date>.json)'
   ].join('\n');
 }
 
 function parseNumber(value, name, { min, max }) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < min || number > max) {
-    throw new Error(`${name} deve estar entre ${min} e ${max}.`);
+    throw new Error(`${name} must be between ${min} and ${max}.`);
   }
   return number;
 }
@@ -37,7 +37,7 @@ function parseArgs(argv) {
     const arg = argv[index];
     const value = argv[index + 1];
     if (arg === '--help' || arg === '-h') return { help: true };
-    if (!arg.startsWith('--') || value === undefined) throw new Error(`Argumento inválido: ${arg}`);
+    if (!arg.startsWith('--') || value === undefined) throw new Error(`Invalid argument: ${arg}`);
     index++;
     if (arg === '--url') options.urls.push(value);
     else if (arg === '--duration-seconds') options.durationSeconds = parseNumber(value, arg, { min: 1, max: 86400 });
@@ -46,12 +46,12 @@ function parseArgs(argv) {
     else if (arg === '--timeout-ms') options.timeoutMs = parseNumber(value, arg, { min: 100, max: 60000 });
     else if (arg === '--max-error-rate') options.maxErrorRate = parseNumber(value, arg, { min: 0, max: 1 });
     else if (arg === '--output') options.output = value;
-    else throw new Error(`Opção desconhecida: ${arg}`);
+    else throw new Error(`Unknown option: ${arg}`);
   }
-  if (options.urls.length === 0) throw new Error('Informe pelo menos um --url.');
+  if (options.urls.length === 0) throw new Error('Provide at least one --url.');
   options.urls = [...new Set(options.urls.map((raw) => {
     const url = new URL(raw);
-    if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Protocolo não permitido: ${url.protocol}`);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error(`Protocol not allowed: ${url.protocol}`);
     url.username = '';
     url.password = '';
     return url.toString();
@@ -161,7 +161,7 @@ async function main(argv = process.argv.slice(2)) {
   const output = path.resolve(options.output || path.join('reports', `soak-${report.startedAt.replace(/[:.]/g, '-')}.json`));
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
-  console.log(`[soak] ${report.passed ? 'PASS' : 'FAIL'} — relatório: ${output}`);
+  console.log(`[soak] ${report.passed ? 'PASS' : 'FAIL'} — report: ${output}`);
   return report.passed ? 0 : 2;
 }
 
