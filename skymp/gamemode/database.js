@@ -50,18 +50,18 @@ async function getConnection() {
 }
 
 /**
- * Fecha o pool e libera o event loop.
+ * Closes the pool and frees the event loop.
  *
- * O servidor de jogo nunca chama isto — ele roda até ser desligado. Quem precisa
- * é script de linha de comando: enquanto o pool existe, o mysql2 mantém sockets
- * abertos e o Node não encerra sozinho.
+ * The game server never calls this — it runs until it is shut down. What needs it
+ * is a command-line script: while the pool exists, mysql2 keeps sockets
+ * open and Node does not exit on its own.
  *
- * `scripts/verify-governance-market-stalls.js` já chamava `db.close()`, atrás de
- * um `if (typeof db.close === 'function')` — e esta função não existia, então o
- * guard nunca disparava. O resultado era que `RUN_DB_CHECK=1 npm run
- * test:systems` imprimia "10/10 checks passaram" e **ficava pendurado para
- * sempre**, sem devolver o prompt. Num CI com banco, o job só terminaria no
- * timeout, e o relatório diria "cancelado" em vez de "passou".
+ * `scripts/verify-governance-market-stalls.js` already called `db.close()`, behind
+ * an `if (typeof db.close === 'function')` — and this function did not exist, so the
+ * guard never fired. The result was that `RUN_DB_CHECK=1 npm run
+ * test:systems` printed "10/10 checks passed" and **hung
+ * forever**, without giving the prompt back. In a CI with a database, the job would only end on
+ * timeout, and the report would say "cancelled" instead of "passed".
  */
 async function close() {
   if (!pool) return;

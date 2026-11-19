@@ -122,10 +122,10 @@ module.exports = {
   cacheKnownIdentity,
   loadKnownIdentities,
   forgetKnownIdentities,
-  // Exportada em 13/08/2026 para o `canSee` de `identity.introduce`: ele
-  // precisa saber se o alvo JA conhece quem se apresenta, e precisa saber isso
-  // de graca. Le o cache em memoria carregado no login do observador — nenhuma
-  // ida ao banco no caminho de montar um menu (§22 do pedido).
+  // Exported on 2026-08-13 for the `canSee` of `identity.introduce`: it
+  // needs to know whether the target ALREADY knows whoever is introducing themselves, and it needs to know that
+  // for free. It reads the in-memory cache loaded at the observer's login — no
+  // trip to the DB on the path that builds a menu (§22 of the request).
   getKnownDisplayName,
   getDisplayName,
   upsertKnownIdentity,

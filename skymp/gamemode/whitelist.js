@@ -6,9 +6,9 @@ const characterState = require('./core/character-state');
 const serverOptions = require('./core/server-options');
 const transactionService = require('./core/transaction-service');
 const economyPhysicalSync = require('./core/economy-physical-sync');
-// NOTA: nenhum módulo PARKED é importado aqui. Eles são inicializados
-// exclusivamente pelo module-registry quando a flag ENABLE_* correspondente
-// está ligada — importar direto no boot os faria rodar sem passar pelo registry.
+// NOTE: no PARKED module is imported here. They are initialized
+// exclusively by the module-registry when the matching ENABLE_* flag
+// is on — importing them directly at boot would make them run without going through the registry.
 
 function allowLocalAutoWhitelist(profileId) {
   if (process.env.NODE_ENV === 'production') return false;
@@ -24,17 +24,17 @@ function accountIdFromProfileId(profileId) {
 }
 
 /**
- * Concede o ouro inicial (`economy.startingGold`) uma única vez por personagem.
+ * Grants the starting gold (`economy.startingGold`) exactly once per character.
  *
- * A garantia de "uma vez só" vem da `idempotency_key` UNIQUE de
- * `gold_transactions`: a chave é derivada do characterId, então a segunda
- * tentativa é ignorada pelo próprio `transaction-service`. Sem isso, o ouro
- * seria concedido a cada login e viraria uma fonte infinita de dinheiro —
- * exatamente o tipo de coisa que a economia server-authoritative existe pra
- * impedir.
+ * The "only once" guarantee comes from the UNIQUE `idempotency_key` of
+ * `gold_transactions`: the key is derived from the characterId, so the second
+ * attempt is ignored by `transaction-service` itself. Without that, the gold
+ * would be granted on every login and become an infinite source of money —
+ * exactly the kind of thing the server-authoritative economy exists to
+ * prevent.
  *
- * Personagens criados pelo painel (`apps/web`) nascem com o default do banco;
- * é aqui, no primeiro spawn, que a opção de gameplay é aplicada.
+ * Characters created through the panel (`apps/web`) are born with the DB default;
+ * it is here, on the first spawn, that the gameplay option is applied.
  */
 async function grantStartingGold(characterId) {
   const startingGold = serverOptions.get('economy.startingGold');
@@ -49,27 +49,27 @@ async function grantStartingGold(characterId) {
       idempotencyKey: `starting_gold:${characterId}`
     });
   } catch (err) {
-    // Não bloqueia o spawn: entrar sem o ouro inicial é um problema pequeno
-    // perto de não conseguir entrar.
-    console.error(`[whitelist] Falha ao conceder ouro inicial para ${characterId}:`, err.message);
+    // Does not block the spawn: joining without the starting gold is a small problem
+    // compared to not being able to join.
+    console.error(`[whitelist] Failed to grant starting gold to ${characterId}:`, err.message);
   }
 }
 
 /**
- * Deriva a alma e entrega o primeiro sinal (`SOUL_AFFINITY.md` §II.1).
+ * Derives the soul and delivers the first sign (`SOUL_AFFINITY.md` §II.1).
  *
- * É aqui e não no `initialize()` do módulo porque o sinal é do **primeiro
- * spawn**, não do boot do servidor: "todo personagem recebe o primeiro sinal na
- * primeira sessão" resolve o problema mais mortal de servidor de RP, que não é
- * balanceamento — é a primeira hora ser vazia.
+ * It is here and not in the module's `initialize()` because the sign belongs to the **first
+ * spawn**, not to server boot: "every character receives the first sign in the
+ * first session" solves an RP server's deadliest problem, which is not
+ * balancing — it is the first hour being empty.
  *
- * O require é preguiçoso e atrás do `isEnabled`, pela mesma razão da nota no
- * topo deste arquivo: importar no topo faria o módulo carregar mesmo com
- * `ENABLE_SOUL_SERVICE` desligado, e o `soul-service` lança no boot quando falta
- * `SOUL_SECRET`. Com a flag desligada nada aqui roda, nem o require.
+ * The require is lazy and behind `isEnabled`, for the same reason as the note at the
+ * top of this file: importing at the top would make the module load even with
+ * `ENABLE_SOUL_SERVICE` off, and `soul-service` throws at boot when
+ * `SOUL_SECRET` is missing. With the flag off nothing here runs, not even the require.
  *
- * Não bloqueia o spawn — mesma escolha do ouro inicial: entrar sem o sinal é um
- * problema pequeno perto de não conseguir entrar.
+ * Does not block the spawn — same choice as the starting gold: joining without the sign is a
+ * small problem compared to not being able to join.
  */
 async function revelarPrimeiroSinal(characterId) {
   const moduleRegistry = require('./core/module-registry');
@@ -78,7 +78,7 @@ async function revelarPrimeiroSinal(characterId) {
   try {
     await require('./soul-service').onFirstSpawn(characterId);
   } catch (err) {
-    console.error(`[whitelist] Falha ao revelar o primeiro sinal para ${characterId}:`, err.message);
+    console.error(`[whitelist] Failed to reveal the first sign for ${characterId}:`, err.message);
   }
 }
 
@@ -110,7 +110,7 @@ async function checkWhitelist(userId, profileId, actorId) {
         return false;
       }
       console.log(`[whitelist] Account not found for profileId: ${profileId}. Auto-registering local account...`);
-      // Apenas para laboratório local. NUNCA em produção.
+      // Local lab only. NEVER in production.
       await db.query(`INSERT INTO accounts (id, status) VALUES (?, 'active')`, [accountId]);
       await db.query(
         `INSERT INTO discord_identities (discord_id, account_id, username) VALUES (?, ?, ?)`,
@@ -121,14 +121,14 @@ async function checkWhitelist(userId, profileId, actorId) {
       account = accountRows[0];
     }
 
-    // 2. Verificar se a conta está ativa
+    // 2. Check that the account is active
     if (account.status !== 'active') {
       console.log(`[whitelist] Account ${account.id} is NOT active (status: ${account.status}). Kicking user ${userId}...`);
       if (typeof mp !== 'undefined') mp.kick(userId);
       return false;
     }
 
-    // 3. Verificar aprovação de Whitelist
+    // 3. Check Whitelist approval
     let wlRows = await db.query(
       `SELECT status FROM whitelist_applications WHERE account_id = ? AND status = 'approved'`,
       [account.id]
@@ -148,11 +148,11 @@ async function checkWhitelist(userId, profileId, actorId) {
       }
     }
 
-    // 4. Verificar se possui personagem ativo e aprovado
-    // ORDER BY + LIMIT 1: hoje só existe 1 personagem approved por conta (a
-    // aplicação bloqueia reenvio com pendente/aprovada ativa), mas sem isso
-    // a query pega uma linha arbitrária do banco se isso mudar no futuro
-    // (ex: suporte a personagem principal + alt).
+    // 4. Check that there is an active, approved character
+    // ORDER BY + LIMIT 1: today there is only 1 approved character per account (the
+    // application blocks resubmission while one is pending/approved), but without this
+    // the query would pick an arbitrary row from the DB if that changes in the future
+    // (e.g. support for a main character + alt).
     let charRows = await db.query(
       `SELECT * FROM characters WHERE account_id = ? AND status = 'approved' ORDER BY id DESC LIMIT 1`,
       [account.id]
@@ -190,26 +190,26 @@ async function checkWhitelist(userId, profileId, actorId) {
 
     console.log(`[whitelist] Whitelist check passed! Welcome, ${character.first_name} ${character.last_name}`);
     
-    // Registrar na memória cache de comandos
+    // Register in the commands' memory cache
     commands.registerActiveCharacter(actorId, character, account.id, profileId);
 
-    // Registrar cargo de staff (carregado de staff_roles, não de vip_level)
+    // Register the staff role (loaded from staff_roles, not from vip_level)
     await adminService.registerStaffRole(actorId, account.id);
     
-    // Inicializar máquina de estados (carrega IMPRISONED/RESTRAINED do banco)
+    // Initialize the state machine (loads IMPRISONED/RESTRAINED from the DB)
     await characterState.initialize(character.id);
 
     await grantStartingGold(character.id);
     await revelarPrimeiroSinal(character.id);
 
-    // Anti-cheat de ouro físico (Gold001 nunca deveria existir no inventário
-    // — ver core/economy-physical-sync.js). Não bloqueia login por design,
-    // mesma filosofia de grantStartingGold acima.
+    // Physical gold anti-cheat (Gold001 should never exist in the inventory
+    // — see core/economy-physical-sync.js). Does not block login by design,
+    // same philosophy as grantStartingGold above.
     economyPhysicalSync.reconcileOnLogin(actorId, character.id).catch((err) => {
-      console.error(`[whitelist] Falha no anti-cheat de ouro físico para ${character.id}:`, err.message);
+      console.error(`[whitelist] Physical gold anti-cheat failed for ${character.id}:`, err.message);
     });
 
-    // 5. Atualizar posição do jogador in-game a partir do banco de dados
+    // 5. Update the player's in-game position from the database
     if (typeof mp !== 'undefined' && actorId) {
       console.log(`[whitelist] Moving actor ${actorId.toString(16)} to db location: pos=[${character.pos_x}, ${character.pos_y}, ${character.pos_z}] cell=${character.cell_id}`);
       
@@ -224,7 +224,7 @@ async function checkWhitelist(userId, profileId, actorId) {
         mp.set(actorId, 'browserVisible', true);
         console.log(`[whitelist] Spawn locData applied successfully for ${character.first_name} ${character.last_name}`);
         
-        // Sincroniza o Inventário do Banco de Dados para o Cliente (com reconciliação)
+        // Sync the database inventory to the client (with reconciliation)
         await inventoryService.syncInventoryToClient(actorId, character.id);
         
       } catch (err) {

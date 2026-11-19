@@ -1,28 +1,28 @@
 /**
  * economy-regional.js
- * Economia Regional com Oferta, Demanda e Impostos por Hold (Fase Beta).
+ * Regional Economy with Supply, Demand and Taxes per Hold (Beta Phase).
  *
- * Mecânica:
- * - Cada Hold tem preços de compra/venda independentes.
- * - Estoque (stock) cai quando jogadores vendem; sobe com tempo.
- * - Quando estoque está alto (saturado), o preço de venda cai (oferta>demanda).
- * - Quando estoque está baixo, o preço de venda sobe (demanda>oferta).
- * - Sobre toda transação, um imposto (tax_rate do Hold) vai ao tesouro regional.
+ * Mechanics:
+ * - Each Hold has independent buy/sell prices.
+ * - Stock falls when players sell; it rises over time.
+ * - When stock is high (saturated), the sell price drops (supply>demand).
+ * - When stock is low, the sell price rises (demand>supply).
+ * - On every transaction, a tax (the Hold's tax_rate) goes to the regional treasury.
  */
 
 const db = require('./database');
-// Compra e venda usam uma fronteira unica: inventario, ouro, estoque, imposto
-// e os tres ledgers so ficam visiveis depois do mesmo COMMIT.
+// Buying and selling use a single boundary: inventory, gold, stock, tax
+// and the three ledgers only become visible after the same COMMIT.
 const regionalMarketTransactions = require('./core/regional-market-transaction-service');
 const institutionalTreasury = require('./core/institutional-treasury-service');
 const admin = require('./admin-service');
 const commands = require('./commands');
 
-// Hold atual de cada personagem (será detectado por posição futuramente)
-// Por ora, 'whiterun' como padrão
+// Each character's current Hold (will be detected by position in the future)
+// For now, 'whiterun' by default
 const characterHold = new Map(); // characterId -> holdId
 
-// Cache dos preços (recarregado a cada 5min)
+// Price cache (reloaded every 5min)
 let pricesCache = {};
 let holdCache   = {};
 
@@ -44,23 +44,23 @@ async function refreshCacheAfterCommit(operation) {
   try {
     await loadCache();
   } catch (err) {
-    // O commit ja aconteceu; cache atrasado nao pode transformar uma compra ou
-    // venda confirmada em erro para o jogador. A proxima recarga periodica
-    // tentara novamente e a transacao continua consultando o banco como fonte
-    // de verdade.
-    console.error(`[economy-regional] Cache nao recarregado apos ${operation}:`, err.message);
+    // The commit already happened; a stale cache must not turn a confirmed purchase or
+    // sale into an error for the player. The next periodic reload
+    // will try again and the transaction still queries the DB as the source
+    // of truth.
+    console.error(`[economy-regional] Cache not reloaded after ${operation}:`, err.message);
   }
 }
 
 setInterval(() => {
-  loadCache().catch(err => console.error('[economy-regional] Falha ao recarregar cache:', err.message));
+  loadCache().catch(err => console.error('[economy-regional] Failed to reload cache:', err.message));
 }, 5 * 60 * 1000);
 
 async function initRegionalEconomy() {
   await loadCache();
-  // Ticker de restoque: a cada 15 minutos restaura 5% do estoque
+  // Restock ticker: every 15 minutes restores 5% of stock
   setInterval(() => {
-    restockTick().catch(err => console.error('[economy-regional] Falha no restockTick:', err.message));
+    restockTick().catch(err => console.error('[economy-regional] restockTick failed:', err.message));
   }, 15 * 60 * 1000);
   console.log('[economy-regional] Regional economy initialized.');
 }
@@ -77,27 +77,27 @@ function getBaseValue(entry) {
 }
 
 /**
- * Preco que o NPC paga ao jogador (Spread punitivo: 40% do base)
+ * Price the NPC pays the player (punitive spread: 40% of base)
  */
 function getDynamicSellPrice(stock, baseValue) {
   let price = baseValue * 0.4;
   if (stock >= 70) price *= 0.5; // Muito estoque = paga miseria
-  if (stock <= 30) price *= 1.5; // Pouco estoque = paga um pouco melhor
+  if (stock <= 30) price *= 1.5; // Low stock = pays a bit better
   return Math.max(1, Math.floor(price));
 }
 
 /**
- * Preco que o NPC cobra do jogador (Spread punitivo: 180% do base)
+ * Price the NPC charges the player (punitive spread: 180% of base)
  */
 function getDynamicBuyPrice(stock, baseValue) {
   let price = baseValue * 1.8;
   if (stock <= 30) price *= 1.4; // Pouco estoque = cobra absurdo
-  if (stock >= 70) price *= 0.8; // Muito estoque = cobra um pouco menos
+  if (stock >= 70) price *= 0.8; // High stock = charges a bit less
   return Math.max(1, Math.floor(price));
 }
 
 /**
- * /sell [baseId] [qty] — Vende item ao mercado regional do Hold atual.
+ * /sell [baseId] [qty] — Sells an item to the current Hold's regional market.
  */
 async function sellToMarket(actorId, characterId, baseId, qty = 1, idempotencyKey) {
   const holdId = characterHold.get(characterId) || 'whiterun';
@@ -105,7 +105,7 @@ async function sellToMarket(actorId, characterId, baseId, qty = 1, idempotencyKe
   try {
     result = await regionalMarketTransactions.sell({ actorId, characterId, holdId, baseId, count: qty, idempotencyKey });
   } catch (err) {
-    console.error(`[economy-regional] Falha atomica na venda em ${holdId}:`, err.message);
+    console.error(`[economy-regional] Atomic failure selling in ${holdId}:`, err.message);
     const message = /Insufficient stock|does not own item/i.test(err.message)
       ? 'You do not have enough items.'
       : 'Technical failure: the sale was not completed.';
@@ -143,7 +143,7 @@ async function buyFromMarket(actorId, characterId, baseId, qty = 1, idempotencyK
   try {
     result = await regionalMarketTransactions.buy({ actorId, characterId, holdId, baseId, count: qty, idempotencyKey });
   } catch (err) {
-    console.error(`[economy-regional] Falha atomica na compra em ${holdId}:`, err.message);
+    console.error(`[economy-regional] Atomic failure buying in ${holdId}:`, err.message);
     const message = /Insufficient gold/i.test(err.message) ? 'Insufficient gold.' : 'Technical failure: the purchase was not completed.';
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [message]);
     return false;
@@ -168,7 +168,7 @@ async function buyFromMarket(actorId, characterId, baseId, qty = 1, idempotencyK
 }
 
 /**
- * /marketinfo — Exibe preços do mercado local do Hold atual.
+ * /marketinfo — Shows the prices of the current Hold's local market.
  */
 async function showMarketInfo(actorId, characterId) {
   const holdId = characterHold.get(characterId) || 'whiterun';
@@ -191,14 +191,14 @@ async function showMarketInfo(actorId, characterId) {
 }
 
 /**
- * Atualiza o Hold atual de um personagem (chamado por detecção de posição).
+ * Updates a character's current Hold (called by position detection).
  */
 function setCharacterHold(characterId, holdId) {
   characterHold.set(characterId, holdId);
 }
 
 /**
- * Lord: /holdwithdraw [amount] - Saca impostos da cidade para o cofre da facção.
+ * Lord: /holdwithdraw [amount] - Withdraws the city's taxes into the faction vault.
  */
 async function withdrawHoldTreasury(actorId, characterId, amount, idempotencyKey) {
   const holdId = characterHold.get(characterId) || 'whiterun';
@@ -211,7 +211,7 @@ async function withdrawHoldTreasury(actorId, characterId, amount, idempotencyKey
       idempotencyKey
     });
   } catch (err) {
-    console.error(`[economy-regional] Falha atomica no saque do hold ${holdId}:`, err.message);
+    console.error(`[economy-regional] Atomic failure withdrawing from hold ${holdId}:`, err.message);
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Technical failure: no gold was transferred.']);
     return false;
   }
@@ -240,12 +240,12 @@ async function withdrawHoldTreasury(actorId, characterId, amount, idempotencyKey
 }
 
 /**
- * Staff: /settax [holdId] [rate] — Define imposto de um Hold.
+ * Staff: /settax [holdId] [rate] — Sets a Hold's tax.
  *
- * Exige `set_gold`, e não uma permissão nova. `set_gold` já significa "a staff
- * escreve um número da economia por decreto, com audit log" — que é exatamente
- * isto, aplicado ao fluxo em vez do saldo. Inventar uma `manage_economy` para um
- * único sítio de chamada criaria um nome que nenhum cargo concede hoje.
+ * It requires `set_gold`, not a new permission. `set_gold` already means "staff
+ * write a number into the economy by decree, with an audit log" — which is exactly
+ * this, applied to the flow instead of the balance. Inventing a `manage_economy` for a
+ * single call site would create a name no role grants today.
  */
 async function setTaxRate(actorId, holdId, rate) {
   if (!admin.hasPermission(actorId, 'set_gold')) return;
@@ -261,10 +261,10 @@ async function setTaxRate(actorId, holdId, rate) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function getInteractionSections(actorId, targetActorId) {
-  // Apenas NPCs (nao-players) oferecem o mercado regional
+  // Only NPCs (non-players) offer the regional market
   const commands = require('./commands');
   const targetChar = commands.getActiveCharacterData(targetActorId);
-  if (targetChar) return []; // Se tem data, eh player
+  if (targetChar) return []; // If it has data, it is a player
 
   const ch = commands.getActiveCharacterData(actorId);
   if (!ch) return [];

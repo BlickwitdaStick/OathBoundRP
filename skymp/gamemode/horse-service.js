@@ -1,25 +1,25 @@
 /**
  * horse-service.js
- * Sistema de Cavalos Persistentes.
+ * Persistent Horses System.
  *
- * O cavalo é um ator no mundo do Skyrim. Quando o servidor inicia,
- * os cavalos de jogadores são re-spawned na última posição salva.
- * A saúde e posição são persistidas a cada 30s (ticker).
+ * The horse is an actor in the Skyrim world. When the server starts,
+ * players' horses are re-spawned at their last saved position.
+ * Health and position are persisted every 30s (ticker).
  *
- * Mecânicas:
- * - /myhorse          → Mostra o status do cavalo
- * - /callhorse        → "Chama" o cavalo (teleporta perto do jogador)
- * - /namehorse [nome] → Renomeia o cavalo
- * - /sellhorse [actorId] [preço] → Coloca à venda para outro jogador
- * - /buyhorse [id]    → Compra cavalo listado
+ * Mechanics:
+ * - /myhorse          → Shows the horse's status
+ * - /callhorse        → "Calls" the horse (teleports it near the player)
+ * - /namehorse [name] → Renames the horse
+ * - /sellhorse [actorId] [price] → Puts it up for sale to another player
+ * - /buyhorse [id]    → Buys a listed horse
  */
 
 const db = require('./database');
-// Ver nota em economy-regional.js: ouro so pelo transaction-service.
+// See the note in economy-regional.js: gold only through transaction-service.
 const transactionService = require('./core/transaction-service');
 const commands = require('./commands');
 
-// FormIDs de raças de cavalos vanilla (Skyrim.esm)
+// FormIDs of vanilla horse races (Skyrim.esm)
 const HORSE_BREEDS = {
   0x0010BF82: { name: 'Bay Horse',       base_price: 1000 },
   0x00012E49: { name: 'Black Horse',     base_price: 1200 },
@@ -28,11 +28,11 @@ const HORSE_BREEDS = {
   0x0010BF84: { name: 'White Horse',     base_price: 1300 },
 };
 
-// Cache em memória: characterId -> { horseId, name, health, actorRefId }
+// In-memory cache: characterId -> { horseId, name, health, actorRefId }
 const mountedHorses = new Map();
 
 /**
- * Carrega o cavalo de um personagem ao logar.
+ * Loads a character's horse on login.
  */
 async function loadHorse(actorId, characterId) {
   const rows = await db.query(
@@ -46,11 +46,11 @@ async function loadHorse(actorId, characterId) {
 }
 
 /**
- * Ticker: salva posição e saúde dos cavalos ativos a cada 30s.
+ * Ticker: saves position and health of active horses every 30s.
  */
 async function tickHorses() {
   for (const [charId, data] of mountedHorses.entries()) {
-    // Atualiza no banco (posição seria detectada via mp.get no futuro)
+    // Updates the DB (position would be detected via mp.get in the future)
     await db.query(
       'UPDATE horses SET health = ? WHERE id = ?',
       [data.health, data.horseId]
@@ -81,7 +81,7 @@ async function showHorse(actorId, characterId) {
 }
 
 /**
- * /callhorse — Teleporta o cavalo para junto do jogador.
+ * /callhorse — Teleports the horse next to the player.
  */
 async function callHorse(actorId, characterId) {
   const rows = await db.query('SELECT id, name FROM horses WHERE owner_character_id = ?', [characterId]);
@@ -89,8 +89,8 @@ async function callHorse(actorId, characterId) {
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['You do not own a horse.']);
     return;
   }
-  // O SkyMP ainda não suporta spawn dinâmico de NPCs acompanhantes —
-  // por ora emitimos uma notificação narrativa e salvamos intenção.
+  // SkyMP does not support dynamic spawning of companion NPCs yet —
+  // for now we send a narrative notification and save the intent.
   if (typeof mp !== 'undefined') {
     mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
       `${rows[0].name} gallops toward you...`
@@ -118,7 +118,7 @@ async function nameHorse(actorId, characterId, newName) {
 }
 
 /**
- * /sellhorse [preço] — Coloca o cavalo à venda no mercado.
+ * /sellhorse [price] — Puts the horse up for sale on the market.
  */
 async function listHorseForSale(actorId, characterId, price) {
   if (price <= 0) return;
@@ -129,7 +129,7 @@ async function listHorseForSale(actorId, characterId, price) {
 }
 
 /**
- * /horselist — Lista cavalos à venda.
+ * /horselist — Lists horses for sale.
  */
 async function listHorses(actorId) {
   const rows = await db.query(
@@ -146,10 +146,10 @@ async function listHorses(actorId) {
 }
 
 /**
- * /buyhorse [id] — Compra um cavalo listado.
+ * /buyhorse [id] — Buys a listed horse.
  */
 async function buyHorse(actorId, characterId, horseId) {
-  // Verifica se já possui cavalo
+  // Check whether they already own a horse
   const owned = await db.query('SELECT id FROM horses WHERE owner_character_id = ?', [characterId]);
   if (owned.length > 0) {
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['You already own a horse. Sell it first.']);
@@ -166,7 +166,7 @@ async function buyHorse(actorId, characterId, horseId) {
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Not enough gold. Price: ${horse.sale_price}g.`]);
     return;
   }
-  // Transfere lucro ao antigo dono
+  // Transfer the proceeds to the previous owner
   if (horse.owner_character_id) {
     await transactionService.addGold({ characterId: horse.owner_character_id, amount: horse.sale_price, reason: 'horse_sale', module: 'horse' });
   }

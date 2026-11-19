@@ -1,55 +1,55 @@
 /**
- * inventory-service.js — projeção do inventário no cliente
+ * inventory-service.js — projecting the inventory onto the client
  *
- * ⚠️ **Este arquivo não é o Inventory Framework.** Desde 13/08/2026, a API
- * central de movimentação de item é `core/inventory.js`, e a documentação dela
- * é `docs/framework/INVENTORY_FRAMEWORK.md`. O que sobrou aqui é a outra
- * metade do assunto: levar o que o banco sabe até a tela do jogador, e os três
- * atalhos históricos (`giveItem`/`removeItem`/`hasItem`) que continuam válidos
- * para o caso de **um dono só**.
+ * ⚠️ **This file is not the Inventory Framework.** Since 2026-08-13, the central
+ * item-movement API is `core/inventory.js`, and its documentation
+ * is `docs/framework/INVENTORY_FRAMEWORK.md`. What remains here is the other
+ * half of the subject: taking what the DB knows to the player's screen, and the three
+ * historical shortcuts (`giveItem`/`removeItem`/`hasItem`) that are still valid
+ * for the **single owner** case.
  *
- * Qual usar:
+ * Which one to use:
  *
- *   - um dono muda (staff dá item, recompensa)      → daqui, ou transaction-service
- *   - **dois** donos (troca, baú, barraca, craft)   → `core/inventory.transfer`
+ *   - one owner changes (staff gives an item, a reward) → from here, or transaction-service
+ *   - **two** owners (trade, chest, stall, craft)       → `core/inventory.transfer`
  *
- * ─── Limite conhecido da reconciliação ──────────────────────────────────────
+ * ─── Known limit of the reconciliation ──────────────────────────────────────
  *
- * `syncInventoryToClient` é **unidirecional**: ela entrega ao cliente o que o
- * banco conhece e nunca faz o contrário. Ela não remove do cliente o que o
- * cliente tem e o banco não conhece, não compara contagens, e roda uma vez só
- * (chamador único: `whitelist.js`).
+ * `syncInventoryToClient` is **one-way**: it hands the client what the
+ * DB knows and never the reverse. It does not remove from the client what the
+ * client has and the DB does not know, does not compare counts, and runs only once
+ * (single caller: `whitelist.js`).
  *
- * Consequência: item pego do chão, saque de NPC vanilla e recompensa de quest
- * existem só no cliente, para sempre. Isso é a fronteira nomeada no
- * `docs/technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md` §3 — fechá-la exige ler
- * `mp.get(id,'inventory')` (ainda **[DOC]** em `types/mp.d.ts`, nunca
- * exercitada) e decidir uma política de divergência, que é decisão de jogo.
+ * Consequence: items picked up from the ground, vanilla NPC loot and quest rewards
+ * exist only on the client, forever. That is the boundary named in
+ * `docs/technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md` §3 — closing it requires reading
+ * `mp.get(id,'inventory')` (still **[DOC]** in `types/mp.d.ts`, never
+ * exercised) and deciding a divergence policy, which is a game decision.
  *
- * Serviço de inventário com reconciliação para prevenir duplicatas.
+ * Inventory service with reconciliation to prevent duplicates.
  *
- * IMPORTANTE: Este serviço NÃO modifica o banco diretamente.
- * Toda mudança de item usa core/transaction-service para garantir
- * atomicidade e rastreabilidade no ledger.
+ * IMPORTANT: This service does NOT modify the DB directly.
+ * Every item change uses core/transaction-service to guarantee
+ * atomicity and traceability in the ledger.
  *
- * Reconciliação:
- * - No login, o servidor lê o snapshot do banco (character_inventory)
- * - Compara com o que foi entregue nessa sessão (flag em memória)
- * - Só chama AddItem para itens ainda não sincronizados
- * - Divergências são logadas para revisão manual
+ * Reconciliation:
+ * - On login, the server reads the DB snapshot (character_inventory)
+ * - Compares it with what was delivered in this session (in-memory flag)
+ * - Only calls AddItem for items not yet synced
+ * - Divergences are logged for manual review
  */
 
 const db = require('./database');
 const transactionService = require('./core/transaction-service');
 const { actorRef } = require('./core/papyrus');
 
-// Cache de itens já sincronizados nessa sessão: characterId → Set<baseId>
-// Reset automático na desconexão (cleanup via removeActiveCharacter)
+// Cache of items already synced in this session: characterId → Set<baseId>
+// Reset automatically on disconnect (cleanup via removeActiveCharacter)
 const _syncedThisSession = new Map();
 
 /**
- * Sincroniza o inventário do banco de dados para o cliente.
- * Usa reconciliação para prevenir duplicatas em reconexões.
+ * Syncs the inventory from the database to the client.
+ * Uses reconciliation to prevent duplicates on reconnects.
  *
  * @param {number} actorId
  * @param {number} characterId
@@ -61,7 +61,7 @@ async function syncInventoryToClient(actorId, characterId) {
       [characterId]
     );
 
-    // Inicializar set de sincronizados para essa sessão
+    // Initialize the synced set for this session
     if (!_syncedThisSession.has(characterId)) {
       _syncedThisSession.set(characterId, new Set());
     }
@@ -72,7 +72,7 @@ async function syncInventoryToClient(actorId, characterId) {
 
     for (const row of rows) {
       if (synced.has(row.base_id)) {
-        // Já foi entregue nessa sessão — pular para prevenir duplicata
+        // Already delivered in this session — skip to prevent a duplicate
         skippedCount++;
         continue;
       }
@@ -83,30 +83,30 @@ async function syncInventoryToClient(actorId, characterId) {
           synced.add(row.base_id);
           syncedCount++;
         } catch (clientErr) {
-          // Falha no cliente: BD está correto, cliente pode ficar divergente
-          // Será resolvido na próxima sincronização ou reconexão
-          console.error(`[inventory] Aviso: falha ao sincronizar item 0x${row.base_id.toString(16)} para actor ${actorId.toString(16)}:`, clientErr.message);
+          // Client failure: the DB is correct, the client may diverge
+          // It will be resolved on the next sync or reconnect
+          console.error(`[inventory] Warning: failed to sync item 0x${row.base_id.toString(16)} to actor ${actorId.toString(16)}:`, clientErr.message);
         }
       } else {
-        // Sem runtime mp (ambiente de teste) — apenas marcar como sincronizado
+        // No mp runtime (test environment) — just mark as synced
         synced.add(row.base_id);
         syncedCount++;
       }
     }
 
-    console.log(`[inventory] Sync para char ${characterId}: ${syncedCount} itens entregues, ${skippedCount} já sincronizados (total no BD: ${rows.length})`);
+    console.log(`[inventory] Sync for char ${characterId}: ${syncedCount} items delivered, ${skippedCount} already synced (total in DB: ${rows.length})`);
     
     if (skippedCount > 0) {
-      console.log(`[inventory] Reconciliação: ${skippedCount} itens pulados por já estarem na sessão (previne duplicatas)`);
+      console.log(`[inventory] Reconciliation: ${skippedCount} items skipped because they were already in the session (prevents duplicates)`);
     }
 
   } catch (err) {
-    console.error(`[inventory] Erro ao sincronizar inventário para char ${characterId}:`, err.message);
+    console.error(`[inventory] Error syncing inventory for char ${characterId}:`, err.message);
   }
 }
 
 /**
- * Limpa o cache de sincronização ao desconectar.
+ * Clears the sync cache on disconnect.
  * @param {number} characterId
  */
 function clearSyncCache(characterId) {
@@ -114,8 +114,8 @@ function clearSyncCache(characterId) {
 }
 
 /**
- * Concede um item ao personagem (usa transaction-service).
- * Wrapper de conveniência para código legado que chama inventory-service diretamente.
+ * Grants an item to the character (uses transaction-service).
+ * Convenience wrapper for legacy code that calls inventory-service directly.
  *
  * @param {number} actorId
  * @param {number} characterId
@@ -130,7 +130,7 @@ async function giveItem(actorId, characterId, baseId, count, reason = 'unknown',
 }
 
 /**
- * Remove um item do personagem (usa transaction-service).
+ * Removes an item from the character (uses transaction-service).
  *
  * @param {number} actorId
  * @param {number} characterId
@@ -145,8 +145,8 @@ async function removeItem(actorId, characterId, baseId, count, reason = 'unknown
 }
 
 /**
- * Verifica se o personagem possui quantidade suficiente de item.
- * Usa o banco como fonte de verdade.
+ * Checks whether the character has enough of an item.
+ * Uses the database as the source of truth.
  *
  * @param {number} characterId
  * @param {number} baseId

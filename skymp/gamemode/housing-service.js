@@ -1,71 +1,71 @@
-// PARKED — ver docs/technical/PARKED_SERVICES_DECISION.md §6.
+// PARKED — see docs/technical/PARKED_SERVICES_DECISION.md §6.
 //
-// Migrado em 13/08/2026 para o Inventory Framework (`core/inventory.js`).
-// Migrar não é reativar: este módulo continua fora do `core/module-registry.js`.
+// Migrated on 2026-08-13 to the Inventory Framework (`core/inventory.js`).
+// Migrating is not reactivating: this module stays out of `core/module-registry.js`.
 //
-// ─── O que estava errado ────────────────────────────────────────────────────
+// ─── What was wrong ─────────────────────────────────────────────────────────
 //
-// `depositItem` fazia `inventoryService.removeItem()` — que **abre e commita a
-// própria transação** — e só depois dois `db.query` soltos no
-// `container_inventory`, sem `BEGIN` e sem lock. Se qualquer um dos dois
-// falhasse, o item já tinha saído do personagem e não entrava no baú: **sumia**.
+// `depositItem` did `inventoryService.removeItem()` — which **opens and commits its
+// own transaction** — and only then two loose `db.query` calls on
+// `container_inventory`, with no `BEGIN` and no lock. If either of the two
+// failed, the item had already left the character and did not enter the chest: it **vanished**.
 //
-// É a forma do `economy-service.transfer` (apagado em 06/08/2026) e a do
-// `craftItem` pré-Fase 3, agora em container. Terceira ocorrência do mesmo
-// padrão — ver docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md §3.
+// It is the shape of `economy-service.transfer` (deleted on 2026-08-06) and of the
+// pre-Phase-3 `craftItem`, now on containers. Third occurrence of the same
+// pattern — see docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md §3.
 //
-// Agora as duas pontas commitam juntas, pela API que existe para isso.
+// Now both ends commit together, through the API that exists for that.
 const db = require('./database');
-// Ver nota em economy-regional.js: ouro so pelo transaction-service.
+// See the note in economy-regional.js: gold only through transaction-service.
 const transactionService = require('./core/transaction-service');
 const inventory = require('./core/inventory');
 const commands = require('./commands');
 
 const MODULE = 'housing';
 
-// Cache de containers abertos para evitar conflitos concorrentes
-// Chave: objectId (formDesc), Valor: { characterId, actorId, openedAt }
+// Cache of open containers to avoid concurrent conflicts
+// Key: objectId (formDesc), Value: { characterId, actorId, openedAt }
 const openContainers = new Map();
 
 /**
- * Depois disto, uma sessão de baú aberta é considerada abandonada.
+ * After this, an open chest session is considered abandoned.
  *
- * ─── Por que TTL e não um gancho de desconexão ──────────────────────────────
+ * ─── Why a TTL and not a disconnect hook ────────────────────────────────────
  *
- * `closeContainer` não tem nenhum chamador fora deste arquivo — grep confirma.
- * Um jogador que caísse com o baú aberto o deixava **trancado para sempre**,
- * até o restart do servidor, e nenhuma outra pessoa conseguia abrir.
+ * `closeContainer` has no caller outside this file — grep confirms it.
+ * A player who dropped with the chest open left it **locked forever**,
+ * until the server restarted, and nobody else could open it.
  *
- * O gancho certo é o `removeActiveCharacter` do `commands.js`, e ele não pode
- * ser ligado aqui: este módulo está PARKED, e o `commands.js` não deve conhecer
- * um serviço que o `module-registry` não conhece — é exatamente o acoplamento
- * que o comentário do `governance-service` cita como a pior ideia possível.
+ * The right hook is `removeActiveCharacter` in `commands.js`, and it cannot
+ * be wired here: this module is PARKED, and `commands.js` must not know
+ * a service the `module-registry` does not know — it is exactly the coupling
+ * the `governance-service` comment cites as the worst possible idea.
  *
- * O TTL cura o caso sozinho, sem depender de quem desligou o módulo, e continua
- * valendo depois que o gancho existir. Quando este serviço for reativado, o
- * `initialize()` dele é que assina a desconexão.
+ * The TTL heals the case on its own, without depending on whoever turned the module off, and stays
+ * valid after the hook exists. When this service is reactivated, its
+ * `initialize()` is what subscribes to the disconnect.
  */
 const CONTAINER_SESSION_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Verifica se um personagem tem acesso a um container.
- * Retorna o container do banco ou null se nao tiver acesso.
+ * Checks whether a character has access to a container.
+ * Returns the container from the DB, or null if there is no access.
  */
 async function getContainerAccess(objectId, characterId) {
   const rows = await db.query('SELECT * FROM containers WHERE object_id = ?', [objectId]);
   if (rows.length === 0) {
-    // Container nao registrado: qualquer um pode abrir (mundo aberto)
+    // Unregistered container: anyone can open it (open world)
     return { isPublic: true };
   }
 
   const container = rows[0];
 
-  // Dono tem acesso total
+  // The owner has full access
   if (container.owner_character_id === characterId) {
     return { ...container, isOwner: true };
   }
 
-  // Verifica se eh convidado da propriedade associada
+  // Check whether they are a guest of the associated property
   const propRows = await db.query(
     `SELECT p.id FROM properties p
      INNER JOIN property_guests pg ON pg.property_id = p.id
@@ -76,11 +76,11 @@ async function getContainerAccess(objectId, characterId) {
     return { ...container, isGuest: true };
   }
 
-  return null; // Sem acesso
+  return null; // No access
 }
 
 /**
- * Tenta abrir um container. Intercepta a ativacao da porta/bau no servidor.
+ * Tries to open a container. Intercepts the door/chest activation on the server.
  */
 async function openContainer(actorId, characterId, objectId) {
   try {
@@ -101,7 +101,7 @@ async function openContainer(actorId, characterId, objectId) {
         return false;
       }
     } else if (sessaoAtual) {
-      // Sessão expirada: quem a abriu caiu, ou esqueceu o baú aberto.
+      // Expired session: whoever opened it dropped, or left the chest open.
       console.log(`[housing] Sessao expirada do container ${objectId} (char ${sessaoAtual.characterId}) liberada.`);
       openContainers.delete(objectId);
     }
@@ -109,7 +109,7 @@ async function openContainer(actorId, characterId, objectId) {
     openContainers.set(objectId, { characterId, actorId, openedAt: Date.now() });
     console.log(`[housing] Char ${characterId} opened container ${objectId}`);
 
-    // Injeta os itens do container na tela (UI futura ou abertura nativa)
+    // Inject the container's items onto the screen (future UI or native opening)
     await syncContainerToClient(actorId, objectId);
     return true;
   } catch (err) {
@@ -119,7 +119,7 @@ async function openContainer(actorId, characterId, objectId) {
 }
 
 /**
- * Sincroniza o conteudo do container para a UI do cliente.
+ * Syncs the container's contents to the client UI.
  */
 async function syncContainerToClient(actorId, objectId) {
   const rows = await db.query(
@@ -128,12 +128,12 @@ async function syncContainerToClient(actorId, objectId) {
      WHERE c.object_id = ?`,
     [objectId]
   );
-  // Por ora: notifica o jogador com a contagem de itens
+  // For now: notifies the player with the item count
   const total = rows.reduce((acc, r) => acc + r.count, 0);
   if (typeof mp !== 'undefined') {
     mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Container: ${total} item(s).`]);
   }
-  // No futuro: envia para a UI CEF via mp.triggerClient(actorId, 'openContainer', rows)
+  // In the future: send to the CEF UI via mp.triggerClient(actorId, 'openContainer', rows)
   console.log(`[housing] Synced container ${objectId} for actor ${actorId}: ${rows.length} item types`);
 }
 
@@ -148,12 +148,12 @@ function closeContainer(objectId) {
 }
 
 /**
- * Confere a sessão de baú e devolve o `containers.id` do objeto, criando o
- * registro se ainda não existir.
+ * Checks the chest session and returns the object's `containers.id`, creating the
+ * record if it does not exist yet.
  *
- * Forma única em vez de união discriminada, pela mesma razão explicada em
- * `core/inventory.js`: o `jsconfig.json` roda com `strictNullChecks: false` e o
- * TypeScript não estreita `{ok:true,…}|{ok:false,…}` sem ele.
+ * A single shape instead of a discriminated union, for the same reason explained in
+ * `core/inventory.js`: `jsconfig.json` runs with `strictNullChecks: false` and
+ * TypeScript does not narrow `{ok:true,…}|{ok:false,…}` without it.
  *
  * @returns {Promise<{ok: boolean, containerId: number|null, motivo: string|null}>}
  */
@@ -180,15 +180,15 @@ async function _resolveOpenContainer(characterId, objectId) {
 }
 
 /**
- * Transfere item do personagem para um container (depositar).
+ * Transfers an item from the character to a container (deposit).
  *
- * Uma transação, duas pontas, razão nos dois lados. O `requestId` torna o
- * clique duplo idempotente: o segundo devolve o resultado do primeiro em vez de
- * depositar de novo.
+ * One transaction, two ends, a ledger on both sides. The `requestId` makes a
+ * double click idempotent: the second returns the result of the first instead of
+ * depositing again.
  *
  * @param {number} actorId
  * @param {number} characterId
- * @param {string} objectId  formDesc do baú
+ * @param {string} objectId  the chest's formDesc
  * @param {number} baseId
  * @param {number} count
  * @param {string} [requestId]
@@ -221,11 +221,11 @@ async function depositItem(actorId, characterId, objectId, baseId, count, reques
 }
 
 /**
- * Transfere item do container para o personagem (retirar).
+ * Transfers an item from the container to the character (withdraw).
  *
- * Não existia. Um baú em que só se deposita não é um baú — e a ausência era
- * invisível porque nada chamava `depositItem` tampouco. Escrita agora porque a
- * simetria é o que torna o adaptador de container exercitável nos dois sentidos.
+ * It did not exist. A chest you can only deposit into is not a chest — and the absence was
+ * invisible because nothing called `depositItem` either. Written now because the
+ * symmetry is what makes the container adapter exercisable in both directions.
  */
 async function withdrawItem(actorId, characterId, objectId, baseId, count, requestId) {
   const alvo = await _resolveOpenContainer(characterId, objectId);
@@ -255,7 +255,7 @@ async function withdrawItem(actorId, characterId, objectId, baseId, count, reque
 }
 
 /**
- * Compra uma propriedade listada para venda.
+ * Buys a property listed for sale.
  */
 async function buyProperty(actorId, characterId, propertyId) {
   const propRows = await db.query('SELECT * FROM properties WHERE id = ? AND is_for_sale = 1 AND owner_character_id IS NULL', [propertyId]);
@@ -278,7 +278,7 @@ async function buyProperty(actorId, characterId, propertyId) {
 }
 
 /**
- * Convida um personagem para uma propriedade.
+ * Invites a character to a property.
  */
 async function inviteToProperty(ownerCharId, targetCharId, propertyId) {
   const propRows = await db.query('SELECT id FROM properties WHERE id = ? AND owner_character_id = ?', [propertyId, ownerCharId]);
@@ -303,8 +303,8 @@ module.exports = {
   inviteToProperty,
   getContainerAccess,
 
-  // Só para teste: o TTL de sessão é tempo de relógio, e o teste precisa
-  // envelhecer uma sessão sem esperar cinco minutos.
+  // Test only: the session TTL is wall-clock time, and the test needs to
+  // age a session without waiting five minutes.
   _openContainers: openContainers,
   CONTAINER_SESSION_TTL_MS
 };
