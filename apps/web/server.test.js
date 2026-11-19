@@ -1,13 +1,13 @@
 /**
- * Smoke tests do painel web.
+ * Web panel smoke tests.
  *
- * O `apps/web` era o único serviço com regra de negócio real — autorização de
- * staff, aprovação de whitelist, troca de OAuth — e nenhum teste. Estes testes
- * cobrem os caminhos onde um erro é silencioso e caro: um endpoint de staff que
- * esquece o guard, ou um UPDATE que reescreve linha demais.
+ * `apps/web` was the only service with real business rules — staff
+ * authorization, whitelist approval, OAuth exchange — and no tests. These tests
+ * cover the paths where a mistake is silent and costly: a staff endpoint that
+ * forgets the guard, or an UPDATE that rewrites too many rows.
  *
- * O MySQL é substituído por um duplo em memória antes do `require` do servidor,
- * então nada aqui toca banco nem rede.
+ * MySQL is replaced by an in-memory double before the server is `require`d,
+ * so nothing here touches the database or the network.
  */
 
 const { test, describe, before, after, beforeEach } = require('node:test');
@@ -15,9 +15,9 @@ const assert = require('node:assert/strict');
 const Module = require('module');
 const path = require('path');
 
-// ── Duplo de MySQL ───────────────────────────────────────────────────────────
-// Guarda toda query executada, pra que os testes possam afirmar sobre o SQL em
-// si (é o SQL que continha o bug do personagem aposentado, não o handler).
+// ── MySQL double ─────────────────────────────────────────────────────────────
+// Records every executed query, so tests can assert on the SQL itself (it was
+// the SQL that held the retired-character bug, not the handler).
 const queryLog = [];
 let queryHandler = () => [];
 
@@ -39,7 +39,7 @@ Module._load = function (request, parent, isMain) {
 };
 
 process.env.INTERNAL_API_SECRET = 'test-internal-secret';
-process.env.MASTER_KEY = 'chave-do-servidor-de-teste';
+process.env.MASTER_KEY = 'test-server-key';
 process.env.SESSION_SECRET = 'test-session-secret';
 process.env.DISCORD_CLIENT_ID = 'test-client-id';
 process.env.DISCORD_CLIENT_SECRET = 'test-client-secret';
@@ -48,7 +48,7 @@ const { app, validateApplication, hashTicket, issueLauncherSession, resolveLaunc
 
 Module._load = realLoad;
 
-// ── Servidor efêmero ─────────────────────────────────────────────────────────
+// ── Ephemeral server ─────────────────────────────────────────────────────────
 let server;
 let baseUrl;
 
@@ -78,9 +78,9 @@ const post = (p, body) => fetch(`${baseUrl}${p}`, {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('autenticação obrigatória', () => {
-  // Sem sessão, nenhuma rota de dado pode responder 200. O risco real aqui é
-  // alguém adicionar um endpoint novo e esquecer o guard.
+describe('authentication required', () => {
+  // Without a session, no data route may respond 200. The real risk here is
+  // someone adding a new endpoint and forgetting the guard.
   const protectedRoutes = [
     '/api/me',
     '/api/dashboard',
@@ -97,34 +97,34 @@ describe('autenticação obrigatória', () => {
   ];
 
   for (const route of protectedRoutes) {
-    test(`GET ${route} exige autenticação`, async () => {
+    test(`GET ${route} requires authentication`, async () => {
       const res = await get(route);
-      assert.equal(res.status, 401, `${route} respondeu ${res.status} sem sessão`);
+      assert.equal(res.status, 401, `${route} responded ${res.status} without a session`);
     });
   }
 
-  test('POST /api/apply exige autenticação', async () => {
+  test('POST /api/apply requires authentication', async () => {
     const res = await post('/api/apply', { first_name: 'A' });
     assert.equal(res.status, 401);
   });
 });
 
-describe('hardening HTTP', () => {
-  test('não divulga Express no header X-Powered-By', async () => {
+describe('HTTP hardening', () => {
+  test('does not advertise Express in the X-Powered-By header', async () => {
     const res = await get('/api/me');
     assert.equal(res.headers.get('x-powered-by'), null);
   });
 });
 
 describe('health check', () => {
-  test('confirma dependência do banco sem exigir sessão', async () => {
+  test('confirms the database dependency without requiring a session', async () => {
     const res = await get('/health');
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { ok: true, database: 'reachable' });
     assert.ok(queryLog.some(entry => /SELECT 1 AS ok/i.test(entry.sql)));
   });
 
-  test('responde 503 sem vazar erro quando o banco falha', async () => {
+  test('responds 503 without leaking the error when the database fails', async () => {
     queryHandler = () => { throw new Error('password=super-secret'); };
     const originalError = console.error;
     console.error = () => {};
@@ -138,97 +138,97 @@ describe('health check', () => {
   });
 });
 
-describe('validação da aplicação de personagem', () => {
+describe('character application validation', () => {
   const valid = {
     first_name: 'Ralof',
-    last_name: 'de Riverwood',
+    last_name: 'of Riverwood',
     biography: 'x'.repeat(120),
     motivations: 'y'.repeat(40),
     weaknesses: 'z'.repeat(40),
     social_ties: 'w'.repeat(40)
   };
 
-  test('aceita ficha completa', () => {
+  test('accepts a complete sheet', () => {
     const { error, clean } = validateApplication(valid);
     assert.equal(error, undefined);
     assert.equal(clean.first_name, 'Ralof');
   });
 
-  test('rejeita nome ausente', () => {
-    assert.match(validateApplication({ ...valid, first_name: '' }).error, /Nome/);
+  test('rejects a missing first name', () => {
+    assert.match(validateApplication({ ...valid, first_name: '' }).error, /First name/);
   });
 
-  test('rejeita nome só com espaços', () => {
-    assert.match(validateApplication({ ...valid, first_name: '   ' }).error, /Nome/);
+  test('rejects a whitespace-only first name', () => {
+    assert.match(validateApplication({ ...valid, first_name: '   ' }).error, /First name/);
   });
 
-  test('rejeita biografia curta demais', () => {
-    assert.match(validateApplication({ ...valid, biography: 'curta' }).error, /Biografia/);
+  test('rejects a biography that is too short', () => {
+    assert.match(validateApplication({ ...valid, biography: 'short' }).error, /Biography/);
   });
 
-  test('rejeita campo acima do limite da coluna', () => {
-    assert.match(validateApplication({ ...valid, biography: 'x'.repeat(6000) }).error, /Biografia/);
+  test('rejects a field above the column limit', () => {
+    assert.match(validateApplication({ ...valid, biography: 'x'.repeat(6000) }).error, /Biography/);
   });
 
-  // A rubrica de whitelist trata ficha sem estes campos como reprovada. Eles
-  // eram `required` só no HTML, o que é trivial de contornar.
+  // The whitelist rubric treats a sheet without these fields as rejected. They
+  // used to be `required` only in the HTML, which is trivial to bypass.
   for (const field of ['motivations', 'weaknesses', 'social_ties']) {
-    test(`rejeita ${field} ausente (rubrica Heavy RP)`, () => {
+    test(`rejects missing ${field} (Heavy RP rubric)`, () => {
       const { error } = validateApplication({ ...valid, [field]: '' });
-      assert.ok(error, `${field} vazio deveria ser rejeitado no servidor`);
+      assert.ok(error, `empty ${field} should be rejected on the server`);
     });
   }
 
-  test('faz trim antes de gravar', () => {
+  test('trims before storing', () => {
     const { clean } = validateApplication({ ...valid, first_name: '  Ralof  ' });
     assert.equal(clean.first_name, 'Ralof');
   });
 
-  test('rejeita tipo não-string sem quebrar', () => {
+  test('rejects a non-string type without breaking', () => {
     assert.ok(validateApplication({ ...valid, first_name: { toString: () => 'x' } }).error);
     assert.ok(validateApplication({}).error);
   });
 });
 
-describe('troca de OAuth do launcher', () => {
-  test('rejeita redirect_uri fora da allowlist', async () => {
+describe('launcher OAuth exchange', () => {
+  test('rejects a redirect_uri outside the allowlist', async () => {
     const res = await post('/api/launcher/oauth/exchange', {
       code: 'abc',
-      redirect_uri: 'http://servidor-do-atacante.example/callback'
+      redirect_uri: 'http://attacker-server.example/callback'
     });
     assert.equal(res.status, 400);
     assert.match((await res.json()).error, /redirect_uri/);
   });
 
-  test('rejeita code ausente', async () => {
+  test('rejects a missing code', async () => {
     const res = await post('/api/launcher/oauth/exchange', {
       redirect_uri: 'http://localhost:19847/callback'
     });
     assert.equal(res.status, 400);
   });
 
-  test('aceita o redirect_uri do launcher (chega a falar com o Discord)', async () => {
+  test('accepts the launcher redirect_uri (gets as far as talking to Discord)', async () => {
     const res = await post('/api/launcher/oauth/exchange', {
-      code: 'codigo-invalido',
+      code: 'invalid-code',
       redirect_uri: 'http://localhost:19847/callback'
     });
-    // Passa da validação de forma; o Discord real recusa o code falso.
-    assert.notEqual(res.status, 400, 'o redirect_uri da allowlist não deveria ser barrado');
+    // Gets past shape validation; the real Discord rejects the fake code.
+    assert.notEqual(res.status, 400, 'the allowlisted redirect_uri should not be blocked');
   });
 });
 
-describe('ticket de lançamento', () => {
-  test('guarda hash, nunca o token em claro', () => {
+describe('launch ticket', () => {
+  test('stores the hash, never the plaintext token', () => {
     const token = 'a'.repeat(64);
     const hash = hashTicket(token);
     assert.equal(hash.length, 64);
     assert.notEqual(hash, token);
-    assert.equal(hashTicket(token), hash, 'o hash precisa ser determinístico');
+    assert.equal(hashTicket(token), hash, 'the hash must be deterministic');
   });
 });
 
-describe('sessão de launcher (refresh de ticket sem reOAuth)', () => {
-  test('issueLauncherSession grava só o hash, nunca o token em claro', async () => {
+describe('launcher session (ticket refresh without re-OAuth)', () => {
+  test('issueLauncherSession stores only the hash, never the plaintext token', async () => {
     let inserted = null;
     queryHandler = (sql, params) => {
       if (sql.includes('INSERT INTO launcher_sessions')) {
@@ -243,19 +243,19 @@ describe('sessão de launcher (refresh de ticket sem reOAuth)', () => {
     assert.ok(token.length >= 32);
     // params: [session_hash, account_id, discord_id, ttl_seconds, issued_ip]
     assert.equal(inserted[0], hashTicket(token));
-    assert.notEqual(inserted[0], token, 'o token em claro nao pode ir pro banco');
+    assert.notEqual(inserted[0], token, 'the plaintext token must not go to the database');
     assert.equal(inserted[1], 42);
   });
 
-  test('resolveLauncherSession rejeita token curto sem consultar o banco', async () => {
+  test('resolveLauncherSession rejects a short token without querying the database', async () => {
     let queried = false;
     queryHandler = () => { queried = true; return []; };
-    const result = await resolveLauncherSession('curto-demais');
+    const result = await resolveLauncherSession('too-short');
     assert.equal(result, null);
-    assert.equal(queried, false, 'token obviamente invalido nao devia gerar query');
+    assert.equal(queried, false, 'an obviously invalid token should not trigger a query');
   });
 
-  test('resolveLauncherSession retorna null quando a query nao acha linha (expirada/revogada/inexistente)', async () => {
+  test('resolveLauncherSession returns null when the query finds no row (expired/revoked/nonexistent)', async () => {
     queryHandler = (sql) => {
       assert.match(sql, /revoked_at IS NULL/);
       assert.match(sql, /expires_at > NOW\(\)/);
@@ -265,14 +265,14 @@ describe('sessão de launcher (refresh de ticket sem reOAuth)', () => {
     assert.equal(result, null);
   });
 
-  test('POST /api/launcher/session/refresh-ticket rejeita sessão inválida', async () => {
+  test('POST /api/launcher/session/refresh-ticket rejects an invalid session', async () => {
     queryHandler = () => [];
-    const res = await post('/api/launcher/session/refresh-ticket', { sessionToken: 'nao-existe' });
+    const res = await post('/api/launcher/session/refresh-ticket', { sessionToken: 'does-not-exist' });
     assert.equal(res.status, 401);
     assert.equal((await res.json()).error, 'invalid_session');
   });
 
-  test('POST /api/launcher/session/refresh-ticket emite um launch ticket novo pra sessão válida', async () => {
+  test('POST /api/launcher/session/refresh-ticket issues a fresh launch ticket for a valid session', async () => {
     const token = 'x'.repeat(64);
     const hash = hashTicket(token);
     queryHandler = (sql, params) => {
@@ -292,7 +292,7 @@ describe('sessão de launcher (refresh de ticket sem reOAuth)', () => {
     assert.ok(body.launchTicket.length >= 32);
   });
 
-  test('POST /api/launcher/session/revoke sempre responde ok (não vaza se o token existia)', async () => {
+  test('POST /api/launcher/session/revoke always responds ok (does not leak whether the token existed)', async () => {
     queryHandler = (sql) => {
       if (sql.includes('UPDATE launcher_sessions SET revoked_at')) return { affectedRows: 0 };
       return [];
@@ -303,31 +303,31 @@ describe('sessão de launcher (refresh de ticket sem reOAuth)', () => {
   });
 });
 
-describe('endpoint de crash reports', () => {
-  test('rejeita corpo sem crash válido', async () => {
+describe('crash report endpoint', () => {
+  test('rejects a body without a valid crash', async () => {
     const res = await post('/api/crashes/client', { crashes: [] });
     assert.equal(res.status, 400);
   });
 
-  test('rejeita crash sem conteúdo', async () => {
+  test('rejects a crash without content', async () => {
     const res = await post('/api/crashes/client', { crashes: [{ filename: 'a.log', content: '' }] });
     assert.equal(res.status, 400);
   });
 });
 
-describe('endpoints removidos continuam removidos', () => {
-  // Servia um manifesto com hash falso e ninguém o consumia. Se voltar, volta
-  // a ser um alvo pra alguém apontar o launcher.
-  test('GET /api/launcher/manifest não devolve JSON de manifesto', async () => {
+describe('removed endpoints stay removed', () => {
+  // It served a manifest with a fake hash and nobody consumed it. If it comes
+  // back, it becomes a target for someone to point the launcher at again.
+  test('GET /api/launcher/manifest does not return manifest JSON', async () => {
     const res = await get('/api/launcher/manifest');
     const body = await res.text();
-    assert.ok(!body.includes('dummy_hash_for_testing'), 'o stub de manifesto voltou');
+    assert.ok(!body.includes('dummy_hash_for_testing'), 'the manifest stub is back');
   });
 });
 
-describe('rotação de crash reports', () => {
-  // O diretório crescia sem limite: até 64 KB de log por crash, e um cliente
-  // instável reporta em série.
+describe('crash report rotation', () => {
+  // The directory grew without limit: up to 64 KB of log per crash, and an
+  // unstable client reports in a row.
   const { pruneCrashReports, CRASH_REPORT_DIR } = require('./server.js');
   const fs = require('fs');
   const path = require('path');
@@ -356,68 +356,68 @@ describe('rotação de crash reports', () => {
 
   after(clearDir);
 
-  test('remove relatórios mais velhos que o limite de idade', async () => {
-    makeReport('velho.json', 60);
-    makeReport('recente.json', 1);
+  test('removes reports older than the age limit', async () => {
+    makeReport('old.json', 60);
+    makeReport('recent.json', 1);
 
     await pruneCrashReports();
 
-    assert.equal(fs.existsSync(path.join(CRASH_REPORT_DIR, 'velho.json')), false);
-    assert.equal(fs.existsSync(path.join(CRASH_REPORT_DIR, 'recente.json')), true);
+    assert.equal(fs.existsSync(path.join(CRASH_REPORT_DIR, 'old.json')), false);
+    assert.equal(fs.existsSync(path.join(CRASH_REPORT_DIR, 'recent.json')), true);
   });
 
-  test('mantém os recentes quando nada passou da idade', async () => {
+  test('keeps recent ones when nothing is past the age limit', async () => {
     for (let i = 0; i < 5; i++) makeReport(`r${i}.json`, 1);
     const removed = await pruneCrashReports();
     assert.equal(removed, 0);
     assert.equal(fs.readdirSync(CRASH_REPORT_DIR).filter(f => f.endsWith('.json')).length, 5);
   });
 
-  test('não quebra com diretório vazio', async () => {
+  test('does not break on an empty directory', async () => {
     assert.equal(await pruneCrashReports(), 0);
   });
 
-  test('sobrevive a arquivo que some no meio da poda', async () => {
-    // Concorrência real: dois relatórios chegando ao mesmo tempo disparam duas
-    // podas. A segunda encontra arquivos que a primeira já apagou.
-    makeReport('some.json', 60);
+  test('survives a file vanishing mid-prune', async () => {
+    // Real concurrency: two reports arriving at once trigger two prunes. The
+    // second finds files the first already deleted.
+    makeReport('vanishing.json', 60);
     const [a, b] = await Promise.all([pruneCrashReports(), pruneCrashReports()]);
     assert.equal(typeof a, 'number');
     assert.equal(typeof b, 'number');
   });
 });
 
-describe('master API de sessão (contrato do SkyMP)', () => {
-  // Este endpoint é o que tira a identidade das mãos do cliente: com
-  // `offlineMode: false`, o servidor SkyMP não lê o `profileId` do
-  // skymp_config.json — ele pergunta aqui quem é o dono da sessão, e o `id`
-  // que respondermos vira o profileId do gamemode.
-  const MASTER_KEY = 'chave-do-servidor-de-teste';
+describe('session master API (SkyMP contract)', () => {
+  // This endpoint is what takes identity out of the client's hands: with
+  // `offlineMode: false`, the SkyMP server doesn't read `profileId` from
+  // skymp_config.json — it asks here who owns the session, and the `id` we
+  // respond with becomes the gamemode's profileId.
+  const MASTER_KEY = 'test-server-key';
   const SESSION = 'b'.repeat(64);
 
-  test('masterKey errada responde 404, não 403', async () => {
-    // 404 e não 403 de propósito: não confirmamos a existência da chave certa
-    // pra quem está adivinhando.
-    const res = await get(`/api/servers/chave-errada/sessions/${SESSION}`);
+  test('a wrong masterKey responds 404, not 403', async () => {
+    // 404 rather than 403 on purpose: we don't confirm the right key exists to
+    // someone who is guessing.
+    const res = await get(`/api/servers/wrong-key/sessions/${SESSION}`);
     assert.equal(res.status, 404);
   });
 
-  test('sessão desconhecida responde 404', async () => {
-    // 404 é o que o SkyMP espera: ele manda `loginFailedSessionNotFound`
-    // pro cliente, que é a mensagem correta pro jogador.
+  test('an unknown session responds 404', async () => {
+    // 404 is what SkyMP expects: it sends `loginFailedSessionNotFound` to the
+    // client, which is the right message for the player.
     queryHandler = () => [];
     const res = await get(`/api/servers/${MASTER_KEY}/sessions/${SESSION}`);
     assert.equal(res.status, 404);
   });
 
-  test('sessão curta demais é rejeitada sem ir ao banco', async () => {
+  test('a session that is too short is rejected without hitting the database', async () => {
     queryLog.length = 0;
-    const res = await get(`/api/servers/${MASTER_KEY}/sessions/curta`);
+    const res = await get(`/api/servers/${MASTER_KEY}/sessions/short`);
     assert.equal(res.status, 404);
     assert.equal(queryLog.filter(q => /game_sessions/i.test(q.sql)).length, 0);
   });
 
-  test('sessão válida responde no formato que o SkyMP espera', async () => {
+  test('a valid session responds in the shape SkyMP expects', async () => {
     queryHandler = (sql) => {
       if (/SELECT id, account_id, discord_id FROM game_sessions/i.test(sql)) {
         return [{ id: 7, account_id: 42, discord_id: '123456789' }];
@@ -429,37 +429,37 @@ describe('master API de sessão (contrato do SkyMP)', () => {
     assert.equal(res.status, 200);
 
     const body = await res.json();
-    // A forma é ditada pelo SkyMP (systems/login.ts lê `data.user.id`),
-    // não por nós — se isto mudar, o login inteiro para.
-    assert.equal(body.user.id, 42, 'user.id vira o profileId do gamemode');
+    // The shape is dictated by SkyMP (systems/login.ts reads `data.user.id`),
+    // not by us — if this changes, all logins stop.
+    assert.equal(body.user.id, 42, 'user.id becomes the gamemode profileId');
     assert.equal(body.user.discordId, '123456789');
   });
 
-  test('a consulta exige sessão não revogada e não expirada', async () => {
+  test('the query requires a non-revoked, non-expired session', async () => {
     queryHandler = () => [{ id: 1, account_id: 1, discord_id: 'x' }];
     await get(`/api/servers/${MASTER_KEY}/sessions/${SESSION}`);
 
     const q = queryLog.find(q => /FROM game_sessions/i.test(q.sql));
-    assert.ok(q, 'deveria ter consultado game_sessions');
-    assert.match(q.sql, /revoked_at IS NULL/, 'sessão revogada precisa deixar de valer na hora');
-    assert.match(q.sql, /expires_at > NOW\(\)/, 'sessão expirada não pode autenticar');
+    assert.ok(q, 'should have queried game_sessions');
+    assert.match(q.sql, /revoked_at IS NULL/, 'a revoked session must stop working immediately');
+    assert.match(q.sql, /expires_at > NOW\(\)/, 'an expired session must not authenticate');
   });
 
-  test('guarda hash, nunca o token em claro', async () => {
+  test('stores the hash, never the plaintext token', async () => {
     queryHandler = () => [{ id: 1, account_id: 1, discord_id: 'x' }];
     await get(`/api/servers/${MASTER_KEY}/sessions/${SESSION}`);
 
     const q = queryLog.find(q => /FROM game_sessions/i.test(q.sql));
-    assert.notEqual(q.params[0], SESSION, 'o token em claro não pode ir pro banco');
+    assert.notEqual(q.params[0], SESSION, 'the plaintext token must not go to the database');
     assert.equal(q.params[0], hashTicket(SESSION));
   });
 
-  test('aceita session com prefixo `ticket:` do launcher (AUTH_001) e hasheia sem o prefixo', async () => {
-    // apps/launcher/electron/main.ts grava config.session como `ticket:<token>`
-    // (docs/technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md linha 22). Sem este
-    // strip, o hash aqui nunca bate com o gravado em game_sessions (que é o
-    // token cru) e toda sessão resolve como inexistente — bug real, confirmado
-    // em 24/08/2026 com um fork externo (failCount chegando a 9000).
+  test('accepts a session with the launcher `ticket:` prefix (AUTH_001) and hashes without the prefix', async () => {
+    // apps/launcher/electron/main.ts writes config.session as `ticket:<token>`
+    // (docs/technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md line 22). Without
+    // this strip, the hash here never matches the one stored in game_sessions
+    // (which is the raw token) and every session resolves as nonexistent — a
+    // real bug, confirmed on 2026-08-24 with an external fork (failCount reaching 9000).
     queryHandler = () => [{ id: 7, account_id: 42, discord_id: '123456789' }];
     const res = await get(`/api/servers/${MASTER_KEY}/sessions/ticket:${SESSION}`);
     assert.equal(res.status, 200);
@@ -468,17 +468,17 @@ describe('master API de sessão (contrato do SkyMP)', () => {
     assert.equal(body.user.id, 42);
 
     const q = queryLog.find(q => /FROM game_sessions/i.test(q.sql));
-    assert.equal(q.params[0], hashTicket(SESSION), 'hash precisa ser do token sem o prefixo ticket:');
+    assert.equal(q.params[0], hashTicket(SESSION), 'the hash must be of the token without the ticket: prefix');
   });
 
-  test('contabiliza a resolução', async () => {
+  test('counts the resolution', async () => {
     queryHandler = (sql) => /SELECT id, account_id/i.test(sql)
       ? [{ id: 7, account_id: 42, discord_id: 'x' }] : [];
     await get(`/api/servers/${MASTER_KEY}/sessions/${SESSION}`);
 
-    // resolve_count alto é sinal de sessão compartilhada entre máquinas.
+    // A high resolve_count signals a session shared between machines.
     const upd = queryLog.find(q => /UPDATE game_sessions/i.test(q.sql));
-    assert.ok(upd, 'deveria registrar o uso');
+    assert.ok(upd, 'should record the use');
     assert.match(upd.sql, /resolve_count = resolve_count \+ 1/);
   });
 });

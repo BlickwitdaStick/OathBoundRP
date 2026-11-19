@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Staff Panel — SkyMP Heavy RP</title>
-  <meta name="description" content="Painel de administração do servidor SkyMP Heavy RP">
+  <meta name="description" content="Administration panel for the SkyMP Heavy RP server">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,8 +14,8 @@
   <div class="login-card">
     <div class="logo">SKYMP</div>
     <div class="subtitle">Heavy RP · Staff Panel</div>
-    <a class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;display:flex" href="/api/auth/discord">Entrar com Discord</a>
-    <p id="login-error" style="color:#e05252;margin-top:12px;font-size:13px;display:none">Acesso staff negado. Fale com um administrador.</p>
+    <a class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;display:flex" href="/api/auth/discord">Log in with Discord</a>
+    <p id="login-error" style="color:#e05252;margin-top:12px;font-size:13px;display:none">Staff access denied. Talk to an administrator.</p>
   </div>
 </div>
 
@@ -35,19 +35,19 @@
         <span class="badge" id="badge-pending" style="display:none">0</span>
       </div>
       <div class="nav-item" data-page="characters" onclick="navigate('characters', this)">
-        <span class="icon">🧙</span> Personagens
+        <span class="icon">🧙</span> Characters
       </div>
       <div class="nav-item" data-page="economy" onclick="navigate('economy', this)">
-        <span class="icon">💰</span> Economia
+        <span class="icon">💰</span> Economy
       </div>
       <div class="nav-item" data-page="factions" onclick="navigate('factions', this)">
-        <span class="icon">⚔️</span> Facções
+        <span class="icon">⚔️</span> Factions
       </div>
       <div class="nav-item" data-page="criminal" onclick="navigate('criminal', this)">
-        <span class="icon">⚖️</span> Fichas Criminais
+        <span class="icon">⚖️</span> Criminal Records
       </div>
       <div class="nav-item" data-page="prison" onclick="navigate('prison', this)">
-        <span class="icon">🔒</span> Presos
+        <span class="icon">🔒</span> Prisoners
       </div>
       <div class="nav-item" data-page="audit" onclick="navigate('audit', this)">
         <span class="icon">🗂️</span> Audit Log
@@ -55,7 +55,7 @@
     </nav>
     <div class="sidebar-footer">
       <div class="nav-item" onclick="doLogout()">
-        <span class="icon">🚪</span> Sair
+        <span class="icon">🚪</span> Log out
       </div>
     </div>
   </aside>
@@ -114,15 +114,15 @@ async function doLogout() {
 // ── Clock ──────────────────────────────────────────────────────────────────
 function startClock() {
   const el = document.getElementById('server-time');
-  const tick = () => el.textContent = new Date().toLocaleTimeString('pt-BR');
+  const tick = () => el.textContent = new Date().toLocaleTimeString('en-GB');
   tick(); setInterval(tick, 1000);
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
 const pageTitles = {
-  dashboard:'Dashboard', whitelist:'Whitelist', characters:'Personagens',
-  economy:'Economia Regional', factions:'Facções', criminal:'Fichas Criminais',
-  prison:'Presos Ativos', audit:'Audit Log'
+  dashboard:'Dashboard', whitelist:'Whitelist', characters:'Characters',
+  economy:'Regional Economy', factions:'Factions', criminal:'Criminal Records',
+  prison:'Active Prisoners', audit:'Audit Log'
 };
 
 function navigate(page, el) {
@@ -149,7 +149,7 @@ async function renderPage(page) {
       case 'audit':       await renderAudit(el);      break;
     }
   } catch(err) {
-    el.innerHTML = `<div class="empty">Erro ao carregar: ${err.message}</div>`;
+    el.innerHTML = `<div class="empty">Failed to load: ${err.message}</div>`;
   }
 }
 
@@ -183,16 +183,16 @@ async function renderDashboard(el) {
     b.textContent = d.pending; b.style.display = '';
   }
   el.innerHTML = `
-    <p class="section-title" style="margin-bottom:16px">Resumo do Servidor</p>
+    <p class="section-title" style="margin-bottom:16px">Server Overview</p>
     <div class="cards-grid">
-      ${statCard('Contas', d.accounts, '👤')}
-      ${statCard('Personagens', d.characters, '🧙')}
-      ${statCard('Pendentes', d.pending, '📋', d.pending > 0 ? 'var(--warning)' : '')}
-      ${statCard('Ações Hoje', d.auditToday, '🗂️')}
-      ${statCard('Presos', d.prisoners, '🔒', d.prisoners > 0 ? 'var(--danger)' : '')}
-      ${statCard('Facções', d.factions, '⚔️')}
+      ${statCard('Accounts', d.accounts, '👤')}
+      ${statCard('Characters', d.characters, '🧙')}
+      ${statCard('Pending', d.pending, '📋', d.pending > 0 ? 'var(--warning)' : '')}
+      ${statCard('Actions Today', d.auditToday, '🗂️')}
+      ${statCard('Prisoners', d.prisoners, '🔒', d.prisoners > 0 ? 'var(--danger)' : '')}
+      ${statCard('Factions', d.factions, '⚔️')}
     </div>
-    ${d.pending > 0 ? `<div class="card"><div class="card-header" style="color:var(--warning)">⚠️ ${d.pending} Aplicação(ões) Pendente(s)</div><div style="padding:16px"><button class="btn btn-primary" onclick="navigate('whitelist')">Revisar Agora</button></div></div>` : ''}
+    ${d.pending > 0 ? `<div class="card"><div class="card-header" style="color:var(--warning)">⚠️ ${d.pending} Pending Application(s)</div><div style="padding:16px"><button class="btn btn-primary" onclick="navigate('whitelist')">Review Now</button></div></div>` : ''}
   `;
 }
 
@@ -211,34 +211,34 @@ async function renderWhitelist(el) {
   if (pending > 0) { badge.textContent=pending; badge.style.display=''; }
   else badge.style.display='none';
 
-  window._whitelistRows = rows; // cache pra toggleAppDetails/saveExtraReviewNotes sem re-fetch
+  window._whitelistRows = rows; // cache for toggleAppDetails/saveExtraReviewNotes without re-fetching
   el.innerHTML = `<div class="card">
-    <div class="card-header">Aplicações de Whitelist <span style="color:var(--muted);font-weight:400">${rows.length} total</span></div>
+    <div class="card-header">Whitelist Applications <span style="color:var(--muted);font-weight:400">${rows.length} total</span></div>
     <table>
-      <thead><tr><th>Discord</th><th>Personagem</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Discord</th><th>Character</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td>${escapeHtml(r.discord_name) || '—'}</td>
-        <td>${r.first_name ? escapeHtml(r.first_name)+' '+escapeHtml(r.last_name) : '—'}${r.needs_extra_review ? ' <span class="pill pill-rejected" title="Conceito forte — revisar com atenção">⚠ Revisão extra</span>' : ''}</td>
+        <td>${r.first_name ? escapeHtml(r.first_name)+' '+escapeHtml(r.last_name) : '—'}${r.needs_extra_review ? ' <span class="pill pill-rejected" title="Strong concept — review carefully">⚠ Extra review</span>' : ''}</td>
         <td><span class="pill pill-${r.status}">${r.status}</span></td>
         <td style="color:var(--muted)">${fmt(r.created_at)}</td>
         <td style="display:flex;gap:6px;padding-top:8px">
-          <button class="btn btn-sm" onclick="toggleAppDetails(${r.id})">Detalhes</button>
+          <button class="btn btn-sm" onclick="toggleAppDetails(${r.id})">Details</button>
           ${r.status==='pending' ? `
-            <button class="btn btn-success btn-sm" onclick="reviewApp(${r.id},'approved')">✓ Aprovar</button>
-            <button class="btn btn-danger btn-sm"  onclick="reviewApp(${r.id},'rejected')">✕ Rejeitar</button>
+            <button class="btn btn-success btn-sm" onclick="reviewApp(${r.id},'approved')">✓ Approve</button>
+            <button class="btn btn-danger btn-sm"  onclick="reviewApp(${r.id},'rejected')">✕ Reject</button>
           ` : ''}
         </td>
       </tr>
       <tr id="app-details-${r.id}" style="display:none"><td colspan="5">
         <div style="padding:10px 4px;color:var(--muted);font-size:13px;line-height:1.6">
-          <div><strong style="color:var(--text)">Motivações:</strong> ${escapeHtml(r.motivations) || '—'}</div>
-          <div><strong style="color:var(--text)">Fraquezas:</strong> ${escapeHtml(r.weaknesses) || '—'}</div>
-          <div><strong style="color:var(--text)">Laços sociais:</strong> ${escapeHtml(r.social_ties) || '—'}</div>
-          <div><strong style="color:var(--text)">Biografia:</strong> ${escapeHtml(r.biography) || '—'}</div>
-          ${r.needs_extra_review ? `<div style="margin-top:6px"><strong style="color:var(--warning)">Nota de revisão extra:</strong> ${escapeHtml(r.extra_review_notes) || '(sem nota ainda)'} <button class="btn btn-sm" onclick="saveExtraReviewNotes(${r.id})">Editar nota</button></div>` : ''}
+          <div><strong style="color:var(--text)">Motivations:</strong> ${escapeHtml(r.motivations) || '—'}</div>
+          <div><strong style="color:var(--text)">Weaknesses:</strong> ${escapeHtml(r.weaknesses) || '—'}</div>
+          <div><strong style="color:var(--text)">Social ties:</strong> ${escapeHtml(r.social_ties) || '—'}</div>
+          <div><strong style="color:var(--text)">Biography:</strong> ${escapeHtml(r.biography) || '—'}</div>
+          ${r.needs_extra_review ? `<div style="margin-top:6px"><strong style="color:var(--warning)">Extra review note:</strong> ${escapeHtml(r.extra_review_notes) || '(no note yet)'} <button class="btn btn-sm" onclick="saveExtraReviewNotes(${r.id})">Edit note</button></div>` : ''}
         </div>
       </td></tr>`).join('')}
-      ${rows.length===0?'<tr><td colspan="5" class="empty">Nenhuma aplicação</td></tr>':''}
+      ${rows.length===0?'<tr><td colspan="5" class="empty">No applications</td></tr>':''}
       </tbody>
     </table>
   </div>`;
@@ -251,28 +251,28 @@ function toggleAppDetails(id) {
 
 async function saveExtraReviewNotes(id) {
   const row = (window._whitelistRows || []).find(r => r.id === id);
-  const notes = prompt('Nota da revisão extra deste conceito:', row?.extra_review_notes || '');
+  const notes = prompt('Extra review note for this concept:', row?.extra_review_notes || '');
   if (notes === null) return;
   await apiPatch(`/api/whitelist/${id}`, { status: row.status, extra_review_notes: notes });
-  toast('Nota salva.', 'success');
+  toast('Note saved.', 'success');
   renderPage('whitelist');
 }
 
 async function reviewApp(id, status) {
-  const notes = status==='rejected' ? prompt('Motivo da rejeição (opcional):') : null;
+  const notes = status==='rejected' ? prompt('Reason for rejection (optional):') : null;
   await apiPatch(`/api/whitelist/${id}`, { status, reviewer_notes: notes });
-  toast(status==='approved' ? '✓ Aprovado com sucesso!' : '✕ Rejeitado.', status==='approved'?'success':'error');
+  toast(status==='approved' ? '✓ Approved successfully!' : '✕ Rejected.', status==='approved'?'success':'error');
   renderPage('whitelist');
 }
 
 async function renderCharacters(el) {
   const rows = await api('/api/characters');
   el.innerHTML = `<div class="card">
-    <div class="card-header">Personagens
-      <input class="search-input" placeholder="Buscar..." oninput="searchChars(this.value)">
+    <div class="card-header">Characters
+      <input class="search-input" placeholder="Search..." oninput="searchChars(this.value)">
     </div>
     <table id="chars-table">
-      <thead><tr><th>Nome IC</th><th>Discord</th><th>Status</th><th>Ouro</th><th>Criado em</th></tr></thead>
+      <thead><tr><th>IC Name</th><th>Discord</th><th>Status</th><th>Gold</th><th>Created</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td><strong>${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</strong></td>
         <td style="color:var(--muted)">${escapeHtml(r.discord_name)||'—'}</td>
@@ -280,7 +280,7 @@ async function renderCharacters(el) {
         <td>⚜ ${r.gold.toLocaleString()}</td>
         <td style="color:var(--muted)">${fmt(r.created_at)}</td>
       </tr>`).join('')}
-      ${rows.length===0?'<tr><td colspan="5" class="empty">Nenhum personagem</td></tr>':''}
+      ${rows.length===0?'<tr><td colspan="5" class="empty">No characters</td></tr>':''}
       </tbody>
     </table>
   </div>`;
@@ -294,16 +294,16 @@ async function searchChars(q) {
     <td><span class="pill pill-${r.status}">${r.status}</span></td>
     <td>⚜ ${r.gold.toLocaleString()}</td>
     <td style="color:var(--muted)">${fmt(r.created_at)}</td>
-  </tr>`).join('') || '<tr><td colspan="5" class="empty">Nenhum resultado</td></tr>';
+  </tr>`).join('') || '<tr><td colspan="5" class="empty">No results</td></tr>';
 }
 
 async function renderEconomy(el) {
   const [holds, top] = await Promise.all([api('/api/economy/holds'), api('/api/economy/top-gold')]);
   el.innerHTML = `
     <div class="card" style="margin-bottom:20px">
-      <div class="card-header">Holds & Tesouros Regionais</div>
+      <div class="card-header">Holds & Regional Treasuries</div>
       <table>
-        <thead><tr><th>Hold</th><th>Taxa</th><th>Tesouro</th><th>Facção Dominante</th></tr></thead>
+        <thead><tr><th>Hold</th><th>Tax</th><th>Treasury</th><th>Ruling Faction</th></tr></thead>
         <tbody>${holds.map(h=>`<tr>
           <td><strong>${h.name}</strong></td>
           <td>${(h.tax_rate*100).toFixed(1)}%</td>
@@ -314,9 +314,9 @@ async function renderEconomy(el) {
       </table>
     </div>
     <div class="card">
-      <div class="card-header">🏆 Top 10 Ricos</div>
+      <div class="card-header">🏆 Top 10 Richest</div>
       <table>
-        <thead><tr><th>#</th><th>Personagem</th><th>Discord</th><th>Ouro</th></tr></thead>
+        <thead><tr><th>#</th><th>Character</th><th>Discord</th><th>Gold</th></tr></thead>
         <tbody>${top.map((r,i)=>`<tr>
           <td style="color:var(--muted)">${i+1}</td>
           <td><strong>${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</strong></td>
@@ -331,16 +331,16 @@ async function renderEconomy(el) {
 async function renderFactions(el) {
   const rows = await api('/api/factions');
   el.innerHTML = `<div class="card">
-    <div class="card-header">Facções Ativas</div>
+    <div class="card-header">Active Factions</div>
     <table>
-      <thead><tr><th>Tag</th><th>Nome</th><th>Membros</th><th>Tesouro</th></tr></thead>
+      <thead><tr><th>Tag</th><th>Name</th><th>Members</th><th>Treasury</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td><span style="color:${r.color_hex||'#bba16b'};font-weight:700;font-family:monospace">${escapeHtml(r.tag)}</span></td>
         <td>${escapeHtml(r.name)}</td>
         <td>${r.member_count}</td>
         <td>⚜ ${r.treasury.toLocaleString()}</td>
       </tr>`).join('')}
-      ${rows.length===0?'<tr><td colspan="4" class="empty">Nenhuma facção registrada</td></tr>':''}
+      ${rows.length===0?'<tr><td colspan="4" class="empty">No factions registered</td></tr>':''}
       </tbody>
     </table>
   </div>`;
@@ -349,18 +349,18 @@ async function renderFactions(el) {
 async function renderCriminal(el) {
   const rows = await api('/api/criminal');
   el.innerHTML = `<div class="card">
-    <div class="card-header">Fichas Criminais</div>
+    <div class="card-header">Criminal Records</div>
     <table>
-      <thead><tr><th>Personagem</th><th>Crime</th><th>Recompensa</th><th>Hold</th><th>Status</th><th>Data</th></tr></thead>
+      <thead><tr><th>Character</th><th>Crime</th><th>Bounty</th><th>Hold</th><th>Status</th><th>Date</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td><strong>${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</strong></td>
         <td>${escapeHtml(r.crime)}</td>
         <td style="color:var(--warning)">⚜ ${r.bounty}</td>
         <td style="color:var(--muted)">${escapeHtml(r.hold)}</td>
-        <td><span class="pill ${r.resolved?'pill-released':'pill-active'}">${r.resolved?'Resolvido':'Ativo'}</span></td>
+        <td><span class="pill ${r.resolved?'pill-released':'pill-active'}">${r.resolved?'Resolved':'Active'}</span></td>
         <td style="color:var(--muted)">${fmt(r.created_at)}</td>
       </tr>`).join('')}
-      ${rows.length===0?'<tr><td colspan="6" class="empty">Nenhuma ficha criminal</td></tr>':''}
+      ${rows.length===0?'<tr><td colspan="6" class="empty">No criminal records</td></tr>':''}
       </tbody>
     </table>
   </div>`;
@@ -369,9 +369,9 @@ async function renderCriminal(el) {
 async function renderPrison(el) {
   const rows = await api('/api/prison');
   el.innerHTML = `<div class="card">
-    <div class="card-header">Presos Ativos <span style="color:var(--muted);font-weight:400">${rows.length} preso(s)</span></div>
+    <div class="card-header">Active Prisoners <span style="color:var(--muted);font-weight:400">${rows.length} prisoner(s)</span></div>
     <table>
-      <thead><tr><th>Personagem</th><th>Crime</th><th>Pena</th><th>Cumprido</th><th>Preso em</th></tr></thead>
+      <thead><tr><th>Character</th><th>Crime</th><th>Sentence</th><th>Served</th><th>Arrested</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td><strong>${escapeHtml(r.first_name)} ${escapeHtml(r.last_name)}</strong></td>
         <td>${escapeHtml(r.crime_summary)||'—'}</td>
@@ -386,7 +386,7 @@ async function renderPrison(el) {
         </td>
         <td style="color:var(--muted)">${fmt(r.arrested_at)}</td>
       </tr>`).join('')}
-      ${rows.length===0?'<tr><td colspan="5" class="empty">Nenhum preso ativo 🕊️</td></tr>':''}
+      ${rows.length===0?'<tr><td colspan="5" class="empty">No active prisoners 🕊️</td></tr>':''}
       </tbody>
     </table>
   </div>`;
@@ -401,9 +401,9 @@ async function renderAudit(el) {
     return 'var(--info)';
   };
   el.innerHTML = `<div class="card">
-    <div class="card-header">Audit Log <span style="color:var(--muted);font-weight:400">${rows.length} registros</span></div>
+    <div class="card-header">Audit Log <span style="color:var(--muted);font-weight:400">${rows.length} entries</span></div>
     <table>
-      <thead><tr><th>Ação</th><th>Por</th><th>Alvo</th><th>Detalhes</th><th>Data</th></tr></thead>
+      <thead><tr><th>Action</th><th>By</th><th>Target</th><th>Details</th><th>Date</th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td><span style="color:${colorAction(r.action)};font-family:monospace;font-size:12px">${escapeHtml(r.action)}</span></td>
         <td>${escapeHtml(r.actor_name)||'—'}</td>
@@ -411,7 +411,7 @@ async function renderAudit(el) {
         <td style="color:var(--muted);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.details)||'—'}</td>
         <td style="color:var(--muted);white-space:nowrap">${fmt(r.created_at)}</td>
       </tr>`).join('')}
-      ${rows.length===0?'<tr><td colspan="5" class="empty">Nenhum registro</td></tr>':''}
+      ${rows.length===0?'<tr><td colspan="5" class="empty">No entries</td></tr>':''}
       </tbody>
     </table>
   </div>`;
@@ -426,7 +426,7 @@ function escapeHtml(value) {
 
 function fmt(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 </script>
 </body>

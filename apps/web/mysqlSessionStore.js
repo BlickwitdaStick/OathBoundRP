@@ -16,8 +16,8 @@ function expiryFor(sessionData, now, defaultTtlMs) {
 }
 
 /**
- * Store MariaDB sem dependência adicional. Recebe o módulo express-session e
- * um executor para continuar testável sem abrir socket de banco.
+ * MariaDB store with no extra dependency. Takes the express-session module and
+ * an executor so it stays testable without opening a database socket.
  */
 function createMysqlSessionStore(sessionModule, {
   execute,

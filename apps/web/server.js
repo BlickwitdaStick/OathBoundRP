@@ -16,21 +16,21 @@ const app  = express();
 const runtimeMetrics = createRuntimeMetrics({ service: 'web' });
 const PORT = process.env.PANEL_PORT || 3001;
 const INTERNAL_API_SECRET = requireEnv('INTERNAL_API_SECRET');
-// O bot escuta em 127.0.0.1 (ver apps/bot-discord/index.js). Configurável porque
-// nem sempre painel e bot rodam no mesmo host.
+// The bot listens on 127.0.0.1 (see apps/bot-discord/index.js). Configurable
+// because the panel and the bot don't always run on the same host.
 const BOT_INTERNAL_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:3002';
-// Allowlist dos redirect_uri aceitos em /api/launcher/oauth/exchange. O launcher
-// sobe um servidor de callback local em 127.0.0.1:19847 (ver electron/main.ts).
+// Allowlist of redirect_uri values accepted by /api/launcher/oauth/exchange. The
+// launcher starts a local callback server on 127.0.0.1:19847 (see electron/main.ts).
 const LAUNCHER_REDIRECT_URIS = (process.env.LAUNCHER_REDIRECT_URIS || 'http://localhost:19847/callback,http://127.0.0.1:19847/callback')
   .split(',')
   .map((uri) => uri.trim())
   .filter(Boolean);
 const CRASH_REPORT_DIR = path.join(__dirname, 'crash-reports');
-// Identifica o servidor de jogo no contrato de master API do SkyMP. Precisa
-// bater com `masterKey` do skymp/config/server-settings.*.json.
+// Identifies the game server in SkyMP's master API contract. It must match
+// `masterKey` in skymp/config/server-settings.*.json.
 const MASTER_KEY = process.env.MASTER_KEY || null;
 
-/** Comparação em tempo constante, tolerante a tamanhos diferentes. */
+/** Constant-time comparison, tolerant of different lengths. */
 function safeEquals(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const bufA = Buffer.from(a);
@@ -73,7 +73,7 @@ async function ensureCrashReportDir() {
   await fsp.mkdir(CRASH_REPORT_DIR, { recursive: true });
 }
 
-// ── Rate limiting em memória, com teto global e por bucket ──────────────────
+// ── In-memory rate limiting, with a global and per-bucket cap ───────────────
 const { isRateLimited } = createMemoryRateLimiter();
 
 function sanitizeCrashText(value, maxLength) {
@@ -98,15 +98,15 @@ function normalizeCrashReport(body) {
 }
 
 // ── Middleware ─────────────────────────────────────────────────────────────
-// Confiar em X-Forwarded-For muda a identidade usada pelo rate limiter. Isso
-// precisa ser uma decisão explícita da implantação, não efeito colateral de
-// NODE_ENV=production em um serviço eventualmente exposto sem proxy.
+// Trusting X-Forwarded-For changes the identity the rate limiter uses. That
+// has to be an explicit deployment decision, not a side effect of
+// NODE_ENV=production on a service that might be exposed without a proxy.
 if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', 1);
 }
-// A origem era `http://localhost:${PORT}` fixo, o que quebra assim que o painel
-// sai da máquina de desenvolvimento. Em produção informe o domínio real em
-// PANEL_PUBLIC_URL (aceita lista separada por vírgula pra apex + www).
+// The origin used to be a fixed `http://localhost:${PORT}`, which breaks as
+// soon as the panel leaves the development machine. In production set the real
+// domain in PANEL_PUBLIC_URL (accepts a comma-separated list for apex + www).
 const CORS_ORIGINS = (process.env.PANEL_PUBLIC_URL || `http://localhost:${PORT}`)
   .split(',')
   .map((origin) => origin.trim().replace(/\/+$/, ''))
@@ -140,8 +140,8 @@ passport.deserializeUser((obj, done) => done(null, obj));
 passport.use(new DiscordStrategy({
     clientID: requireEnv('DISCORD_CLIENT_ID'),
     clientSecret: requireEnv('DISCORD_CLIENT_SECRET'),
-    // Precisa bater EXATAMENTE com a Redirect URI cadastrada no portal do
-    // Discord, senão a autenticação falha com `invalid_request`.
+    // Must match EXACTLY the Redirect URI registered in the Discord developer
+    // portal, otherwise authentication fails with `invalid_request`.
     callbackURL: process.env.DISCORD_CALLBACK_URL || `${CORS_ORIGINS[0]}/api/auth/discord/callback`,
     scope: ['identify']
 }, async (accessToken, refreshToken, profile, done) => {
@@ -156,7 +156,7 @@ passport.use(new DiscordStrategy({
             accountId = rows[0].account_id;
             await executeDb('UPDATE discord_identities SET username = ?, avatar = ? WHERE discord_id = ?', [profile.username, profile.avatar || '', profile.id]);
         }
-        
+
         return done(null, { id: profile.id, username: profile.username, avatar: profile.avatar, accountId });
     } catch(err) {
         return done(err, null);
@@ -166,28 +166,28 @@ passport.use(new DiscordStrategy({
 function requireAuth(req, res, next) {
   if (req.isAuthenticated && req.isAuthenticated()) return next();
   runtimeMetrics.recordRejection('auth_required');
-  res.status(401).json({ error: 'Não autenticado' });
+  res.status(401).json({ error: 'Not authenticated' });
 }
 
-// A autoridade de staff é derivada EXCLUSIVAMENTE da tabela `staff_roles`.
-// O campo `vip_level` em `accounts` é SOMENTE para monetização (VIP/Apoiador).
-// NUNCA usar vip_level como critério de permissão administrativa.
+// Staff authority is derived EXCLUSIVELY from the `staff_roles` table.
+// The `vip_level` field in `accounts` is ONLY for monetization (VIP/Supporter).
+// NEVER use vip_level as a criterion for administrative permission.
 async function requireStaff(req, res, next) {
   if (!req.isAuthenticated || !req.isAuthenticated()) {
     runtimeMetrics.recordRejection('staff_auth_required');
-    return res.status(401).json({ error: 'Nao autenticado' });
+    return res.status(401).json({ error: 'Not authenticated' });
   }
   try {
     const rows = await db('SELECT role FROM staff_roles WHERE account_id = ? LIMIT 1', [req.user.accountId]);
     if (rows.length === 0) {
       runtimeMetrics.recordRejection('staff_role_required');
-      return res.status(403).json({ error: 'Acesso staff negado' });
+      return res.status(403).json({ error: 'Staff access denied' });
     }
     req.staff = { role: rows[0].role };
     return next();
   } catch (err) {
     console.error('[requireStaff]', err);
-    return res.status(500).json({ error: 'Erro interno do servidor' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
 
@@ -198,7 +198,7 @@ app.get('/health', async (req, res) => {
     await db('SELECT 1 AS ok');
     return res.json({ ok: true, database: 'reachable' });
   } catch (err) {
-    console.error('[health] Banco indisponivel:', err.message);
+    console.error('[health] Database unavailable:', err.message);
     return res.status(503).json({ ok: false, database: 'unreachable' });
   }
 });
@@ -212,12 +212,12 @@ app.get('/api/auth/discord/callback', passport.authenticate('discord', {
 
 app.post('/api/auth/logout', (req, res) => {
   req.logout((err) => {
-    if(err) { console.error('[logout]', err); return res.status(500).json({ error: 'Erro interno do servidor' }); }
+    if(err) { console.error('[logout]', err); return res.status(500).json({ error: 'Internal server error' }); }
     req.session.destroy(() => res.json({ ok: true }));
   });
 });
 
-// Rotas do Jogador Público
+// Public player routes
 app.get('/api/me', requireAuth, async (req, res) => {
     try {
         const appRows = await db('SELECT * FROM whitelist_applications WHERE account_id = ? ORDER BY id DESC LIMIT 1', [req.user.accountId]);
@@ -226,12 +226,16 @@ app.get('/api/me', requireAuth, async (req, res) => {
             user: req.user,
             application
         });
-    } catch (err) { console.error('[/api/me]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+    } catch (err) { console.error('[/api/me]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// Heurística best-effort: sinaliza conceitos fortes pra staff olhar com mais
-// atenção antes de aprovar (rubrica de whitelist Heavy RP). Não é um gate
-// automático — só marca needs_extra_review pra staff decidir na revisão.
+// Best-effort heuristic: flags strong concepts so staff look more carefully
+// before approving (Heavy RP whitelist rubric). It's not an automatic gate —
+// it only sets needs_extra_review for staff to decide during review.
+//
+// The pattern deliberately includes Portuguese keywords alongside the English
+// ones: many applicants write their character sheets in Portuguese, and those
+// keywords are matched against player input, not shown to anyone.
 const STRONG_CONCEPT_PATTERN = new RegExp(
   [
     'nobre', 'noble', 'jarl', 'th[aã]ne',
@@ -250,19 +254,19 @@ function detectsStrongConcept(...texts) {
   return STRONG_CONCEPT_PATTERN.test(combined);
 }
 
-// Limites alinhados com o schema (VARCHAR/TEXT) e com a rubrica de whitelist:
-// um campo vazio ou de 1 caractere não é uma ficha, e um campo maior que o
-// tipo da coluna estoura no INSERT e vira 500 sem explicação pro jogador.
+// Limits aligned with the schema (VARCHAR/TEXT) and the whitelist rubric: an
+// empty or 1-character field is not a character sheet, and a field longer than
+// the column type overflows on INSERT and becomes an unexplained 500 for the player.
 const APPLY_FIELDS = {
-  first_name:  { required: true,  min: 2, max: 60,   label: 'Nome' },
-  last_name:   { required: true,  min: 2, max: 60,   label: 'Sobrenome' },
-  biography:   { required: true,  min: 80, max: 5000, label: 'Biografia' },
-  // Obrigatórios também no servidor, não só no `required` do apply.html — o
-  // formulário é só a UI, e a rubrica de whitelist trata ficha sem motivação,
-  // fraqueza ou laço social como reprovada de saída.
-  motivations: { required: true,  min: 30, max: 2000, label: 'Motivações' },
-  weaknesses:  { required: true,  min: 30, max: 2000, label: 'Fraquezas' },
-  social_ties: { required: true,  min: 30, max: 2000, label: 'Laços sociais' }
+  first_name:  { required: true,  min: 2, max: 60,   label: 'First name' },
+  last_name:   { required: true,  min: 2, max: 60,   label: 'Last name' },
+  biography:   { required: true,  min: 80, max: 5000, label: 'Biography' },
+  // Required on the server too, not just via `required` in apply.html — the
+  // form is only the UI, and the whitelist rubric treats a sheet without
+  // motivation, weakness or social ties as an outright rejection.
+  motivations: { required: true,  min: 30, max: 2000, label: 'Motivations' },
+  weaknesses:  { required: true,  min: 30, max: 2000, label: 'Weaknesses' },
+  social_ties: { required: true,  min: 30, max: 2000, label: 'Social ties' }
 };
 
 function validateApplication(body) {
@@ -270,12 +274,12 @@ function validateApplication(body) {
   for (const [field, rule] of Object.entries(APPLY_FIELDS)) {
     const value = typeof body[field] === 'string' ? body[field].trim() : '';
     if (!value) {
-      if (rule.required) return { error: `${rule.label} é obrigatório.` };
+      if (rule.required) return { error: `${rule.label} is required.` };
       clean[field] = null;
       continue;
     }
-    if (value.length < rule.min) return { error: `${rule.label} precisa de pelo menos ${rule.min} caracteres.` };
-    if (value.length > rule.max) return { error: `${rule.label} passa do limite de ${rule.max} caracteres.` };
+    if (value.length < rule.min) return { error: `${rule.label} needs at least ${rule.min} characters.` };
+    if (value.length > rule.max) return { error: `${rule.label} exceeds the ${rule.max}-character limit.` };
     clean[field] = value;
   }
   return { clean };
@@ -288,7 +292,7 @@ app.post('/api/apply', requireAuth, async (req, res) => {
     try {
         const existing = await db('SELECT status FROM whitelist_applications WHERE account_id = ? ORDER BY id DESC LIMIT 1', [req.user.accountId]);
         if (existing.length > 0 && (existing[0].status === 'pending' || existing[0].status === 'approved')) {
-            return res.status(400).json({ error: 'Você já possui uma aplicação pendente ou aprovada.' });
+            return res.status(400).json({ error: 'You already have a pending or approved application.' });
         }
 
         const needsExtraReview = detectsStrongConcept(biography, motivations, weaknesses, social_ties) ? 1 : 0;
@@ -306,7 +310,7 @@ app.post('/api/apply', requireAuth, async (req, res) => {
         );
 
         res.json({ ok: true });
-    } catch (err) { console.error('[/api/apply]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+    } catch (err) { console.error('[/api/apply]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ── API: Dashboard ─────────────────────────────────────────────────────────
@@ -315,10 +319,10 @@ app.get('/api/dashboard', requireStaff, async (req, res) => {
     const [accounts]    = await executeDb('SELECT COUNT(*) as c FROM accounts');
     const [chars]       = await executeDb('SELECT COUNT(*) as c FROM characters');
     const [pending]     = await executeDb("SELECT COUNT(*) as c FROM whitelist_applications WHERE status='pending'");
-    // `DATE(created_at)=CURDATE()` envolve a coluna numa função, o que impede o
-    // MySQL de usar índice — vira varredura da tabela inteira, justamente a que
-    // mais cresce no projeto. A comparação por intervalo faz o mesmo recorte e
-    // consegue usar `idx_audit_created` (migration v7).
+    // `DATE(created_at)=CURDATE()` wraps the column in a function, which keeps
+    // MySQL from using an index — it becomes a full scan of the table, precisely
+    // the one that grows fastest in the project. The range comparison makes the
+    // same cut and can use `idx_audit_created` (migration v7).
     const [auditToday]  = await executeDb(
       "SELECT COUNT(*) as c FROM audit_logs WHERE created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY"
     );
@@ -332,7 +336,7 @@ app.get('/api/dashboard', requireStaff, async (req, res) => {
       prisoners:   prisoners[0].c,
       factions:    factions[0].c
     });
-  } catch (err) { console.error('[/api/dashboard]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/dashboard]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ── API: Whitelist ─────────────────────────────────────────────────────────
@@ -351,17 +355,17 @@ app.get('/api/whitelist', requireStaff, async (req, res) => {
        LIMIT 100`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/whitelist GET]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/whitelist GET]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 /**
- * Manda um evento pro canal de log de moderacao do Discord (via bot).
+ * Sends an event to the Discord moderation log channel (via the bot).
  *
- * Manda e esquece: nao retorna promessa pra quem chama e engole todo erro. O
- * registro de verdade e `audit_logs`; o canal e notificacao. Ver
- * `apps/bot-discord/moderationLog.js` e ARCHITECTURE.md 1.3.
+ * Fire and forget: it returns no promise to the caller and swallows every
+ * error. The real record is `audit_logs`; the channel is a notification. See
+ * `apps/bot-discord/moderationLog.js` and ARCHITECTURE.md 1.3.
  */
-function notifyModerationLog(evento, requestId) {
+function notifyModerationLog(event, requestId) {
     fetch(`${BOT_INTERNAL_URL}/api/moderation-log`, {
         method: 'POST',
         headers: {
@@ -369,21 +373,21 @@ function notifyModerationLog(evento, requestId) {
             'X-Internal-Secret': INTERNAL_API_SECRET,
             'X-Request-Id': requestId
         },
-        body: JSON.stringify({ ...evento, source: 'painel', at: new Date().toISOString() })
-    }).catch(e => console.error('[web] Falha ao enviar log de moderacao:', e.message));
+        body: JSON.stringify({ ...event, source: 'panel', at: new Date().toISOString() })
+    }).catch(e => console.error('[web] Failed to send moderation log:', e.message));
 }
 
 app.patch('/api/whitelist/:id', requireStaff, async (req, res) => {
   const { status, reviewer_notes, extra_review_notes } = req.body;
   const validStatuses = ['approved', 'rejected', 'pending'];
-  if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Status inválido' });
+  if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
   try {
     await db(
       'UPDATE whitelist_applications SET status=?, reviewer_notes=?, reviewed_at=NOW() WHERE id=?',
       [status, reviewer_notes || null, req.params.id]
     );
 
-    // Notas da staff sobre o conceito sinalizado como needs_extra_review (opcional).
+    // Staff notes about a concept flagged as needs_extra_review (optional).
     if (typeof extra_review_notes === 'string' && extra_review_notes.trim()) {
       await db(
         `UPDATE characters c
@@ -394,7 +398,7 @@ app.patch('/api/whitelist/:id', requireStaff, async (req, res) => {
       );
     }
 
-    // Buscar o discord_id e account_id relacionados para notificar o bot e auditar
+    // Look up the related discord_id and account_id to notify the bot and audit
     const idRows = await db(
       `SELECT d.discord_id, a.id as account_id FROM discord_identities d
        INNER JOIN accounts a ON a.id = d.account_id
@@ -402,13 +406,13 @@ app.patch('/api/whitelist/:id', requireStaff, async (req, res) => {
        WHERE wa.id=?`, [req.params.id]
     );
 
-    // Se aprovado, aprova também o personagem.
+    // If approved, approve the character too.
     //
-    // `c.status='pending'` é obrigatório aqui: sem ele, o UPDATE varre TODOS os
-    // personagens da conta e reescreve o status de qualquer um deles — inclusive
-    // os que a staff aposentou com /permakill (`status='retired'`, ver
-    // admin-service.retireCharacter). Aprovar uma ficha nova ressuscitava o
-    // personagem morto permanentemente e apagava a consequência do permakill.
+    // `c.status='pending'` is mandatory here: without it, the UPDATE sweeps ALL
+    // of the account's characters and rewrites the status of any of them —
+    // including those staff retired with /permakill (`status='retired'`, see
+    // admin-service.retireCharacter). Approving a new sheet used to resurrect
+    // the permanently dead character and erase the permakill's consequence.
     if (status === 'approved') {
       await db(
         `UPDATE characters c
@@ -419,7 +423,7 @@ app.patch('/api/whitelist/:id', requireStaff, async (req, res) => {
       );
     }
 
-    // Auditoria: registra quem revisou a aplicação de whitelist
+    // Audit: records who reviewed the whitelist application
     const auditAction = status === 'approved' ? 'whitelist:approve'
       : status === 'rejected' ? 'whitelist:reject'
       : 'whitelist:reset';
@@ -428,7 +432,7 @@ app.patch('/api/whitelist/:id', requireStaff, async (req, res) => {
       [auditAction, req.user.accountId, idRows.length > 0 ? idRows[0].account_id : null, reviewer_notes || null]
     );
 
-    // Sincronizar com o Bot do Discord
+    // Sync with the Discord bot
     if (idRows.length > 0) {
         try {
             await fetch(`${BOT_INTERNAL_URL}/api/sync-role`, {
@@ -441,33 +445,33 @@ app.patch('/api/whitelist/:id', requireStaff, async (req, res) => {
                 body: JSON.stringify({ discord_id: idRows[0].discord_id, status })
             });
         } catch (e) {
-            console.error('[web] Falha ao notificar o Bot do Discord:', e.message);
+            console.error('[web] Failed to notify the Discord bot:', e.message);
         }
     }
 
-    // Log de moderacao no canal do Discord (ARCHITECTURE.md 1.3).
+    // Moderation log in the Discord channel (ARCHITECTURE.md 1.3).
     //
-    // Separado do sync de cargo de proposito, e nao um campo a mais naquela
-    // chamada: sao coisas com consequencias diferentes. O sync ALTERA o estado
-    // do usuario no Discord e a falha dele importa; este e notificacao pra staff
-    // e a falha dele nao pode desfazer nem atrasar a decisao de whitelist, que
-    // ja esta gravada no banco e no audit_logs acima.
+    // Kept separate from the role sync on purpose, rather than one more field
+    // in that call: they have different consequences. The sync CHANGES the
+    // user's state on Discord and its failure matters; this one is a staff
+    // notification and its failure must neither undo nor delay the whitelist
+    // decision, which is already stored in the database and audit_logs above.
     //
-    // Nao e `await`ado pelo mesmo motivo.
+    // Not `await`ed for the same reason.
     notifyModerationLog({
         kind: status === 'approved' ? 'whitelist_approve'
             : status === 'rejected' ? 'whitelist_reject'
             : 'whitelist_reset',
-        target: idRows.length > 0 ? `<@${idRows[0].discord_id}>` : `aplicacao #${req.params.id}`,
-        moderator: req.user.username || `conta #${req.user.accountId}`,
+        target: idRows.length > 0 ? `<@${idRows[0].discord_id}>` : `application #${req.params.id}`,
+        moderator: req.user.username || `account #${req.user.accountId}`,
         reason: reviewer_notes || null
     }, req.requestId);
 
     res.json({ ok: true });
-  } catch (err) { console.error('[/api/whitelist PATCH]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/whitelist PATCH]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ── API: Personagens ───────────────────────────────────────────────────────
+// ── API: Characters ────────────────────────────────────────────────────────
 app.get('/api/characters', requireStaff, async (req, res) => {
   try {
     const search = req.query.q ? `%${req.query.q}%` : '%';
@@ -482,7 +486,7 @@ app.get('/api/characters', requireStaff, async (req, res) => {
       [search, search, search]
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/characters]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/characters]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ── API: Audit Logs ────────────────────────────────────────────────────────
@@ -499,10 +503,10 @@ app.get('/api/audit', requireStaff, async (req, res) => {
        ORDER BY al.created_at DESC LIMIT 200`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/audit]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/audit]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ── API: Economia / Holds ──────────────────────────────────────────────────
+// ── API: Economy / Holds ───────────────────────────────────────────────────
 app.get('/api/economy/holds', requireStaff, async (req, res) => {
   try {
     const rows = await db(
@@ -513,7 +517,7 @@ app.get('/api/economy/holds', requireStaff, async (req, res) => {
        ORDER BY h.name`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/economy/holds]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/economy/holds]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 app.get('/api/economy/top-gold', requireStaff, async (req, res) => {
@@ -526,10 +530,10 @@ app.get('/api/economy/top-gold', requireStaff, async (req, res) => {
        ORDER BY c.gold DESC LIMIT 10`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/economy/top-gold]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/economy/top-gold]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ── API: Fichas Criminais ──────────────────────────────────────────────────
+// ── API: Criminal Records ──────────────────────────────────────────────────
 app.get('/api/criminal', requireStaff, async (req, res) => {
   try {
     const rows = await db(
@@ -540,10 +544,10 @@ app.get('/api/criminal', requireStaff, async (req, res) => {
        ORDER BY cr.resolved ASC, cr.created_at DESC LIMIT 100`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/criminal]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/criminal]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ── API: Facções ───────────────────────────────────────────────────────────
+// ── API: Factions ──────────────────────────────────────────────────────────
 app.get('/api/factions', requireStaff, async (req, res) => {
   try {
     const rows = await db(
@@ -554,10 +558,10 @@ app.get('/api/factions', requireStaff, async (req, res) => {
        GROUP BY f.id ORDER BY member_count DESC`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/factions]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/factions]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ── API: Presos Ativos ─────────────────────────────────────────────────────
+// ── API: Active Prisoners ──────────────────────────────────────────────────
 app.get('/api/prison', requireStaff, async (req, res) => {
   try {
     const rows = await db(
@@ -570,24 +574,24 @@ app.get('/api/prison', requireStaff, async (req, res) => {
        ORDER BY pr.arrested_at DESC`
     );
     res.json(rows);
-  } catch (err) { console.error('[/api/prison]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
+  } catch (err) { console.error('[/api/prison]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// API: Crash reports do launcher
+// API: launcher crash reports
 const CRASH_REPORT_MAX_BYTES = 256 * 1024;
 const CRASH_REPORT_MAX_FILES = parseInt(process.env.CRASH_REPORT_MAX_FILES || '500', 10);
 const CRASH_REPORT_MAX_AGE_DAYS = parseInt(process.env.CRASH_REPORT_MAX_AGE_DAYS || '30', 10);
 
 /**
- * Remove relatórios antigos demais ou excedentes.
+ * Removes reports that are too old or in excess.
  *
- * Dois limites em vez de um: a idade evita guardar log de uma versão do cliente
- * que nem existe mais, e a contagem protege contra uma enxurrada num intervalo
- * curto — um bug de crash em loop pode gerar centenas de relatórios no mesmo
- * dia, e só o limite de idade não seguraria isso.
+ * Two limits instead of one: age avoids keeping logs from a client version
+ * that no longer exists, and the count protects against a flood in a short
+ * interval — a crash-loop bug can generate hundreds of reports in the same
+ * day, and the age limit alone wouldn't hold that back.
  *
- * Falha aqui nunca deve derrubar o recebimento: perder a poda é irrelevante
- * perto de perder o relatório.
+ * A failure here must never take down report intake: losing the prune is
+ * irrelevant compared to losing the report.
  */
 async function pruneCrashReports() {
   const names = (await fsp.readdir(CRASH_REPORT_DIR)).filter((name) => name.endsWith('.json'));
@@ -598,13 +602,13 @@ async function pruneCrashReports() {
     try {
       const stat = await fsp.stat(fullPath);
       entries.push({ fullPath, mtimeMs: stat.mtimeMs });
-    } catch { /* sumiu no meio do caminho: nada a podar */ }
+    } catch { /* vanished midway: nothing to prune */ }
   }
 
   const cutoff = Date.now() - CRASH_REPORT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
   const doomed = new Set(entries.filter((e) => e.mtimeMs < cutoff).map((e) => e.fullPath));
 
-  // Do mais novo pro mais velho; o que passar do teto entra na lista.
+  // Newest to oldest; whatever goes past the cap joins the list.
   const survivors = entries
     .filter((e) => !doomed.has(e.fullPath))
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
@@ -613,11 +617,11 @@ async function pruneCrashReports() {
   }
 
   for (const fullPath of doomed) {
-    try { await fsp.unlink(fullPath); } catch { /* concorrência: já foi */ }
+    try { await fsp.unlink(fullPath); } catch { /* concurrency: already gone */ }
   }
 
   if (doomed.size > 0) {
-    console.log(`[crash-reports] ${doomed.size} relatorio(s) antigo(s) removido(s).`);
+    console.log(`[crash-reports] ${doomed.size} old report(s) removed.`);
   }
   return doomed.size;
 }
@@ -626,30 +630,30 @@ app.post('/api/crashes/client', async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     if (isRateLimited(`crashes:${ip}`, 10, 60 * 1000)) {
       runtimeMetrics.recordRejection('rate_limit_crashes');
-      return res.status(429).json({ ok: false, error: 'Muitas requisições, tente novamente mais tarde.' });
+      return res.status(429).json({ ok: false, error: 'Too many requests, please try again later.' });
     }
 
     const contentLength = Number(req.get('content-length') || 0);
     if (contentLength > CRASH_REPORT_MAX_BYTES) {
-      return res.status(413).json({ ok: false, error: 'Payload muito grande' });
+      return res.status(413).json({ ok: false, error: 'Payload too large' });
     }
 
     const report = normalizeCrashReport(req.body || {});
-    if (report.crashes.length === 0) return res.status(400).json({ ok: false, error: 'Nenhum crash valido recebido' });
+    if (report.crashes.length === 0) return res.status(400).json({ ok: false, error: 'No valid crash received' });
 
     await ensureCrashReportDir();
     const filePath = path.join(CRASH_REPORT_DIR, `${report.id}.json`);
     await fsp.writeFile(filePath, JSON.stringify(report, null, 2));
 
-    // Sem isto o diretório cresce pra sempre: cada relatório carrega até 64 KB
-    // de log por crash, e um cliente instável reporta em série. Rodar depois da
-    // escrita (e não em cron) mantém a limpeza acoplada ao que a causa.
-    pruneCrashReports().catch((err) => console.error('[crash-reports] Falha ao podar:', err.message));
+    // Without this the directory grows forever: each report carries up to 64 KB
+    // of log per crash, and an unstable client reports in a row. Running it
+    // after the write (rather than on a cron) keeps the cleanup tied to its cause.
+    pruneCrashReports().catch((err) => console.error('[crash-reports] Failed to prune:', err.message));
 
     res.json({ ok: true, id: report.id, received: report.crashes.length });
   } catch (err) {
     console.error('[/api/crashes/client]', err);
-    res.status(500).json({ ok: false, error: 'Erro interno do servidor' });
+    res.status(500).json({ ok: false, error: 'Internal server error' });
   }
 });
 
@@ -677,7 +681,7 @@ app.get('/api/crashes', requireStaff, async (req, res) => {
           })) : []
         });
       } catch (fileErr) {
-        console.error(`[/api/crashes] Arquivo corrompido ignorado: ${name}`, fileErr.message);
+        console.error(`[/api/crashes] Corrupt file skipped: ${name}`, fileErr.message);
       }
     }
 
@@ -685,32 +689,33 @@ app.get('/api/crashes', requireStaff, async (req, res) => {
     res.json(reports.slice(0, 100));
   } catch (err) {
     console.error('[/api/crashes]', err);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// ── API: Master (contrato do SkyMP) ──────────────────────────────────────────
+// ── API: Master (SkyMP contract) ─────────────────────────────────────────────
 //
-// Este endpoint não foi inventado por nós: é o contrato que o servidor SkyMP
-// chama quando `offlineMode: false` (ver skymp5-server/ts/systems/login.ts
-// upstream). O servidor pega o `gameData.session` que o cliente mandou e
-// pergunta ao master quem é aquela pessoa. O `user.id` que respondermos vira o
-// `profileId` do gamemode.
+// We didn't invent this endpoint: it's the contract the SkyMP server calls
+// when `offlineMode: false` (see skymp5-server/ts/systems/login.ts upstream).
+// The server takes the `gameData.session` the client sent and asks the master
+// who that person is. The `user.id` we respond with becomes the gamemode's
+// `profileId`.
 //
-// É isso que tira a identidade das mãos do cliente. Sem este endpoint, o
-// caminho é `offlineMode: true`, onde o cliente simplesmente declara o próprio
-// `profileId` no `skymp_config.json` e o servidor acredita.
+// That is what takes identity out of the client's hands. Without this
+// endpoint, the path is `offlineMode: true`, where the client simply declares
+// its own `profileId` in `skymp_config.json` and the server believes it.
 //
-// O `master` padrão do SkyMP é `https://gateway.skymp.net`. Apontar para o
-// nosso painel é só trocar a string em `server-settings.json` — e faz sentido,
-// porque o painel já é quem autentica o Discord e aprova a whitelist.
+// SkyMP's default `master` is `https://gateway.skymp.net`. Pointing it at our
+// panel is just a matter of changing the string in `server-settings.json` — and
+// it makes sense, because the panel is already what authenticates Discord and
+// approves the whitelist.
 app.get('/api/servers/:masterKey/sessions/:session', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
 
-  // Comparação em tempo constante: a masterKey identifica o servidor de jogo
-  // e não deve vazar por diferença de tempo de resposta.
+  // Constant-time comparison: the masterKey identifies the game server and
+  // must not leak through response-time differences.
   if (!MASTER_KEY || !safeEquals(req.params.masterKey, MASTER_KEY)) {
-    console.warn(`[master-api] masterKey invalida vinda de ${ip}`);
+    console.warn(`[master-api] Invalid masterKey from ${ip}`);
     return res.status(404).json({ error: 'Unknown server' });
   }
 
@@ -720,13 +725,13 @@ app.get('/api/servers/:masterKey/sessions/:session', async (req, res) => {
   }
 
   try {
-    // `apps/launcher/electron/main.ts` grava `config.session` como
-    // `ticket:<token>` (ver docs/technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md
-    // linha 22) — o prefixo é só um marcador de formato do lado do cliente, o
-    // token gravado em `game_sessions` (apps/game-api) é o valor cru, sem ele.
-    // Sem este strip, todo hash aqui é calculado sobre a string errada e a
-    // sessão nunca resolve — falha silenciosa e recorrente confirmada em
-    // 24/08/2026 com um fork externo (failCount chegando a 9000).
+    // `apps/launcher/electron/main.ts` writes `config.session` as
+    // `ticket:<token>` (see docs/technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md
+    // line 22) — the prefix is only a client-side format marker; the token
+    // stored in `game_sessions` (apps/game-api) is the raw value, without it.
+    // Without this strip, every hash here is computed over the wrong string and
+    // the session never resolves — a silent, recurring failure confirmed on
+    // 2026-08-24 with an external fork (failCount reaching 9000).
     const rawSession = req.params.session;
     const session = typeof rawSession === 'string' && rawSession.startsWith('ticket:')
       ? rawSession.slice('ticket:'.length)
@@ -741,29 +746,29 @@ app.get('/api/servers/:masterKey/sessions/:session', async (req, res) => {
       [hashTicket(session)]
     );
 
-    // 404 é o que o SkyMP espera pra sessão inválida: ele manda
-    // `loginFailedSessionNotFound` pro cliente, que é a mensagem correta.
+    // 404 is what SkyMP expects for an invalid session: it sends
+    // `loginFailedSessionNotFound` to the client, which is the right message.
     if (rows.length === 0) return res.status(404).json({ error: 'Session not found' });
 
-    // Contabiliza o uso. `resolve_count` alto é sinal de sessão compartilhada
-    // entre máquinas — vale olhar quando aparecer.
+    // Count the use. A high `resolve_count` is a sign of a session shared
+    // between machines — worth looking at when it shows up.
     await db(
       'UPDATE game_sessions SET last_resolved_at = NOW(), resolve_count = resolve_count + 1 WHERE id = ?',
       [rows[0].id]
     );
 
-    // A forma da resposta é ditada pelo SkyMP, não por nós: `data.user.id`.
+    // The response shape is dictated by SkyMP, not by us: `data.user.id`.
     res.json({ user: { id: rows[0].account_id, discordId: rows[0].discord_id } });
   } catch (err) {
     console.error('[master-api] /sessions', err);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // ── API: Launcher ────────────────────────────────────────────────────────────
 
-// Tempo de vida do ticket de lançamento: ele só precisa sobreviver do clique em
-// "Jogar" até a entrada na fila. Curto porque nada nele exige durar mais.
+// Launch ticket lifetime: it only needs to survive from the click on "Play"
+// until joining the queue. Short because nothing about it needs to last longer.
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
 
 function hashTicket(token) {
@@ -771,8 +776,8 @@ function hashTicket(token) {
 }
 
 /**
- * Emite um ticket de uso único ligado a uma conta. Guarda só o hash — se o
- * banco vazar, os tickets em voo não viram credencial utilizável.
+ * Issues a single-use ticket bound to an account. Stores only the hash — if
+ * the database leaks, in-flight tickets don't become usable credentials.
  */
 async function issueLaunchTicket(accountId, discordId, issuedIp) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -784,13 +789,14 @@ async function issueLaunchTicket(accountId, discordId, issuedIp) {
   return token;
 }
 
-// Sessão de launcher: multiuso e de vida longa, ao contrário do launch ticket
-// (uso único, ~5 min). Serve só pra uma coisa — pedir um launch ticket novo
-// sem repetir o OAuth do Discord inteiro. Ver migration-v25-launcher-sessions.sql
-// para o problema que isto resolve (token error após a primeira partida).
-const LAUNCHER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+// Launcher session: multi-use and long-lived, unlike the launch ticket
+// (single-use, ~5 min). It serves exactly one purpose — requesting a new launch
+// ticket without repeating the whole Discord OAuth. See
+// migration-v25-launcher-sessions.sql for the problem this solves (token error
+// after the first match).
+const LAUNCHER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-/** Emite uma sessão de launcher ligada a uma conta. Guarda só o hash. */
+/** Issues a launcher session bound to an account. Stores only the hash. */
 async function issueLauncherSession(accountId, discordId, issuedIp) {
   const token = crypto.randomBytes(32).toString('hex');
   await db(
@@ -801,7 +807,7 @@ async function issueLauncherSession(accountId, discordId, issuedIp) {
   return token;
 }
 
-/** Valida uma sessão de launcher. Não consome — é multiuso até expirar ou ser revogada. */
+/** Validates a launcher session. Does not consume it — it's multi-use until it expires or is revoked. */
 async function resolveLauncherSession(token) {
   if (typeof token !== 'string' || token.length < 32) return null;
   const rows = await db(
@@ -814,31 +820,32 @@ async function resolveLauncherSession(token) {
 }
 
 
-// Troca do `code` do OAuth do Discord por um perfil, feita pelo painel.
+// Exchange of the Discord OAuth `code` for a profile, done by the panel.
 //
-// O launcher é um app de desktop distribuído aos jogadores: qualquer segredo
-// embutido nele (era `VITE_DISCORD_CLIENT_SECRET`) pode ser extraído do
-// instalador por qualquer pessoa que baixe o jogo, e com o secret em mãos dá pra
-// se passar pela aplicação no Discord. O secret fica só aqui, no servidor.
+// The launcher is a desktop app distributed to players: any secret embedded in
+// it (it used to be `VITE_DISCORD_CLIENT_SECRET`) can be extracted from the
+// installer by anyone who downloads the game, and with the secret in hand one
+// can impersonate the application on Discord. The secret lives only here, on
+// the server.
 //
-// O launcher manda `{ code, redirect_uri }` e recebe de volta apenas os dados
-// públicos do usuário — nunca o access_token do Discord, que não tem uso do lado
-// dele e só aumentaria a superfície de vazamento.
+// The launcher sends `{ code, redirect_uri }` and gets back only the user's
+// public data — never the Discord access_token, which has no use on its side
+// and would only widen the leak surface.
 app.post('/api/launcher/oauth/exchange', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   if (isRateLimited(`oauth-exchange:${ip}`, 10, 60 * 1000)) {
     runtimeMetrics.recordRejection('rate_limit_oauth_exchange');
-    return res.status(429).json({ error: 'Muitas tentativas, aguarde um minuto.' });
+    return res.status(429).json({ error: 'Too many attempts, please wait a minute.' });
   }
 
   const { code, redirect_uri } = req.body || {};
-  if (typeof code !== 'string' || !code) return res.status(400).json({ error: 'code ausente' });
-  if (typeof redirect_uri !== 'string' || !redirect_uri) return res.status(400).json({ error: 'redirect_uri ausente' });
+  if (typeof code !== 'string' || !code) return res.status(400).json({ error: 'missing code' });
+  if (typeof redirect_uri !== 'string' || !redirect_uri) return res.status(400).json({ error: 'missing redirect_uri' });
 
-  // Só aceitamos os redirect_uri que nós mesmos registramos. Sem isso, um code
-  // roubado poderia ser trocado apontando pra um endereço controlado por terceiro.
+  // We only accept the redirect_uri values we registered ourselves. Without
+  // this, a stolen code could be exchanged pointing to a third-party address.
   if (!LAUNCHER_REDIRECT_URIS.includes(redirect_uri)) {
-    return res.status(400).json({ error: 'redirect_uri não permitido' });
+    return res.status(400).json({ error: 'redirect_uri not allowed' });
   }
 
   try {
@@ -854,19 +861,19 @@ app.post('/api/launcher/oauth/exchange', async (req, res) => {
       })
     });
 
-    if (!tokenRes.ok) return res.status(401).json({ error: 'Falha ao autenticar no Discord.' });
+    if (!tokenRes.ok) return res.status(401).json({ error: 'Failed to authenticate with Discord.' });
     const token = await tokenRes.json();
-    if (!token.access_token) return res.status(401).json({ error: 'Falha ao autenticar no Discord.' });
+    if (!token.access_token) return res.status(401).json({ error: 'Failed to authenticate with Discord.' });
 
     const userRes = await fetch('https://discord.com/api/users/@me', {
       headers: { Authorization: `Bearer ${token.access_token}` }
     });
-    if (!userRes.ok) return res.status(401).json({ error: 'Falha ao ler o perfil do Discord.' });
+    if (!userRes.ok) return res.status(401).json({ error: 'Failed to read the Discord profile.' });
     const user = await userRes.json();
-    if (!user.id) return res.status(401).json({ error: 'Falha ao ler o perfil do Discord.' });
+    if (!user.id) return res.status(401).json({ error: 'Failed to read the Discord profile.' });
 
-    // A conta precisa existir antes de emitir ticket — quem nunca passou pelo
-    // painel não tem whitelist, então não tem o que fazer na fila.
+    // The account has to exist before a ticket is issued — someone who never
+    // went through the panel has no whitelist, so has nothing to do in the queue.
     const accountRows = await db('SELECT account_id FROM discord_identities WHERE discord_id = ?', [user.id]);
     const accountId = accountRows.length > 0 ? accountRows[0].account_id : null;
 
@@ -877,9 +884,9 @@ app.post('/api/launcher/oauth/exchange', async (req, res) => {
       avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : null
     };
 
-    // Só o painel tem o client secret, logo só ele consegue provar que aquele
-    // Discord de fato autenticou. O ticket carrega essa prova até a fila
-    // (apps/game-api), que não teria como verificar nada sozinha.
+    // Only the panel has the client secret, so only it can prove that Discord
+    // user really authenticated. The ticket carries that proof to the queue
+    // (apps/game-api), which would have no way to verify anything on its own.
     if (accountId) {
       profile.launchTicket = await issueLaunchTicket(accountId, user.id, ip);
       profile.sessionToken = await issueLauncherSession(accountId, user.id, ip);
@@ -888,19 +895,19 @@ app.post('/api/launcher/oauth/exchange', async (req, res) => {
     res.json(profile);
   } catch (err) {
     console.error('[/api/launcher/oauth/exchange]', err);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// O launcher troca a sessão (multiuso, 30 dias) por um launch ticket novo
-// (uso único, ~5 min) antes de cada tentativa de entrar na fila — em vez de
-// reenviar um ticket que a primeira partida já consumiu. Ver
+// The launcher trades the session (multi-use, 30 days) for a fresh launch
+// ticket (single-use, ~5 min) before each attempt to join the queue — instead
+// of resending a ticket the first match already consumed. See
 // migration-v25-launcher-sessions.sql.
 app.post('/api/launcher/session/refresh-ticket', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   if (isRateLimited(`session-refresh:${ip}`, 30, 60 * 1000)) {
     runtimeMetrics.recordRejection('rate_limit_session_refresh');
-    return res.status(429).json({ error: 'Muitas tentativas, aguarde um minuto.' });
+    return res.status(429).json({ error: 'Too many attempts, please wait a minute.' });
   }
 
   const { sessionToken } = req.body || {};
@@ -913,13 +920,13 @@ app.post('/api/launcher/session/refresh-ticket', async (req, res) => {
     res.json({ launchTicket });
   } catch (err) {
     console.error('[/api/launcher/session/refresh-ticket]', err);
-    res.status(500).json({ error: 'Erro interno do servidor' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Chamado no logout do launcher. Sempre responde 200 — não é o launcher quem
-// decide se o token existia ou já estava revogado, e não há nada de sensível
-// pra esconder atrás de um erro diferente aqui.
+// Called on launcher logout. Always responds 200 — it's not up to the launcher
+// to know whether the token existed or was already revoked, and there's
+// nothing sensitive to hide behind a different error here.
 app.post('/api/launcher/session/revoke', async (req, res) => {
   const { sessionToken } = req.body || {};
   if (typeof sessionToken === 'string' && sessionToken.length >= 32) {
@@ -935,25 +942,25 @@ app.post('/api/launcher/session/revoke', async (req, res) => {
   res.json({ ok: true });
 });
 
-// Aqui existia um `GET /api/launcher/manifest` que devolvia um manifesto fixo
-// com `hash: "dummy_hash_for_testing"`. Nada o consumia: o launcher real
-// (apps/launcher/electron/main.ts) busca o manifesto de cliente e de mods em
-// GitHub Releases (VITE_GITHUB_DIST_REPO) e a paridade de modpack em
-// `http://<SERVER_IP>:<VITE_API_PORT>/mods.json`. Manter um stub com hash falso
-// num painel que também serve autenticação era só um convite a alguém apontar o
-// launcher pra ele. Ver docs/technical/LAUNCHER_DISTRIBUTION.md.
+// There used to be a `GET /api/launcher/manifest` here that returned a fixed
+// manifest with `hash: "dummy_hash_for_testing"`. Nothing consumed it: the real
+// launcher (apps/launcher/electron/main.ts) fetches the client and mod
+// manifests from GitHub Releases (VITE_GITHUB_DIST_REPO) and modpack parity
+// from `http://<SERVER_IP>:<VITE_API_PORT>/mods.json`. Keeping a stub with a
+// fake hash on a panel that also serves authentication was just an invitation
+// for someone to point the launcher at it. See docs/technical/LAUNCHER_DISTRIBUTION.md.
 
 // ── Catch-all: SPA ─────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Só escuta quando executado direto. Sob `require` (testes), exporta o app pra
-// ser montado num servidor efêmero — sem isso, importar este arquivo num teste
-// abriria a porta 3001 de verdade.
+// Only listens when run directly. Under `require` (tests), it exports the app
+// to be mounted on an ephemeral server — without this, importing this file in
+// a test would open the real port 3001.
 if (require.main === module) {
   app.listen(PORT, () => {
-    console.log(`[staff-panel] Painel rodando em http://localhost:${PORT}`);
+    console.log(`[staff-panel] Panel running at http://localhost:${PORT}`);
   });
 }
 
