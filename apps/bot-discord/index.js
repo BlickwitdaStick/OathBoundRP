@@ -24,9 +24,9 @@ const WHITELIST_ROLE_ID = process.env.WHITELIST_ROLE_ID;
 const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET;
 const STAFF_ROLE_ID = process.env.STAFF_ROLE_ID;
 const VOICE_CATEGORY_ID = process.env.VOICE_CATEGORY_ID;
-// Canal de log de moderação. Sem ele o endpoint continua respondendo 202 e não
-// envia nada: quem configura o servidor decide se quer o canal, e um servidor
-// sem canal não pode ver `/permakill` falhar por causa disso.
+// Moderation log channel. Without it the endpoint still responds 202 and sends
+// nothing: whoever configures the server decides whether they want the channel,
+// and a server without one must not see `/permakill` fail because of it.
 const MODERATION_LOG_CHANNEL_ID = process.env.MODERATION_LOG_CHANNEL_ID;
 
 function requireEnv(name) {
@@ -43,25 +43,25 @@ requireEnv('WHITELIST_ROLE_ID');
 requireEnv('INTERNAL_API_SECRET');
 
 client.once('ready', async () => {
-    console.log(`[discord-bot] Bot logado como ${client.user.tag}`);
+    console.log(`[discord-bot] Bot logged in as ${client.user.tag}`);
 
-    // Registra os slash commands no boot. Antes isso era um passo manual
-    // (`npm run deploy-commands`) e nada avisava quando alguém esquecia — o
-    // comando simplesmente não aparecia no Discord, sem erro nenhum.
+    // Registers the slash commands at boot. This used to be a manual step
+    // (`npm run deploy-commands`) and nothing warned when someone forgot — the
+    // command simply didn't show up in Discord, with no error at all.
     //
-    // Uma falha aqui NÃO derruba o bot: o sync de whitelist é a função crítica
-    // e continua funcionando sem os comandos de voz.
+    // A failure here does NOT bring the bot down: whitelist sync is the
+    // critical feature and keeps working without the voice commands.
     const result = await deployCommands();
     if (result.ok) {
-        console.log(`[discord-bot] ${result.count} slash command(s) registrado(s) na guild.`);
+        console.log(`[discord-bot] ${result.count} slash command(s) registered in the guild.`);
     } else {
-        console.error(`[discord-bot] NAO foi possivel registrar os slash commands: ${result.error}`);
-        console.error('[discord-bot] /voz-criar e /voz-fechar nao vao aparecer no Discord ate isso ser resolvido.');
+        console.error(`[discord-bot] COULD NOT register the slash commands: ${result.error}`);
+        console.error('[discord-bot] /voice-create and /voice-close will not show up in Discord until this is fixed.');
     }
 });
 
-// Canais de voz temporários (/voz-criar, /voz-fechar) — ver voiceChannels.js.
-// Comandos precisam ser registrados separadamente com `node deploy-commands.js`.
+// Temporary voice channels (/voice-create, /voice-close) — see voiceChannels.js.
+// Commands are registered at boot (see above) or with `node deploy-commands.js`.
 client.on('interactionCreate', async (interaction) => {
     try {
         await voiceChannels.handleInteraction(interaction, {
@@ -69,7 +69,7 @@ client.on('interactionCreate', async (interaction) => {
             voiceCategoryId: VOICE_CATEGORY_ID
         });
     } catch (err) {
-        console.error('[discord-bot] Erro ao processar interação:', err.message);
+        console.error('[discord-bot] Error handling interaction:', err.message);
     }
 });
 
@@ -77,10 +77,10 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     voiceChannels.handleVoiceStateUpdate(oldState, newState);
 });
 
-// ── Rate limiting em memória, com teto global e por bucket ──────────────────
+// ── In-memory rate limiting, with a global and per-bucket cap ───────────────
 const { isRateLimited } = createMemoryRateLimiter();
 
-// Comparação em tempo constante para evitar timing attacks no secret interno
+// Constant-time comparison to avoid timing attacks on the internal secret
 function isValidInternalSecret(provided) {
     if (typeof provided !== 'string' || !provided) return false;
     const expected = Buffer.from(INTERNAL_API_SECRET);
@@ -89,7 +89,7 @@ function isValidInternalSecret(provided) {
     return crypto.timingSafeEqual(expected, actual);
 }
 
-// Endpoint para receber webhook do Painel Web
+// Endpoint that receives the webhook from the Web Panel
 app.post('/api/sync-role', async (req, res) => {
     const { discord_id, status } = req.body;
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -101,7 +101,7 @@ app.post('/api/sync-role', async (req, res) => {
 
     if (!isValidInternalSecret(req.get('X-Internal-Secret'))) {
         runtimeMetrics.recordRejection('internal_secret_invalid');
-        console.warn(`[discord-bot] Tentativa de acesso não autorizada a /api/sync-role de ${ip}`);
+        console.warn(`[discord-bot] Unauthorized access attempt to /api/sync-role from ${ip}`);
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -116,35 +116,35 @@ app.post('/api/sync-role', async (req, res) => {
         const member = await guild.members.fetch(discord_id).catch(() => null);
         
         if (!member) {
-            console.log(`[discord-bot] Membro ${discord_id} não encontrado na guild.`);
+            console.log(`[discord-bot] Member ${discord_id} not found in the guild.`);
             return res.status(404).json({ error: 'Member not found in guild' });
         }
         
         if (status === 'approved') {
             await member.roles.add(WHITELIST_ROLE_ID);
-            console.log(`[discord-bot] Cargo adicionado para ${discord_id}`);
+            console.log(`[discord-bot] Role added for ${discord_id}`);
         } else if (status === 'rejected' || status === 'pending') {
             await member.roles.remove(WHITELIST_ROLE_ID);
-            console.log(`[discord-bot] Cargo removido para ${discord_id}`);
+            console.log(`[discord-bot] Role removed for ${discord_id}`);
         }
         
         res.json({ ok: true });
     } catch (err) {
-        console.error(`[discord-bot] Erro ao sincronizar:`, err);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+        console.error(`[discord-bot] Sync error:`, err);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
 /**
- * Log de moderação — ver `moderationLog.js` e `docs/ARCHITECTURE.md` 1.3.
+ * Moderation log — see `moderationLog.js` and `docs/ARCHITECTURE.md` 1.3.
  *
- * Responde **202 e não espera o Discord**. A ação de moderação já aconteceu
- * quando esta requisição chega: o gamemode já expulsou, o painel já gravou a
- * decisão de whitelist. Segurar a resposta até o Discord confirmar faria um
- * `/permakill` esperar por uma API de terceiro, e faria a lentidão do Discord
- * virar lentidão do comando de staff.
+ * Responds **202 and does not wait for Discord**. The moderation action has
+ * already happened when this request arrives: the gamemode already kicked, the
+ * panel already stored the whitelist decision. Holding the response until
+ * Discord confirms would make a `/permakill` wait on a third-party API, and
+ * would turn Discord's slowness into slowness of the staff command.
  *
- * Corpo inválido responde 400 — quem manda tem um bug e precisa saber.
+ * An invalid body responds 400 — the sender has a bug and needs to know.
  */
 app.post('/api/moderation-log', (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -156,24 +156,24 @@ app.post('/api/moderation-log', (req, res) => {
 
     if (!isValidInternalSecret(req.get('X-Internal-Secret'))) {
         runtimeMetrics.recordRejection('internal_secret_invalid');
-        console.warn(`[discord-bot] Tentativa nao autorizada em /api/moderation-log de ${ip}`);
+        console.warn(`[discord-bot] Unauthorized attempt on /api/moderation-log from ${ip}`);
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const parsed = moderationLog.parseEvent(req.body);
     if (!parsed.ok) {
-        console.warn(`[discord-bot] Evento de moderacao recusado: ${parsed.erro}`);
-        return res.status(400).json({ error: parsed.erro });
+        console.warn(`[discord-bot] Moderation event rejected: ${parsed.error}`);
+        return res.status(400).json({ error: parsed.error });
     }
 
     res.status(202).json({ ok: true });
 
-    // Depois da resposta, de propósito. Uma falha aqui vira linha de log e nada
-    // mais — o registro de verdade é `audit_logs`, que já foi escrito.
-    moderationLog.sendModerationLog(client, parsed.evento, MODERATION_LOG_CHANNEL_ID)
+    // After the response, on purpose. A failure here becomes a log line and
+    // nothing more — the real record is `audit_logs`, which is already written.
+    moderationLog.sendModerationLog(client, parsed.event, MODERATION_LOG_CHANNEL_ID)
         .then(r => {
-            if (!r.sent && r.erro !== 'canal nao configurado') {
-                console.error(`[discord-bot] Evento '${parsed.evento.kind}' nao chegou no canal: ${r.erro}`);
+            if (!r.sent && r.error !== 'channel not configured') {
+                console.error(`[discord-bot] Event '${parsed.event.kind}' did not reach the channel: ${r.error}`);
             }
         });
 });
@@ -192,13 +192,13 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3002;
-// Default seguro no host. Em container, use 0.0.0.0 apenas dentro da rede
-// privada do compose e não publique a porta no host.
+// Safe default on the host. In a container, use 0.0.0.0 only inside the
+// compose private network and don't publish the port on the host.
 const HOST = process.env.BOT_API_BIND_HOST || '127.0.0.1';
 app.listen(PORT, HOST, () => {
-    console.log(`[discord-bot] API interna rodando em http://${HOST}:${PORT}`);
+    console.log(`[discord-bot] Internal API running at http://${HOST}:${PORT}`);
 });
 
 client.login(process.env.DISCORD_BOT_TOKEN).catch(err => {
-    console.error("[discord-bot] Falha ao logar no Discord. Verifique o DISCORD_BOT_TOKEN no arquivo .env");
+    console.error("[discord-bot] Failed to log in to Discord. Check DISCORD_BOT_TOKEN in the .env file");
 });

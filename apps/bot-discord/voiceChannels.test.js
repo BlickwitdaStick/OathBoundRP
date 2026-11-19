@@ -1,13 +1,13 @@
 /**
  * voiceChannels.test.js
  *
- * Testes das partes de voiceChannels.js que não exigem conexão real com o
- * Discord: checagem de permissão de staff, sanitização de nome de canal, e
- * o ciclo de vida de agendamento/cancelamento de remoção de canal vazio.
- * A interação real com a API do Discord (criar/apagar canal, responder
- * interação) não é coberta aqui — precisa de um bot/guild reais pra validar.
+ * Tests for the parts of voiceChannels.js that don't need a real Discord
+ * connection: the staff permission check, channel name sanitization, and the
+ * schedule/cancel lifecycle of empty-channel removal. Real interaction with
+ * the Discord API (creating/deleting a channel, replying to an interaction)
+ * is not covered here — validating it needs a real bot/guild.
  *
- * Executa com: node --test voiceChannels.test.js
+ * Run with: node --test voiceChannels.test.js
  */
 
 const assert = require('assert');
@@ -16,44 +16,44 @@ const { describe, it, beforeEach, afterEach } = require('node:test');
 const voiceChannels = require('./voiceChannels');
 
 describe('isStaffMember', () => {
-  it('permite quem tem o cargo de staff configurado', () => {
+  it('allows a member with the configured staff role', () => {
     const member = { permissions: { has: () => false }, roles: { cache: new Map([['staff-role', true]]) } };
     assert.strictEqual(voiceChannels.isStaffMember(member, 'staff-role'), true);
   });
 
-  it('permite administrador mesmo sem o cargo de staff', () => {
+  it('allows an administrator even without the staff role', () => {
     const member = { permissions: { has: () => true }, roles: { cache: new Map() } };
     assert.strictEqual(voiceChannels.isStaffMember(member, 'staff-role'), true);
   });
 
-  it('bloqueia quem não é admin nem tem o cargo', () => {
+  it('blocks a member who is neither admin nor has the role', () => {
     const member = { permissions: { has: () => false }, roles: { cache: new Map() } };
     assert.strictEqual(voiceChannels.isStaffMember(member, 'staff-role'), false);
   });
 
-  it('bloqueia membro nulo', () => {
+  it('blocks a null member', () => {
     assert.strictEqual(voiceChannels.isStaffMember(null, 'staff-role'), false);
   });
 });
 
 describe('sanitizeChannelName', () => {
-  it('mantém nome válido', () => {
+  it('keeps a valid name', () => {
     assert.strictEqual(voiceChannels.sanitizeChannelName('Taverna do Bannered Mare'), 'Taverna do Bannered Mare');
   });
 
-  it('corta nomes muito longos em 60 caracteres', () => {
+  it('truncates very long names to 60 characters', () => {
     const long = 'x'.repeat(100);
     assert.strictEqual(voiceChannels.sanitizeChannelName(long).length, 60);
   });
 
-  it('usa fallback pra entrada vazia', () => {
-    assert.strictEqual(voiceChannels.sanitizeChannelName(''), 'sala-rp');
-    assert.strictEqual(voiceChannels.sanitizeChannelName('   '), 'sala-rp');
-    assert.strictEqual(voiceChannels.sanitizeChannelName(null), 'sala-rp');
+  it('uses a fallback for empty input', () => {
+    assert.strictEqual(voiceChannels.sanitizeChannelName(''), 'rp-room');
+    assert.strictEqual(voiceChannels.sanitizeChannelName('   '), 'rp-room');
+    assert.strictEqual(voiceChannels.sanitizeChannelName(null), 'rp-room');
   });
 });
 
-describe('ciclo de vida de canal gerenciado', () => {
+describe('managed channel lifecycle', () => {
   function fakeChannel(id, memberCount) {
     return { id, members: { size: memberCount }, delete: async () => {} };
   }
@@ -69,27 +69,27 @@ describe('ciclo de vida de canal gerenciado', () => {
     voiceChannels._managedChannels.clear();
   });
 
-  it('agenda remoção só de canais gerenciados por nós', () => {
+  it('schedules removal only for channels we manage', () => {
     const untracked = fakeChannel('untracked-channel', 0);
     voiceChannels._scheduleRemovalIfEmpty(untracked);
     assert.strictEqual(voiceChannels._managedChannels.has('untracked-channel'), false);
   });
 
-  it('não agenda remoção se o canal ainda tem gente', () => {
+  it('does not schedule removal while the channel still has people', () => {
     voiceChannels._managedChannels.set('c1', { createdBy: 'u1', emptyTimer: null });
     const channel = fakeChannel('c1', 2);
     voiceChannels._scheduleRemovalIfEmpty(channel);
     assert.strictEqual(voiceChannels._managedChannels.get('c1').emptyTimer, null);
   });
 
-  it('agenda remoção quando o canal gerenciado fica vazio', () => {
+  it('schedules removal when the managed channel goes empty', () => {
     voiceChannels._managedChannels.set('c1', { createdBy: 'u1', emptyTimer: null });
     const channel = fakeChannel('c1', 0);
     voiceChannels._scheduleRemovalIfEmpty(channel);
-    assert.ok(voiceChannels._managedChannels.get('c1').emptyTimer, 'deveria ter agendado um timer');
+    assert.ok(voiceChannels._managedChannels.get('c1').emptyTimer, 'should have scheduled a timer');
   });
 
-  it('cancelPendingRemoval limpa o timer agendado', () => {
+  it('cancelPendingRemoval clears the scheduled timer', () => {
     voiceChannels._managedChannels.set('c1', { createdBy: 'u1', emptyTimer: null });
     const channel = fakeChannel('c1', 0);
     voiceChannels._scheduleRemovalIfEmpty(channel);
@@ -99,22 +99,22 @@ describe('ciclo de vida de canal gerenciado', () => {
     assert.strictEqual(voiceChannels._managedChannels.get('c1').emptyTimer, null);
   });
 
-  it('handleVoiceStateUpdate cancela remoção quando alguém entra no canal', () => {
+  it('handleVoiceStateUpdate cancels removal when someone joins the channel', () => {
     voiceChannels._managedChannels.set('c1', { createdBy: 'u1', emptyTimer: null });
     const channel = fakeChannel('c1', 0);
     voiceChannels._scheduleRemovalIfEmpty(channel);
     assert.ok(voiceChannels._managedChannels.get('c1').emptyTimer);
 
-    // Alguém entra em c1: oldState sem canal, newState com channel c1.
+    // Someone joins c1: oldState with no channel, newState with channel c1.
     voiceChannels.handleVoiceStateUpdate({ channel: null }, { channel: fakeChannel('c1', 1) });
     assert.strictEqual(voiceChannels._managedChannels.get('c1').emptyTimer, null);
   });
 
-  it('handleVoiceStateUpdate agenda remoção quando alguém sai deixando o canal vazio', () => {
+  it('handleVoiceStateUpdate schedules removal when someone leaves the channel empty', () => {
     voiceChannels._managedChannels.set('c1', { createdBy: 'u1', emptyTimer: null });
 
-    // Alguém sai de c1 (agora vazio): oldState com channel c1, newState sem canal.
+    // Someone leaves c1 (now empty): oldState with channel c1, newState with no channel.
     voiceChannels.handleVoiceStateUpdate({ channel: fakeChannel('c1', 0) }, { channel: null });
-    assert.ok(voiceChannels._managedChannels.get('c1').emptyTimer, 'deveria ter agendado remoção ao esvaziar');
+    assert.ok(voiceChannels._managedChannels.get('c1').emptyTimer, 'should have scheduled removal on going empty');
   });
 });

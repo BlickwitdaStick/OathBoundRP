@@ -1,35 +1,35 @@
 /**
  * deploy-commands.js
  *
- * Registra os slash commands do bot na guild configurada.
+ * Registers the bot's slash commands in the configured guild.
  *
- * Roda automaticamente no boot do bot (`index.js`) — antes era só manual, e
- * nada avisava quando alguém esquecia: o comando simplesmente não aparecia no
- * Discord, sem erro em lugar nenhum. Continua funcionando standalone:
+ * Runs automatically when the bot boots (`index.js`) — it used to be manual
+ * only, and nothing warned when someone forgot: the command simply didn't show
+ * up in Discord, with no error anywhere. It still works standalone:
  *
  *   npm run deploy-commands
  *
- * Comandos de guild (não globais) propagam quase instantaneamente — melhor
- * pra um bot de servidor único como este, em vez de comandos globais que
- * levam até 1h pra propagar.
+ * Guild commands (not global ones) propagate almost instantly — better for a
+ * single-server bot like this one than global commands, which take up to 1h
+ * to propagate.
  */
 require('dotenv').config();
 const { REST, Routes } = require('discord.js');
 const voiceChannels = require('./voiceChannels');
 
-/** Fonte única da lista de comandos. Novo módulo de comando entra aqui. */
+/** Single source of the command list. New command modules go here. */
 function collectCommands() {
   return [...voiceChannels.commands].map((c) => c.toJSON());
 }
 
 /**
- * Registra os comandos na guild.
+ * Registers the commands in the guild.
  *
  * @param {object} [opts]
- * @param {boolean} [opts.throwOnError] `true` no uso standalone (queremos
- *   exit code != 0); `false` no boot, onde uma falha de registro não deve
- *   derrubar o bot inteiro — sync de whitelist é mais importante que os
- *   comandos de voz, e continua funcionando sem eles.
+ * @param {boolean} [opts.throwOnError] `true` for standalone use (we want a
+ *   non-zero exit code); `false` at boot, where a registration failure must not
+ *   bring the whole bot down — whitelist sync matters more than the voice
+ *   commands, and keeps working without them.
  * @returns {Promise<{ok: boolean, count?: number, error?: string}>}
  */
 async function deployCommands(opts = {}) {
@@ -45,7 +45,7 @@ async function deployCommands(opts = {}) {
   if (!guildId) missing.push('GUILD_ID');
 
   if (missing.length > 0) {
-    const error = `faltando no .env: ${missing.join(', ')}`;
+    const error = `missing from .env: ${missing.join(', ')}`;
     if (throwOnError) throw new Error(error);
     return { ok: false, error };
   }
@@ -64,16 +64,16 @@ async function deployCommands(opts = {}) {
 
 module.exports = { deployCommands, collectCommands };
 
-// Execução direta (`node deploy-commands.js`).
+// Direct execution (`node deploy-commands.js`).
 if (require.main === module) {
   (async () => {
     try {
       const commands = collectCommands();
-      console.log(`[deploy-commands] Registrando ${commands.length} comando(s) na guild ${process.env.GUILD_ID}...`);
+      console.log(`[deploy-commands] Registering ${commands.length} command(s) in guild ${process.env.GUILD_ID}...`);
       const result = await deployCommands({ throwOnError: true });
-      console.log(`[deploy-commands] ${result.count} comando(s) registrado(s) com sucesso.`);
+      console.log(`[deploy-commands] ${result.count} command(s) registered successfully.`);
     } catch (err) {
-      console.error('[deploy-commands] Falha ao registrar comandos:', err.message);
+      console.error('[deploy-commands] Failed to register commands:', err.message);
       process.exit(1);
     }
   })();
