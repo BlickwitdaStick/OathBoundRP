@@ -1,54 +1,54 @@
--- v20 — Depot Service: armazenamento regional de itens
+-- v20 — Depot Service: regional item storage
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- Por que "regional" reaproveita `holds`, e não cria `regions`
+-- Why "regional" reuses `holds` instead of creating `regions`
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- `holds` já existe (`schema.sql`) com `id VARCHAR(32)` cobrindo exatamente as
--- cidades que este recurso precisa (whiterun, solitude, riften...). Um
--- `region_id` solto duplicaria um catálogo que já é autoridade em
--- `core/economy-service.js` (titular `hold`, treasury) e em `market_prices`.
--- `character_depots.hold_id` é FK para lá — não existe uma segunda lista de
--- "quais regiões existem" neste banco.
+-- `holds` already exists (`schema.sql`) with `id VARCHAR(32)` covering exactly the
+-- cities this feature needs (whiterun, solitude, riften...). A loose
+-- `region_id` would duplicate a catalog that is already the authority in
+-- `core/economy-service.js` (holder `hold`, treasury) and in `market_prices`.
+-- `character_depots.hold_id` is an FK to it — there is no second list of
+-- "which regions exist" in this database.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- Por que NÃO existe coluna de ouro aqui
+-- Why there is NO gold column here
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- O brief original pedia "ouro bancário global" no Depot. `characters.gold`
--- já é global por natureza (não existe conceito de "ouro na mão" vs "ouro no
--- banco" neste projeto — ver `core/economy-service.js`). Criar uma segunda
--- coluna de saldo aqui duplicaria a única fonte de verdade que
--- `ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md` existe para evitar. O Depot só
--- EXIBE o saldo existente; não guarda o próprio.
+-- The original brief asked for "global bank gold" in the Depot. `characters.gold`
+-- is already global by nature (there is no concept of "gold in hand" vs "gold in
+-- the bank" in this project — see `core/economy-service.js`). Creating a second
+-- balance column here would duplicate the single source of truth that
+-- `ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md` exists to avoid. The Depot only
+-- DISPLAYS the existing balance; it does not keep its own.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- `depot_terminals` — por que é uma tabela separada de `character_depots`
+-- `depot_terminals` — why it is a table separate from `character_depots`
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- `character_depots` é por (personagem, hold) — o armazém de alguém.
--- `depot_terminals` é por (objeto físico do mundo) — o baú que a staff coloca
--- numa cidade. Várias cidades podem ter baús diferentes (ou uma cidade pode
--- ter mais de um), mas todos os baús de Whiterun resolvem para o MESMO
--- `hold_id` = 'whiterun'. Sem essa tabela, o `DEPOT_CHEST` do Interaction
--- Framework não teria como traduzir "o jogador interagiu com ESTE
--- `MpObjectReference`" em "qual hold é esse".
+-- `character_depots` is per (character, hold) — someone's storage.
+-- `depot_terminals` is per (physical world object) — the chest staff places
+-- in a city. Several cities can have different chests (or one city can
+-- have more than one), but every Whiterun chest resolves to the SAME
+-- `hold_id` = 'whiterun'. Without this table, the Interaction Framework's
+-- `DEPOT_CHEST` would have no way to translate "the player interacted with THIS
+-- `MpObjectReference`" into "which hold is this".
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- COLLATE explicito nas tres tabelas (22/08/2026)
+-- Explicit COLLATE on all three tables (2026-08-22)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- `holds.id` (schema.sql) nao declara COLLATE proprio: herda
--- `utf8mb4_unicode_ci` do `CREATE DATABASE ... COLLATE utf8mb4_unicode_ci`
--- (schema.sql linha 3). Mas `DEFAULT CHARSET=utf8mb4` SEM `COLLATE` explicito
--- numa CREATE TABLE nao herda o collate do banco — usa o collate PADRAO DO
--- SERVIDOR para aquele charset. Em instalacoes de MariaDB onde o default de
--- `utf8mb4` mudou (ex: `utf8mb4_uca1400_ai_ci` em versoes 10.10+/11.x, no
--- lugar do antigo `utf8mb4_general_ci`), `hold_id VARCHAR(32)` nascia com um
--- collate diferente do `holds.id` que ele referencia — e a FK falhava na
--- criacao da tabela. Migration nunca testada contra uma instalacao de MariaDB
--- com esse default; achado ajudando um fork externo a rodar isto pela
--- primeira vez.
+-- `holds.id` (schema.sql) does not declare its own COLLATE: it inherits
+-- `utf8mb4_unicode_ci` from `CREATE DATABASE ... COLLATE utf8mb4_unicode_ci`
+-- (schema.sql line 3). But `DEFAULT CHARSET=utf8mb4` WITHOUT an explicit `COLLATE`
+-- in a CREATE TABLE does not inherit the database collation — it uses the SERVER
+-- DEFAULT collation for that charset. On MariaDB installs where the `utf8mb4`
+-- default changed (e.g. `utf8mb4_uca1400_ai_ci` in versions 10.10+/11.x, instead
+-- of the old `utf8mb4_general_ci`), `hold_id VARCHAR(32)` was born with a
+-- different collation from the `holds.id` it references — and the FK failed at
+-- table creation. The migration had never been tested against a MariaDB install
+-- with that default; found while helping an external fork run this for the
+-- first time.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 USE `skymp_rp`;
@@ -57,14 +57,14 @@ CREATE TABLE IF NOT EXISTS `character_depots` (
   `id`             INT AUTO_INCREMENT PRIMARY KEY,
   `character_id`   INT NOT NULL,
 
-  -- FK para `holds.id` — ver a nota acima. Sem catálogo próprio.
+  -- FK to `holds.id` — see the note above. No catalog of its own.
   `hold_id`        VARCHAR(32) NOT NULL,
 
-  `capacity`       INT NOT NULL COMMENT 'Teto de itens somados neste deposito; ver server-options depot.defaultCapacity',
+  `capacity`       INT NOT NULL COMMENT 'Ceiling of summed items in this depot; see server-options depot.defaultCapacity',
   `created_at`     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-  -- Um depósito por personagem por região — itens de Whiterun não têm como
-  -- aparecer em Solitude porque são LINHAS diferentes, não um filtro.
+  -- One depot per character per region — Whiterun items have no way to
+  -- show up in Solitude because they are different ROWS, not a filter.
   UNIQUE KEY `uk_depot_character_hold` (`character_id`, `hold_id`),
 
   CONSTRAINT `fk_depot_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE,
@@ -74,22 +74,22 @@ CREATE TABLE IF NOT EXISTS `character_depots` (
 CREATE TABLE IF NOT EXISTS `depot_inventory` (
   `id`         INT AUTO_INCREMENT PRIMARY KEY,
   `depot_id`   INT NOT NULL,
-  `base_id`    INT NOT NULL COMMENT 'FormID nativo do Skyrim (decimal)',
+  `base_id`    INT NOT NULL COMMENT 'Native Skyrim FormID (decimal)',
   `count`      INT NOT NULL DEFAULT 1,
 
-  -- Pedido explícito do brief: `container_inventory`/`character_inventory`
-  -- não têm essa UNIQUE (contam só com o `FOR UPDATE` de
-  -- `transaction-service.tx.applyStackDelta` para não fragmentar). Aqui entra
-  -- como defesa em profundidade a mais, sem mudar o comportamento das outras
-  -- duas tabelas de pilha.
+  -- Explicit request from the brief: `container_inventory`/`character_inventory`
+  -- do not have this UNIQUE (they rely only on the `FOR UPDATE` of
+  -- `transaction-service.tx.applyStackDelta` to avoid fragmenting). Here it comes in
+  -- as extra defense in depth, without changing the behavior of the other
+  -- two stack tables.
   UNIQUE KEY `uk_depot_inventory_item` (`depot_id`, `base_id`),
 
   CONSTRAINT `fk_depot_inventory_depot` FOREIGN KEY (`depot_id`) REFERENCES `character_depots` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `depot_terminals` (
-  -- FormDesc do MpObjectReference no mundo — hex SEM prefixo `0x`, dois-pontos,
-  -- nome do plugin (`"162e2:Skyrim.esm"`), mesmo formato de `containers.object_id`.
+  -- FormDesc of the MpObjectReference in the world — hex WITHOUT the `0x` prefix, colon,
+  -- plugin name (`"162e2:Skyrim.esm"`), same format as `containers.object_id`.
   `object_id`  VARCHAR(64) PRIMARY KEY,
   `hold_id`    VARCHAR(32) NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

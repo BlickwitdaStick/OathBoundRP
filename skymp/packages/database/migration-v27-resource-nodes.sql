@@ -1,61 +1,61 @@
--- v27 — resource_nodes: o estado persistente do Resource Node Framework
+-- v27 — resource_nodes: the persistent state of the Resource Node Framework
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- Escopo desta migration
+-- Scope of this migration
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- Cria SÓ `resource_nodes` — a instância de um nó no mundo (uma veia de
--- minério, uma árvore) e o estado dela (capacidade atual, quando foi
--- atualizada pela última vez). NÃO cria:
+-- It creates ONLY `resource_nodes` — the instance of a node in the world (an ore
+-- vein, a tree) and its state (current capacity, when it was
+-- last updated). It does NOT create:
 --
---   * tabela de "tipo de nó" — `type` é um VARCHAR fechado em código
---     (core/resource-node-registry.NODE_TYPES), mesmo padrão de
---     `crafting_recipes.station_type` e de `character_professions
---     .profession_code`: catálogo fechado, validado em código, sem tabela
---     própria, porque nada nesta fase cria tipo novo em runtime;
---   * sessão de coleta / action token — isso é controle de UMA TENTATIVA de
---     coleta (distância, ferramenta, animação), que pertence à profissão
---     concreta que consome este framework (Minerador etc.), não ao framework
+--   * a "node type" table — `type` is a VARCHAR closed in code
+--     (core/resource-node-registry.NODE_TYPES), the same pattern as
+--     `crafting_recipes.station_type` and `character_professions
+--     .profession_code`: a closed catalog, validated in code, with no table of
+--     its own, because nothing in this phase creates a new type at runtime;
+--   * a gathering session / action token — that controls ONE gathering
+--     ATTEMPT (distance, tool, animation), which belongs to the concrete profession
+-- Recipe names are player-facing; migration-v31-english-seed-labels.sql renames old rows.
 --     genérico;
 --   * qualquer coisa de Minerador, Lenhador ou Caçador especificamente.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- Por que capacidade não é atualizada por um tick
+-- Why capacity is not updated by a tick
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- `last_updated_at` + `regen_per_hour` são o par que permite calcular a
--- capacidade atual SOB DEMANDA (`elapsed_ms / 3600000 * regen_per_hour`,
--- arredondado para baixo, somado à capacidade gravada, com teto em
--- `max_capacity`) em vez de um job rodando a cada segundo por nó — a mesma
--- escolha que `core/transaction-service.js` já não faz para ouro ("regen" ali
--- nem existe) e que o §26 do briefing de profissões pediu explicitamente
--- ("pode armazenar lastUpdatedAt e calcular regeneração quando node for
--- consultado"). Só `resource-node-service.consume()` GRAVA a capacidade
--- recalculada — uma leitura pura não escreve nada.
+-- `last_updated_at` + `regen_per_hour` are the pair that lets us compute the
+-- current capacity ON DEMAND (`elapsed_ms / 3600000 * regen_per_hour`,
+-- rounded down, added to the stored capacity, capped at
+-- `max_capacity`) instead of a job running every second per node — the same
+-- choice `core/transaction-service.js` already avoids for gold ("regen" does not
+-- even exist there) and that §26 of the professions briefing explicitly asked for
+-- ("may store lastUpdatedAt and compute regeneration when the node is
+-- queried"). Only `resource-node-service.consume()` WRITES the recomputed
+-- capacity — a pure read writes nothing.
 --
--- `regen_per_hour` é INTEGER, não FLOAT: o projeto já evita ponto flutuante em
--- contadores de jogo (rank, xp, gold são todos inteiros) pelo mesmo motivo que
--- motivou `MAX_STACK_COUNT`/`MAX_GOLD` em `core/transaction-service.js` —
--- erro de arredondamento em produção é pior que a perda de precisão de "não dá
--- pra regenerar meia unidade por segundo".
+-- `regen_per_hour` is INTEGER, not FLOAT: the project already avoids floating point in
+-- game counters (rank, xp, gold are all integers) for the same reason that
+-- motivated `MAX_STACK_COUNT`/`MAX_GOLD` in `core/transaction-service.js` —
+-- a rounding error in production is worse than the precision loss of "you cannot
+-- regenerate half a unit per second".
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- `required_profession`/`required_rank`: por que estes dois entram e
--- `required_tool` não
+-- `required_profession`/`required_rank`: why these two go in and
+-- `required_tool` does not
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- A Fase 0 encontrou em `crafting_recipes.requires_perk` um campo lido e
--- NUNCA comparado com nada — uma validação que o cabeçalho do serviço
--- afirmava existir e não existia. Este framework não repete isso:
--- `required_profession`/`required_rank` são de fato checados dentro de
--- `resource-node-service.consume()`, contra `profession-service.js`, porque o
--- framework já tem acesso a ele.
+-- Phase 0 found in `crafting_recipes.requires_perk` a field that was read and
+-- NEVER compared with anything — a validation the service header
+-- claimed existed and did not. This framework does not repeat that:
+-- `required_profession`/`required_rank` are actually checked inside
+-- `resource-node-service.consume()`, against `profession-service.js`, because the
+-- framework already has access to it.
 --
--- `required_tool` NÃO entra: "o jogador tem a picareta equipada" exige
--- consultar `Actor.GetItemCount` — Papyrus, ao vivo, contra o cliente — que é
--- exatamente o tipo de checagem que pertence à camada de gameplay concreta
--- (Minerador), não a este framework genérico. Adicionar a coluna agora seria
--- o mesmo erro do `requires_perk`: um campo que nada nesta fase compara.
+-- `required_tool` does NOT go in: "the player has the pickaxe equipped" requires
+-- querying `Actor.GetItemCount` — Papyrus, live, against the client — which is
+-- exactly the kind of check that belongs to the concrete gameplay layer
+-- (Miner), not to this generic framework. Adding the column now would be
+-- the same mistake as `requires_perk`: a field nothing in this phase compares.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -64,30 +64,30 @@ USE `skymp_rp`;
 CREATE TABLE IF NOT EXISTS `resource_nodes` (
   `id`                    INT AUTO_INCREMENT PRIMARY KEY,
 
-  -- FormDesc do objeto no mundo: hex SEM prefixo, dois-pontos, nome do
-  -- arquivo (ex: '162e2:Skyrim.esm') — a convenção documentada no CLAUDE.md
-  -- do projeto. Único porque um objeto do mundo só pode ser um nó.
-  `form_desc`             VARCHAR(64) NOT NULL COMMENT 'FormDesc do objeto no mundo, ex: 4a2f0:Skyrim.esm',
+  -- FormDesc of the world object: hex WITHOUT prefix, colon, file
+  -- name (e.g. '162e2:Skyrim.esm') — the convention documented in the project
+  -- CLAUDE.md. Unique because a world object can only be one node.
+  `form_desc`             VARCHAR(64) NOT NULL COMMENT 'FormDesc of the world object, e.g. 4a2f0:Skyrim.esm',
 
-  -- Categoria fechada em código — core/resource-node-registry.NODE_TYPES.
+  -- Category closed in code — core/resource-node-registry.NODE_TYPES.
   `type`                  VARCHAR(16) NOT NULL COMMENT 'ORE, TREE, HERB, CROP, FISHING',
 
-  -- O que este nó entrega por coleta, e quanto.
-  `resource_base_id`      INT NOT NULL COMMENT 'FormID nativo do Skyrim entregue via transaction-service.tx',
+  -- What this node yields per gathering, and how much.
+  `resource_base_id`      INT NOT NULL COMMENT 'Native Skyrim FormID delivered via transaction-service.tx',
   `yield_per_action`      INT NOT NULL DEFAULT 1,
 
-  -- Capacidade: o que o nó tem agora (gravado) e o teto (config).
+  -- Capacity: what the node has now (stored) and the ceiling (config).
   `max_capacity`          INT NOT NULL,
   `current_capacity`      INT NOT NULL,
-  `regen_per_hour`        INT NOT NULL DEFAULT 0 COMMENT 'unidades regeneradas por hora, calculado sob demanda',
-  `last_updated_at`       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT 'ultima escrita de current_capacity — base do calculo de regen',
+  `regen_per_hour`        INT NOT NULL DEFAULT 0 COMMENT 'units regenerated per hour, computed on demand',
+  `last_updated_at`       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT 'last write of current_capacity - base of the regen calculation',
 
-  -- Gate opcional. NULL = qualquer personagem pode tentar (a checagem de
-  -- ferramenta e distância, se existirem, são de quem consome este framework).
-  `required_profession`   VARCHAR(32) DEFAULT NULL COMMENT 'codigo de core/profession-registry.js, ou NULL',
+  -- Optional gate. NULL = any character may try (tool and distance
+  -- checks, if any, belong to whoever consumes this framework).
+  `required_profession`   VARCHAR(32) DEFAULT NULL COMMENT 'code from core/profession-registry.js, or NULL',
   `required_rank`         TINYINT UNSIGNED DEFAULT NULL,
 
-  -- Interruptor administrativo — nó fora de rotação sem apagar histórico.
+  -- Admin switch — node out of rotation without deleting history.
   `enabled`               TINYINT(1) NOT NULL DEFAULT 1,
 
   `created_at`            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -96,22 +96,22 @@ CREATE TABLE IF NOT EXISTS `resource_nodes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Índices
+-- Indexes
 --
--- `idx_resource_nodes_type` — consulta administrativa ("quantos veios de
--- minério existem?"), barata de deixar pronta agora.
--- `idx_resource_nodes_enabled` — o mesmo, para "quantos nós estão fora de
--- rotação?".
+-- `idx_resource_nodes_type` — admin query ("how many ore
+-- veins are there?"), cheap to have ready now.
+-- `idx_resource_nodes_enabled` — the same, for "how many nodes are out of
+-- rotation?".
 --
--- Nenhum índice de concorrência aqui: `consume()` trava por `id`, chave
--- primária, que já tem índice por construção.
+-- No concurrency index here: `consume()` locks by `id`, the primary
+-- key, which is indexed by construction.
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE `resource_nodes`
   ADD INDEX IF NOT EXISTS `idx_resource_nodes_type`    (`type`),
   ADD INDEX IF NOT EXISTS `idx_resource_nodes_enabled` (`enabled`);
 
--- Cooldown persistente por personagem e nó. A chave composta também serializa
--- duas tentativas concorrentes do mesmo personagem no mesmo recurso.
+-- Persistent cooldown per character and node. The composite key also serializes
+-- two concurrent attempts by the same character on the same resource.
 CREATE TABLE IF NOT EXISTS `resource_node_gathers` (
   `resource_node_id` INT NOT NULL,
   `character_id` INT NOT NULL,

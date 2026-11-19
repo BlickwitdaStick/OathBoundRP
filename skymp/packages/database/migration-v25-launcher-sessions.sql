@@ -1,42 +1,42 @@
 -- =============================================================================
--- Migration v25 - Sessoes de launcher (ticket novo sem refazer OAuth)
--- Aplicar apos migration-v24-crafted-item-signatures.sql.
+-- Migration v25 - Launcher sessions (new ticket without redoing OAuth)
+-- Apply after migration-v24-crafted-item-signatures.sql.
 --
--- Problema que isto resolve: `launch_tickets` (v6) e de uso unico de proposito
--- — sobrevive so do clique em "Jogar" ate a entrada na fila. Isso e' correto
--- pro ticket em si, mas deixou um buraco: quando a fila admite na hora
--- (`status: 'success'`), o servidor nao emite ticket de reposicao (so
--- `status: 'queued'` ganha um `pollTicket`), entao uma segunda tentativa de
--- jogar na mesma sessao do launcher reenviava o ticket ja consumido e caia em
--- `401 invalid_ticket` — o jogador so conseguia um ticket novo refazendo o
--- OAuth do Discord inteiro (popup, redirect, tudo de novo).
+-- Problem this solves: `launch_tickets` (v6) is single-use on purpose
+-- — it only survives from the click on "Play" until the queue entry. That is correct
+-- for the ticket itself, but it left a gap: when the queue admits immediately
+-- (`status: 'success'`), the server does not issue a replacement ticket (only
+-- `status: 'queued'` gets a `pollTicket`), so a second attempt to
+-- play in the same launcher session resent the already-consumed ticket and hit
+-- `401 invalid_ticket` — the player could only get a new ticket by redoing the
+-- whole Discord OAuth (popup, redirect, everything again).
 --
--- Esta tabela guarda uma sessao de launcher: multiuso (ao contrario do
--- launch_ticket), vive mais tempo, e serve pra UMA coisa so — pedir um
--- launch_ticket novo. Ela nao substitui a checagem de elegibilidade (whitelist,
--- ban), que continua acontecendo em apps/game-api no momento da fila; ela so
--- prova "este Discord autenticou nos ultimos 30 dias", o mesmo que
+-- This table stores a launcher session: multi-use (unlike the
+-- launch_ticket), longer-lived, and good for ONE thing only — requesting a
+-- new launch_ticket. It does not replace the eligibility check (whitelist,
+-- ban), which still happens in apps/game-api at queue time; it only
+-- Recipe names are player-facing; migration-v31-english-seed-labels.sql renames old rows.
 -- `launch_tickets` ja provava, so que reutilizavel.
 --
--- Fluxo:
---   1. POST /api/launcher/oauth/exchange (v6) agora tambem emite um
---      `sessionToken` junto do `launchTicket`, quando a conta existe.
---   2. O launcher guarda os dois. Antes de cada tentativa de entrar na fila,
---      troca o `sessionToken` por um `launchTicket` fresco em
---      POST /api/launcher/session/refresh-ticket — sem popup, sem Discord.
---   3. POST /api/launcher/session/revoke apaga a sessao no logout, pra um
---      arquivo auth.json roubado do disco parar de valer depois que o dono
---      deslogou.
+-- Flow:
+--   1. POST /api/launcher/oauth/exchange (v6) now also issues a
+--      `sessionToken` alongside the `launchTicket`, when the account exists.
+--   2. The launcher stores both. Before each attempt to join the queue,
+--      it trades the `sessionToken` for a fresh `launchTicket` at
+--      POST /api/launcher/session/refresh-ticket — no popup, no Discord.
+--   3. POST /api/launcher/session/revoke deletes the session on logout, so an
+--      auth.json file stolen from disk stops working after its owner
+--      logged out.
 --
--- 30 dias e nao "pra sempre": o re-OAuth periodico e o unico ponto em que
--- confirmamos de novo, direto no Discord, que a conta ainda existe e nao foi
--- deletada/banida do lado de la — util o bastante pra nao abrir mao dele.
+-- 30 days and not "forever": the periodic re-OAuth is the only point where
+-- we confirm again, directly with Discord, that the account still exists and was not
+-- deleted/banned on their side — useful enough not to give it up.
 -- =============================================================================
 USE `skymp_rp`;
 
 CREATE TABLE IF NOT EXISTS `launcher_sessions` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  -- SHA-256 do token, nunca o token em claro — mesmo raciocinio de
+  -- SHA-256 of the token, never the token in clear text — same reasoning as
   -- `launch_tickets.token_hash`.
   `session_hash` CHAR(64) NOT NULL,
   `account_id` INT NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS `launcher_sessions` (
   `issued_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `expires_at` TIMESTAMP NOT NULL,
   `last_used_at` TIMESTAMP NULL DEFAULT NULL,
-  `revoked_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Preenchido no logout ou revogacao manual',
+  `revoked_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Set on logout or manual revocation',
   `issued_ip` VARCHAR(64) DEFAULT NULL,
   UNIQUE KEY `uq_launcher_session_hash` (`session_hash`),
   KEY `idx_launcher_session_expiry` (`expires_at`),

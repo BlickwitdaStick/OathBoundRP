@@ -1,34 +1,34 @@
--- Schema de Banco de Dados para SkyMP Heavy RP (MySQL/MariaDB)
+-- Database schema for SkyMP Heavy RP (MySQL/MariaDB)
 
 CREATE DATABASE IF NOT EXISTS `skymp_rp` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `skymp_rp`;
 
--- 1. Contas de Jogadores (com suporte a VIP e Monetizacao)
+-- 1. Player accounts (with VIP and monetization support)
 CREATE TABLE IF NOT EXISTS `accounts` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `status` VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT 'active, suspended, banned',
-  -- VIP / Apoiador
-  `vip_level` INT NOT NULL DEFAULT 0 COMMENT '0: Padrao, 1: Apoiador, 2: VIP Gold, 3: VIP Platinum',
-  `vip_expires_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Data de expiracao do VIP (NULL para permanente ou inativo)',
-  `coins` INT NOT NULL DEFAULT 0 COMMENT 'Moedas da loja virtual (adquiridas por doacao)',
+  -- VIP / Supporter
+  `vip_level` INT NOT NULL DEFAULT 0 COMMENT '0: Standard, 1: Supporter, 2: VIP Gold, 3: VIP Platinum',
+  `vip_expires_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'VIP expiry date (NULL for permanent or inactive)',
+  `coins` INT NOT NULL DEFAULT 0 COMMENT 'Virtual store coins (obtained through donations)',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 2. Identidades do Discord (Login via Discord OAuth)
--- NOTA: access_token e refresh_token nao sao armazenados. O fluxo OAuth sempre e
--- redirecionado para o Discord ao expirar a sessao web. Nunca persistir tokens OAuth
--- em texto simples. Se necessario no futuro, usar AES-256-GCM com chave fora do banco.
+-- 2. Discord identities (login via Discord OAuth)
+-- NOTE: access_token and refresh_token are not stored. The OAuth flow always
+-- redirects back to Discord when the web session expires. Never persist OAuth
+-- tokens in plain text. If ever needed, use AES-256-GCM with a key kept outside the database.
 CREATE TABLE IF NOT EXISTS `discord_identities` (
   `discord_id` VARCHAR(64) PRIMARY KEY,
   `account_id` INT NOT NULL,
   `username` VARCHAR(128) NOT NULL,
   `avatar` VARCHAR(256) DEFAULT NULL,
-  `last_login_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Ultimo login via Discord OAuth',
+  `last_login_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Last login via Discord OAuth',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_discord_account` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 3. Formulários de Whitelist
+-- 3. Whitelist applications
 CREATE TABLE IF NOT EXISTS `whitelist_applications` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `account_id` INT NOT NULL,
@@ -40,32 +40,32 @@ CREATE TABLE IF NOT EXISTS `whitelist_applications` (
   CONSTRAINT `fk_whitelist_account` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4. Fichas de Personagem do Skyrim
+-- 4. Skyrim character sheets
 CREATE TABLE IF NOT EXISTS `characters` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `account_id` INT NOT NULL,
   `first_name` VARCHAR(64) NOT NULL,
   `last_name` VARCHAR(64) NOT NULL,
   `biography` TEXT DEFAULT NULL,
-  `motivations` TEXT DEFAULT NULL COMMENT 'Objetivos do personagem em jogo (rubrica de whitelist Heavy RP)',
-  `weaknesses` TEXT DEFAULT NULL COMMENT 'Falhas/limites do personagem (rubrica de whitelist Heavy RP)',
-  `social_ties` TEXT DEFAULT NULL COMMENT 'Laços sociais/relações pretendidas (rubrica de whitelist Heavy RP)',
-  `needs_extra_review` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Conceito forte (nobre, mago poderoso, vampiro, lobisomem, lider de faccao) — exige aprovacao extra da staff antes de approved',
-  `extra_review_notes` TEXT DEFAULT NULL COMMENT 'Notas da staff sobre a revisao extra do conceito',
-  -- Coordenadas de Logout (Default: The Bannered Mare Whiterun)
+  `motivations` TEXT DEFAULT NULL COMMENT 'In-game goals of the character (Heavy RP whitelist rubric)',
+  `weaknesses` TEXT DEFAULT NULL COMMENT 'Flaws/limits of the character (Heavy RP whitelist rubric)',
+  `social_ties` TEXT DEFAULT NULL COMMENT 'Intended social ties/relationships (Heavy RP whitelist rubric)',
+  `needs_extra_review` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Strong concept (noble, powerful mage, vampire, werewolf, faction leader) - needs extra staff approval before approved',
+  `extra_review_notes` TEXT DEFAULT NULL COMMENT 'Staff notes on the extra concept review',
+  -- Logout coordinates (default: The Bannered Mare, Whiterun)
   `pos_x` FLOAT NOT NULL DEFAULT 35.0,
   `pos_y` FLOAT NOT NULL DEFAULT -165.0,
   `pos_z` FLOAT NOT NULL DEFAULT -189.0,
   `angle_z` FLOAT NOT NULL DEFAULT 180.0,
   `cell_id` VARCHAR(64) NOT NULL DEFAULT '0x162e2',
-  `gold` INT NOT NULL DEFAULT 0 COMMENT 'Economia in-game (Septims)',
-  `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending, approved, rejected, retired (soft-delete, ver admin-service.retireCharacter)',
-  `racemenu_presets` TEXT DEFAULT NULL COMMENT 'JSON string contendo presets de aparencia',
+  `gold` INT NOT NULL DEFAULT 0 COMMENT 'In-game economy (Septims)',
+  `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending, approved, rejected, retired (soft-delete, see admin-service.retireCharacter)',
+  `racemenu_presets` TEXT DEFAULT NULL COMMENT 'JSON string with appearance presets',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_character_account` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4.1. Inventário Persistente do Personagem
+-- 4.1. Identities a character knows (who they recognize, and by which name)
 CREATE TABLE IF NOT EXISTS `character_known_identities` (
   `observer_character_id` INT NOT NULL,
   `target_character_id` INT NOT NULL,
@@ -78,50 +78,50 @@ CREATE TABLE IF NOT EXISTS `character_known_identities` (
   CONSTRAINT `fk_known_target` FOREIGN KEY (`target_character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4.2. Inventario Persistente do Personagem
+-- 4.2. Persistent character inventory
 CREATE TABLE IF NOT EXISTS `character_inventory` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
-  `base_id` INT NOT NULL COMMENT 'FormID nativo do Skyrim (Decimal)',
+  `base_id` INT NOT NULL COMMENT 'Native Skyrim FormID (decimal)',
   `count` INT NOT NULL DEFAULT 1,
   CONSTRAINT `fk_inventory_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 5. Containers Persistentes (Baús controlados pelo servidor)
+-- 5. Persistent containers (server-controlled chests)
 CREATE TABLE IF NOT EXISTS `containers` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `object_id` VARCHAR(64) NOT NULL UNIQUE COMMENT 'formDesc do objeto no mundo (ex: 0x3003A:Skyrim.esm)',
-  `owner_character_id` INT DEFAULT NULL COMMENT 'Personagem dono do container',
-  `label` VARCHAR(128) DEFAULT NULL COMMENT 'Etiqueta customizada do baú',
+  `object_id` VARCHAR(64) NOT NULL UNIQUE COMMENT 'formDesc of the world object (e.g. 0x3003A:Skyrim.esm)',
+  `owner_character_id` INT DEFAULT NULL COMMENT 'Character that owns the container',
+  `label` VARCHAR(128) DEFAULT NULL COMMENT 'Custom chest label',
   `is_locked` TINYINT(1) NOT NULL DEFAULT 0,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_container_owner` FOREIGN KEY (`owner_character_id`) REFERENCES `characters` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 5.1. Inventário dos Containers
+-- 5.1. Container inventory
 CREATE TABLE IF NOT EXISTS `container_inventory` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `container_id` INT NOT NULL,
-  `base_id` INT NOT NULL COMMENT 'FormID nativo do Skyrim (Decimal)',
+  `base_id` INT NOT NULL COMMENT 'Native Skyrim FormID (decimal)',
   `count` INT NOT NULL DEFAULT 1,
   CONSTRAINT `fk_container_inv` FOREIGN KEY (`container_id`) REFERENCES `containers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 6. Propriedades e Imóveis
+-- 6. Properties and real estate
 CREATE TABLE IF NOT EXISTS `properties` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `name` VARCHAR(128) NOT NULL COMMENT 'Nome do imóvel (ex: Casa em Whiterun 12)',
+  `name` VARCHAR(128) NOT NULL COMMENT 'Property name (e.g. House in Whiterun 12)',
   `owner_character_id` INT DEFAULT NULL,
-  `container_id` INT DEFAULT NULL COMMENT 'Container principal da propriedade',
-  `door_form_desc` VARCHAR(64) DEFAULT NULL COMMENT 'formDesc da porta de entrada',
-  `price_gold` INT NOT NULL DEFAULT 0 COMMENT 'Valor de aluguel/compra em Septims',
+  `container_id` INT DEFAULT NULL COMMENT 'Main container of the property',
+  `door_form_desc` VARCHAR(64) DEFAULT NULL COMMENT 'formDesc of the entrance door',
+  `price_gold` INT NOT NULL DEFAULT 0 COMMENT 'Rent/purchase price in Septims',
   `is_for_sale` TINYINT(1) NOT NULL DEFAULT 0,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_property_owner` FOREIGN KEY (`owner_character_id`) REFERENCES `characters` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_property_container` FOREIGN KEY (`container_id`) REFERENCES `containers` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 6.1. Acesso de Convidados a Propriedades
+-- 6.1. Guest access to properties
 CREATE TABLE IF NOT EXISTS `property_guests` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `property_id` INT NOT NULL,
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS `property_guests` (
   CONSTRAINT `fk_guest_character` FOREIGN KEY (`guest_character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 5. Compras e Resgates da Loja de Apoiador
+-- 5. Supporter store purchases and redemptions
 CREATE TABLE IF NOT EXISTS `store_purchases` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `account_id` INT NOT NULL,
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS `store_purchases` (
   CONSTRAINT `fk_store_account` FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 6. Logs de Auditoria e Staff
+-- 6. Audit and staff logs
 CREATE TABLE IF NOT EXISTS `audit_logs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `action` VARCHAR(128) NOT NULL,
@@ -152,35 +152,35 @@ CREATE TABLE IF NOT EXISTS `audit_logs` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 7. Fichas Criminais (Criminal Record)
+-- 7. Criminal records
 CREATE TABLE IF NOT EXISTS `criminal_records` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
-  `crime` VARCHAR(128) NOT NULL COMMENT 'Assassinato, Roubo, Agressao, Perturbacao...',
-  `bounty` INT NOT NULL DEFAULT 0 COMMENT 'Valor da recompensa em Septims',
-  `hold` VARCHAR(64) NOT NULL DEFAULT 'whiterun' COMMENT 'Hold onde o crime foi cometido',
-  `witness_character_id` INT DEFAULT NULL COMMENT 'Guardia ou testemunha que registrou',
-  `resolved` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=Ativo, 1=Pago/Cumprido',
+  `crime` VARCHAR(128) NOT NULL COMMENT 'Murder, Theft, Assault, Disturbance...',
+  `bounty` INT NOT NULL DEFAULT 0 COMMENT 'Bounty amount in Septims',
+  `hold` VARCHAR(64) NOT NULL DEFAULT 'whiterun' COMMENT 'Hold where the crime was committed',
+  `witness_character_id` INT DEFAULT NULL COMMENT 'Guard or witness who reported it',
+  `resolved` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0=Active, 1=Paid/Served',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_crime_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 8. Registro de Prisoes Ativas e Historico
+-- 8. Active and past imprisonments
 CREATE TABLE IF NOT EXISTS `prison_records` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
-  `arrested_by_character_id` INT DEFAULT NULL COMMENT 'Guardia que prendeu',
+  `arrested_by_character_id` INT DEFAULT NULL COMMENT 'Guard who made the arrest',
   `crime_summary` TEXT DEFAULT NULL,
-  `sentence_minutes` INT NOT NULL DEFAULT 10 COMMENT 'Tempo de pena em minutos in-game',
+  `sentence_minutes` INT NOT NULL DEFAULT 10 COMMENT 'Sentence length in in-game minutes',
   `time_served_minutes` INT NOT NULL DEFAULT 0,
   `status` VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT 'active, released, escaped',
-  `cell_id` VARCHAR(64) NOT NULL DEFAULT '0x162e2' COMMENT 'Celula da prisao',
+  `cell_id` VARCHAR(64) NOT NULL DEFAULT '0x162e2' COMMENT 'Prison cell',
   `arrested_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `released_at` TIMESTAMP NULL DEFAULT NULL,
   CONSTRAINT `fk_prison_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 8.1. Estado Atual de Algemas (Restraints)
+-- 8.1. Current restraint state
 CREATE TABLE IF NOT EXISTS `character_restraints` (
   `character_id` INT PRIMARY KEY,
   `restrained_by_character_id` INT DEFAULT NULL,
@@ -190,36 +190,36 @@ CREATE TABLE IF NOT EXISTS `character_restraints` (
 ) ENGINE=InnoDB;
 
 -- ═══════════════════════════════════════════════════
--- FASE BETA - Sobrevivência, Economia Regional, Crafting, Facções
+-- BETA PHASE - Survival, Regional Economy, Crafting, Factions
 -- ═══════════════════════════════════════════════════
 
--- 9. Status de Sobrevivência do Personagem
+-- 9. Character survival stats
 CREATE TABLE IF NOT EXISTS `character_survival` (
   `character_id` INT PRIMARY KEY,
-  `hunger`       FLOAT NOT NULL DEFAULT 100.0 COMMENT '0=Morrendo de fome, 100=Satisfeito',
-  `thirst`       FLOAT NOT NULL DEFAULT 100.0 COMMENT '0=Desidratado, 100=Hidratado',
-  `fatigue`      FLOAT NOT NULL DEFAULT 100.0 COMMENT '0=Exausto, 100=Descansado',
+  `hunger`       FLOAT NOT NULL DEFAULT 100.0 COMMENT '0=Starving, 100=Sated',
+  `thirst`       FLOAT NOT NULL DEFAULT 100.0 COMMENT '0=Dehydrated, 100=Hydrated',
+  `fatigue`      FLOAT NOT NULL DEFAULT 100.0 COMMENT '0=Exhausted, 100=Rested',
   `updated_at`   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT `fk_survival_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 10. Holds (Regiões) e sua Economia
+-- 10. Holds (regions) and their economy
 CREATE TABLE IF NOT EXISTS `holds` (
   `id`           VARCHAR(32) PRIMARY KEY COMMENT 'whiterun, solitude, riften, windhelm, markarth, falkreath, morthal, dawnstar, winterhold',
   `name`         VARCHAR(64) NOT NULL,
-  `tax_rate`     FLOAT NOT NULL DEFAULT 0.05 COMMENT 'Taxa sobre vendas (0.05 = 5%)',
-  `treasury`     INT NOT NULL DEFAULT 0 COMMENT 'Ouro acumulado em impostos',
-  `ruling_faction_id` INT DEFAULT NULL COMMENT 'Facção que controla o Hold'
+  `tax_rate`     FLOAT NOT NULL DEFAULT 0.05 COMMENT 'Sales tax (0.05 = 5%)',
+  `treasury`     INT NOT NULL DEFAULT 0 COMMENT 'Gold accumulated from taxes',
+  `ruling_faction_id` INT DEFAULT NULL COMMENT 'Faction that controls the Hold'
 ) ENGINE=InnoDB;
 
--- 10.1. Preços de Mercado Regionais (Oferta & Demanda)
+-- 10.1. Regional market prices (supply and demand)
 CREATE TABLE IF NOT EXISTS `market_prices` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `hold_id`      VARCHAR(32) NOT NULL,
-  `base_id`      INT NOT NULL COMMENT 'FormID do item',
-  `buy_price`    INT NOT NULL DEFAULT 10 COMMENT 'Preco de compra do jogador',
-  `sell_price`   INT NOT NULL DEFAULT 7  COMMENT 'Preco de venda do jogador',
-  `stock`        INT NOT NULL DEFAULT 100 COMMENT 'Estoque disponivel (oferta)',
+  `base_id`      INT NOT NULL COMMENT 'Item FormID',
+  `buy_price`    INT NOT NULL DEFAULT 10 COMMENT 'Price the player buys at',
+  `sell_price`   INT NOT NULL DEFAULT 7  COMMENT 'Price the player sells at',
+  `stock`        INT NOT NULL DEFAULT 100 COMMENT 'Available stock (supply)',
   `updated_at`   TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_hold_item` (`hold_id`, `base_id`),
   CONSTRAINT `fk_market_hold` FOREIGN KEY (`hold_id`) REFERENCES `holds` (`id`) ON DELETE CASCADE
@@ -244,39 +244,39 @@ CREATE TABLE IF NOT EXISTS `regional_market_transactions` (
   CONSTRAINT `fk_regional_market_hold` FOREIGN KEY (`hold_id`) REFERENCES `holds` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 10.2. Rotas Comerciais entre Holds
+-- 10.2. Trade routes between Holds
 CREATE TABLE IF NOT EXISTS `trade_routes` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `from_hold`    VARCHAR(32) NOT NULL,
   `to_hold`      VARCHAR(32) NOT NULL,
-  `bonus_pct`    FLOAT NOT NULL DEFAULT 0.15 COMMENT 'Bônus de lucro ao vender em outro Hold',
+  `bonus_pct`    FLOAT NOT NULL DEFAULT 0.15 COMMENT 'Profit bonus when selling in another Hold',
   `is_active`    TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
 
--- 11. Receitas de Crafting
+-- 11. Crafting recipes
 CREATE TABLE IF NOT EXISTS `crafting_recipes` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `name`         VARCHAR(128) NOT NULL,
   `station_type` VARCHAR(64)  NOT NULL COMMENT 'forge, cooking_pot, tanning_rack, alchemy_lab, enchanting_table',
-  `result_base_id` INT NOT NULL COMMENT 'FormID do item resultante',
+  `result_base_id` INT NOT NULL COMMENT 'FormID of the resulting item',
   `result_count`   INT NOT NULL DEFAULT 1,
-  `requires_perk`  VARCHAR(64) DEFAULT NULL COMMENT 'Nome do perk necessario',
+  `requires_perk`  VARCHAR(64) DEFAULT NULL COMMENT 'Name of the required perk',
   `created_at`   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 11.1. Ingredientes das Receitas
+-- 11.1. Recipe ingredients
 CREATE TABLE IF NOT EXISTS `crafting_ingredients` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `recipe_id`    INT NOT NULL,
-  `base_id`      INT NOT NULL COMMENT 'FormID do ingrediente',
+  `base_id`      INT NOT NULL COMMENT 'Ingredient FormID',
   `count`        INT NOT NULL DEFAULT 1,
   CONSTRAINT `fk_ingredient_recipe` FOREIGN KEY (`recipe_id`) REFERENCES `crafting_recipes` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 12. Facções e Territórios
+-- 12. Factions and territories
 CREATE TABLE IF NOT EXISTS `factions` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
-  `tag`          VARCHAR(16) NOT NULL UNIQUE COMMENT 'Ex: [COMP], [GUARDIA]',
+  `tag`          VARCHAR(16) NOT NULL UNIQUE COMMENT 'E.g. [COMP], [GUARD]',
   `name`         VARCHAR(128) NOT NULL,
   `description`  TEXT DEFAULT NULL,
   `color_hex`    VARCHAR(7) NOT NULL DEFAULT '#ffffff',
@@ -286,7 +286,7 @@ CREATE TABLE IF NOT EXISTS `factions` (
   CONSTRAINT `fk_faction_leader` FOREIGN KEY (`leader_character_id`) REFERENCES `characters` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 12.0. Ledger de tesouros institucionais (Hold <-> Facção)
+-- 12.0. Institutional treasury ledger (Hold <-> Faction)
 CREATE TABLE IF NOT EXISTS `institutional_treasury_transactions` (
   `transfer_id` CHAR(36) NOT NULL PRIMARY KEY,
   `idempotency_key` VARCHAR(64) NOT NULL,
@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS `institutional_treasury_transactions` (
   CONSTRAINT `fk_institutional_treasury_faction` FOREIGN KEY (`faction_id`) REFERENCES `factions` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 12.1. Membros de Facções
+-- 12.1. Faction members
 CREATE TABLE IF NOT EXISTS `faction_members` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `faction_id`   INT NOT NULL,
@@ -315,9 +315,9 @@ CREATE TABLE IF NOT EXISTS `faction_members` (
   CONSTRAINT `fk_member_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ── Seed: Holds iniciais ─────────────────────────────────────────────────────
--- Mapeamento correto: ID = slug do hold, name = nome do hold (nao da cidade)
--- Cidade principal → Hold: Whiterun→Whiterun Hold, Solitude→Haafingar,
+-- ── Seed: initial Holds ──────────────────────────────────────────────────────
+-- Correct mapping: ID = hold slug, name = name of the hold (not of the city)
+-- Capital city → Hold: Whiterun→Whiterun Hold, Solitude→Haafingar,
 -- Riften→The Rift, Windhelm→Eastmarch, Markarth→The Reach,
 -- Falkreath→Falkreath Hold, Morthal→Hjaalmarch, Dawnstar→The Pale, Winterhold→Winterhold
 INSERT IGNORE INTO `holds` (`id`, `name`, `tax_rate`) VALUES
@@ -332,24 +332,24 @@ INSERT IGNORE INTO `holds` (`id`, `name`, `tax_rate`) VALUES
   ('winterhold',  'Winterhold',           0.03);
 
 -- ═══════════════════════════════════════════════════
--- AUTORIDADE ADMINISTRATIVA — Staff separado de VIP/Apoiador
+-- ADMINISTRATIVE AUTHORITY — Staff kept separate from VIP/Supporter
 -- ═══════════════════════════════════════════════════
 
--- A. Papéis de Staff (separados do vip_level)
--- vip_level na tabela accounts e APENAS para monetizacao (0-3).
--- Poder administrativo NUNCA deriva de vip_level.
+-- A. Staff roles (separate from vip_level)
+-- vip_level in the accounts table is ONLY for monetization (0-3).
+-- Administrative power NEVER derives from vip_level.
 CREATE TABLE IF NOT EXISTS `staff_roles` (
   `id`                    INT AUTO_INCREMENT PRIMARY KEY,
   `account_id`            INT NOT NULL UNIQUE,
   `role`                  VARCHAR(32) NOT NULL COMMENT 'moderator, admin, owner',
-  `granted_by_account_id` INT DEFAULT NULL COMMENT 'Quem concedeu o cargo',
+  `granted_by_account_id` INT DEFAULT NULL COMMENT 'Who granted the role',
   `notes`                 VARCHAR(256) DEFAULT NULL,
   `granted_at`            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_staff_account`  FOREIGN KEY (`account_id`) REFERENCES `accounts` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_staff_grantor` FOREIGN KEY (`granted_by_account_id`) REFERENCES `accounts` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- B. Permissoes granulares por cargo (para controle futuro fino)
+-- B. Granular per-role permissions (for future fine-grained control)
 CREATE TABLE IF NOT EXISTS `staff_permissions` (
   `id`            INT AUTO_INCREMENT PRIMARY KEY,
   `staff_role_id` INT NOT NULL,
@@ -358,35 +358,35 @@ CREATE TABLE IF NOT EXISTS `staff_permissions` (
   CONSTRAINT `fk_perm_role` FOREIGN KEY (`staff_role_id`) REFERENCES `staff_roles` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ── Seed: Permissões padrão por cargo ────────────────────────────────────────
--- Inseridas depois que os registros de staff_roles existirem (via aplicação).
--- Referência: moderator=[kick,teleport,view_audit], admin=[+ban,add_item,set_gold], owner=[todos]
+-- ── Seed: default permissions per role ───────────────────────────────────────
+-- Inserted once staff_roles rows exist (by the application).
+-- Reference: moderator=[kick,teleport,view_audit], admin=[+ban,add_item,set_gold], owner=[all]
 
 -- ═══════════════════════════════════════════════════
--- LEDGER FINANCEIRO — Transações auditáveis de inventário e ouro
+-- FINANCIAL LEDGER — Auditable inventory and gold transactions
 -- ═══════════════════════════════════════════════════
 
--- C. Ledger de Inventário
--- Toda mudança de item passa por aqui. Nunca modificar character_inventory diretamente.
+-- C. Inventory ledger
+-- Every item change goes through here. Never modify character_inventory directly.
 CREATE TABLE IF NOT EXISTS `inventory_transactions` (
   `transaction_id`   CHAR(36)     NOT NULL PRIMARY KEY COMMENT 'UUID v4',
   `character_id`     INT          NOT NULL,
-  `base_id`          INT          NOT NULL COMMENT 'FormID nativo do Skyrim',
-  `delta`            INT          NOT NULL COMMENT 'Positivo = ganhou, Negativo = perdeu',
+  `base_id`          INT          NOT NULL COMMENT 'Native Skyrim FormID',
+  `delta`            INT          NOT NULL COMMENT 'Positive = gained, Negative = lost',
   `reason`           VARCHAR(64)  NOT NULL COMMENT 'woodcutting, admin_give, trade, craft, loot...',
-  `module`           VARCHAR(32)  NOT NULL COMMENT 'Modulo que originou a transacao',
-  `idempotency_key`  VARCHAR(128) DEFAULT NULL UNIQUE COMMENT 'Previne duplicatas em retries',
+  `module`           VARCHAR(32)  NOT NULL COMMENT 'Module that originated the transaction',
+  `idempotency_key`  VARCHAR(128) DEFAULT NULL UNIQUE COMMENT 'Prevents duplicates on retries',
   `status`           VARCHAR(16)  NOT NULL DEFAULT 'committed' COMMENT 'committed, rolled_back',
   `created_at`       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_inv_tx_char` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE,
   INDEX `idx_inv_tx_char_date` (`character_id`, `created_at`)
 ) ENGINE=InnoDB;
 
--- D. Ledger de Ouro
+-- D. Gold ledger
 CREATE TABLE IF NOT EXISTS `gold_transactions` (
   `transaction_id`   CHAR(36)     NOT NULL PRIMARY KEY COMMENT 'UUID v4',
   `character_id`     INT          NOT NULL,
-  `delta`            INT          NOT NULL COMMENT 'Positivo = ganhou, Negativo = perdeu',
+  `delta`            INT          NOT NULL COMMENT 'Positive = gained, Negative = lost',
   `reason`           VARCHAR(64)  NOT NULL,
   `module`           VARCHAR(32)  NOT NULL,
   `idempotency_key`  VARCHAR(128) DEFAULT NULL UNIQUE,
@@ -397,17 +397,19 @@ CREATE TABLE IF NOT EXISTS `gold_transactions` (
 ) ENGINE=InnoDB;
 
 -- ═══════════════════════════════════════════════════
--- SISTEMAS ESTACIONADOS — Cavalos, Disfarces, Magia, Doenças
+-- PARKED SYSTEMS — Horses, Disguises, Magic, Diseases
 -- ═══════════════════════════════════════════════════
 
--- 13. Cavalos Persistentes
+-- 13. Persistent horses
+-- The 'Cavalo' default is a historical Portuguese value kept so this baseline
+-- matches existing databases; migration-v31 switches the default to 'Horse'.
 CREATE TABLE IF NOT EXISTS `horses` (
   `id`             INT AUTO_INCREMENT PRIMARY KEY,
   `name`           VARCHAR(64)  NOT NULL DEFAULT 'Cavalo',
-  `base_id`        INT          NOT NULL COMMENT 'FormID da raça (ex: 0x00067C43)',
+  `base_id`        INT          NOT NULL COMMENT 'Race FormID (e.g. 0x00067C43)',
   `owner_character_id` INT DEFAULT NULL,
   `health`         FLOAT NOT NULL DEFAULT 500.0,
-  `speed_bonus`    FLOAT NOT NULL DEFAULT 0.0  COMMENT 'Bônus de velocidade treinada',
+  `speed_bonus`    FLOAT NOT NULL DEFAULT 0.0  COMMENT 'Trained speed bonus',
   `last_pos_x`     FLOAT DEFAULT NULL,
   `last_pos_y`     FLOAT DEFAULT NULL,
   `last_pos_z`     FLOAT DEFAULT NULL,
@@ -418,25 +420,25 @@ CREATE TABLE IF NOT EXISTS `horses` (
   CONSTRAINT `fk_horse_owner` FOREIGN KEY (`owner_character_id`) REFERENCES `characters` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 14. Disfarces e Identidades Falsas
+-- 14. Disguises and false identities
 CREATE TABLE IF NOT EXISTS `disguises` (
   `id`             INT AUTO_INCREMENT PRIMARY KEY,
   `character_id`   INT NOT NULL,
   `fake_name`      VARCHAR(128) NOT NULL,
-  `fake_faction_id` INT DEFAULT NULL  COMMENT 'Facção fingida',
+  `fake_faction_id` INT DEFAULT NULL  COMMENT 'Faction being impersonated',
   `is_active`      TINYINT(1) NOT NULL DEFAULT 0,
-  `detection_roll` INT NOT NULL DEFAULT 15  COMMENT 'DC de Percepção para detectar (1-20)',
+  `detection_roll` INT NOT NULL DEFAULT 15  COMMENT 'Perception DC to detect (1-20)',
   `created_at`     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_char_disguise` (`character_id`),
   CONSTRAINT `fk_disguise_char` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 15. Licenças de Magia (Spells Aprovados para RP)
+-- 15. Magic licenses (spells approved for RP)
 CREATE TABLE IF NOT EXISTS `magic_licenses` (
   `id`             INT AUTO_INCREMENT PRIMARY KEY,
   `character_id`   INT NOT NULL,
   `spell_name`     VARCHAR(128) NOT NULL,
-  `spell_base_id`  INT NOT NULL  COMMENT 'FormID do feitiço',
+  `spell_base_id`  INT NOT NULL  COMMENT 'Spell FormID',
   `school`         VARCHAR(32) NOT NULL DEFAULT 'alteration' COMMENT 'alteration, conjuration, destruction, illusion, restoration',
   `level`          VARCHAR(16) NOT NULL DEFAULT 'novice' COMMENT 'novice, apprentice, adept, expert, master',
   `granted_by_character_id` INT DEFAULT NULL,
@@ -445,7 +447,7 @@ CREATE TABLE IF NOT EXISTS `magic_licenses` (
   CONSTRAINT `fk_magic_char` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 15.1. Usos de Magia Não Autorizada (para audit)
+-- 15.1. Unauthorized magic use (for audit)
 CREATE TABLE IF NOT EXISTS `magic_violations` (
   `id`             INT AUTO_INCREMENT PRIMARY KEY,
   `character_id`   INT NOT NULL,
@@ -455,75 +457,78 @@ CREATE TABLE IF NOT EXISTS `magic_violations` (
   CONSTRAINT `fk_violation_char` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 16. Doenças Persistentes
+-- 16. Persistent diseases
 CREATE TABLE IF NOT EXISTS `character_diseases` (
   `id`             INT AUTO_INCREMENT PRIMARY KEY,
   `character_id`   INT NOT NULL,
   `disease`        VARCHAR(64)  NOT NULL COMMENT 'rockjoint, ataxia, brain_rot, witbane, rattles, vampirism_stage1',
-  `severity`       INT NOT NULL DEFAULT 1  COMMENT '1=Leve, 2=Moderada, 3=Grave',
+  `severity`       INT NOT NULL DEFAULT 1  COMMENT '1=Mild, 2=Moderate, 3=Severe',
   `contracted_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `cured_at`       TIMESTAMP NULL DEFAULT NULL,
   `is_active`      TINYINT(1) NOT NULL DEFAULT 1,
   CONSTRAINT `fk_disease_char` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 17. Afinidade da Alma (soul-service)
--- Desenho: docs/design/SOUL_AFFINITY.md. Detalhes de cada decisao de modelagem
--- estao em migration-v10-soul.sql, que cria estas mesmas quatro tabelas em banco
--- ja existente.
+-- 17. Soul affinity (soul-service)
+-- Design: docs/design/SOUL_AFFINITY.md. The reasoning behind each modelling
+-- decision lives in migration-v10-soul.sql, which creates these same four
+-- tables on an existing database.
+-- Column names (arcana, divina, sombria, vontade...) and stored values
+-- (fisica, visivel...) are Portuguese keys the code compares against; they are
+-- identifiers, not prose, and stay as they are.
 
--- 17.1. A alma: sete valores derivados da ficha aprovada, mais a semente.
--- SENSIVEL: `soul_seed` nunca sai do servidor (ver §III.3).
+-- 17.1. The soul: seven values derived from the approved sheet, plus the seed.
+-- SENSITIVE: `soul_seed` never leaves the server (see §III.3).
 CREATE TABLE IF NOT EXISTS `character_soul` (
   `character_id`  INT NOT NULL PRIMARY KEY,
-  `soul_seed`     CHAR(64) NOT NULL COMMENT 'HMAC hex. SENSIVEL: nunca sai do servidor',
-  `arcana`        TINYINT UNSIGNED NOT NULL COMMENT '0-100. As quatro afinidades somam 200',
+  `soul_seed`     CHAR(64) NOT NULL COMMENT 'HMAC hex. SENSITIVE: never leaves the server',
+  `arcana`        TINYINT UNSIGNED NOT NULL COMMENT '0-100. The four affinities sum to 200',
   `divina`        TINYINT UNSIGNED NOT NULL,
   `sombria`       TINYINT UNSIGNED NOT NULL,
   `bestial`       TINYINT UNSIGNED NOT NULL,
-  `vontade`       TINYINT UNSIGNED NOT NULL COMMENT '0-100. Os tres tracos somam 150',
+  `vontade`       TINYINT UNSIGNED NOT NULL COMMENT '0-100. The three traits sum to 150',
   `sensibilidade` TINYINT UNSIGNED NOT NULL,
   `estabilidade`  TINYINT UNSIGNED NOT NULL,
   `created_at`    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_soul_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 17.2. Sinais: o primeiro sai no primeiro spawn, pra que a primeira sessao nao
--- seja vazia. `sign_key` e chave de catalogo, nunca texto do jogador.
+-- 17.2. Signs: the first one appears on the first spawn, so that the first
+-- session is not empty. `sign_key` is a catalog key, never player text.
 CREATE TABLE IF NOT EXISTS `character_signs` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
-  `sign_key`     VARCHAR(64) NOT NULL COMMENT 'Chave do catalogo em soul-service.js',
+  `sign_key`     VARCHAR(64) NOT NULL COMMENT 'Catalog key in soul-service.js',
   `source`       VARCHAR(32) NOT NULL DEFAULT 'first_spawn' COMMENT 'first_spawn, event, ritual',
   `revealed_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_sign_character_key` (`character_id`, `sign_key`),
   CONSTRAINT `fk_sign_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 17.3. Marcas: sao a progressao. Marca nunca e removida, no maximo coberta —
--- por isso nao ha `removed_at` nem status.
+-- 17.3. Marks: they are the progression. A mark is never removed, at most
+-- covered — which is why there is no `removed_at` and no status.
 CREATE TABLE IF NOT EXISTS `character_marks` (
   `id`              INT AUTO_INCREMENT PRIMARY KEY,
   `character_id`    INT NOT NULL,
-  `kind`            VARCHAR(16) NOT NULL COMMENT 'fisica, espiritual, social',
-  `visibility`      VARCHAR(16) NOT NULL COMMENT 'visivel, sentida, conhecida',
-  `descriptor`      VARCHAR(64) NOT NULL COMMENT 'Chave do catalogo em soul-service.js',
-  `origin_event_id` VARCHAR(128) DEFAULT NULL COMMENT 'Rastro ate a linha soul:resolve em audit_logs',
+  `kind`            VARCHAR(16) NOT NULL COMMENT 'fisica (physical), espiritual (spiritual), social',
+  `visibility`      VARCHAR(16) NOT NULL COMMENT 'visivel (visible), sentida (felt), conhecida (known)',
+  `descriptor`      VARCHAR(64) NOT NULL COMMENT 'Catalog key in soul-service.js',
+  `origin_event_id` VARCHAR(128) DEFAULT NULL COMMENT 'Trail back to the soul:resolve row in audit_logs',
   `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY `idx_marks_character` (`character_id`),
   CONSTRAINT `fk_mark_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 17.4. Arvore de Transformacao: maquina de estados irma de
--- core/character-state.js, separada dela de proposito (segundos vs meses).
--- `consented_at` obrigatorio em no irreversivel (SOUL_AFFINITY §14.2).
+-- 17.4. Transformation tree: a state machine sibling to
+-- core/character-state.js, deliberately kept separate from it (seconds vs months).
+-- `consented_at` is mandatory on an irreversible node (SOUL_AFFINITY §14.2).
 CREATE TABLE IF NOT EXISTS `character_paths` (
   `id`           INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
   `tree`         VARCHAR(16) NOT NULL COMMENT 'arcana, divina, sombria, bestial',
   `node`         VARCHAR(32) NOT NULL,
   `entered_at`   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `consented_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Obrigatorio em no irreversivel',
+  `consented_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Mandatory on an irreversible node',
   `metadata`     TEXT DEFAULT NULL COMMENT 'JSON',
   UNIQUE KEY `uk_path_character_tree` (`character_id`, `tree`),
   CONSTRAINT `fk_path_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE

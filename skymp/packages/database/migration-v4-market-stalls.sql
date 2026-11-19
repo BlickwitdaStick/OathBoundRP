@@ -1,6 +1,6 @@
 -- =============================================================================
--- Migration v4 - Barraquinhas de venda de jogadores
--- Aplicar apos migration-v3-governance.sql.
+-- Migration v4 - Player market stalls
+-- Apply after migration-v3-governance.sql.
 -- =============================================================================
 USE `skymp_rp`;
 
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `market_stalls` (
   `pos_z` FLOAT NOT NULL,
   `cell_id` VARCHAR(96) NOT NULL,
   `heading` FLOAT NOT NULL DEFAULT 0,
-  `visual_ref_id` INT DEFAULT NULL COMMENT 'MpObjectReference criado para representar a barraca no mundo',
+  `visual_ref_id` INT DEFAULT NULL COMMENT 'MpObjectReference created to represent the stall in the world',
   `tax_rate` FLOAT NOT NULL DEFAULT 0.05,
   `rent_paid_until` TIMESTAMP NULL DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `market_stalls` (
 
 ALTER TABLE `market_stalls`
   ADD COLUMN IF NOT EXISTS `visual_ref_id` INT DEFAULT NULL
-    COMMENT 'MpObjectReference criado para representar a barraca no mundo'
+    COMMENT 'MpObjectReference created to represent the stall in the world'
     AFTER `heading`;
 
 CREATE TABLE IF NOT EXISTS `market_stall_items` (
@@ -94,18 +94,18 @@ CREATE TABLE IF NOT EXISTS `market_stall_audit` (
 ) ENGINE=InnoDB;
 
 -- =============================================================================
--- Colunas de posicao na tabela cities (para lookup espacial de barracas)
+-- Position columns on the cities table (for spatial stall lookup)
 -- =============================================================================
 ALTER TABLE `cities`
-  ADD COLUMN IF NOT EXISTS `pos_x` FLOAT DEFAULT NULL COMMENT 'Centro X da cidade'
+  ADD COLUMN IF NOT EXISTS `pos_x` FLOAT DEFAULT NULL COMMENT 'City center X'
     AFTER `tax_rate`,
-  ADD COLUMN IF NOT EXISTS `pos_y` FLOAT DEFAULT NULL COMMENT 'Centro Y da cidade'
+  ADD COLUMN IF NOT EXISTS `pos_y` FLOAT DEFAULT NULL COMMENT 'City center Y'
     AFTER `pos_x`,
-  ADD COLUMN IF NOT EXISTS `pos_z` FLOAT DEFAULT NULL COMMENT 'Centro Z da cidade'
+  ADD COLUMN IF NOT EXISTS `pos_z` FLOAT DEFAULT NULL COMMENT 'City center Z'
     AFTER `pos_y`,
-  ADD COLUMN IF NOT EXISTS `cell_id` VARCHAR(96) DEFAULT NULL COMMENT 'Cell/Worldspace da cidade'
+  ADD COLUMN IF NOT EXISTS `cell_id` VARCHAR(96) DEFAULT NULL COMMENT 'City cell/worldspace'
     AFTER `pos_z`;
 
 -- =============================================================================
--- FIM DA MIGRATION v4
+-- END OF MIGRATION v4
 -- =============================================================================

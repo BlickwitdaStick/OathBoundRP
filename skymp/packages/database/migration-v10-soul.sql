@@ -1,48 +1,48 @@
 -- =============================================================================
--- Migration v10 - Afinidade da Alma (soul-service)
--- Aplicar apos migration-v9-characters-gold.sql.
+-- Migration v10 - Soul Affinity (soul-service)
+-- Apply after migration-v9-characters-gold.sql.
 --
--- Desenho fechado em docs/design/SOUL_AFFINITY.md. As quatro tabelas abaixo sao
--- exatamente as declaradas la (III.6 marcas, III.7 sinais, III.8 arvore) mais a
--- `character_soul` da §10, e nada alem disso.
+-- Design finalized in docs/design/SOUL_AFFINITY.md. The four tables below are
+-- exactly the ones declared there (III.6 marks, III.7 signs, III.8 tree) plus
+-- the `character_soul` table from §10, and nothing beyond that.
 --
--- Por que a alma fica em tabela propria, e nao em colunas de `characters`
+-- Why the soul lives in its own table rather than in columns of `characters`
 -- -----------------------------------------------------------------------------
--- A ficha aprovada (`motivations`, `weaknesses`, `social_ties`, migration v5) e
--- a FONTE da alma, nao a alma. Guardar os sete valores em `characters` misturaria
--- o que a staff revisa com o que o servidor deriva, e a segunda coisa nunca deve
--- ser editavel a mao pelo painel — e o que garante que a mesma ficha aprovada
--- produza sempre a mesma alma (§14.1, o fim do reroll-farming).
+-- The approved sheet (`motivations`, `weaknesses`, `social_ties`, migration v5) is
+-- the SOURCE of the soul, not the soul. Storing the seven values in `characters` would mix
+-- what staff reviews with what the server derives, and the latter must never
+-- be hand-editable from the panel — that is what guarantees the same approved sheet
+-- always produces the same soul (§14.1, the end of reroll farming).
 --
--- Por que a semente e persistida em vez de rederivada a cada uso
+-- Why the seed is persisted instead of re-derived on each use
 -- -----------------------------------------------------------------------------
--- Ela e derivada de `HMAC(SOUL_SECRET, characterId || ficha normalizada)`. Se a
--- staff editar a ficha de um personagem ja aprovado — o que o painel permite —,
--- rederivar trocaria a alma de alguem que ja jogou meses com ela, silenciosamente.
--- Persistir congela a alma no instante da aprovacao, que e o unico comportamento
--- compativel com "marcas sao a progressao" (§II.3).
+-- It is derived from `HMAC(SOUL_SECRET, characterId || normalized sheet)`. If
+-- staff edits the sheet of an already-approved character — which the panel allows —,
+-- re-deriving would silently swap the soul of someone who has played with it for months.
+-- Persisting freezes the soul at the moment of approval, which is the only behavior
+-- compatible with "marks are the progression" (§II.3).
 --
--- ⚠️ `soul_seed` e material sensivel. Com ela e o codigo publico deste repositorio
--- qualquer pessoa reproduz todas as rolagens futuras daquele personagem. Nunca
--- deve sair do servidor, nunca entra em payload de `panelData` e nunca aparece em
--- endpoint do painel web. Ha teste que trava isso (soul-service.test.js).
+-- ⚠️ `soul_seed` is sensitive material. With it and the public code of this repository
+-- anyone can reproduce every future roll of that character. It must never
+-- leave the server, never goes into a `panelData` payload and never shows up in a
+-- web panel endpoint. A test locks this down (soul-service.test.js).
 --
--- Idempotente: `IF NOT EXISTS` em todas as criacoes.
+-- Idempotent: `IF NOT EXISTS` on every creation.
 -- =============================================================================
 USE `skymp_rp`;
 
 -- -----------------------------------------------------------------------------
--- A alma. Sete valores (quatro afinidades + tres tracos) e a semente que os gerou.
--- Um registro por personagem, criado no primeiro spawn depois da aprovacao.
+-- The soul. Seven values (four affinities + three traits) and the seed that generated them.
+-- One row per character, created on the first spawn after approval.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `character_soul` (
   `character_id` INT NOT NULL PRIMARY KEY,
-  `soul_seed` CHAR(64) NOT NULL COMMENT 'HMAC hex. SENSIVEL: nunca sai do servidor',
-  `arcana` TINYINT UNSIGNED NOT NULL COMMENT '0-100. Orcamento fixo: as quatro afinidades somam 200',
+  `soul_seed` CHAR(64) NOT NULL COMMENT 'HMAC hex. SENSITIVE: never leaves the server',
+  `arcana` TINYINT UNSIGNED NOT NULL COMMENT '0-100. Fixed budget: the four affinities sum to 200',
   `divina` TINYINT UNSIGNED NOT NULL,
   `sombria` TINYINT UNSIGNED NOT NULL,
   `bestial` TINYINT UNSIGNED NOT NULL,
-  `vontade` TINYINT UNSIGNED NOT NULL COMMENT '0-100. Orcamento fixo: os tres tracos somam 150',
+  `vontade` TINYINT UNSIGNED NOT NULL COMMENT '0-100. Fixed budget: the three traits sum to 150',
   `sensibilidade` TINYINT UNSIGNED NOT NULL,
   `estabilidade` TINYINT UNSIGNED NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -50,16 +50,16 @@ CREATE TABLE IF NOT EXISTS `character_soul` (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
--- Sinais (III.7). O primeiro e revelado no primeiro spawn, nao por tempo de jogo:
--- e o que garante que a primeira sessao nao seja vazia (§II.1).
+-- Signs (III.7). The first is revealed on the first spawn, not by play time:
+-- that is what guarantees the first session is not empty (§II.1).
 --
--- `sign_key` e chave de catalogo, nunca texto livre — o texto mora no codigo,
--- pelo mesmo motivo que `descriptor` em `character_marks`.
+-- `sign_key` is a catalog key, never free text — the text lives in code,
+-- for the same reason as `descriptor` in `character_marks`.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `character_signs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
-  `sign_key` VARCHAR(64) NOT NULL COMMENT 'Chave do catalogo em soul-service.js. Nunca texto do jogador',
+  `sign_key` VARCHAR(64) NOT NULL COMMENT 'Catalog key in soul-service.js. Never player text',
   `source` VARCHAR(32) NOT NULL DEFAULT 'first_spawn' COMMENT 'first_spawn, event, ritual',
   `revealed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_sign_character_key` (`character_id`, `sign_key`),
@@ -67,33 +67,33 @@ CREATE TABLE IF NOT EXISTS `character_signs` (
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
--- Marcas (III.6). SAO a progressao — nao ha nivel, ha o que ficou em voce.
+-- Marks (III.6). They ARE the progression — there are no levels, there is what stayed with you.
 --
--- Marca nunca e removida. No maximo e coberta, o que tambem e jogavel e caro —
--- por isso nao existe coluna `removed_at` nem status.
+-- A mark is never removed. At most it is covered, which is also playable and costly —
+-- which is why there is no `removed_at` column and no status.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `character_marks` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `character_id` INT NOT NULL,
-  `kind` VARCHAR(16) NOT NULL COMMENT 'fisica, espiritual, social',
-  `visibility` VARCHAR(16) NOT NULL COMMENT 'visivel (outros veem), sentida (so o portador), conhecida (reputacao)',
-  `descriptor` VARCHAR(64) NOT NULL COMMENT 'Chave do catalogo em soul-service.js. Nunca texto do jogador',
-  `origin_event_id` VARCHAR(128) DEFAULT NULL COMMENT 'Rastro ate a linha de soul:resolve em audit_logs',
+  `kind` VARCHAR(16) NOT NULL COMMENT 'fisica (physical), espiritual (spiritual), social',
+  `visibility` VARCHAR(16) NOT NULL COMMENT 'visivel (others see it), sentida (only the bearer), conhecida (reputation)',
+  `descriptor` VARCHAR(64) NOT NULL COMMENT 'Catalog key in soul-service.js. Never player text',
+  `origin_event_id` VARCHAR(128) DEFAULT NULL COMMENT 'Trail back to the soul:resolve row in audit_logs',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY `idx_marks_character` (`character_id`),
   CONSTRAINT `fk_mark_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- -----------------------------------------------------------------------------
--- Arvore de Transformacao (III.8). Maquina de estados IRMA de
--- core/character-state.js, deliberadamente separada dela: aquele trata estado
--- imediato de gameplay (NORMAL/DOWNED/IMPRISONED) com ciclo de vida de segundos;
--- este e trajetoria de meses. Misturar acoplaria coisas com tempos de vida
--- incompativeis (Constituicao §13).
+-- Transformation tree (III.8). A SIBLING state machine of
+-- core/character-state.js, deliberately kept separate from it: that one handles
+-- immediate gameplay state (NORMAL/DOWNED/IMPRISONED) with a lifecycle of seconds;
+-- this one is a trajectory of months. Mixing them would couple things with
+-- incompatible lifetimes (Constitution §13).
 --
--- `consented_at` e a implementacao da condicao §14.2: no irreversivel nao avanca
--- sem consentimento registrado. NULL nele num no irreversivel e um bug de
--- processo, nao um estado valido — ha teste que trava isso.
+-- `consented_at` implements condition §14.2: an irreversible node does not advance
+-- without recorded consent. NULL in it on an irreversible node is a process
+-- bug, not a valid state — a test locks this down.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `character_paths` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS `character_paths` (
   `tree` VARCHAR(16) NOT NULL COMMENT 'arcana, divina, sombria, bestial',
   `node` VARCHAR(32) NOT NULL,
   `entered_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  `consented_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Obrigatorio em no irreversivel (SOUL_AFFINITY §14.2)',
+  `consented_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Mandatory on an irreversible node (SOUL_AFFINITY §14.2)',
   `metadata` TEXT DEFAULT NULL COMMENT 'JSON',
   UNIQUE KEY `uk_path_character_tree` (`character_id`, `tree`),
   CONSTRAINT `fk_path_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE

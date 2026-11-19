@@ -1,6 +1,6 @@
 -- =============================================================================
--- Migration v3 - Governanca, faccoes IC, cidades, guarda e eventos
--- Aplicar apos schema.sql e migration-v2.sql.
+-- Migration v3 - Governance, IC factions, cities, guard and events
+-- Apply after schema.sql and migration-v2.sql.
 -- =============================================================================
 USE `skymp_rp`;
 
@@ -182,5 +182,5 @@ CREATE TABLE IF NOT EXISTS `governance_events` (
 ) ENGINE=InnoDB;
 
 -- =============================================================================
--- FIM DA MIGRATION v3
+-- END OF MIGRATION v3
 -- =============================================================================

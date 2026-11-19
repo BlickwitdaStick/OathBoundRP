@@ -1,28 +1,28 @@
 -- =============================================================================
--- Migration v5 - Aprofunda a aplicação de personagem (rubrica Heavy RP)
--- Aplicar apos migration-v4-market-stalls.sql.
+-- Migration v5 - Deepens the character application (Heavy RP rubric)
+-- Apply after migration-v4-market-stalls.sql.
 --
--- O plano de desenvolvimento (secao 8.1, "Padrao da Whitelist") exige que a
--- aplicacao teste conceito, motivacoes, fraquezas e lacos sociais do
--- personagem, e que conceitos fortes (nobres, magos poderosos, vampiros,
--- lobisomens, lideres de faccao) exijam aprovacao extra da staff. Antes desta
--- migration a aplicacao só coletava first_name/last_name/biography.
+-- The development plan (section 8.1, "Whitelist Standard") requires the
+-- application to test the character's concept, motivations, weaknesses and
+-- social ties, and that strong concepts (nobles, powerful mages, vampires,
+-- werewolves, faction leaders) require extra staff approval. Before this
+-- migration the application only collected first_name/last_name/biography.
 -- =============================================================================
 USE `skymp_rp`;
 
 ALTER TABLE `characters`
   ADD COLUMN IF NOT EXISTS `motivations` TEXT DEFAULT NULL
-    COMMENT 'Objetivos do personagem em jogo (rubrica de whitelist Heavy RP)'
+    COMMENT 'In-game goals of the character (Heavy RP whitelist rubric)'
     AFTER `biography`,
   ADD COLUMN IF NOT EXISTS `weaknesses` TEXT DEFAULT NULL
-    COMMENT 'Falhas/limites do personagem (rubrica de whitelist Heavy RP)'
+    COMMENT 'Flaws/limits of the character (Heavy RP whitelist rubric)'
     AFTER `motivations`,
   ADD COLUMN IF NOT EXISTS `social_ties` TEXT DEFAULT NULL
-    COMMENT 'Laços sociais/relações pretendidas (rubrica de whitelist Heavy RP)'
+    COMMENT 'Intended social ties/relationships (Heavy RP whitelist rubric)'
     AFTER `weaknesses`,
   ADD COLUMN IF NOT EXISTS `needs_extra_review` TINYINT(1) NOT NULL DEFAULT 0
-    COMMENT 'Conceito forte — exige aprovacao extra da staff antes de approved'
+    COMMENT 'Strong concept - needs extra staff approval before approved'
     AFTER `social_ties`,
   ADD COLUMN IF NOT EXISTS `extra_review_notes` TEXT DEFAULT NULL
-    COMMENT 'Notas da staff sobre a revisao extra do conceito'
+    COMMENT 'Staff notes on the extra concept review'
     AFTER `needs_extra_review`;

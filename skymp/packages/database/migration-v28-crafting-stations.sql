@@ -1,4 +1,4 @@
--- v28 — estações físicas autoritativas de crafting
+-- v28 — authoritative physical crafting stations
 USE `skymp_rp`;
 
 CREATE TABLE IF NOT EXISTS `crafting_stations` (
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `crafting_stations` (
   INDEX `idx_crafting_station_type_enabled` (`station_type`, `enabled`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Remove o seed histórico que fabricava uma capa com FormID placeholder.
--- A ordem (ingrediente antes da receita) respeita a FK existente.
+-- Removes the historical seed that produced a cloak with a placeholder FormID.
+-- The order (ingredient before recipe) respects the existing FK.
 DELETE FROM `crafting_ingredients` WHERE `recipe_id` = 1003;
 DELETE FROM `crafting_recipes` WHERE `id` = 1003 AND `result_base_id` = 999999;

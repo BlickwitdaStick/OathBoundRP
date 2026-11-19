@@ -1,36 +1,36 @@
 -- =============================================================================
--- Migration v9 - Adiciona characters.gold em bancos que vieram do schema antigo
--- Aplicar apos migration-v8-game-sessions.sql.
+-- Migration v9 - Adds characters.gold to databases that came from the old schema
+-- Apply after migration-v8-game-sessions.sql.
 --
--- Por que esta migration existe
+-- Why this migration exists
 -- -----------------------------------------------------------------------------
--- `characters.gold` esta declarada no `schema.sql`, e em NENHUMA migration. Isso
--- funciona para banco novo (roda o schema.sql e pronto), e deixa um buraco em
--- banco antigo: quem criou o banco antes da coluna entrar no schema e depois
--- aplicou v2 -> v8 em ordem, como o CONTRIBUTING manda, nunca recebe a coluna.
+-- `characters.gold` is declared in `schema.sql`, and in NO migration. That
+-- works for a new database (run schema.sql and done), and leaves a gap in an
+-- old database: whoever created the database before the column entered the schema
+-- and then applied v2 -> v8 in order, as CONTRIBUTING says, never gets the column.
 --
--- A v2 chega a criar a tabela `gold_transactions` — o ledger da economia — sem
--- garantir a coluna de saldo que esse ledger acompanha.
+-- v2 even creates the `gold_transactions` table — the economy ledger — without
+-- ensuring the balance column that ledger tracks.
 --
--- O efeito nao aparece no boot. Aparece na primeira operacao de ouro, que e todo
--- o `core/transaction-service.js`:
+-- The effect does not show at boot. It shows on the first gold operation, which is
+-- the whole of `core/transaction-service.js`:
 --
 --     SELECT gold FROM characters WHERE id = ? FOR UPDATE
 --     UPDATE characters SET gold = gold + ? WHERE id = ?
 --
--- Ou seja: compra em barraca, multa da guarda, penalidade de morte, ouro inicial
--- e `/setgold` falham todos com "Unknown column 'gold'", no meio de uma cena.
+-- In other words: stall purchases, guard fines, death penalty, starting gold
+-- and `/setgold` all fail with "Unknown column 'gold'", in the middle of a scene.
 --
--- Encontrado pelo `npm run check:schema` (QA 4.1) ao preparar a Fase 0, que e
--- exatamente a classe de problema que aquele checador foi escrito para pegar:
--- "banco meio-migrado nao quebra o boot; quebra a query que toca a coluna
--- faltante, semanas depois".
+-- Found by `npm run check:schema` (QA 4.1) while preparing Phase 0, which is
+-- exactly the class of problem that checker was written to catch:
+-- "a half-migrated database does not break boot; it breaks the query that touches
+-- the missing column, weeks later".
 --
--- Idempotente: `IF NOT EXISTS` faz esta migration ser inofensiva em banco que
--- veio do `schema.sql` completo e ja tem a coluna.
+-- Idempotent: `IF NOT EXISTS` makes this migration harmless on a database that
+-- came from the full `schema.sql` and already has the column.
 -- =============================================================================
 USE `skymp_rp`;
 
 ALTER TABLE `characters`
   ADD COLUMN IF NOT EXISTS `gold` INT NOT NULL DEFAULT 0
-    COMMENT 'Economia in-game (Septims). Toda alteracao passa pelo core/transaction-service.js';
+    COMMENT 'In-game economy (Septims). Every change goes through core/transaction-service.js';
