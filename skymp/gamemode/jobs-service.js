@@ -1,40 +1,40 @@
 /**
  * jobs-service.js
- * Trabalho público de lenha. A mineração autoritativa pertence ao módulo
- * `mining` (profissão + nó físico + cooldown + idempotência). A pesca fica
- * fora da alfa enquanto o FormID da vara não for confirmado.
+ * Public firewood work. Authoritative mining belongs to the
+ * `mining` module (profession + physical node + cooldown + idempotency). Fishing stays
+ * out of the alpha while the rod's FormID is not confirmed.
  *
- * Registrado em `phase0-basic.js` como módulo `jobs` (fase `lab`,
- * `ENABLE_JOBS_SERVICE`, nasce desligado). A migração para o
- * `transaction-service` descrita abaixo — que corrigiu o defeito registrado em
- * docs/technical/PARKED_SERVICES_DECISION.md §7.3 — foi o que tornou a
- * reativação possível; até 20/08/2026 o arquivo existia no disco sem comando
- * de chat nenhum. Ver §7.3 para o histórico do defeito original.
+ * Registered in `phase0-basic.js` as the `jobs` module (phase `lab`,
+ * `ENABLE_JOBS_SERVICE`, off by default). The migration to
+ * `transaction-service` described below — which fixed the defect recorded in
+ * docs/technical/PARKED_SERVICES_DECISION.md §7.3 — is what made
+ * reactivation possible; until 2026-08-20 the file existed on disk with no chat
+ * command at all. See §7.3 for the history of the original defect.
  *
- * ─── Por que este arquivo mudou ──────────────────────────────────────────────
+ * ─── Why this file changed ──────────────────────────────────────────────────
  *
- * Ele entregava recurso chamando `AddItem` do Papyrus direto no ator,
- * contornando `inventory-service` e `core/transaction-service` inteiros. A
- * consequência: lenha, minério e peixe nasciam **sem linha em
- * `character_inventory` e sem linha no ledger** — não existiam para o servidor.
+ * It delivered resources by calling Papyrus `AddItem` directly on the actor,
+ * bypassing `inventory-service` and `core/transaction-service` entirely. The
+ * consequence: firewood, ore and fish were born **with no row in
+ * `character_inventory` and no row in the ledger** — they did not exist for the server.
  *
- * Isso é mais forte que o achado do `/setgold` (ouro que aparecia sem origem
- * registrada, mas ao menos mudava o saldo no banco). Aqui o item existia só no
- * cliente até a próxima sincronização, e o `syncInventoryToClient` reconcilia a
- * partir do **banco**, que nunca soube dele. Inverte a regra que o resto do
- * projeto segue: inventário só existe se o MariaDB confirmar.
+ * That is stronger than the `/setgold` finding (gold that appeared with no recorded
+ * origin, but at least changed the balance in the DB). Here the item existed only on the
+ * client until the next sync, and `syncInventoryToClient` reconciles
+ * from the **DB**, which never knew about it. It inverts the rule the rest of the
+ * project follows: inventory only exists if MariaDB confirms it.
  *
- * Agora toda entrega passa por `transactionService.giveItem`, que é atômico,
- * grava no ledger e só então aplica no cliente. A função pública é a certa
- * aqui (e não as primitivas `tx.*`): a entrega é uma perna só, não precisa
- * commitar junto com mais nada.
+ * Now every delivery goes through `transactionService.giveItem`, which is atomic,
+ * writes to the ledger and only then applies on the client. The public function is the right one
+ * here (and not the `tx.*` primitives): the delivery is a single leg, it does not need to
+ * commit together with anything else.
  *
- * ─── O que continua pendente ─────────────────────────────────────────────────
+ * ─── What is still pending ──────────────────────────────────────────────────
  *
- * `Math.random()` ainda decide a quantidade de lenha. Não cai sob a §14.3 da
- * Afinidade da Alma (que rege rolagem *oculta de alma*, e esta não é), mas
- * produção de recurso irreproduzível é um problema de economia por si só —
- * registrado na §7.3 do PARKED_SERVICES_DECISION, não resolvido aqui.
+ * `Math.random()` still decides the amount of firewood. It does not fall under §14.3 of
+ * Soul Affinity (which governs *hidden soul* rolls, and this is not one), but
+ * irreproducible resource production is an economy problem on its own —
+ * recorded in §7.3 of PARKED_SERVICES_DECISION, not solved here.
  */
 
 const commands = require('./commands');
@@ -43,26 +43,26 @@ const { actorRef } = require('./core/papyrus');
 
 const MODULE = 'jobs';
 
-// IDs Base de itens do Skyrim
+// Base IDs of Skyrim items
 const ITEM_FIREWOOD = 0x00033760; // Lenha
-const ITEM_WOODCUTTER_AXE = 0x0002F2F4; // Machado de Lenhador
+const ITEM_WOODCUTTER_AXE = 0x0002F2F4; // Woodcutter's Axe
 
 const ITEM_PICKAXE = 0x000E3C16; // Picareta
 const ITEM_IRON_ORE = 0x00071CF3;
 const ITEM_CORUNDUM_ORE = 0x0005ACDB;
 const ITEM_EBONY_ORE = 0x0005ACDC;
 
-const ITEM_FISHING_ROD = 0x00044E20; // TODO: Substituir pelo ID correto do mod
+const ITEM_FISHING_ROD = 0x00044E20; // TODO: Replace with the mod's correct ID
 const FISH_SALMON = 0x00065C34;
 const FISH_RIVER_BETTY = 0x00106E1A;
 const FISH_SPADETAIL = 0x00106E19;
 
-// Previne spam mantendo controle de quem esta coletando.
+// Prevents spam by keeping track of who is gathering.
 //
-// Chaveado por characterId, nao por actorId. O actorId e um slot que o SkyMP
-// reaproveita entre sessoes: com a chave antiga, quem entrasse no slot de
-// alguem que saiu no meio de uma coleta ficava bloqueado ate o timer daquela
-// outra pessoa expirar. E a mesma classe do cache de vida do death-service.
+// Keyed by characterId, not by actorId. The actorId is a slot SkyMP
+// reuses across sessions: with the old key, whoever took the slot of
+// someone who left in the middle of a gather was blocked until that other
+// person's timer expired. Same class as death-service's health cache.
 const activeGatherers = new Set();
 
 function notify(text) {
@@ -71,16 +71,16 @@ function notify(text) {
 }
 
 /**
- * Abre uma coleta: resolve o personagem, checa a ferramenta e marca ocupado.
+ * Opens a gather: resolves the character, checks the tool and marks them busy.
  *
- * @returns {{characterId: number}|null} null quando a coleta nao pode comecar
+ * @returns {{characterId: number}|null} null when the gather cannot start
  */
 function _beginGather(actorId, toolBaseId, toolName) {
   if (typeof mp === 'undefined') return null;
 
-  // Item so existe se o banco confirmar, e o banco fala em characterId. Sem
-  // personagem carregado nao ha onde creditar — coletar seria criar item do
-  // nada, que e exatamente o que esta migracao veio consertar.
+  // An item only exists if the DB confirms it, and the DB speaks in characterId. With no
+  // loaded character there is nowhere to credit — gathering would create an item out of
+  // nothing, which is exactly what this migration came to fix.
   const character = commands.getActiveCharacterData(actorId);
   if (!character) {
     notify('Character not loaded.');
@@ -92,9 +92,9 @@ function _beginGather(actorId, toolBaseId, toolName) {
     return null;
   }
 
-  // Ferramenta continua sendo lida do cliente, e isso e aceitavel aqui: ela
-  // decide se a acao COMECA, nao o que o jogador recebe. Quem burlar ganha uma
-  // animacao; o item so nasce pelo transaction-service, no fim.
+  // The tool is still read from the client, and that is acceptable here: it
+  // decides whether the action STARTS, not what the player receives. Whoever cheats gets an
+  // animation; the item is only born through transaction-service, at the end.
   if (toolBaseId !== null) {
     const hasTool = mp.callPapyrusFunction('method', 'Actor', 'GetItemCount', actorRef(actorId), [toolBaseId]);
     if (hasTool <= 0) {
@@ -108,20 +108,20 @@ function _beginGather(actorId, toolBaseId, toolName) {
 }
 
 /**
- * Fecha uma coleta e credita o resultado.
+ * Closes a gather and credits the result.
  *
- * Confere que o slot ainda e da mesma pessoa antes de entregar: entre o inicio
- * e o fim passam 10 a 20 segundos, tempo de sobra pra alguem cair e outro
- * jogador entrar no mesmo actorId. Sem esta checagem, o recurso ia pro
- * personagem errado — o banco registraria a entrega corretamente, no dono
- * errado, que e pior que nao entregar.
+ * Checks that the slot still belongs to the same person before delivering: between the start
+ * and the end 10 to 20 seconds pass, plenty of time for someone to drop and another
+ * player to take the same actorId. Without this check, the resource went to the
+ * wrong character — the DB would record the delivery correctly, to the wrong
+ * owner, which is worse than not delivering.
  */
 async function _finishGather(actorId, characterId, baseId, count, reason) {
   activeGatherers.delete(characterId);
 
   const atual = commands.getActiveCharacterData(actorId);
   if (!atual || atual.characterId !== characterId) {
-    console.log(`[jobs-service] Coleta descartada: actor ${actorId.toString(16)} nao e mais o char ${characterId}.`);
+    console.log(`[jobs-service] Gather discarded: actor ${actorId.toString(16)} is no longer char ${characterId}.`);
     return false;
   }
 
@@ -144,12 +144,12 @@ function chopWood(actorId) {
 
   commands.broadcastProximityMessage(actorId, `* Starts chopping wood energetically.`, 1500);
 
-  // Toca a animacao do Skyrim (se disponivel no ator).
-  // `Debug.SendAnimationEvent` e global: o `self` e null e a referencia do ator
-  // vai como ARGUMENTO — e argumento que e referencia tambem precisa ser objeto
-  // (ver core/papyrus.js e o achado 2.13 do QA_REPORT). A versao anterior desta
-  // linha passava `actorId` cru na posicao do self, que e invalida nas duas
-  // contas; ficaria assim se alguem descomentasse sem reler o contrato.
+  // Plays the Skyrim animation (if available on the actor).
+  // `Debug.SendAnimationEvent` is global: `self` is null and the actor reference
+  // goes as an ARGUMENT — and an argument that is a reference must also be an object
+  // (see core/papyrus.js and finding 2.13 of the QA_REPORT). The previous version of this
+  // line passed the raw `actorId` in the self position, which is invalid on both
+  // counts; it would stay that way if someone uncommented it without rereading the contract.
   // mp.callPapyrusFunction('global', 'Debug', 'SendAnimationEvent', null, [actorRef(actorId), 'WoodChopping']);
 
   notify('Chopping wood... please wait.');
@@ -163,7 +163,7 @@ function chopWood(actorId) {
           console.log(`[jobs-service] Char ${sessao.characterId} chopped ${woodAmount} wood.`);
         }
       })
-      .catch(err => console.error('[jobs-service] Falha ao entregar lenha:', err.message));
+      .catch(err => console.error('[jobs-service] Failed to deliver firewood:', err.message));
   }, 10000);
 }
 
@@ -196,13 +196,13 @@ function mineOre(actorId) {
           console.log(`[jobs-service] Char ${sessao.characterId} mined ${amount}x 0x${oreItem.toString(16)}.`);
         }
       })
-      .catch(err => console.error('[jobs-service] Falha ao entregar minerio:', err.message));
+      .catch(err => console.error('[jobs-service] Failed to deliver ore:', err.message));
   }, 15000);
 }
 
 function catchFish(actorId) {
-  // TODO: passar ITEM_FISHING_ROD no lugar de null quando o FormID correto do
-  // mod for confirmado. Enquanto for null, a pesca nao exige ferramenta.
+  // TODO: pass ITEM_FISHING_ROD instead of null once the mod's correct FormID
+  // is confirmed. While it is null, fishing requires no tool.
   const sessao = _beginGather(actorId, null, 'a Fishing Rod');
   if (!sessao) return;
 
@@ -226,8 +226,8 @@ function catchFish(actorId) {
     }
 
     if (!fishItem) {
-      // Nao houve item, entao nao ha nada pra creditar — mas o "ocupado"
-      // precisa sair do mesmo jeito, senao o jogador fica travado pra sempre.
+      // There was no item, so there is nothing to credit — but "busy"
+      // has to be cleared anyway, otherwise the player is stuck forever.
       activeGatherers.delete(sessao.characterId);
       notify('The fish got away!');
       commands.broadcastProximityMessage(actorId, `* Pulls up the empty fishing rod in frustration.`, 1000);
@@ -241,15 +241,15 @@ function catchFish(actorId) {
           console.log(`[jobs-service] Char ${sessao.characterId} caught fish 0x${fishItem.toString(16)}.`);
         }
       })
-      .catch(err => console.error('[jobs-service] Falha ao entregar peixe:', err.message));
+      .catch(err => console.error('[jobs-service] Failed to deliver fish:', err.message));
   }, 20000);
 }
 
 /**
- * Comandos de chat da alfa. `/garimpar` foi removido porque contornava o
- * Resource Node Framework; `/pescar` permanece fora da alfa porque a vara usa
- * um FormID provisório. As funções legadas continuam exportadas apenas para
- * caracterização até uma remoção dedicada.
+ * The alpha's chat commands. `/garimpar` was removed because it bypassed the
+ * Resource Node Framework; `/pescar` stays out of the alpha because the rod uses
+ * a provisional FormID. The legacy functions remain exported only for
+ * characterization until a dedicated removal.
  */
 function commandDefs() {
   return [
@@ -267,7 +267,7 @@ module.exports = {
   mineOre,
   catchFish,
   commandDefs,
-  // Exposto so pra teste: permite exercitar o bloqueio de coleta concorrente e
-  // a liberacao sem depender de timer real.
+  // Exposed only for tests: allows exercising the concurrent-gather block and
+  // the release without depending on a real timer.
   _activeGatherers: activeGatherers
 };

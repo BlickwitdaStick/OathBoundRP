@@ -1,45 +1,45 @@
 /**
- * npc-cleaner.js — remocao seletiva de NPCs vanilla
+ * npc-cleaner.js — selective removal of vanilla NPCs
  *
- * ─── O que este arquivo fazia antes, e por que mudou ────────────────────────
+ * ─── What this file did before, and why it changed ──────────────────────────
  *
- * A versao anterior varria `mp.getActorsByProfileId(0)` e chamava `disable` +
- * `delete` em **todo** ator que encontrasse, pulando apenas os que estivessem
- * numa allowlist — que estava vazia, com um comentario "adicione IDs base de
- * mercadores essenciais aqui". Ou seja: apagava mercadores, guardas e NPCs de
- * quest, a cada 60 segundos, e `delete` numa referencia persistente nao volta.
+ * The previous version swept `mp.getActorsByProfileId(0)` and called `disable` +
+ * `delete` on **every** actor it found, skipping only those on an
+ * allowlist — which was empty, with a comment "add base IDs of essential
+ * merchants here". In other words: it deleted merchants, guards and quest NPCs
+ * every 60 seconds, and `delete` on a persistent reference does not come back.
  *
- * Isso contradizia a decisao registrada em `docs/technical/NPC_POLICY_DECISION.md`,
- * que avaliou tres opcoes e escolheu a **C — Vanilla Spawn Seletivo** ("NPCs
- * devem existir onde ajudam ambientacao e onboarding; NPCs que geram loot,
- * combate repetitivo ou conflito com papeis de jogadores devem ser removidos,
- * congelados ou substituidos"). O codigo implementava a opcao B, rejeitada, na
- * sua forma mais extrema.
+ * That contradicted the decision recorded in `docs/technical/NPC_POLICY_DECISION.md`,
+ * which evaluated three options and chose **C — Selective Vanilla Spawn** ("NPCs
+ * should exist where they help atmosphere and onboarding; NPCs that generate loot,
+ * repetitive combat or conflict with player roles should be removed,
+ * frozen or replaced"). The code implemented option B, the rejected one, in
+ * its most extreme form.
  *
- * Tres inversoes:
+ * Three inversions:
  *
- *   1. **Allowlist virou blocklist.** So sai do mundo o que estiver listado. A
- *      lista vazia agora significa "nao remove nada" em vez de "remove tudo" —
- *      o modo de falha aponta pro lado seguro.
- *   2. **`safeRadius` passou a existir de verdade.** Era declarado no config
- *      com o comentario "limpa apenas NPCs longe dos players para nao quebrar
- *      imersao brusca" e nunca era lido. O comentario descrevia um recurso que
- *      nao estava escrito.
- *   3. **`delete` saiu.** `disable` e reversivel (`enable` traz de volta);
- *      `delete` numa referencia persistente e definitivo. Enquanto a curadoria
- *      da secao 4 do NPC_POLICY nao existir, nada aqui deve ser irreversivel.
+ *   1. **The allowlist became a blocklist.** Only what is listed leaves the world. An
+ *      empty list now means "remove nothing" instead of "remove everything" —
+ *      the failure mode points to the safe side.
+ *   2. **`safeRadius` now really exists.** It was declared in the config
+ *      with the comment "only clean NPCs far from players so as not to break
+ *      immersion abruptly" and was never read. The comment described a feature that
+ *      had not been written.
+ *   3. **`delete` is gone.** `disable` is reversible (`enable` brings it back);
+ *      `delete` on a persistent reference is final. Until the curation
+ *      in section 4 of NPC_POLICY exists, nothing here should be irreversible.
  *
- * ─── Sobre o formato da lista ───────────────────────────────────────────────
+ * ─── About the list's format ────────────────────────────────────────────────
  *
- * A lista guarda `baseDesc` ("1a6a0:Skyrim.esm"), nunca FormID numerico. O
- * primeiro byte de um FormID e o indice de load order, entao o mesmo numero
- * aponta pra records diferentes em clientes com load order diferente — e o
- * contrato de FormID (`MODS_AND_GAMEMODE_CONTRACT.md` secao 3) existe
- * justamente por causa disso. O desc carrega o plugin dentro do proprio valor.
+ * The list stores `baseDesc` ("1a6a0:Skyrim.esm"), never a numeric FormID. The
+ * first byte of a FormID is the load-order index, so the same number
+ * points to different records on clients with a different load order — and the
+ * FormID contract (`MODS_AND_GAMEMODE_CONTRACT.md` section 3) exists
+ * precisely because of that. The desc carries the plugin inside the value itself.
  *
- * (A allowlist antiga comparava `mp.get(actorId, 'baseDesc')` — uma string —
- * contra um Set descrito como "IDs base". Mesmo preenchida, nunca teria
- * casado.)
+ * (The old allowlist compared `mp.get(actorId, 'baseDesc')` — a string —
+ * against a Set described as "base IDs". Even when filled in, it would never have
+ * matched.)
  */
 
 const fs = require('fs');
@@ -49,8 +49,8 @@ const rangeUtils = require('./core/range-utils');
 
 const POLICY_PATH = path.resolve(__dirname, '../config/npc-policy.json');
 
-// Faixa de profileId varrida em busca de jogadores conectados, pro safeRadius.
-// Mesmo teto usado em phase0-basic.js e death-service.js.
+// profileId range swept looking for connected players, for the safeRadius.
+// Same cap used in phase0-basic.js and death-service.js.
 const MAX_PLAYER_PROFILE_ID = 50;
 
 const DEFAULT_POLICY = Object.freeze({
@@ -64,8 +64,8 @@ const DEFAULT_POLICY = Object.freeze({
 let _sweepTimer = null;
 
 /**
- * Le `skymp/config/npc-policy.json`. Ausencia do arquivo nao e erro — o
- * default e inerte, que e o estado correto ate a curadoria acontecer.
+ * Reads `skymp/config/npc-policy.json`. A missing file is not an error — the
+ * default is inert, which is the correct state until curation happens.
  *
  * @returns {{enabled: boolean, blockedBaseDescs: Set<string>, safeRadius: number, sweepIntervalMs: number, mode: string}}
  */
@@ -75,9 +75,9 @@ function loadPolicy() {
     try {
       raw = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'));
     } catch (err) {
-      // Config quebrada nao pode virar "remove tudo" nem "remove ao acaso":
-      // volta pro default inerte e grita.
-      console.error(`[npc-cleaner] ${POLICY_PATH} nao e JSON valido (${err.message}). Servico fica inerte.`);
+      // Broken config must not turn into "remove everything" nor "remove at random":
+      // it falls back to the inert default and screams.
+      console.error(`[npc-cleaner] ${POLICY_PATH} is not valid JSON (${err.message}). The service stays inert.`);
       raw = {};
     }
   }
@@ -89,21 +89,21 @@ function loadPolicy() {
   return {
     enabled: raw.enabled === true,
     blockedBaseDescs: new Set(bloqueados.filter(d => typeof d === 'string' && d.trim()).map(d => d.trim())),
-    // `Number.isFinite` recusa Infinity e NaN de proposito: um raio infinito
-    // protegeria todo mundo (servico inerte disfarcado de ativo) e um NaN
-    // faria toda comparacao dar false (protegeria ninguem). Os dois sao piores
-    // que o default.
+    // `Number.isFinite` rejects Infinity and NaN on purpose: an infinite radius
+    // would protect everyone (an inert service disguised as active) and a NaN
+    // would make every comparison false (it would protect nobody). Both are worse
+    // than the default.
     safeRadius: Number.isFinite(safeRadius) && safeRadius >= 0 ? safeRadius : DEFAULT_POLICY.safeRadius,
     sweepIntervalMs: Number.isFinite(sweepIntervalMs) && sweepIntervalMs >= 1000
       ? sweepIntervalMs
       : DEFAULT_POLICY.sweepIntervalMs,
-    // Só 'disable' é aceito. Ver o cabeçalho: 'delete' não é uma opção.
+    // Only 'disable' is accepted. See the header: 'delete' is not an option.
     mode: 'disable'
   };
 }
 
 /**
- * actorIds de jogadores conectados, pra medir o safeRadius contra eles.
+ * actorIds of connected players, to measure the safeRadius against them.
  * @returns {number[]}
  */
 function _onlinePlayerActorIds() {
@@ -116,13 +116,13 @@ function _onlinePlayerActorIds() {
 }
 
 /**
- * Decide se um NPC pode ser removido agora.
+ * Decides whether an NPC can be removed now.
  *
- * Separado do laco pra ser testavel sem `mp`: e aqui que mora a regra, e
- * regra de remocao permanente merece teste direto.
+ * Separate from the loop so it is testable without `mp`: this is where the rule lives, and
+ * a permanent-removal rule deserves a direct test.
  *
  * @param {string|null} baseDesc          `mp.get(npcActorId, 'baseDesc')`
- * @param {number} distanciaAoJogadorMaisProximo  `Infinity` se nao ha ninguem por perto
+ * @param {number} distanciaAoJogadorMaisProximo  `Infinity` if nobody is nearby
  * @param {{blockedBaseDescs: Set<string>, safeRadius: number}} policy
  * @returns {boolean}
  */
@@ -133,30 +133,30 @@ function _shouldRemove(baseDesc, distanciaAoJogadorMaisProximo, policy) {
 }
 
 /**
- * Distancia do NPC ao jogador conectado mais proximo.
- * `Infinity` quando nao ha jogador algum, ou quando todos estao em outra
- * celula (`range-utils.distanceBetween` ja devolve Infinity nesse caso).
+ * Distance from the NPC to the nearest connected player.
+ * `Infinity` when there is no player at all, or when all of them are in another
+ * cell (`range-utils.distanceBetween` already returns Infinity in that case).
  */
 function _distanciaAoJogadorMaisProximo(npcActorId, jogadores) {
   let menor = Infinity;
   for (const jogadorId of jogadores) {
     const d = rangeUtils.distanceBetween(npcActorId, jogadorId);
-    if (d === null) continue; // posicao indisponivel: nao conta como "perto"
+    if (d === null) continue; // position unavailable: does not count as "near"
     if (d < menor) menor = d;
   }
   return menor;
 }
 
 /**
- * Uma passada. Exportada pra teste e pra permitir execucao manual pela staff.
- * @param {object} [policy] - default: le do disco
+ * One pass. Exported for tests and to allow manual execution by staff.
+ * @param {object} [policy] - default: read from disk
  * @returns {{avaliados: number, removidos: number, protegidosPorDistancia: number}}
  */
 function sweepOnce(policy = loadPolicy()) {
   const relatorio = { avaliados: 0, removidos: 0, protegidosPorDistancia: 0 };
   if (typeof mp === 'undefined') return relatorio;
 
-  // Sem nada bloqueado nao ha o que fazer — e nem vale varrer o mundo.
+  // With nothing blocked there is nothing to do — and it is not worth sweeping the world.
   if (policy.blockedBaseDescs.size === 0) return relatorio;
 
   const npcs = mp.getActorsByProfileId(0) || [];
@@ -175,7 +175,7 @@ function sweepOnce(policy = loadPolicy()) {
       continue;
     }
 
-    // `disable(false)` — o argumento e `abFadeOut`. Sem delete: ver cabecalho.
+    // `disable(false)` — the argument is `abFadeOut`. No delete: see the header.
     mp.callPapyrusFunction('method', 'ObjectReference', 'disable', actorRef(npcActorId), [false]);
     relatorio.removidos++;
   }
@@ -189,20 +189,20 @@ function startWorldCleaner() {
   const policy = loadPolicy();
 
   if (!policy.enabled) {
-    console.log('[npc-cleaner] Desligado (npc-policy.json ausente ou enabled=false). Nenhum NPC sera tocado.');
+    console.log('[npc-cleaner] Off (npc-policy.json missing or enabled=false). No NPC will be touched.');
     return;
   }
   if (policy.blockedBaseDescs.size === 0) {
     console.warn(
-      '[npc-cleaner] enabled=true, mas blockedBaseDescs esta vazia — nenhum NPC sera removido. ' +
-      'Isto e deliberado: a lista e de BLOQUEIO. Preencha depois da curadoria da secao 4 de NPC_POLICY_DECISION.md.'
+      '[npc-cleaner] enabled=true, but blockedBaseDescs is empty — no NPC will be removed. ' +
+      'This is deliberate: it is a BLOCK list. Fill it in after the curation in section 4 of NPC_POLICY_DECISION.md.'
     );
     return;
   }
 
   console.log(
-    `[npc-cleaner] Ativo: ${policy.blockedBaseDescs.size} record(s) bloqueado(s), ` +
-    `safeRadius=${policy.safeRadius}, intervalo=${policy.sweepIntervalMs}ms, modo=${policy.mode}.`
+    `[npc-cleaner] Active: ${policy.blockedBaseDescs.size} record(s) blocked, ` +
+    `safeRadius=${policy.safeRadius}, interval=${policy.sweepIntervalMs}ms, mode=${policy.mode}.`
   );
 
   _sweepTimer = setInterval(() => {
@@ -210,12 +210,12 @@ function startWorldCleaner() {
       const r = sweepOnce(policy);
       if (r.removidos > 0 || r.protegidosPorDistancia > 0) {
         console.log(
-          `[npc-cleaner] Varredura: ${r.removidos} desativado(s), ` +
-          `${r.protegidosPorDistancia} preservado(s) por proximidade de jogador, ${r.avaliados} avaliado(s).`
+          `[npc-cleaner] Sweep: ${r.removidos} disabled, ` +
+          `${r.protegidosPorDistancia} preserved because a player was near, ${r.avaliados} evaluated.`
         );
       }
     } catch (err) {
-      console.error('[npc-cleaner] Erro na varredura:', err.message);
+      console.error('[npc-cleaner] Sweep error:', err.message);
     }
   }, policy.sweepIntervalMs);
 
@@ -232,6 +232,6 @@ module.exports = {
   stopWorldCleaner,
   loadPolicy,
   sweepOnce,
-  // Exposto pra teste: a regra de remocao permanente merece teste direto.
+  // Exposed for tests: the permanent-removal rule deserves a direct test.
   _shouldRemove
 };

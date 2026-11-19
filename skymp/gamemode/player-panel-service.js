@@ -1,19 +1,19 @@
 /**
  * player-panel-service.js
  *
- * Painel do jogador: agrega dados de outros serviços (status vital, governança,
- * economia/mercado, social) e os envia para a UI via a property `panelData`.
+ * Player panel: aggregates data from other services (vital status, governance,
+ * economy/market, social) and sends it to the UI through the `panelData` property.
  *
- * Não duplica lógica de negócio — só lê. Toda ação continua passando pelos
- * serviços originais (governance-service, market-stalls-service) via o menu
- * de interação já existente.
+ * It does not duplicate business logic — it only reads. Every action still goes through the
+ * original services (governance-service, market-stalls-service) via the existing
+ * interaction menu.
  *
- * Fluxo:
- *   - Comando /painel (ou evento 'panel:open') abre o painel e envia um snapshot
- *     de cada seção.
- *   - Enquanto o painel estiver aberto, um polling de 2s atualiza a aba de Status
- *     (vida/magicka/stamina/ouro/estado RP), só reenviando quando o valor muda.
- *   - Governança/Economia/Social são atualizados sob demanda via 'panel:refresh:<secao>'.
+ * Flow:
+ *   - The /panel command (or the 'panel:open' event) opens the panel and sends a snapshot
+ *     of each section.
+ *   - While the panel is open, a 2s poll updates the Status tab
+ *     (health/magicka/stamina/gold/RP state), only resending when the value changes.
+ *   - Governance/Economy/Social are updated on demand via 'panel:refresh:<section>'.
  */
 
 const db = require('./database');
@@ -27,7 +27,7 @@ const professionService = require('./profession-service');
 const professionRegistry = require('./core/profession-registry');
 const soulService = require('./soul-service');
 const panelRefreshBus = require('./core/panel-refresh-bus');
-// Mesmo motivo do death-service: a forma do `self` tem um lugar so.
+// Same reason as death-service: the shape of `self` has a single place.
 const { actorRef } = require('./core/papyrus');
 
 const VITALS_POLL_INTERVAL_MS = 2000;
@@ -36,37 +36,37 @@ const MAX_PANEL_ALIAS_INPUT_LENGTH = 128;
 let initialized = false;
 let _vitalsTimer = null;
 
-// actorIds com o painel atualmente aberto
+// actorIds with the panel currently open
 const _openPanelActors = new Set();
-// actorId -> último snapshot de status serializado (para diffing no polling)
+// actorId -> last serialized status snapshot (for diffing in the poll)
 const _lastStatusJson = new Map();
 
 /**
- * actorId -> aba visível no momento ('status' | 'governance' | 'economy' | 'social').
+ * actorId -> tab visible right now ('status' | 'governance' | 'economy' | 'social').
  *
- * Existe por causa de custo, não de funcionalidade. Ler vida/magicka/stamina
- * custa **três** idas ao Papyrus, e cada uma custa dezenas de milissegundos —
- * o servidor RP Red House mediu 13–35 ms por chamada
- * (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1). Antes disto o laço lia os três
- * para **todo** painel aberto a cada 2 s, mesmo o de quem estava olhando a
- * aba Social: com 10 painéis abertos são 30 chamadas por janela, ~450 ms
- * gastos para atualizar um número que ninguém está vendo.
+ * It exists because of cost, not functionality. Reading health/magicka/stamina
+ * costs **three** Papyrus round trips, and each one costs tens of milliseconds —
+ * the Red House RP server measured 13–35 ms per call
+ * (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1). Before this the loop read all three
+ * for **every** open panel every 2 s, even for someone looking at the
+ * Social tab: with 10 open panels that is 30 calls per window, ~450 ms
+ * spent updating a number nobody is looking at.
  *
- * A informação para evitar isso já chegava e era descartada: `player-panel.js`
- * manda `panel:refresh:<aba>` toda vez que o jogador troca de aba
- * (`switchTab`). Só faltava o servidor guardar qual foi a última.
+ * The information to avoid that was already arriving and being discarded: `player-panel.js`
+ * sends `panel:refresh:<tab>` every time the player switches tabs
+ * (`switchTab`). The server only needed to remember which one was last.
  */
 const _activeTab = new Map();
 
-/** Aba que o painel mostra ao abrir — ver `renderTab` em skymp/ui/player-panel.js. */
+/** Tab the panel shows when it opens — see `renderTab` in skymp/ui/player-panel.js. */
 const ABA_INICIAL = 'status';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Leitura de dados
+// Reading data
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Lê vida/magicka/stamina atuais via Papyrus (mesmo padrão de death-service.js).
+ * Reads current health/magicka/stamina via Papyrus (same pattern as death-service.js).
  * @param {number} actorId
  */
 function readVitals(actorId) {
@@ -79,7 +79,7 @@ function readVitals(actorId) {
       stamina: mp.callPapyrusFunction('method', 'Actor', 'getActorValue', self, ['Stamina'])
     };
   } catch (err) {
-    console.error('[player-panel] Falha ao ler vitals:', err.message);
+    console.error('[player-panel] Failed to read vitals:', err.message);
     return { health: 0, magicka: 0, stamina: 0 };
   }
 }
@@ -125,9 +125,9 @@ async function buildSocialSnapshot(actorId) {
 }
 
 /**
- * PLAYER_ACTION_SHORTCUTS_PLAN.md Fase 4: `/profissoes` como aba, não só
- * comando. Mesma leitura que o comando já faz (`getCharacterProfessions` +
- * `professionRegistry` pro rótulo) — não duplica lógica, só reaproveita.
+ * PLAYER_ACTION_SHORTCUTS_PLAN.md Phase 4: `/professions` as a tab, not just a
+ * command. Same read the command already does (`getCharacterProfessions` +
+ * `professionRegistry` for the label) — it does not duplicate logic, it just reuses it.
  */
 async function buildProfessionsSnapshot(actorId) {
   const character = commands.getActiveCharacterData(actorId);
@@ -149,9 +149,9 @@ async function buildProfessionsSnapshot(actorId) {
 }
 
 /**
- * PLAYER_ACTION_SHORTCUTS_PLAN.md Fase 4: `/alma` como aba. `buildPanelPayload`
- * já existia em `soul-service.js` — o nome já dizia "painel", só nunca tinha
- * um painel de verdade chamando. Zero lógica nova aqui.
+ * PLAYER_ACTION_SHORTCUTS_PLAN.md Phase 4: `/soul` as a tab. `buildPanelPayload`
+ * already existed in `soul-service.js` — the name already said "panel", it just never had
+ * a real panel calling it. Zero new logic here.
  */
 async function buildSoulSnapshot(actorId) {
   const character = commands.getActiveCharacterData(actorId);
@@ -160,12 +160,12 @@ async function buildSoulSnapshot(actorId) {
 }
 
 /**
- * Renomeia (apelida) uma pessoa já conhecida direto pela aba Social do painel.
- * Não exige que o alvo esteja online — `character_known_identities` é indexada
- * por characterId, então isso funciona mesmo com o alvo desconectado — MAS exige
- * que já exista uma entrada known prévia (apresentação/apelido anterior) pra esse
- * alvo, senão qualquer characterId (1..N) poderia ser varrido pra quebrar o
- * sistema de anonimato/disfarce. Ver identity-service.getKnownDisplayName.
+ * Renames (gives a nickname to) an already known person directly from the panel's Social tab.
+ * It does not require the target to be online — `character_known_identities` is indexed
+ * by characterId, so this works even with the target disconnected — BUT it requires
+ * a prior known entry (an earlier introduction/nickname) for that
+ * target, otherwise any characterId (1..N) could be swept to break the
+ * anonymity/disguise system. See identity-service.getKnownDisplayName.
  * @param {number} actorId
  * @param {number} targetCharacterId
  * @param {string} alias
@@ -197,7 +197,7 @@ async function renameKnownPerson(actorId, targetCharacterId, alias) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Envio para a UI
+// Sending to the UI
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sendPanelData(actorId, channel, data) {
@@ -205,7 +205,7 @@ function sendPanelData(actorId, channel, data) {
   try {
     mp.set(actorId, 'panelData', { channel, data, sentAt: Date.now() });
   } catch (err) {
-    console.error('[player-panel] Falha ao enviar panelData:', err.message);
+    console.error('[player-panel] Failed to send panelData:', err.message);
   }
 }
 
@@ -273,10 +273,10 @@ const PUSH_BY_CHANNEL = {
 };
 
 /**
- * Reage a panelRefreshBus.requestRefresh(actorId, channel) — disparado por
- * outros serviços (ex: governance-service após multa/prisão) quando algo
- * muda para um jogador. Só empurra dado se o painel dele estiver aberto;
- * caso contrário não faz nada (evita abrir o painel à força).
+ * Reacts to panelRefreshBus.requestRefresh(actorId, channel) — fired by
+ * other services (e.g. governance-service after a fine/arrest) when something
+ * changes for a player. It only pushes data if their panel is open;
+ * otherwise it does nothing (avoids forcing the panel open).
  * @param {number} actorId
  * @param {string} channel
  */
@@ -284,20 +284,20 @@ function handlePanelRefreshRequest(actorId, channel) {
   if (!_openPanelActors.has(actorId)) return;
   const push = PUSH_BY_CHANNEL[channel];
   if (!push) return;
-  push(actorId).catch(err => console.error('[player-panel] Falha ao reagir a refresh solicitado:', err.message));
+  push(actorId).catch(err => console.error('[player-panel] Failed to react to a requested refresh:', err.message));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Polling de vitals (só para quem está com o painel aberto)
+// Vitals polling (only for whoever has the panel open)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Quem o laço de vitals precisa ler neste tick.
+ * Who the vitals loop needs to read on this tick.
  *
- * Só quem está **com a aba Status visível**. O diffing que já existia
- * (`_lastStatusJson`) evita reenviar dado igual, mas o custo não está no envio
- * — está em montar o snapshot, que são três chamadas Papyrus mais uma query
- * de ouro. Diffing depois de pagar o custo não economiza o custo.
+ * Only those **with the Status tab visible**. The diffing that already existed
+ * (`_lastStatusJson`) avoids resending identical data, but the cost is not in sending
+ * — it is in building the snapshot, which is three Papyrus calls plus a gold
+ * query. Diffing after paying the cost does not save the cost.
  */
 function _atoresQuePrecisamDeVitals() {
   const alvos = [];
@@ -308,10 +308,10 @@ function _atoresQuePrecisamDeVitals() {
 }
 
 /**
- * Um tick do laço de vitals. Função nomeada (em vez do corpo inline do
- * `setInterval`) pra que o teste possa exercitar um tick sem esperar 2 s reais
- * — e, principalmente, pra poder CONTAR as chamadas Papyrus que ele dispara,
- * que é o que a otimização mudou.
+ * One tick of the vitals loop. A named function (instead of the inline body of
+ * `setInterval`) so the test can exercise a tick without waiting 2 real seconds
+ * — and, above all, so it can COUNT the Papyrus calls it fires,
+ * which is what the optimization changed.
  */
 async function _tickVitals() {
   for (const actorId of _atoresQuePrecisamDeVitals()) {
@@ -323,7 +323,7 @@ async function _tickVitals() {
       _lastStatusJson.set(actorId, json);
       sendPanelData(actorId, 'status', snapshot);
     } catch (err) {
-      console.error('[player-panel] Falha no polling de status:', err.message);
+      console.error('[player-panel] Status polling failed:', err.message);
     }
   }
 }
@@ -331,7 +331,7 @@ async function _tickVitals() {
 function startVitalsLoop() {
   if (_vitalsTimer) return;
   _vitalsTimer = setInterval(() => {
-    _tickVitals().catch(err => console.error('[player-panel] Falha no tick de vitals:', err.message));
+    _tickVitals().catch(err => console.error('[player-panel] Vitals tick failed:', err.message));
   }, VITALS_POLL_INTERVAL_MS);
 }
 
@@ -341,7 +341,7 @@ function stopVitalsLoop() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API pública
+// Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 function openPanel(actorId) {
@@ -350,14 +350,14 @@ function openPanel(actorId) {
     mp.set(actorId, 'browserFocused', true);
   }
   _openPanelActors.add(actorId);
-  // A UI abre no Status; sem registrar isso, o primeiro tick pularia o painel
-  // de quem acabou de abrir e a vida ficaria congelada ate a primeira troca.
+  // The UI opens on Status; without recording that, the first tick would skip the panel
+  // of whoever just opened it and health would stay frozen until the first tab switch.
   _activeTab.set(actorId, ABA_INICIAL);
-  pushAllSections(actorId).catch(err => console.error('[player-panel] Falha ao abrir painel:', err.message));
+  pushAllSections(actorId).catch(err => console.error('[player-panel] Failed to open panel:', err.message));
 }
 
 /**
- * Remove o actorId do rastreio do painel (chamar na desconexão do jogador).
+ * Removes the actorId from panel tracking (call it when the player disconnects).
  * @param {number} actorId
  */
 function cleanup(actorId) {
@@ -367,8 +367,8 @@ function cleanup(actorId) {
 }
 
 /**
- * O painel recebe JSON da CEF. Manter o schema ao lado do handler evita que um
- * novo campo de UI vire, por acidente, entrada livre para a camada de banco.
+ * The panel receives JSON from the CEF. Keeping the schema next to the handler prevents a
+ * new UI field from accidentally becoming free input to the DB layer.
  * @param {unknown} data
  * @returns {{ok: true, targetCharacterId: number, alias: string}|{ok: false}}
  */
@@ -386,8 +386,8 @@ function validateRenamePayload(data) {
 }
 
 /**
- * Handler de eventos UI→servidor para o namespace 'panel'.
- * Registrado no core/ui-event-router.
+ * UI→server event handler for the 'panel' namespace.
+ * Registered in core/ui-event-router.
  * @param {number} actorId
  * @param {{type: string, data?: object}} uiEvent
  * @returns {Promise<boolean>}
@@ -395,9 +395,9 @@ function validateRenamePayload(data) {
 async function handleUiEvent(actorId, uiEvent) {
   if (!uiEvent || typeof uiEvent.type !== 'string') return false;
 
-  // `panel:refresh:<aba>` é mandado pelo `switchTab` da UI a cada troca de aba.
-  // Guardar qual foi a última é o que permite o laço de vitals pular quem não
-  // está olhando o Status — ver `_activeTab`.
+  // `panel:refresh:<tab>` is sent by the UI's `switchTab` on every tab switch.
+  // Remembering which one was last is what lets the vitals loop skip whoever is not
+  // looking at Status — see `_activeTab`.
   const trocaDeAba = /^panel:refresh:(status|governance|economy|social|professions|soul)$/.exec(uiEvent.type);
   if (trocaDeAba) _activeTab.set(actorId, trocaDeAba[1]);
 
@@ -484,9 +484,9 @@ module.exports = {
   validateRenamePayload,
   handlePanelRefreshRequest,
   isInitialized: () => initialized,
-  // Expostos só pra teste: a otimização de custo mora na seleção de quem entra
-  // no tick, e o único jeito de provar que ela funciona é contar as chamadas
-  // Papyrus que um tick dispara.
+  // Exposed only for tests: the cost optimization lives in selecting who goes into
+  // the tick, and the only way to prove it works is to count the Papyrus
+  // calls a tick fires.
   _tickVitals,
   _atoresQuePrecisamDeVitals
 };
