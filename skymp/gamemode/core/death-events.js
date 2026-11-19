@@ -1,100 +1,100 @@
 /**
  * core/death-events.js
  *
- * Dono único de `mp.onDeath`, com múltiplos assinantes nomeados.
+ * Sole owner of `mp.onDeath`, with multiple named subscribers.
  *
- * ─── Por que isto existe ─────────────────────────────────────────────────────
+ * ─── Why this exists ─────────────────────────────────────────────────────────
  *
- * Até 08/08/2026 o `death-service.js` fazia `mp.onDeath = (actorId, killerId) =>
- * {...}` — atribuição direta, e portanto **posse exclusiva**. Um segundo módulo
- * que precisasse do mesmo evento escreveria por cima, e a falha seria a pior
- * possível: a detecção de morte de jogador pelo caminho primário simplesmente
- * pararia, sem erro, sem log e sem crash. O polling de 2 s que o próprio
- * `death-service` mantém como rede de segurança disfarçaria o buraco com dois
- * segundos de atraso, que é justamente o intervalo pequeno o bastante para
- * ninguém desconfiar.
+ * Until 2026-08-08 `death-service.js` did `mp.onDeath = (actorId, killerId) =>
+ * {...}` — direct assignment, and therefore **exclusive ownership**. A second module
+ * that needed the same event would write over it, and the failure would be the worst
+ * possible: player death detection through the primary path would simply
+ * stop, with no error, no log and no crash. The 2 s polling that
+ * `death-service` itself keeps as a safety net would hide the hole with two
+ * seconds of delay, which is exactly a small enough interval for
+ * nobody to suspect anything.
  *
- * `core/module-registry.js` já tinha escrito, em 06/08/2026, a condição exata
- * para reabrir o assunto de distribuição de eventos de jogo:
+ * `core/module-registry.js` had already written, on 2026-08-06, the exact condition
+ * for reopening the topic of game-event distribution:
  *
- *   > "O gatilho para reabrir isto (…): um segundo módulo que precise de um
- *   > evento de jogo já capturado por outro."
+ *   > "The trigger for reopening this (…): a second module that needs a
+ *   > game event already captured by another one."
  *
- * O `HOSTILE_MOB_ACTIVATION_DECISION.md` §7.3 registra que mobs hostis é a
- * primeira coisa deste projeto a atender esse gatilho: quando o
- * `hunting-service` existir, ele vai precisar de `mp.onDeath` — o mesmo hook —
- * para um pipeline **separado** (§11.4: um lobo não tem `characterId`, não pode
- * ser socorrido e não pode ser aposentado).
+ * `HOSTILE_MOB_ACTIVATION_DECISION.md` §7.3 records that hostile mobs are the
+ * first thing in this project to meet that trigger: when the
+ * `hunting-service` exists, it will need `mp.onDeath` — the same hook —
+ * for a **separate** pipeline (§11.4: a wolf has no `characterId`, cannot
+ * be revived and cannot be retired).
  *
- * ─── Por que um barramento nomeado, e não `descriptor.on` no registry ────────
+ * ─── Why a named bus, and not `descriptor.on` in the registry ───────────────
  *
- * A §7.3 daquele documento sugere `descriptor.on = { death: fn }` opcional no
- * `register()`. Este arquivo diverge, de propósito, por dois motivos:
+ * §7.3 of that document suggests an optional `descriptor.on = { death: fn }` in
+ * `register()`. This file diverges, on purpose, for two reasons:
  *
- *   1. **O registry não conhece `mp`.** Ele é ciclo de vida puro
- *      (`initialize`/`shutdown`/`healthCheck`) e não captura evento nenhum.
- *      Para despachar `onDeath` de lá, o `death-service` teria que chamar de
- *      volta para dentro do registry, que então chamaria os outros módulos —
- *      uma inversão de dependência para a qual não há necessidade hoje.
- *   2. **É o precedente da própria casa.** Quando um segundo consumidor apareceu
- *      de verdade — governança precisando avisar o painel —, a resposta foi
- *      `core/panel-refresh-bus.js`: um barramento pequeno e nomeado, não um canal
- *      genérico. O comentário do registry chama aquilo de "modelo se um terceiro
- *      caso aparecer", e este é o terceiro caso.
+ *   1. **The registry does not know `mp`.** It is pure lifecycle
+ *      (`initialize`/`shutdown`/`healthCheck`) and captures no events.
+ *      To dispatch `onDeath` from there, `death-service` would have to call
+ *      back into the registry, which would then call the other modules —
+ *      a dependency inversion there is no need for today.
+ *   2. **It is the house's own precedent.** When a second consumer really
+ *      showed up — governance needing to notify the panel —, the answer was
+ *      `core/panel-refresh-bus.js`: a small, named bus, not a generic
+ *      channel. The registry's comment calls that the "model if a third
+ *      case shows up", and this is the third case.
  *
- * O canal genérico continua não existindo, e continua não devendo existir até
- * que `onCellChange` (que hoje não tem nenhum consumidor) ganhe um.
+ * The generic channel still does not exist, and still should not exist until
+ * `onCellChange` (which has no consumer today) gets one.
  *
- * ─── O que este arquivo NÃO faz ──────────────────────────────────────────────
+ * ─── What this file does NOT do ──────────────────────────────────────────────
  *
- * Não filtra, não decide se o morto é jogador ou criatura, e não sabe o que é um
- * mob. Ele entrega `(actorId, killerId)` cru a quem assinou; cada assinante
- * decide em O(1) se o assunto é dele. Esse requisito é da §7.2 do documento de
- * mobs: com fauna ativa este hook passa a disparar constantemente, e **o caminho
- * de morte não pode tocar o banco antes de decidir que interessa**.
+ * It does not filter, does not decide whether the dead one is a player or a creature, and does not know what a
+ * mob is. It hands the raw `(actorId, killerId)` to whoever subscribed; each subscriber
+ * decides in O(1) whether it is their business. That requirement comes from §7.2 of the
+ * mobs document: with active fauna this hook starts firing constantly, and **the death
+ * path must not touch the DB before deciding it cares**.
  *
- * ─── O retorno bloqueia o respawn nativo, e por isso é agregado ──────────────
+ * ─── The return value blocks the native respawn, which is why it is aggregated ─
  *
- * **`[DOC]`** `gamemode_events/DeathEvent.cpp`: `OnFireSuccess` chama
- * `actor->RespawnWithDelay()`. **`[DOC]`** `GameModeEvent::Fire` só chama
- * `OnFireSuccess` se **nenhum** listener devolveu `false`. **`[DOC]`**
- * `ScampServerListener.cpp:41-129` fixa o contrato do handler JS:
+ * **`[DOC]`** `gamemode_events/DeathEvent.cpp`: `OnFireSuccess` calls
+ * `actor->RespawnWithDelay()`. **`[DOC]`** `GameModeEvent::Fire` only calls
+ * `OnFireSuccess` if **no** listener returned `false`. **`[DOC]`**
+ * `ScampServerListener.cpp:41-129` fixes the JS handler contract:
  *
- *   | devolve      | efeito                                         |
+ *   | returns      | effect                                         |
  *   |--------------|------------------------------------------------|
- *   | `undefined`  | não bloqueia → **respawn automático em 25 s**   |
- *   | `false`      | bloqueia → o servidor não respawna             |
- *   | lança        | erro logado, **não bloqueia**                  |
+ *   | `undefined`  | does not block → **automatic respawn in 25 s** |
+ *   | `false`      | blocks → the server does not respawn           |
+ *   | throws       | error logged, **does not block**               |
  *
- * Até 09/08/2026 o `_dispatch` era um laço `for` sem `return` — devolvia
- * `undefined`, e portanto **o servidor ressuscitava o jogador aos 25 segundos**
- * enquanto o `death-service` ainda o considerava `DOWNED` esperando os 4 minutos
- * de bleed-out. Duas autoridades sobre o mesmo estado, que é o defeito que a
- * `REVISAO_REALIDADE_COMPARTILHADA.md` §6.2 registrou como bloqueador da Fase 0.
+ * Until 2026-08-09 `_dispatch` was a `for` loop without `return` — it returned
+ * `undefined`, and therefore **the server resurrected the player after 25 seconds**
+ * while `death-service` still considered them `DOWNED`, waiting out the 4 minutes
+ * of bleed-out. Two authorities over the same state, which is the defect that
+ * `REVISAO_REALIDADE_COMPARTILHADA.md` §6.2 recorded as a Phase 0 blocker.
  *
- * **A política é "bloqueia se algum assinante pedir", e ela é deliberada.** A
- * §6.2 daquele documento aponta o risco de um `return false` global: o
- * `hunting-service` vai assinar este mesmo hook, e `RespawnWithDelay` é como o
- * servidor devolve **qualquer** ator morto ao mundo — bloquear tudo mataria o
- * respawn dos mobs junto. Com agregação, cada assinante responde só pelo que é
- * dele: quem não reconhece o ator devolve `undefined` e não interfere; quem
- * assume o ciclo de vida daquela morte devolve `false`. Um assinante que **lança**
- * não bloqueia — mesma regra do upstream, e pela mesma razão: falha de um
- * consumidor não pode virar decisão de mundo.
+ * **The policy is "block if any subscriber asks", and it is deliberate.**
+ * §6.2 of that document points out the risk of a global `return false`: the
+ * `hunting-service` will subscribe to this same hook, and `RespawnWithDelay` is how the
+ * server returns **any** dead actor to the world — blocking everything would kill
+ * mob respawn as well. With aggregation, each subscriber answers only for what is
+ * theirs: whoever does not recognize the actor returns `undefined` and does not interfere; whoever
+ * takes over the lifecycle of that death returns `false`. A subscriber that **throws**
+ * does not block — same rule as upstream, and for the same reason: one
+ * consumer's failure must not become a world decision.
  *
- * **O que isto não alcança.** **`[DEEPWIKI]`** (referência §9.2,
- * `PartOne.cpp:175-221`) `PartOne::SetUserActor` chama `RespawnWithDelay()` se o
- * ator estiver morto no handshake. Um jogador que caia e **reconecte** é
- * respawnado por aquele caminho, que não passa por aqui. Bloquear o evento
- * resolve o caminho principal, não todos — e isso é observação da Fase 0, não
- * conserto desta rodada.
+ * **What this does not reach.** **`[DEEPWIKI]`** (reference §9.2,
+ * `PartOne.cpp:175-221`) `PartOne::SetUserActor` calls `RespawnWithDelay()` if the
+ * actor is dead at handshake. A player who goes down and **reconnects** is
+ * respawned through that path, which does not go through here. Blocking the event
+ * solves the main path, not all of them — and that is a Phase 0 observation, not
+ * a fix for this round.
  *
- * ─── Procedência ─────────────────────────────────────────────────────────────
+ * ─── Provenance ──────────────────────────────────────────────────────────────
  *
- * `mp.onDeath(actorId, killerId)` é **[TESTE OFICIAL]** — `misc/tests/test_isdead.js`
- * upstream, tipado em `types/mp.d.ts`. **Nunca disparou numa sessão real deste
- * servidor** (Etapa 9 do `FASE_0_ROTEIRO.md`). Este barramento não muda isso:
- * ele garante que, quando disparar, chegue a todo mundo que pediu.
+ * `mp.onDeath(actorId, killerId)` is **[OFFICIAL TEST]** — upstream `misc/tests/test_isdead.js`,
+ * typed in `types/mp.d.ts`. **It has never fired in a real session of this
+ * server** (Step 9 of `FASE_0_ROTEIRO.md`). This bus does not change that:
+ * it guarantees that, when it fires, it reaches everyone who asked.
  */
 
 // nome do assinante → handler
@@ -103,61 +103,61 @@ const _subscribers = new Map();
 let _hookInstalled = false;
 
 /**
- * Entrega o evento a cada assinante, isolando falhas, e agrega o retorno.
+ * Hands the event to each subscriber, isolating failures, and aggregates the return value.
  *
- * Um assinante que lança **não pode** impedir os outros de rodar: se o
- * `hunting-service` quebrar concedendo loot, a queda do jogador ainda precisa
- * virar DOWNED. É a mesma razão pela qual o `_dispatch` não usa `for...of` com
- * `await` — não há nada assíncrono aqui de propósito; quem precisa de banco
- * dispara a própria promise e trata o próprio erro.
+ * A subscriber that throws **must not** stop the others from running: if
+ * `hunting-service` breaks while granting loot, the player's fall still needs to
+ * become DOWNED. It is the same reason `_dispatch` does not use `for...of` with
+ * `await` — there is nothing asynchronous here on purpose; whoever needs the DB
+ * fires their own promise and handles their own error.
  *
- * O laço **não** sai cedo quando alguém devolve `false`: todos os assinantes
- * precisam ver toda morte. Bloquear é a decisão agregada no fim, não um atalho
- * que cala quem vem depois na ordem de inscrição.
+ * The loop does **not** exit early when someone returns `false`: every subscriber
+ * must see every death. Blocking is the aggregated decision at the end, not a shortcut
+ * that silences whoever comes later in subscription order.
  *
- * @returns {false|undefined} `false` se algum assinante pediu para bloquear o
- *   respawn nativo; `undefined` caso contrário (que é o que não bloqueia).
+ * @returns {false|undefined} `false` if any subscriber asked to block the
+ *   native respawn; `undefined` otherwise (which is what does not block).
  */
 function _dispatch(actorId, killerId) {
   let bloquearRespawn = false;
 
   for (const [name, handler] of _subscribers) {
     try {
-      // `=== false` de propósito: só o booleano exato pede bloqueio. Um
-      // assinante que devolva `0`, `''` ou `null` por descuido não pode
-      // desligar o respawn do servidor sem ter pedido.
+      // `=== false` on purpose: only the exact boolean asks for a block. A
+      // subscriber that carelessly returns `0`, `''` or `null` must not
+      // turn off the server's respawn without having asked to.
       if (handler(actorId, killerId) === false) bloquearRespawn = true;
     } catch (err) {
       console.error(
-        `[death-events] Assinante '${name}' lancou em onDeath: ${err.message}. ` +
-        `Os demais assinantes continuam, e a excecao NAO bloqueia o respawn nativo.`
+        `[death-events] Subscriber '${name}' threw in onDeath: ${err.message}. ` +
+        `The other subscribers keep running, and the exception does NOT block the native respawn.`
       );
     }
   }
 
-  // `undefined` explícito, não `false`: devolver `false` por padrão bloquearia o
-  // respawn de todo ator morto do mundo, mobs inclusive.
+  // Explicit `undefined`, not `false`: returning `false` by default would block the
+  // respawn of every dead actor in the world, mobs included.
   return bloquearRespawn ? false : undefined;
 }
 
 /**
- * Instala o hook uma única vez. Idempotente.
+ * Installs the hook exactly once. Idempotent.
  *
- * Chamado por `subscribe()`, não pelo boot: sem assinante não há motivo para
- * ocupar `mp.onDeath`, e o modo de falha aponta para o lado inerte.
+ * Called by `subscribe()`, not by boot: with no subscriber there is no reason to
+ * occupy `mp.onDeath`, and the failure mode points to the inert side.
  */
 function _installHook() {
   if (_hookInstalled) return;
   if (typeof mp === 'undefined') return;
 
-  // Se alguém já atribuiu direto, o barramento está prestes a fazer com o outro
-  // exatamente o que existe para impedir. Não dá para recuperar o handler
-  // anterior de forma segura (não sabemos o nome nem a ordem), então gritamos.
+  // If someone already assigned directly, the bus is about to do to the other one
+  // exactly what it exists to prevent. The previous handler cannot be recovered
+  // safely (we know neither its name nor its order), so we scream.
   if (typeof mp.onDeath === 'function') {
     console.error(
-      '[death-events] mp.onDeath JA tinha uma funcao atribuida antes deste barramento. ' +
-      'Alguem esta usando `mp.onDeath = ...` direto — o handler anterior sera perdido. ' +
-      'Troque aquela atribuicao por deathEvents.subscribe(<nome>, fn).'
+      '[death-events] mp.onDeath ALREADY had a function assigned before this bus. ' +
+      'Someone is using `mp.onDeath = ...` directly — the previous handler will be lost. ' +
+      'Replace that assignment with deathEvents.subscribe(<name>, fn).'
     );
   }
 
@@ -166,29 +166,29 @@ function _installHook() {
 }
 
 /**
- * Registra um consumidor de morte.
+ * Registers a death consumer.
  *
- * @param {string} name    Nome do módulo, para o log de erro dizer quem quebrou
+ * @param {string} name    Module name, so the error log says who broke
  * @param {(actorId: number, killerId: number) => void} handler
  *
- * Lança em nome duplicado de propósito. Registrar duas vezes é erro de
- * programação (um `initialize` chamado duas vezes, ou dois módulos com o mesmo
- * nome), e silenciar isso reintroduz o defeito que este arquivo remove: um
- * handler perdido sem ninguém saber. O `module-registry` captura a exceção,
- * marca o módulo como `FALHOU ao inicializar` e continua o boot — alto e
- * contido, que é o comportamento desejado.
+ * Throws on a duplicate name on purpose. Registering twice is a programming
+ * error (an `initialize` called twice, or two modules with the same
+ * name), and silencing it reintroduces the defect this file removes: a
+ * lost handler without anyone knowing. `module-registry` catches the exception,
+ * marks the module as `FAILED to initialize` and continues booting — loud and
+ * contained, which is the desired behavior.
  */
 function subscribe(name, handler) {
   if (typeof name !== 'string' || !name.trim()) {
-    throw new Error('[death-events] subscribe exige um nome nao-vazio');
+    throw new Error('[death-events] subscribe requires a non-empty name');
   }
   if (typeof handler !== 'function') {
-    throw new Error(`[death-events] subscribe('${name}') exige uma funcao`);
+    throw new Error(`[death-events] subscribe('${name}') requires a function`);
   }
   if (_subscribers.has(name)) {
     throw new Error(
-      `[death-events] '${name}' ja esta inscrito em onDeath. ` +
-      `Inscricao duplicada esconde um handler perdido — foi por isso que este barramento existe.`
+      `[death-events] '${name}' is already subscribed to onDeath. ` +
+      `A duplicate subscription hides a lost handler — that is why this bus exists.`
     );
   }
 
@@ -197,27 +197,27 @@ function subscribe(name, handler) {
 }
 
 /**
- * Remove um assinante. Usado no `shutdown()` dos módulos.
+ * Removes a subscriber. Used in modules' `shutdown()`.
  * @param {string} name
- * @returns {boolean} se havia algo para remover
+ * @returns {boolean} whether there was anything to remove
  */
 function unsubscribe(name) {
   return _subscribers.delete(name);
 }
 
-/** Quem está escutando agora. Para diagnóstico e teste. */
+/** Who is listening right now. For diagnostics and tests. */
 function subscriberNames() {
   return [..._subscribers.keys()];
 }
 
 /**
- * Devolve o barramento ao estado de boot: sem assinantes e sem hook instalado.
+ * Returns the bus to its boot state: no subscribers and no hook installed.
  *
- * Existe só para teste, e por um motivo específico: como este módulo é um
- * singleton, um teste que rode depois de outro herda `_hookInstalled = true` e
- * nunca exercita a instalação do hook. É justamente na instalação que mora a
- * proteção contra `mp.onDeath = ...` direto, então sem isto a regressão mais
- * perigosa — o segundo módulo apagando o `death-service` — não é reproduzível.
+ * It exists only for tests, and for a specific reason: since this module is a
+ * singleton, a test that runs after another inherits `_hookInstalled = true` and
+ * never exercises installing the hook. Installation is exactly where the
+ * protection against a direct `mp.onDeath = ...` lives, so without this the most
+ * dangerous regression — the second module wiping out `death-service` — cannot be reproduced.
  */
 function _resetForTest() {
   _subscribers.clear();
@@ -229,8 +229,8 @@ module.exports = {
   subscribe,
   unsubscribe,
   subscriberNames,
-  // Exposto só para teste: permite exercitar o despacho sem depender de o mock
-  // de `mp` ter sido instalado antes do require.
+  // Exposed only for tests: allows exercising dispatch without depending on the
+  // `mp` mock having been installed before the require.
   _dispatch,
   _resetForTest
 };

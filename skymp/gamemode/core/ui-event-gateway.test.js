@@ -109,7 +109,7 @@ describe('ui-event-gateway', () => {
       logger: { log: () => {}, warn: (...a) => logs.push(a), error: () => {} }
     });
     assert.equal(mp._onUiEvent, undefined);
-    assert.ok(logs.some((l) => l.join(' ').includes('makeEventSource indisponivel')));
+    assert.ok(logs.some((l) => l.join(' ').includes('makeEventSource unavailable')));
     assert.equal(typeof gateway, 'function');
   });
 

@@ -57,15 +57,15 @@ describe('activation-events', () => {
   });
 
   it('recusa nome, handler e duplicata invalidos', () => {
-    assert.throws(() => events.subscribe('', () => {}), /nome nao-vazio/);
-    assert.throws(() => events.subscribe('x', null), /exige funcao/);
+    assert.throws(() => events.subscribe('', () => {}), /non-empty name/);
+    assert.throws(() => events.subscribe('x', null), /requires a function/);
     events.subscribe('same', () => {});
-    assert.throws(() => events.subscribe('same', () => {}), /ja esta inscrito/);
+    assert.throws(() => events.subscribe('same', () => {}), /already subscribed/);
   });
 
   it('falha fechado se outro modulo ja tomou mp.onActivate', () => {
     global.mp.onActivate = () => {};
-    assert.throws(() => events.subscribe('late', () => {}), /handler direto/);
+    assert.throws(() => events.subscribe('late', () => {}), /direct handler/);
   });
 
   it('unsubscribe remove somente o assinante pedido', () => {

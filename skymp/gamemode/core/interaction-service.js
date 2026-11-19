@@ -1,54 +1,54 @@
 /**
  * core/interaction-service.js
  *
- * O pipeline que separa "o cliente pediu" de "o servidor fez".
+ * The pipeline that separates "the client asked" from "the server did".
  *
- * ─── Fluxo, na ordem, e por que esta ordem ──────────────────────────────────
+ * ─── Flow, in order, and why this order ─────────────────────────────────────
  *
- *   envelope → rate limit → ação conhecida → alvo → schema → permissão
- *            → política de ação (estado + zona) → distância
- *            → canSee → canExecute → deduplicação → execute → auditoria
+ *   envelope → rate limit → known action → target → schema → permission
+ *            → action policy (state + zone) → distance
+ *            → canSee → canExecute → deduplication → execute → audit
  *
- * A ordem não é decorativa. Cada estágio é mais caro que o anterior, e cada um
- * só recebe entrada que o anterior já limpou:
+ * The order is not decorative. Each stage is more expensive than the previous one, and each
+ * only receives input the previous one already cleaned:
  *
- *   - **rate limit antes de tudo** porque o objetivo dele é não pagar o resto;
- *   - **alvo antes de schema** porque um pedido sem alvo válido não tem contra
- *     o que validar payload, e porque resolver o alvo é o que transforma o
- *     `targetId` do cliente no registro que o servidor já tinha;
- *   - **permissão antes de política** porque "você não é guarda" é uma resposta
- *     melhor que "você está algemado" para quem não é guarda;
- *   - **política e distância antes de `canSee`** porque as duas são regras do
- *     core e o `canSee` é código de módulo: o barato e auditável roda primeiro;
- *   - **deduplicação depois de toda validação** porque um pedido que ia ser
- *     recusado não deve consumir o `requestId` — senão o retry legítimo, já
- *     corrigido, seria recusado como duplicata.
+ *   - **rate limit before everything** because its whole point is not paying for the rest;
+ *   - **target before schema** because a request with no valid target has nothing
+ *     to validate the payload against, and because resolving the target is what turns the
+ *     client's `targetId` into the record the server already had;
+ *   - **permission before policy** because "you are not a guard" is a better answer
+ *     than "you are restrained" for someone who is not a guard;
+ *   - **policy and distance before `canSee`** because both are core rules
+ *     and `canSee` is module code: the cheap and auditable runs first;
+ *   - **deduplication after all validation** because a request that was going to be
+ *     refused must not consume the `requestId` — otherwise the legitimate, already
+ *     corrected retry would be refused as a duplicate.
  *
- * ─── A regra que este arquivo existe para cumprir ───────────────────────────
+ * ─── The rule this file exists to enforce ───────────────────────────────────
  *
- * **`canSee` não autoriza nada.** Ele decide o que aparece num menu que foi
- * montado num instante anterior, na máquina de outra pessoa. Entre a montagem e
- * o clique o alvo pode ter andado, saído, sido preso ou vendido a barraca; o
- * jogador pode ter perdido o cargo. Por isso `execute` **refaz o pipeline
- * inteiro** — resolve o alvo de novo, checa permissão de novo, mede distância
- * de novo — e roda `canExecute` além de `canSee`.
+ * **`canSee` authorizes nothing.** It decides what shows up in a menu that was
+ * built at an earlier instant, on someone else's machine. Between building it and
+ * the click the target may have moved, left, been arrested or sold the stall; the
+ * player may have lost their post. That is why `execute` **reruns the whole
+ * pipeline** — resolves the target again, checks permission again, measures distance
+ * again — and runs `canExecute` in addition to `canSee`.
  *
- * Isso é o §11 do pedido, e já era o comportamento da governança por
- * acidente de desenho (as funções de domínio revalidam sozinhas). Aqui vira
- * contrato: nenhuma interação precisa lembrar de revalidar, porque quem
- * revalida é o pipeline.
+ * That is §11 of the request, and it was already governance's behavior by
+ * accident of design (the domain functions revalidate on their own). Here it becomes a
+ * contract: no interaction needs to remember to revalidate, because the one that
+ * revalidates is the pipeline.
  *
- * ─── O que continua sendo responsabilidade de quem registra ─────────────────
+ * ─── What remains the responsibility of whoever registers ───────────────────
  *
- * Atomicidade. O `execute` que move ouro e item chama o
- * `core/transaction-service.js` — este arquivo não abre transação e não sabe o
- * que é ouro. O pipeline garante que a chamada é legítima; o
- * `transaction-service` garante que ela é atômica e auditável.
+ * Atomicity. An `execute` that moves gold and items calls
+ * `core/transaction-service.js` — this file opens no transaction and does not know what
+ * gold is. The pipeline guarantees the call is legitimate;
+ * `transaction-service` guarantees it is atomic and auditable.
  */
 
 const { AUDIT_LEVELS } = require('./interaction-registry');
 
-/** Estágios, na ordem. Usados no resultado e nos testes. */
+/** Stages, in order. Used in the result and in tests. */
 const STAGES = Object.freeze({
   ENVELOPE: 'envelope',
   RATE_LIMIT: 'rate_limit',
@@ -69,7 +69,7 @@ const DEFAULT_DEDUP_TTL_MS = 120_000;
 const MIN_REQUEST_ID_LENGTH = 8;
 const MAX_REQUEST_ID_LENGTH = 48;
 
-/** Mensagem única para tudo que o jogador não deveria conseguir distinguir. */
+/** A single message for everything the player should not be able to tell apart. */
 const RECUSA_GENERICA = 'Action unavailable.';
 
 // Display names for interaction-menu sections. The section id stays the
@@ -85,9 +85,9 @@ const SECTION_LABELS = Object.freeze({
 });
 
 /**
- * Normaliza o retorno de `canSee`/`canExecute`.
- * Aceita `true`, `false`, `{allowed}` e `{allowed, reason}` — as três formas que
- * um módulo escreve naturalmente.
+ * Normalizes the return value of `canSee`/`canExecute`.
+ * Accepts `true`, `false`, `{allowed}` and `{allowed, reason}` — the three shapes a
+ * module naturally writes.
  * @param {unknown} raw
  * @returns {{allowed: boolean, reason: string}}
  */
@@ -106,7 +106,7 @@ function normalizeVerdict(raw) {
 /**
  * @param {object} deps
  * @param {object} deps.registry        - `core/interaction-registry`
- * @param {{resolve: Function}} deps.targets - de `createTargetResolvers`
+ * @param {{resolve: Function}} deps.targets - from `createTargetResolvers`
  * @param {(actorId: number) => object|null|undefined} deps.getCharacter
  * @param {(actorId: number, permission: string, ctx: object) => Promise<{allowed: boolean, reason?: string}>} [deps.checkPermission]
  * @param {{canPerform: Function}} [deps.actionPolicy]
@@ -133,28 +133,28 @@ function createInteractionService({
   logger = console
 }) {
   if (!registry || typeof registry.get !== 'function' || typeof registry.listForTarget !== 'function') {
-    throw new Error('[interaction-service] registry invalido');
+    throw new Error('[interaction-service] invalid registry');
   }
   if (!targets || typeof targets.resolve !== 'function') {
-    throw new Error('[interaction-service] targets invalido');
+    throw new Error('[interaction-service] invalid targets');
   }
   if (typeof getCharacter !== 'function') {
-    throw new Error('[interaction-service] getCharacter invalido');
+    throw new Error('[interaction-service] invalid getCharacter');
   }
 
   /**
-   * Pedidos já vistos, por `${actorId}:${requestId}`.
+   * Requests already seen, by `${actorId}:${requestId}`.
    *
-   * Guarda o **resultado**, não só a marca. Um duplo clique não pode virar duas
-   * multas, e também não deve virar uma multa e um erro: a segunda chamada
-   * devolve o que a primeira devolveu, que é o que o jogador espera ver.
+   * Stores the **result**, not just the mark. A double click must not become two
+   * fines, and must not become a fine and an error either: the second call
+   * returns what the first one returned, which is what the player expects to see.
    *
-   * Fica em memória de propósito. Uma tabela daria idempotência entre reinícios
-   * do servidor, e o custo seria um `INSERT` no caminho quente de toda
-   * interação — para proteger de um caso (duplo clique atravessando um restart)
-   * que não acontece. A idempotência que **precisa** sobreviver a restart já
-   * existe uma camada abaixo, por `idempotency_key` no `transaction-service`, e
-   * é ela que protege ouro e item. Esta aqui protege contra duplo clique.
+   * Kept in memory on purpose. A table would give idempotency across server
+   * restarts, and the cost would be an `INSERT` on the hot path of every
+   * interaction — to protect against a case (a double click spanning a restart)
+   * that does not happen. The idempotency that **must** survive a restart already
+   * exists one layer below, through `idempotency_key` in `transaction-service`, and
+   * that is what protects gold and items. This one protects against double clicks.
    *
    * @type {Map<string, {state: 'running'|'done', at: number, result?: object}>}
    */
@@ -176,14 +176,14 @@ function createInteractionService({
   }
 
   /**
-   * Estágios 1 a 8 — tudo que vale igual para consultar e para executar.
+   * Stages 1 to 8 — everything that applies equally to querying and to executing.
    *
-   * Devolve o contexto pronto (§12 do pedido) ou a recusa com o estágio em que
-   * ela aconteceu. `execute` chama isto de novo, do zero: é o que garante que
-   * uma opção vista há trinta segundos não vale nada por si só.
+   * Returns the ready context (§12 of the request) or the refusal with the stage where
+   * it happened. `execute` calls this again, from scratch: that is what guarantees
+   * an option seen thirty seconds ago is worth nothing by itself.
    *
    * @param {number} actorId
-   * @param {object} entry            descritor da interação
+   * @param {object} entry            interaction descriptor
    * @param {unknown} rawTargetId
    * @param {unknown} rawPayload
    * @param {{skipSchema?: boolean}} [options]
@@ -192,10 +192,10 @@ function createInteractionService({
     const actor = getCharacter(actorId);
     if (!actor) return fail(STAGES.TARGET, 'Character not loaded.');
 
-    // ── Alvo ────────────────────────────────────────────────────────────────
-    // Refeito a cada chamada, e é aqui que a desconexão do alvo entre a consulta
-    // e o clique vira uma recusa limpa: `getCharacter` não responde mais por
-    // quem saiu, então o alvo não resolve.
+    // ── Target ──────────────────────────────────────────────────────────────
+    // Redone on every call, and this is where the target disconnecting between the query
+    // and the click becomes a clean refusal: `getCharacter` no longer answers for
+    // whoever left, so the target does not resolve.
     const resolved = targets.resolve(entry.target, rawTargetId, actorId);
     if (!resolved.ok) return fail(STAGES.TARGET, resolved.reason);
     const target = resolved.target;
@@ -208,17 +208,17 @@ function createInteractionService({
       data = validated.data;
     }
 
-    // ── Permissão ───────────────────────────────────────────────────────────
-    // A permissão é uma string opaca para este arquivo. Quem sabe o que
-    // `guard.search` significa é o adaptador que o módulo injeta — governança
-    // consulta cargo em `governance_memberships`, staff consulta
-    // `admin-service`. O core não escolhe modelo de permissão para os módulos.
+    // ── Permission ──────────────────────────────────────────────────────────
+    // The permission is an opaque string to this file. Whoever knows what
+    // `guard.search` means is the adapter the module injects — governance
+    // checks the post in `governance_memberships`, staff checks
+    // `admin-service`. The core does not choose a permission model for the modules.
     let permission = null;
     if (entry.permission) {
       if (typeof checkPermission !== 'function') {
         logger.error(
-          `[interaction-service] '${entry.id}' exige a permissao '${entry.permission}' ` +
-          `e nenhum checkPermission foi injetado. Negando.`
+          `[interaction-service] '${entry.id}' requires the permission '${entry.permission}' ` +
+          `and no checkPermission was injected. Denying.`
         );
         return fail(STAGES.PERMISSION, RECUSA_GENERICA);
       }
@@ -230,7 +230,7 @@ function createInteractionService({
       permission = normalized;
     }
 
-    // ── Política de ação: estado do personagem + zona ───────────────────────
+    // ── Action policy: character state + zone ──────────────────────────────
     if (entry.policyAction && actionPolicy) {
       const context = { actorId };
       if (target.actorId !== undefined) context.targetActorId = target.actorId;
@@ -238,11 +238,11 @@ function createInteractionService({
       if (!verdict.allowed) return fail(STAGES.POLICY, verdict.reason);
     }
 
-    // ── Distância ───────────────────────────────────────────────────────────
-    // `unverified` distingue "medimos e está perto" de "não havia como medir"
-    // (`mp` ausente — ver CORE_FRAMEWORK_AUDIT.md §5). O pipeline deixa passar
-    // nos dois casos, como sempre deixou, mas só o primeiro vira "validado" no
-    // log de auditoria.
+    // ── Distance ────────────────────────────────────────────────────────────
+    // `unverified` tells "we measured and it is close" apart from "there was no way to measure"
+    // (`mp` missing — see CORE_FRAMEWORK_AUDIT.md §5). The pipeline lets it through
+    // in both cases, as it always did, but only the first becomes "validated" in the
+    // audit log.
     let distanceVerified = false;
     let distanceUnverified = false;
     if (entry.distance !== null && typeof target.assertRange === 'function') {
@@ -272,10 +272,10 @@ function createInteractionService({
   }
 
   /**
-   * Roda `canSee` (e, quando pedido, `canExecute`) com o contexto pronto.
+   * Runs `canSee` (and, when asked, `canExecute`) with the ready context.
    *
-   * Um `canSee` que **lança** não vira "pode": vira "não pode", com log. Um
-   * módulo com bug não pode abrir o menu de ninguém.
+   * A `canSee` that **throws** does not become "can": it becomes "cannot", with a log. A
+   * buggy module must not open anyone's menu.
    */
   async function runGuard(entry, ctx, which) {
     const guard = entry[which];
@@ -283,7 +283,7 @@ function createInteractionService({
     try {
       return normalizeVerdict(await guard(ctx));
     } catch (err) {
-      logger.error(`[interaction-service] ${which} de '${entry.id}' lancou:`, err.message);
+      logger.error(`[interaction-service] ${which} of '${entry.id}' threw:`, err.message);
       return { allowed: false, reason: RECUSA_GENERICA };
     }
   }
@@ -310,21 +310,21 @@ function createInteractionService({
         requestId: ctx.requestId
       });
     } catch (err) {
-      // Auditoria que falha não desfaz a ação: ela já aconteceu. Grita e segue.
-      logger.error(`[interaction-service] auditoria de '${entry.id}' falhou:`, err.message);
+      // An audit that fails does not undo the action: it already happened. Scream and move on.
+      logger.error(`[interaction-service] audit of '${entry.id}' failed:`, err.message);
     }
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // API pública
+  // Public API
   // ───────────────────────────────────────────────────────────────────────────
 
   /**
-   * O que este ator pode ver no menu deste alvo, agora.
+   * What this actor can see in this target's menu, right now.
    *
-   * Devolve **só rótulo, id e campos do formulário**. Nunca a permissão que
-   * liberou a ação, nem o motivo pelo qual as outras sumiram: a lista de
-   * ações é a resposta, e o raciocínio é do servidor.
+   * Returns **only label, id and form fields**. Never the permission that
+   * allowed the action, nor why the others disappeared: the list of
+   * actions is the answer, and the reasoning belongs to the server.
    *
    * @param {number} actorId
    * @param {{targetType?: unknown, targetId?: unknown}} request
@@ -340,13 +340,13 @@ function createInteractionService({
   }
 
   /**
-   * O mesmo cálculo de `query`, sem o rate limit.
+   * The same computation as `query`, without the rate limit.
    *
-   * Uso exclusivo de chamador INTERNO do servidor (ex: um tick periódico que
-   * decide se mostra o prompt `[E]` — Tarefa 11), nunca de um evento vindo da
-   * CEF. `interaction:query` da CEF sempre passa por `query()`, com o limite;
-   * ligar isto num `ui-event-router` seria abrir uma segunda porta pro mesmo
-   * cálculo sem o freio que a primeira tem.
+   * Exclusively for an INTERNAL server caller (e.g. a periodic tick that
+   * decides whether to show the `[E]` prompt — Task 11), never for an event coming from the
+   * CEF. The CEF's `interaction:query` always goes through `query()`, with the limit;
+   * wiring this into a `ui-event-router` would open a second door to the same
+   * computation without the brake the first one has.
    *
    * @param {number} actorId
    * @param {{targetType?: unknown, targetId?: unknown}} request
@@ -372,9 +372,9 @@ function createInteractionService({
     let resolvedTarget = null;
 
     for (const entry of candidates) {
-      // O contexto é montado por interação, e não uma vez só, porque cada uma
-      // tem a sua distância, a sua permissão e a sua política. Uma ação de
-      // alcance 200 não pode aparecer só porque outra, de alcance 3000, coube.
+      // The context is built per interaction, and not just once, because each one
+      // has its own distance, permission and policy. An action with
+      // range 200 must not show up just because another one, with range 3000, fit.
       const built = await buildContext(actorId, entry, request.targetId, {}, { skipSchema: true });
       if (!built.ok) continue;
 
@@ -389,8 +389,8 @@ function createInteractionService({
         action: entry.id,
         label: entry.label,
         fields: describeFields(entry.schema),
-        // O cliente precisa saber se deve gerar um `requestId`; não precisa
-        // saber a permissão, o alcance nem a classe de auditoria.
+        // The client needs to know whether to generate a `requestId`; it does not need
+        // to know the permission, the range or the audit class.
         requiresRequestId: entry.idempotent
       });
     }
@@ -405,7 +405,7 @@ function createInteractionService({
   }
 
   /**
-   * Executa uma ação escolhida no menu, revalidando tudo.
+   * Executes an action picked in the menu, revalidating everything.
    *
    * @param {number} actorId
    * @param {{action?: unknown, targetType?: unknown, targetId?: unknown, requestId?: unknown, data?: unknown}} request
@@ -421,15 +421,15 @@ function createInteractionService({
     const actionId = typeof request.action === 'string' ? request.action : null;
     const entry = actionId ? registry.get(actionId) : undefined;
     if (!entry) {
-      // Mesma mensagem de uma ação que existe e não está disponível: dizer
-      // "essa ação não existe" transforma o menu num oráculo de enumeração.
-      logger.warn(`[interaction-service] acao desconhecida de 0x${actorId.toString(16)}: ${String(actionId)}`);
+      // Same message as an action that exists and is not available: saying
+      // "this action does not exist" turns the menu into an enumeration oracle.
+      logger.warn(`[interaction-service] unknown action from 0x${actorId.toString(16)}: ${String(actionId)}`);
       return fail(STAGES.UNKNOWN_ACTION, RECUSA_GENERICA);
     }
 
-    // O tipo de alvo vem do descritor, não do pedido. Aceitar o `targetType` do
-    // cliente permitiria chamar uma ação de `player` declarando o alvo como
-    // `container` e cair num resolvedor que não faz as recusas daquela ação.
+    // The target type comes from the descriptor, not from the request. Accepting the client's
+    // `targetType` would allow calling a `player` action while declaring the target as a
+    // `container` and landing in a resolver that does not make that action's refusals.
     const built = await buildContext(actorId, entry, request.targetId, request.data ?? request);
     if (!built.ok) return built;
     const ctx = built.ctx;
@@ -440,7 +440,7 @@ function createInteractionService({
     const podeExecutar = await runGuard(entry, ctx, 'canExecute');
     if (!podeExecutar.allowed) return fail(STAGES.CAN_EXECUTE, podeExecutar.reason || RECUSA_GENERICA);
 
-    // ── Deduplicação ────────────────────────────────────────────────────────
+    // ── Deduplication ───────────────────────────────────────────────────────
     let dedupKey = null;
     if (entry.idempotent) {
       const requestId = typeof request.requestId === 'string' ? request.requestId.trim() : '';
@@ -454,8 +454,8 @@ function createInteractionService({
       sweepDedup(timestamp);
       const previous = seen.get(dedupKey);
       if (previous) {
-        // `running` é o duplo clique de verdade: a primeira ainda não voltou.
-        // `done` é o retry depois da resposta. Os dois devolvem sem executar.
+        // `running` is the real double click: the first one has not come back yet.
+        // `done` is the retry after the response. Both return without executing.
         return previous.state === 'done' && previous.result
           ? { ...previous.result, duplicate: true }
           : fail(STAGES.DUPLICATE, 'This request is already being processed.');
@@ -463,7 +463,7 @@ function createInteractionService({
       seen.set(dedupKey, { state: 'running', at: timestamp });
     }
 
-    // ── Execução ────────────────────────────────────────────────────────────
+    // ── Execution ───────────────────────────────────────────────────────────
     try {
       const returned = await entry.execute(ctx);
       const result = {
@@ -479,25 +479,25 @@ function createInteractionService({
       await record(entry, ctx, 'ok', result.message);
       return result;
     } catch (err) {
-      // O `requestId` é liberado numa falha: o pedido não aconteceu, e o retry
-      // com o mesmo id é o comportamento correto do cliente.
+      // The `requestId` is released on failure: the request did not happen, and the retry
+      // with the same id is the correct client behavior.
       if (dedupKey) seen.delete(dedupKey);
-      logger.error(`[interaction-service] '${entry.id}' falhou:`, err.message);
+      logger.error(`[interaction-service] '${entry.id}' failed:`, err.message);
       await record(entry, ctx, 'error', err.message);
       return fail(STAGES.EXECUTE, 'Could not complete the action.');
     }
   }
 
   /**
-   * Ponte para o `core/ui-event-router.js`.
+   * Bridge to `core/ui-event-router.js`.
    *
-   * Dois tipos, e só eles. `interaction:query` responde pelo `browserModal`;
-   * `interaction:execute` responde por notificação, porque o resultado de uma
-   * ação é uma frase, não uma tela.
+   * Two types, and only those. `interaction:query` answers through `browserModal`;
+   * `interaction:execute` answers through a notification, because the result of an
+   * action is a sentence, not a screen.
    *
    * @param {number} actorId
    * @param {{type?: string, data?: unknown}} uiEvent
-   * @returns {Promise<boolean>} true se o evento era deste módulo
+   * @returns {Promise<boolean>} true if the event belonged to this module
    */
   async function handleUiEvent(actorId, uiEvent) {
     if (!uiEvent || typeof uiEvent !== 'object') return false;
@@ -514,9 +514,9 @@ function createInteractionService({
         notify(actorId, /** @type {{reason: string}} */ (result).reason);
         return true;
       }
-      // Só a lista vai para a tela. A versão anterior desta feature também
-      // despejava o JSON das ações no chat (`CORE_FRAMEWORK_AUDIT.md` §6.7b);
-      // aqui o canal é um só.
+      // Only the list goes to the screen. The previous version of this feature also
+      // dumped the actions' JSON into chat (`CORE_FRAMEWORK_AUDIT.md` §6.7b);
+      // here there is a single channel.
       sendModal(actorId, 'interaction:actions', {
         target: result.target,
         targetType: result.targetType,
@@ -534,7 +534,7 @@ function createInteractionService({
     return true;
   }
 
-  /** Diagnóstico: quantos pedidos estão em memória de deduplicação. */
+  /** Diagnostics: how many requests are held in deduplication memory. */
   function snapshot() {
     return { pendingRequests: seen.size, dedupTtlMs };
   }
@@ -543,12 +543,12 @@ function createInteractionService({
 }
 
 /**
- * Traduz o `schema` do servidor no formulário que a CEF desenha.
+ * Translates the server's `schema` into the form the CEF draws.
  *
- * Existe para que o cliente **pare de manter a própria tabela de campos**
- * (`ACTION_CONFIG` em `ui/index.html`). Enquanto os dois lados declaram os
- * mesmos campos, o dia em que o servidor apertar um limite a UI continua
- * oferecendo o antigo — e o jogador descobre digitando.
+ * It exists so the client **stops keeping its own field table**
+ * (`ACTION_CONFIG` in `ui/index.html`). While both sides declare the
+ * same fields, the day the server tightens a limit the UI keeps
+ * offering the old one — and the player finds out by typing.
  *
  * @param {Record<string, any>|null} schema
  */

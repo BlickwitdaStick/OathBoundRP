@@ -39,8 +39,8 @@ describe('public-work-config', () => {
   });
 
   it('recusa JSON vazio, malformado e definição incompleta', () => {
-    assert.throws(() => config.load({ filePath: temp('[]'), registry }), /array nao-vazio/);
-    assert.throws(() => config.load({ filePath: temp('{'), registry }), /JSON invalido/);
+    assert.throws(() => config.load({ filePath: temp('[]'), registry }), /non-empty array/);
+    assert.throws(() => config.load({ filePath: temp('{'), registry }), /invalid JSON/);
     assert.throws(() => config.load({ filePath: temp('[{"code":"hay_delivery"}]'), registry }), /label/);
   });
 });

@@ -1,4 +1,4 @@
-/** Carrega rotas físicas de Public Work sem aceitar defaults fictícios. */
+/** Loads the physical Public Work routes without accepting fictitious defaults. */
 'use strict';
 
 const fs = require('fs');
@@ -11,19 +11,19 @@ function defaultPath(environment = process.env.NODE_ENV || 'local') {
 /** @param {{filePath?: string, registry?: {register: Function, list: Function, _reset: Function}}} [options] */
 function load({ filePath = process.env.PUBLIC_WORK_CONFIG || defaultPath(), registry } = {}) {
   if (!registry || typeof registry.register !== 'function') {
-    throw new Error('[public-work-config] registry ausente');
+    throw new Error('[public-work-config] missing registry');
   }
   if (!fs.existsSync(filePath)) {
     throw new Error(
-      `[public-work-config] arquivo nao encontrado: ${filePath}. ` +
-      'Mantenha ENABLE_PUBLIC_WORK_SERVICE=false ate cadastrar FormDesc reais.'
+      `[public-work-config] file not found: ${filePath}. ` +
+      'Keep ENABLE_PUBLIC_WORK_SERVICE=false until real FormDescs are registered.'
     );
   }
   let parsed;
   try { parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')); }
-  catch (err) { throw new Error(`[public-work-config] JSON invalido em ${filePath}: ${err.message}`); }
+  catch (err) { throw new Error(`[public-work-config] invalid JSON in ${filePath}: ${err.message}`); }
   if (!Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error('[public-work-config] esperado array nao-vazio de definicoes');
+    throw new Error('[public-work-config] expected a non-empty array of definitions');
   }
   registry._reset();
   for (const definition of parsed) registry.register(definition);

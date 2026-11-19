@@ -138,7 +138,7 @@ describe('death-events — o hook tem dono unico e varios assinantes', () => {
 
     assert.throws(
       () => deathEvents.subscribe('mesmo-nome', () => {}),
-      /ja esta inscrito/,
+      /already subscribed/,
       'silenciar a duplicata reintroduz exatamente o defeito: um handler perdido sem ninguem saber'
     );
   });
@@ -155,9 +155,9 @@ describe('death-events — o hook tem dono unico e varios assinantes', () => {
   });
 
   it('subscribe recusa nome vazio e handler que nao e funcao', () => {
-    assert.throws(() => deathEvents.subscribe('', () => {}), /nome nao-vazio/);
-    assert.throws(() => deathEvents.subscribe('   ', () => {}), /nome nao-vazio/);
-    assert.throws(() => deathEvents.subscribe('x', null), /exige uma funcao/);
+    assert.throws(() => deathEvents.subscribe('', () => {}), /non-empty name/);
+    assert.throws(() => deathEvents.subscribe('   ', () => {}), /non-empty name/);
+    assert.throws(() => deathEvents.subscribe('x', null), /requires a function/);
   });
 
   it('grita quando encontra mp.onDeath ja atribuido direto', () => {
@@ -175,7 +175,7 @@ describe('death-events — o hook tem dono unico e varios assinantes', () => {
     }
 
     assert.ok(
-      erros.some(e => e.includes('JA tinha uma funcao atribuida')),
+      erros.some(e => e.includes('ALREADY had a function assigned')),
       'a perda de um handler nao pode ser silenciosa — o aviso e a unica coisa que aponta pro arquivo culpado'
     );
   });
