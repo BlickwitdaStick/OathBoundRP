@@ -1,131 +1,131 @@
-# RBAC administrativo
+# Administrative RBAC
 
-**Status:** desenho aceito, implementação não iniciada
-**Decisão formal:** [ADR 005](../technical/ADR_005_ADMIN_RBAC.md)
-**Evidência:** [`ADMIN_PLATFORM_AUDIT.md`](../research/ADMIN_PLATFORM_AUDIT.md) §4.1–§4.6
-**Regra que não muda:** `vip_level` é monetização. Nunca foi e nunca será critério de permissão.
-
----
-
-## 1. As quatro regras
-
-1. **Permissão é a unidade. Cargo é um agrupamento.** Todo código pergunta por
-   permissão, nunca por cargo. Não existe `if (role === 'admin')` em lugar nenhum.
-2. **O banco é a autoridade.** O mapa cargo→permissão vive em tabela, não em
-   constante de arquivo. Mudar quem pode o quê é uma linha auditada, não um deploy.
-3. **Negar é o padrão, e negar é barulhento.** Ausência de permissão nega;
-   permissão desconhecida nega **e** grita no log; toda negação vira linha de
-   auditoria.
-4. **Sem herança implícita.** `owner` não "herda" de `admin`. Cada cargo tem seu
-   conjunto explícito, ainda que isso duplique linhas. O motivo está na §4.
+**Status:** design accepted, implementation not started
+**Formal decision:** [ADR 005](../technical/ADR_005_ADMIN_RBAC.md)
+**Evidence:** [`ADMIN_PLATFORM_AUDIT.md`](../research/ADMIN_PLATFORM_AUDIT.md) §4.1–§4.6
+**Rule that does not change:** `vip_level` is monetization. It never was and never will be a permission criterion.
 
 ---
 
-## 2. Catálogo de permissões
+## 1. The four rules
 
-Namespace pontuado `dominio.acao[.escopo]`. O domínio é o módulo do painel; a
-ação é o verbo; o escopo aparece só quando um verbo tem recortes de risco
-diferentes (`logs.view` vs `logs.view.security`).
+1. **Permission is the unit. A role is a grouping.** All code asks about a
+   permission, never about a role. There is no `if (role === 'admin')` anywhere.
+2. **The database is the authority.** The role→permission map lives in a table, not in a
+   file constant. Changing who can do what is an audited row, not a deploy.
+3. **Denying is the default, and denying is loud.** A missing permission denies;
+   an unknown permission denies **and** shouts in the log; every denial becomes an audit
+   row.
+4. **No implicit inheritance.** `owner` does not "inherit" from `admin`. Each role has its
+   explicit set, even if that duplicates rows. The reason is in §4.
 
-**Risco** governa a UI ([§22 do briefing](ADMIN_PLATFORM.md#7-risco-e-ui)):
-🟢 leitura · 🟡 muta estado recuperável · 🔴 irreversível ou de alto impacto.
+---
 
-### 2.1 Jogadores e sessões
+## 2. Permission catalog
 
-| Permissão | Risco | O que autoriza | Existe hoje? |
+Dotted namespace `domain.action[.scope]`. The domain is the panel module; the
+action is the verb; the scope appears only when a verb has slices with different
+risk (`logs.view` vs `logs.view.security`).
+
+**Risk** governs the UI ([§22 of the briefing](ADMIN_PLATFORM.md#7-risk-and-ui)):
+🟢 read · 🟡 mutates recoverable state · 🔴 irreversible or high impact.
+
+### 2.1 Players and sessions
+
+| Permission | Risk | What it authorizes | Exists today? |
 |---|---|---|---|
-| `players.view` | 🟢 | listar contas, ver perfil, histórico de sessões | painel: sem gate |
-| `players.session.view` | 🟢 | ver quem está conectado agora | **bloqueada** — §4.8 da auditoria |
-| `players.kick` | 🟡 | expulsar da sessão atual | jogo: `kick` ✅ · painel: ❌ |
-| `players.warn` | 🟡 | registrar advertência formal | ❌ não existe |
-| `players.mute` | 🟡 | silenciar chat/voz | ❌ não existe em jogo |
-| `players.ban` | 🔴 | banir conta (temp ou permanente) | permissão declarada, **nada implementa** |
-| `players.unban` | 🔴 | revogar ban | ❌ |
-| `players.teleport` | 🟡 | teleportar até um jogador | jogo: `teleport` ✅ |
+| `players.view` | 🟢 | list accounts, view profile, session history | panel: no gate |
+| `players.session.view` | 🟢 | see who is connected right now | **blocked** — audit §4.8 |
+| `players.kick` | 🟡 | kick from the current session | game: `kick` ✅ · panel: ❌ |
+| `players.warn` | 🟡 | record a formal warning | ❌ does not exist |
+| `players.mute` | 🟡 | silence chat/voice | ❌ does not exist in game |
+| `players.ban` | 🔴 | ban an account (temporary or permanent) | permission declared, **nothing implements it** |
+| `players.unban` | 🔴 | revoke a ban | ❌ |
+| `players.teleport` | 🟡 | teleport to a player | game: `teleport` ✅ |
 
-### 2.2 Personagens
+### 2.2 Characters
 
-| Permissão | Risco | O que autoriza | Existe hoje? |
+| Permission | Risk | What it authorizes | Exists today? |
 |---|---|---|---|
-| `characters.view` | 🟢 | ficha, biografia, histórico | painel: sem gate |
-| `characters.edit` | 🟡 | corrigir campos de ficha | ❌ |
-| `characters.rename` | 🟡 | renomear (com registro do nome anterior) | ❌ |
-| `characters.notes` | 🟡 | anotações de staff no personagem | ❌ |
-| `characters.retire` | 🔴 | aposentar (`status='retired'`) | jogo: `retire_character` ✅ |
-| `characters.permakill` | 🔴 | morte permanente | mesmo comando acima |
-| `characters.restore` | 🔴 | reverter aposentadoria | ❌ — ver §5 do MODERATION_WORKFLOW |
-| `identity.reveal` | 🔴 | revelar nome real por trás do anonimato | jogo: `reveal_identity` ✅ |
+| `characters.view` | 🟢 | sheet, biography, history | panel: no gate |
+| `characters.edit` | 🟡 | correct sheet fields | ❌ |
+| `characters.rename` | 🟡 | rename (recording the previous name) | ❌ |
+| `characters.notes` | 🟡 | staff notes on the character | ❌ |
+| `characters.retire` | 🔴 | retire (`status='retired'`) | game: `retire_character` ✅ |
+| `characters.permakill` | 🔴 | permanent death | same command as above |
+| `characters.restore` | 🔴 | revert a retirement | ❌ — see MODERATION_WORKFLOW §5 |
+| `identity.reveal` | 🔴 | reveal the real name behind anonymity | game: `reveal_identity` ✅ |
 
-`characters.retire` e `characters.permakill` são a mesma operação hoje
-(`/permakill` grava `status='retired'`). Ficam separadas no catálogo porque o
-`MODERATION_WORKFLOW` §5 distingue aposentadoria administrativa de CK narrativo,
-e a distinção precisa de nome antes de precisar de código.
+`characters.retire` and `characters.permakill` are the same operation today
+(`/permakill` writes `status='retired'`). They are kept separate in the catalog because
+`MODERATION_WORKFLOW` §5 distinguishes administrative retirement from narrative CK,
+and the distinction needs a name before it needs code.
 
-### 2.3 Economia e inventário
+### 2.3 Economy and inventory
 
-| Permissão | Risco | O que autoriza | Existe hoje? |
+| Permission | Risk | What it authorizes | Exists today? |
 |---|---|---|---|
-| `economy.view` | 🟢 | saldos, tesouros, ranking | painel: sem gate |
-| `economy.ledger.search` | 🟢 | buscar em `gold_transactions` | ❌ |
-| `economy.adjust` | 🔴 | mover ouro de um personagem | jogo: `set_gold` ✅ |
-| `economy.freeze` | 🔴 | congelar conta suspeita | ❌ |
-| `inventory.view` | 🟢 | ver inventário e `inventory_transactions` | ❌ |
-| `inventory.trace` | 🟢 | rastrear um item pelo ledger | ❌ |
-| `inventory.grant` | 🔴 | entregar item | jogo: `add_item` ✅ |
-| `inventory.remove` | 🔴 | remover item | ❌ |
+| `economy.view` | 🟢 | balances, treasuries, ranking | panel: no gate |
+| `economy.ledger.search` | 🟢 | search `gold_transactions` | ❌ |
+| `economy.adjust` | 🔴 | move a character's gold | game: `set_gold` ✅ |
+| `economy.freeze` | 🔴 | freeze a suspicious account | ❌ |
+| `inventory.view` | 🟢 | view inventory and `inventory_transactions` | ❌ |
+| `inventory.trace` | 🟢 | trace an item through the ledger | ❌ |
+| `inventory.grant` | 🔴 | give an item | game: `add_item` ✅ |
+| `inventory.remove` | 🔴 | remove an item | ❌ |
 
-**Invariante herdada, não negociável:** ajuste de ouro passa por
-`core/transaction-service`; entrega e remoção de item passam por
-`transaction-service.giveItem`/`removeItem`. Nenhuma rota do painel escreve em
-`characters.gold` ou `character_inventory` direto. É a regra que apagou o
-`economy-service.js` antigo (`CONTRIBUTING.md` §3.1) e ela vale igual quando o
-chamador é a UI.
+**Inherited, non-negotiable invariant:** gold adjustments go through
+`core/transaction-service`; giving and removing items go through
+`transaction-service.giveItem`/`removeItem`. No panel route writes to
+`characters.gold` or `character_inventory` directly. It is the rule that deleted the
+old `economy-service.js` (`CONTRIBUTING.md` §3.1) and it applies equally when the
+caller is the UI.
 
-### 2.4 Whitelist, staff e mundo
+### 2.4 Whitelist, staff and world
 
-| Permissão | Risco | O que autoriza | Existe hoje? |
+| Permission | Risk | What it authorizes | Exists today? |
 |---|---|---|---|
-| `whitelist.view` | 🟢 | ler a fila de aplicações | painel: sem gate |
-| `whitelist.review` | 🟡 | mover entre estados, escrever parecer | painel: **sem gate** |
-| `whitelist.approve` | 🟡 | aprovar (libera entrada no servidor) | painel: **sem gate** |
-| `staff.view` | 🟢 | ver equipe e cargos | ❌ |
-| `staff.manage` | 🔴 | conceder/revogar cargo e permissão | jogo: `manage_staff` ✅ |
-| `factions.view` / `factions.manage` | 🟢 / 🟡 | facções | view sem gate · manage ❌ |
-| `world.probe` | 🟡 | censo de fauna e sonda de cadáver | jogo: `run_world_probe` ✅ |
-| `crafting.recipes.manage` | 🔴 | criar/editar receita (regra permanente) | jogo: `manage_recipes` ✅ |
+| `whitelist.view` | 🟢 | read the application queue | panel: no gate |
+| `whitelist.review` | 🟡 | move between states, write an assessment | panel: **no gate** |
+| `whitelist.approve` | 🟡 | approve (allows entry to the server) | panel: **no gate** |
+| `staff.view` | 🟢 | view team and roles | ❌ |
+| `staff.manage` | 🔴 | grant/revoke roles and permissions | game: `manage_staff` ✅ |
+| `factions.view` / `factions.manage` | 🟢 / 🟡 | factions | view without gate · manage ❌ |
+| `world.probe` | 🟡 | fauna census and corpse probe | game: `run_world_probe` ✅ |
+| `crafting.recipes.manage` | 🔴 | create/edit a recipe (permanent rule) | game: `manage_recipes` ✅ |
 
-### 2.5 Servidor, módulos e logs
+### 2.5 Server, modules and logs
 
-| Permissão | Risco | O que autoriza | Existe hoje? |
+| Permission | Risk | What it authorizes | Exists today? |
 |---|---|---|---|
-| `server.view` | 🟢 | health, fila, versão, manifesto | `/health` é público hoje |
-| `server.announce` | 🟡 | anúncio global | ❌ |
-| `server.maintenance` | 🔴 | modo manutenção / fechar entrada | ❌ |
-| `server.restart` | 🔴 | reiniciar processo | **não deve existir até a §14 do ADMIN_PLATFORM** |
-| `modules.view` | 🟢 | estado dos módulos do registry | ❌ |
-| `modules.toggle` | 🔴 | ligar/desligar módulo | ❌ — hoje é `ENABLE_*` no `.env` + restart |
-| `logs.view` | 🟢 | auditoria administrativa | jogo: `view_audit` (declarada, **nada verifica**) |
-| `logs.view.security` | 🔴 | eventos sensíveis: revelação de identidade, mudança de cargo, negações | ❌ |
+| `server.view` | 🟢 | health, queue, version, manifest | `/health` is public today |
+| `server.announce` | 🟡 | global announcement | ❌ |
+| `server.maintenance` | 🔴 | maintenance mode / close entry | ❌ |
+| `server.restart` | 🔴 | restart the process | **must not exist until ADMIN_PLATFORM §14** |
+| `modules.view` | 🟢 | state of the registry modules | ❌ |
+| `modules.toggle` | 🔴 | turn a module on/off | ❌ — today it is `ENABLE_*` in `.env` + restart |
+| `logs.view` | 🟢 | administrative audit | game: `view_audit` (declared, **nothing checks it**) |
+| `logs.view.security` | 🔴 | sensitive events: identity reveal, role change, denials | ❌ |
 
-`logs.view.security` é escopo separado por um motivo concreto: o `audit_logs`
-mistura `identity:staff_reveal` com `staff:teleport`. Quem pode ver movimentação
-rotineira não deveria ver, de graça, a lista de quem foi desmascarado — o
-`admin-service.js` gastou trinta linhas argumentando que revelar identidade é a
-única ação de staff sem volta, e deixar o **rastro** dela aberto a todo cargo
-esvaziaria metade daquele cuidado.
+`logs.view.security` is a separate scope for a concrete reason: `audit_logs`
+mixes `identity:staff_reveal` with `staff:teleport`. Whoever can see routine
+movement should not see, for free, the list of who was unmasked —
+`admin-service.js` spent thirty lines arguing that revealing identity is the
+only staff action with no way back, and leaving its **trail** open to every role
+would empty out half of that care.
 
-### 2.6 Mapa de renome (as 12 permissões que já existem)
+### 2.6 Rename map (the 12 permissions that already exist)
 
-O gamemode usa nomes planos. A migração é mecânica e **falha fechada**:
-`hasPermission` já recusa nome desconhecido com `console.error`, então uma
-chamada esquecida nega a ação e aparece no log — o comportamento mais seguro
-possível para um renome.
+The gamemode uses flat names. The migration is mechanical and **fails closed**:
+`hasPermission` already refuses an unknown name with `console.error`, so a
+forgotten call denies the action and shows up in the log — the safest possible
+behavior for a rename.
 
-| Nome atual | Nome novo | Chamadores a atualizar |
+| Current name | New name | Callers to update |
 |---|---|---|
 | `kick` | `players.kick` | `admin-service.js` |
 | `teleport` | `players.teleport` | `admin-service.js` (×2) |
-| `ban` | `players.ban` | nenhum — **órfã** |
+| `ban` | `players.ban` | none — **orphan** |
 | `add_item` | `inventory.grant` | `admin-service.js` |
 | `set_gold` | `economy.adjust` | `admin-service.js`, `economy-regional.js` |
 | `retire_character` | `characters.permakill` | `admin-service.js` |
@@ -133,91 +133,91 @@ possível para um renome.
 | `run_world_probe` | `world.probe` | `fauna-census.js` (×2), `corpse-probe.js` |
 | `manage_recipes` | `crafting.recipes.manage` | `crafting-service.js` (×2) |
 | `manage_staff` | `staff.manage` | `governance-service.js`, `market-stalls-service.js` (×2) |
-| `view_audit` | `logs.view` | nenhum — **órfã** |
-| `manage_whitelist` | `whitelist.review` | nenhum — **órfã** |
+| `view_audit` | `logs.view` | none — **orphan** |
+| `manage_whitelist` | `whitelist.review` | none — **orphan** |
 
-As três órfãs não são renomeadas: são **decididas**. `players.ban` e
-`whitelist.review` ganham implementação (painel); `logs.view` idem. Nenhuma
-permissão pode existir no catálogo sem pelo menos um verificador — e isso vira
-teste (`ADMIN_SECURITY_MATRIX` §3.1).
+The three orphans are not renamed: they are **decided**. `players.ban` and
+`whitelist.review` get an implementation (panel); so does `logs.view`. No
+permission may exist in the catalog without at least one checker — and that becomes a
+test (`ADMIN_SECURITY_MATRIX` §3.1).
 
 ---
 
-## 3. Cargos
+## 3. Roles
 
-Cargo é rótulo operacional e agrupamento de permissões. **Nada no código lê o
-nome do cargo para decidir.**
+A role is an operational label and a grouping of permissions. **Nothing in the code reads the
+role name to decide.**
 
-| Cargo | Para quem | Domínios que alcança |
+| Role | For whom | Domains it reaches |
 |---|---|---|
-| `SUPERADMIN` | dono do servidor | tudo, incluindo `staff.manage` e `server.*` |
-| `ADMIN` | administração | tudo exceto `staff.manage`, `server.restart`, `modules.toggle` |
-| `MODERATOR` | linha de frente | `players.*` até `kick`/`warn`/`mute`, `whitelist.*`, `logs.view`, leituras |
-| `SUPPORT` | atendimento | leituras + `characters.notes` + `whitelist.review`. **Nenhuma ação em jogo** |
-| `GAMEMASTER` | eventos e RP | `players.teleport`, `inventory.grant`, `world.probe`, leituras |
-| `DEVELOPER` | quem constrói | `modules.view`, `logs.view`, `server.view`, leituras. **Nada de jogador** |
+| `SUPERADMIN` | server owner | everything, including `staff.manage` and `server.*` |
+| `ADMIN` | administration | everything except `staff.manage`, `server.restart`, `modules.toggle` |
+| `MODERATOR` | front line | `players.*` up to `kick`/`warn`/`mute`, `whitelist.*`, `logs.view`, reads |
+| `SUPPORT` | player support | reads + `characters.notes` + `whitelist.review`. **No in-game action** |
+| `GAMEMASTER` | events and RP | `players.teleport`, `inventory.grant`, `world.probe`, reads |
+| `DEVELOPER` | builders | `modules.view`, `logs.view`, `server.view`, reads. **Nothing on players** |
 
-Duas escolhas que valem o argumento:
+Two choices worth the argument:
 
-**`GAMEMASTER` recebe `inventory.grant` e não recebe `economy.adjust`.** Entregar
-uma espada para um evento é reversível e visível; mover ouro mexe no razão que a
-economia inteira usa para fechar. São riscos diferentes e o cargo que roda evento
-precisa do primeiro, não do segundo.
+**`GAMEMASTER` gets `inventory.grant` and does not get `economy.adjust`.** Handing
+out a sword for an event is reversible and visible; moving gold touches the ledger that the
+whole economy uses to balance. They are different risks and the role that runs events
+needs the first, not the second.
 
-**`DEVELOPER` não toca em jogador.** É o cargo mais fácil de conceder e o que mais
-gente vai ter. Dar-lhe `players.kick` porque "é útil para testar" transformaria a
-permissão mais concedida na mais poderosa — que é exatamente o argumento que o
-`admin-service.js` usou para manter `reveal_identity` fora do moderador.
+**`DEVELOPER` does not touch players.** It is the easiest role to grant and the one most
+people will have. Giving it `players.kick` because "it's useful for testing" would turn the
+most granted permission into the most powerful — which is exactly the argument that
+`admin-service.js` used to keep `reveal_identity` away from moderators.
 
-A matriz completa cargo × permissão vive na migration de seed e é reproduzida em
-[`ADMIN_SECURITY_MATRIX.md`](../testing/ADMIN_SECURITY_MATRIX.md) §2, que é onde
-ela é **testada**. Duplicá-la aqui criaria uma segunda resposta para a mesma
-pergunta.
-
----
-
-## 4. Por que não há herança
-
-O desenho óbvio seria `SUPERADMIN > ADMIN > MODERATOR > SUPPORT` com herança.
-Foi recusado:
-
-1. **A pergunta que importa é "quem pode `economy.adjust`?"** Com conjuntos
-   explícitos é um `SELECT`. Com herança é uma travessia de árvore que precisa
-   estar certa em todo lugar que a faz — painel, gamemode, teste e a cabeça de
-   quem audita.
-2. **Os cargos deste projeto não formam uma linha.** `GAMEMASTER` pode
-   `inventory.grant`, que `MODERATOR` não pode; `MODERATOR` pode `players.kick`,
-   que `GAMEMASTER` não precisa. Já são um reticulado, não uma escada — forçar
-   escada obrigaria a inventar exceções, e exceção em herança é o defeito clássico.
-3. **O custo é duplicação de linha em uma tabela de seed.** Barato, visível, e
-   um `CHECK` de integridade cobre o resto.
-
-O briefing §21 pede teste de "role inheritance". O teste correspondente aqui é o
-**oposto**: verificar que nenhum cargo ganha permissão que não está escrita para
-ele, mesmo que outro cargo "acima" a tenha. Está em `ADMIN_SECURITY_MATRIX` §2.2.
+The full role × permission matrix lives in the seed migration and is reproduced in
+[`ADMIN_SECURITY_MATRIX.md`](../testing/ADMIN_SECURITY_MATRIX.md) §2, which is where
+it is **tested**. Duplicating it here would create a second answer to the same
+question.
 
 ---
 
-## 5. Modelo de dados
+## 4. Why there is no inheritance
 
-### 5.1 O que muda
+The obvious design would be `SUPERADMIN > ADMIN > MODERATOR > SUPPORT` with inheritance.
+It was rejected:
+
+1. **The question that matters is "who can `economy.adjust`?"** With explicit
+   sets it is a `SELECT`. With inheritance it is a tree traversal that needs to
+   be right everywhere it is done — panel, gamemode, tests and the head of
+   whoever audits.
+2. **This project's roles do not form a line.** `GAMEMASTER` can
+   `inventory.grant`, which `MODERATOR` cannot; `MODERATOR` can `players.kick`,
+   which `GAMEMASTER` does not need. They are already a lattice, not a ladder — forcing a
+   ladder would require inventing exceptions, and exceptions in inheritance are the classic defect.
+3. **The cost is duplicated rows in a seed table.** Cheap, visible, and
+   an integrity `CHECK` covers the rest.
+
+Briefing §21 asks for a "role inheritance" test. The corresponding test here is the
+**opposite**: verify that no role gains a permission not written for
+it, even if another role "above" it has it. It is in `ADMIN_SECURITY_MATRIX` §2.2.
+
+---
+
+## 5. Data model
+
+### 5.1 What changes
 
 ```sql
--- CATÁLOGO — a lista fechada de permissões que existem.
+-- CATALOG — the closed list of permissions that exist.
 CREATE TABLE staff_permission_catalog (
   permission   VARCHAR(64) PRIMARY KEY,
   risk         ENUM('read','mutate','destructive') NOT NULL,
   description  VARCHAR(256) NOT NULL
 );
 
--- CARGOS — a lista fechada de cargos.
+-- ROLES — the closed list of roles.
 CREATE TABLE staff_role_definitions (
   role         VARCHAR(32) PRIMARY KEY,
   label        VARCHAR(64) NOT NULL,
-  is_system    TINYINT(1) NOT NULL DEFAULT 1   -- cargo de sistema não é editável pela UI
+  is_system    TINYINT(1) NOT NULL DEFAULT 1   -- a system role is not editable through the UI
 );
 
--- MAPA cargo → permissão. É a fonte de verdade que hoje é ROLE_PERMISSIONS.
+-- MAP role → permission. It is the source of truth that today is ROLE_PERMISSIONS.
 CREATE TABLE staff_role_permissions (
   role        VARCHAR(32) NOT NULL,
   permission  VARCHAR(64) NOT NULL,
@@ -226,13 +226,13 @@ CREATE TABLE staff_role_permissions (
   CONSTRAINT fk_srp_perm FOREIGN KEY (permission) REFERENCES staff_permission_catalog (permission)
 );
 
--- OVERRIDE por pessoa. Existe para o caso raro, e é sempre temporário por padrão.
+-- Per-person OVERRIDE. It exists for the rare case, and is always temporary by default.
 CREATE TABLE staff_permission_overrides (
   id                    INT AUTO_INCREMENT PRIMARY KEY,
   account_id            INT NOT NULL,
   permission            VARCHAR(64) NOT NULL,
   mode                  ENUM('grant','deny') NOT NULL,
-  reason                VARCHAR(256) NOT NULL,           -- obrigatório
+  reason                VARCHAR(256) NOT NULL,           -- mandatory
   granted_by_account_id INT NOT NULL,
   granted_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   expires_at            TIMESTAMP NULL DEFAULT NULL,
@@ -243,8 +243,8 @@ CREATE TABLE staff_permission_overrides (
 );
 ```
 
-`staff_roles` é alterada, não substituída — é a tabela que os dois leitores já
-consultam:
+`staff_roles` is altered, not replaced — it is the table both readers already
+query:
 
 ```sql
 ALTER TABLE staff_roles
@@ -253,105 +253,105 @@ ALTER TABLE staff_roles
   ADD COLUMN revoked_by_account_id INT NULL DEFAULT NULL,
   ADD COLUMN revoke_reason         VARCHAR(256) NULL DEFAULT NULL,
   ADD CONSTRAINT fk_staff_role_def FOREIGN KEY (role) REFERENCES staff_role_definitions (role);
--- e, SOMENTE depois que os dois leitores agregarem múltiplas linhas:
---   DROP INDEX account_id;   -- o UNIQUE que impede cargo temporário simultâneo
+-- and, ONLY after both readers aggregate multiple rows:
+--   DROP INDEX account_id;   -- the UNIQUE that prevents a simultaneous temporary role
 --   ADD KEY idx_staff_account_active (account_id, revoked_at, expires_at);
 ```
 
-Revogar cargo passa a ser `revoked_at = NOW()` com motivo, **nunca `DELETE`** —
-mesma regra que `CONTRIBUTING.md` §3.7 já impõe a personagem, pelo mesmo motivo:
-o histórico de quem teve qual poder e quando precisa sobreviver à revogação.
+Revoking a role becomes `revoked_at = NOW()` with a reason, **never `DELETE`** —
+the same rule that `CONTRIBUTING.md` §3.7 already imposes on characters, for the same reason:
+the history of who had which power and when needs to survive the revocation.
 
-`staff_permissions` (a tabela vazia de hoje, cuja FK aponta para a *linha* de uma
-pessoa e não para o cargo) é **descontinuada** pela migration. Ver
+`staff_permissions` (today's empty table, whose FK points to a person's *row*
+and not to the role) is **discontinued** by the migration. See
 [ADR 005](../technical/ADR_005_ADMIN_RBAC.md) §3.
 
-### 5.2 Resolução efetiva
+### 5.2 Effective resolution
 
 ```
-permissões(conta) =
-      ∪ { staff_role_permissions[r] : r ∈ cargos ativos da conta }
-    ∪   { p : override(conta, p, 'grant') ativo }
-    ∖   { p : override(conta, p, 'deny')  ativo }
+permissions(account) =
+      ∪ { staff_role_permissions[r] : r ∈ the account's active roles }
+    ∪   { p : active override(account, p, 'grant') }
+    ∖   { p : active override(account, p, 'deny') }
 ```
 
-Cargo ativo = `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())`.
-**`deny` sempre vence.** Um override de negação é a forma de suspender alguém de
-uma capacidade sem tirar o cargo inteiro — e ele não pode ser contornado somando
-outro cargo.
+Active role = `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW())`.
+**`deny` always wins.** A deny override is the way to suspend someone from
+a capability without taking away the whole role — and it cannot be bypassed by adding
+another role.
 
-### 5.3 Ordem de migração, porque a ordem importa
+### 5.3 Migration order, because order matters
 
-`SELECT role FROM staff_roles WHERE account_id = ? LIMIT 1` existe hoje em dois
-lugares. Soltar o `UNIQUE` antes de trocar essas duas leituras faria a segunda
-linha de cargo ser silenciosamente ignorada — a pessoa recebe metade do poder que
-foi concedido e ninguém vê erro.
+`SELECT role FROM staff_roles WHERE account_id = ? LIMIT 1` exists today in two
+places. Dropping the `UNIQUE` before changing those two reads would make the second
+role row silently ignored — the person gets half the power that
+was granted and nobody sees an error.
 
-1. Criar as tabelas novas e semear cargo→permissão a partir do `ROLE_PERMISSIONS` atual.
-2. Trocar os dois leitores para agregar **todas** as linhas ativas.
-3. Só então soltar o `UNIQUE(account_id)`.
+1. Create the new tables and seed role→permission from the current `ROLE_PERMISSIONS`.
+2. Change both readers to aggregate **all** active rows.
+3. Only then drop the `UNIQUE(account_id)`.
 
 ---
 
-## 6. Contrato do middleware (painel)
+## 6. Middleware contract (panel)
 
 ```js
-// apps/web — substitui requireStaff em TODAS as rotas de staff
+// apps/web — replaces requireStaff on ALL staff routes
 requirePermission('whitelist.approve')
 ```
 
-Obrigações, todas verificáveis por teste:
+Obligations, all verifiable by tests:
 
-1. Sessão ausente → `401`. Sem permissão → `403`. **Nunca `404`** para esconder
-   existência de rota: staff é população conhecida e 404 confunde diagnóstico.
-2. A resposta de negação não diz qual permissão faltou nem quais a conta tem.
-   O motivo detalhado vai para a auditoria, não para o corpo HTTP.
-3. Verifica também `accounts.status = 'active'` da própria staff (fecha §4.10 da
-   auditoria): conta banida perde o painel junto com o jogo.
-4. Permissão fora do catálogo → `500` **no boot da rota**, não em runtime. Uma
-   rota registrada com permissão inexistente é bug de programação e deve impedir
-   o servidor de subir, não negar silenciosamente em produção.
-5. Toda negação grava `audit_logs` com `outcome='denied'`, a permissão pedida e o
-   `request_id`. É o sinal de sondagem que hoje não existe.
-6. Cache de permissões por sessão com TTL curto (≤ 60 s) **e** invalidação
-   imediata em qualquer escrita de `staff_roles`/overrides. Revogação que demora
-   um TTL para valer é aceitável para concessão; para revogação, não.
+1. Missing session → `401`. No permission → `403`. **Never `404`** to hide
+   a route's existence: staff is a known population and 404 confuses diagnosis.
+2. The denial response does not say which permission was missing or which ones the account has.
+   The detailed reason goes to the audit, not to the HTTP body.
+3. Also checks the staff member's own `accounts.status = 'active'` (closes audit
+   §4.10): a banned account loses the panel along with the game.
+4. A permission outside the catalog → `500` **at route boot**, not at runtime. A
+   route registered with a nonexistent permission is a programming bug and must prevent
+   the server from starting, not silently deny in production.
+5. Every denial writes `audit_logs` with `outcome='denied'`, the requested permission and the
+   `request_id`. It is the probing signal that does not exist today.
+6. Per-session permission cache with a short TTL (≤ 60 s) **and** immediate
+   invalidation on any write to `staff_roles`/overrides. A revocation that takes
+   a TTL to take effect is acceptable for grants; for revocation, it is not.
 
-No gamemode, `admin-service.hasPermission(actorId, permission)` mantém a
-assinatura — muda só a origem do `Set`: passa a vir do banco no login, com a
-mesma resolução da §5.2. O `staffCache` continua sendo por `actorId` e continua
-sendo limpo na desconexão (`admin-service.test.js` já cobre isso).
+In the gamemode, `admin-service.hasPermission(actorId, permission)` keeps its
+signature — only the origin of the `Set` changes: it now comes from the database at login, with the
+same resolution as §5.2. `staffCache` remains keyed by `actorId` and is still
+cleared on disconnect (`admin-service.test.js` already covers this).
 
-**Se o banco estiver indisponível no login, o resultado é conjunto vazio.** Staff
-sem poder é um problema pequeno; staff com poder herdado de um cache que ninguém
-consegue invalidar é um incidente.
+**If the database is unavailable at login, the result is an empty set.** Staff
+without power is a small problem; staff with power inherited from a cache nobody
+can invalidate is an incident.
 
 ---
 
 ## 7. Discord
 
-O Discord **sugere**; o banco **decide**. Concretamente:
+Discord **suggests**; the database **decides**. Concretely:
 
-| Direção | Permitido? |
+| Direction | Allowed? |
 |---|---|
-| Painel aprova whitelist → bot adiciona cargo no Discord | ✅ existe hoje (`/api/sync-role`) |
-| Cargo do Discord → cargo de staff no banco | ⚠️ só como **proposta**, nunca aplicação automática |
-| Cargo do Discord → permissão em jogo | ❌ **nunca** |
+| Panel approves whitelist → bot adds a role on Discord | ✅ exists today (`/api/sync-role`) |
+| Discord role → staff role in the database | ⚠️ only as a **proposal**, never automatic application |
+| Discord role → in-game permission | ❌ **never** |
 
-O caminho de sugestão, se for construído, produz uma linha em uma fila de
-revisão que um `SUPERADMIN` confirma com motivo. Nada em `staff_roles` nasce de
-um webhook.
+The suggestion path, if built, produces a row in a review queue
+that a `SUPERADMIN` confirms with a reason. Nothing in `staff_roles` is born from
+a webhook.
 
-Três razões: quem administra o servidor do Discord não é necessariamente quem
-administra o jogo; cargo do Discord é editável por qualquer um com
-`MANAGE_ROLES` lá, uma superfície que este projeto não controla; e um outage do
-Discord não pode alterar quem pode banir no jogo.
+Three reasons: whoever administers the Discord server is not necessarily who
+administers the game; a Discord role is editable by anyone with
+`MANAGE_ROLES` there, a surface this project does not control; and a Discord
+outage cannot change who can ban in game.
 
-**Pendência real, registrada:** `apps/bot-discord/voiceChannels.js` usa
-`STAFF_ROLE_ID` do Discord para autorizar `/voz-criar` e `/voz-fechar`. É o único
-lugar onde o Discord é autoridade sobre uma ação. O impacto é baixo (canal de voz
-temporário, nenhum efeito em jogo ou em dado persistente) e a alternativa —
-consultar `staff_roles` a cada slash command — acopla o bot ao banco, que hoje ele
-não toca. Fica **aceito e documentado**, não corrigido, com um gatilho para
-reabrir: se um slash command passar a ter efeito em jogo ou em dado persistente,
-ele migra para `requirePermission` via painel antes de existir.
+**Real pending item, recorded:** `apps/bot-discord/voiceChannels.js` uses the
+Discord `STAFF_ROLE_ID` to authorize `/voz-criar` and `/voz-fechar`. It is the only
+place where Discord is the authority over an action. The impact is low (a temporary
+voice channel, no effect in game or on persistent data) and the alternative —
+querying `staff_roles` on every slash command — couples the bot to the database, which today it
+does not touch. It is **accepted and documented**, not fixed, with a trigger to
+reopen: if a slash command starts having an effect in game or on persistent data,
+it migrates to `requirePermission` via the panel before it exists.

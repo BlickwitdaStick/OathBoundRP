@@ -1,203 +1,203 @@
-# Fluxo de moderação
+# Moderation workflow
 
-**Status:** desenho aceito, implementação não iniciada
-**Permissões:** [`RBAC.md`](RBAC.md) · **Plataforma:** [`ADMIN_PLATFORM.md`](ADMIN_PLATFORM.md)
-**Rubrica de whitelist (canônica):** [`../staff/WHITELIST_RUBRIC.md`](../staff/WHITELIST_RUBRIC.md)
-
----
-
-## 1. O princípio
-
-Moderação em Heavy RP não é uma sequência de punições soltas. É um **histórico
-por pessoa** que precisa responder, meses depois e para alguém que não estava
-lá: *o que aconteceu, quem decidiu, com base em quê, e o que foi feito.*
-
-Hoje o servidor responde a primeira e a terceira metade dessa pergunta. Um
-`/kick` grava `audit_logs` com o motivo dentro de um campo de texto livre e
-manda uma linha para o Discord. Não existe nada que ligue o kick de hoje ao warn
-da semana passada e ao ban de amanhã.
-
-O **caso** é a coisa que liga.
+**Status:** design accepted, implementation not started
+**Permissions:** [`RBAC.md`](RBAC.md) · **Platform:** [`ADMIN_PLATFORM.md`](ADMIN_PLATFORM.md)
+**Whitelist rubric (canonical):** [`../staff/WHITELIST_RUBRIC.md`](../staff/WHITELIST_RUBRIC.md)
 
 ---
 
-## 2. O caso
+## 1. The principle
 
-Um caso é a unidade de moderação. Ações vivem dentro dele.
+Moderation in Heavy RP is not a sequence of loose punishments. It is a **history
+per person** that must answer, months later and for someone who was not
+there: *what happened, who decided, based on what, and what was done.*
+
+Today the server answers the first and third halves of that question. A
+`/kick` writes `audit_logs` with the reason inside a free-text field and
+sends a line to Discord. Nothing links today's kick to last week's warn
+and tomorrow's ban.
+
+The **case** is the thing that links them.
+
+---
+
+## 2. The case
+
+A case is the unit of moderation. Actions live inside it.
 
 ```
-Caso #142
-  target      Ralof Battleborn (conta 87)
+Case #142
+  target      Ralof Battleborn (account 87)
   type        metagaming
   status      resolved
   opened_by   moderator Sigrid          2026-08-10 21:14
-  reason      "usou informação de Discord em cena"
-  ├─ evidência  captura, link de log de chat
-  ├─ ação       warn      (moderator Sigrid)   2026-08-10
-  ├─ ação       kick      (moderator Sigrid)   2026-08-10
-  └─ ação       tempban   (admin Bjorn, 72 h)  2026-08-11
+  reason      "used Discord information in a scene"
+  ├─ evidence   screenshot, chat log link
+  ├─ action     warn      (moderator Sigrid)   2026-08-10
+  ├─ action     kick      (moderator Sigrid)   2026-08-10
+  └─ action     tempban   (admin Bjorn, 72 h)  2026-08-11
 ```
 
-| Campo | Regra |
+| Field | Rule |
 |---|---|
-| `id` | sequencial, é o número que a staff cita |
-| `target_account_id` | a **conta**, não o personagem — pessoa que age é conta |
-| `target_character_id` | opcional; preenchido quando o caso é sobre um personagem |
-| `type` | vocabulário fechado (ver §2.1) |
+| `id` | sequential; it is the number staff cite |
+| `target_account_id` | the **account**, not the character — the person who acts is an account |
+| `target_character_id` | optional; filled in when the case is about a character |
+| `type` | closed vocabulary (see §2.1) |
 | `status` | `open` · `under_review` · `resolved` · `appealed` · `overturned` |
-| `reason` | obrigatório na abertura |
-| `evidence` | anexos e links; opcional, mas exigido para `status='resolved'` em caso 🔴 |
-| `opened_by_account_id` | quem abriu |
+| `reason` | mandatory on opening |
+| `evidence` | attachments and links; optional, but required for `status='resolved'` in a 🔴 case |
+| `opened_by_account_id` | who opened it |
 | `created_at` / `resolved_at` | |
 
-**Ações** (`moderation_actions`) referenciam o caso e carregam o que a ação tem
-de próprio: tipo, executor, motivo, duração, resultado, `request_id` e a linha de
-`audit_logs` correspondente.
+**Actions** (`moderation_actions`) reference the case and carry what is specific
+to the action: type, executor, reason, duration, result, `request_id` and the corresponding
+`audit_logs` row.
 
-### 2.1 Tipos de caso
+### 2.1 Case types
 
-`metagaming` · `powergaming` · `rdm` (morte sem RP) · `ooc_conduct` (conduta fora
-de personagem) · `exploit` · `cheating` · `harassment` · `whitelist_fraud` ·
+`metagaming` · `powergaming` · `rdm` (death without RP) · `ooc_conduct` (out-of-character
+conduct) · `exploit` · `cheating` · `harassment` · `whitelist_fraud` ·
 `other`.
 
-Vocabulário fechado, e não texto livre, porque a pergunta operacional que
-justifica o campo é *"quantos casos de exploit este mês?"*. Texto livre não
-responde. `other` existe e exige explicação no `reason` — e um `other` que vira
-recorrente é o sinal de que falta um tipo.
+A closed vocabulary, not free text, because the operational question that
+justifies the field is *"how many exploit cases this month?"*. Free text does not
+answer that. `other` exists and requires an explanation in `reason` — and an `other` that becomes
+recurring is the signal that a type is missing.
 
-### 2.2 Uma ação pode existir sem caso?
+### 2.2 Can an action exist without a case?
 
-**Sim, e é o caminho normal.** Exigir abertura de caso para um kick de "volte
-depois de ler as regras" transformaria moderação leve em burocracia, e a resposta
-previsível seria a staff parar de registrar.
+**Yes, and it is the normal path.** Requiring a case to be opened for a "come back
+after reading the rules" kick would turn light moderation into bureaucracy, and the predictable
+response would be for staff to stop recording.
 
-A regra é por severidade:
+The rule depends on severity:
 
-| Ação | Caso obrigatório? |
+| Action | Case required? |
 |---|---|
-| `warn`, `kick`, `mute` | não — mas a ação é sempre registrada e **anexável** a um caso depois |
-| `tempban`, `ban`, `permakill`, congelamento de conta | **sim** |
+| `warn`, `kick`, `mute` | no — but the action is always recorded and **attachable** to a case later |
+| `tempban`, `ban`, `permakill`, account freeze | **yes** |
 
-Uma ação solta pode ser puxada para dentro de um caso mais tarde, que é como o
-histórico se forma na prática: três kicks soltos viram um caso quando alguém nota
-o padrão.
+A loose action can be pulled into a case later, which is how the
+history forms in practice: three loose kicks become a case when someone notices
+the pattern.
 
 ---
 
-## 3. Ações e o que cada uma exige
+## 3. Actions and what each one requires
 
-| Ação | Motivo | Prazo | Caso | Efeito | Existe? |
+| Action | Reason | Duration | Case | Effect | Exists? |
 |---|---|---|---|---|---|
-| `note` | — | — | não | anotação interna no perfil | ❌ |
-| `warn` | ✅ | — | não | registro + aviso ao jogador | ❌ |
-| `kick` | ✅ | — | não | encerra a sessão atual | jogo ✅ / painel ❌ |
-| `mute` | ✅ | ✅ | não | silencia chat e voz | ❌ (não existe em jogo) |
-| `tempban` | ✅ | ✅ | ✅ | bloqueia login até expirar | ❌ |
-| `ban` | ✅ | — | ✅ | bloqueia login sem prazo | ❌ |
-| `unban` | ✅ | — | ✅ | reativa a conta | ❌ |
-| `permakill` | ✅ | — | ✅ | `characters.status='retired'` | jogo ✅ / painel ❌ |
-| `account_freeze` | ✅ | — | ✅ | bloqueia movimentação de patrimônio | ❌ |
+| `note` | — | — | no | internal note on the profile | ❌ |
+| `warn` | ✅ | — | no | record + warning to the player | ❌ |
+| `kick` | ✅ | — | no | ends the current session | game ✅ / panel ❌ |
+| `mute` | ✅ | ✅ | no | silences chat and voice | ❌ (does not exist in game) |
+| `tempban` | ✅ | ✅ | ✅ | blocks login until it expires | ❌ |
+| `ban` | ✅ | — | ✅ | blocks login indefinitely | ❌ |
+| `unban` | ✅ | — | ✅ | reactivates the account | ❌ |
+| `permakill` | ✅ | — | ✅ | `characters.status='retired'` | game ✅ / panel ❌ |
+| `account_freeze` | ✅ | — | ✅ | blocks asset movement | ❌ |
 
-O `MODERATION_WORKFLOW` não inventa capacidade: as ausências acima são as mesmas
-que a [auditoria §4.8](../research/ADMIN_PLATFORM_AUDIT.md) mediu. `mute` e
-`freeze` não existem no jogo e **não entram no painel antes de existirem lá**.
+The `MODERATION_WORKFLOW` does not invent capability: the gaps above are the same ones
+that the [audit §4.8](../research/ADMIN_PLATFORM_AUDIT.md) measured. `mute` and
+`freeze` do not exist in the game and **do not go into the panel before they exist there**.
 
 ---
 
-## 4. Ban — o desenho, porque a metade que falta é pequena
+## 4. Ban — the design, because the missing half is small
 
-Os dois pontos de aplicação já existem e funcionam:
+Both enforcement points already exist and work:
 
 ```
 whitelist.js:124      accounts.status !== 'active'  → kick
-game-api isEligible   accounts.status !== 'active'  → 403 na fila
-master API            game_sessions.revoked_at IS NULL exigido
+game-api isEligible   accounts.status !== 'active'  → 403 in the queue
+master API            game_sessions.revoked_at IS NULL required
 ```
 
-O que falta é o **escritor**. Um ban é uma transação única:
+What is missing is the **writer**. A ban is a single transaction:
 
 ```sql
 BEGIN;
   INSERT INTO bans (account_id, case_id, type, reason,
-                    issued_by_account_id, expires_at);      -- NULL = permanente
+                    issued_by_account_id, expires_at);      -- NULL = permanent
   UPDATE accounts SET status = 'banned' WHERE id = ?;
   UPDATE game_sessions SET revoked_at = NOW()
-    WHERE account_id = ? AND revoked_at IS NULL;            -- corta a reconexão
-  INSERT INTO audit_logs (...);                             -- mesma transação
+    WHERE account_id = ? AND revoked_at IS NULL;            -- cuts off reconnection
+  INSERT INTO audit_logs (...);                             -- same transaction
 COMMIT;
 ```
 
-Depois do commit, e fora dele: notificação ao Discord (manda-e-esquece, como o
-`moderation-log` já faz) e — quando a ponte existir — o kick do jogador online.
+After the commit, and outside it: a Discord notification (fire-and-forget, as
+`moderation-log` already does) and — when the bridge exists — the kick of the online player.
 
-**Três coisas que este desenho assume e que precisam ser ditas:**
+**Three things this design assumes that need to be said:**
 
-1. **Revogar sessão não expulsa quem já está dentro.** O SkyMP consulta o master
-   API na conexão. Até a ponte existir, ban de jogador online só vale no próximo
-   login, e o painel deve dizer isso na confirmação em vez de fingir imediatismo.
-2. **`tempban` precisa de alguém que expire.** `expires_at` no passado não
-   reativa a conta sozinho. A expiração é uma varredura periódica que devolve
-   `accounts.status='active'` — e ela mesma grava auditoria, porque uma conta que
-   volta a poder entrar é uma mudança de estado como qualquer outra.
-3. **`unban` é `INSERT`, nunca `DELETE`.** O ban revogado continua na tabela com
-   `revoked_at`, `revoked_by` e motivo. Histórico de punição que desaparece ao ser
-   revertido não é histórico — é a mesma regra do `CONTRIBUTING.md` §3.7.
+1. **Revoking the session does not expel someone who is already inside.** SkyMP queries the master
+   API on connection. Until the bridge exists, a ban on an online player only takes effect at the next
+   login, and the panel must say so in the confirmation instead of pretending to be immediate.
+2. **`tempban` needs something that expires it.** An `expires_at` in the past does not
+   reactivate the account by itself. Expiration is a periodic sweep that sets
+   `accounts.status='active'` back — and it writes an audit entry itself, because an account that
+   can enter again is a state change like any other.
+3. **`unban` is an `INSERT`, never a `DELETE`.** The revoked ban stays in the table with
+   `revoked_at`, `revoked_by` and a reason. A punishment history that disappears when
+   reverted is not a history — it is the same rule as `CONTRIBUTING.md` §3.7.
 
 ---
 
-## 5. Personagem: aposentar, matar e a pergunta do restore
+## 5. Character: retire, kill and the restore question
 
-Hoje `/permakill` grava `status='retired'` e o jogador precisa de nova aplicação
-de whitelist. Nunca há `DELETE`. Isso está certo e não muda.
+Today `/permakill` writes `status='retired'` and the player needs a new whitelist
+application. There is never a `DELETE`. This is right and does not change.
 
-O que precisa de nome — e o catálogo do RBAC já separou — são **dois atos
-diferentes que hoje usam o mesmo comando**:
+What needs a name — and the RBAC catalog has already separated them — are **two different
+acts that today use the same command**:
 
-| Ato | O que é | Reversível? |
+| Act | What it is | Reversible? |
 |---|---|---|
-| `characters.retire` | administrativo: ficha aprovada por engano, personagem duplicado, pedido do jogador | sim, por decisão |
-| `characters.permakill` | narrativo: consequência de RP, morte definitiva na história | **não** |
+| `characters.retire` | administrative: sheet approved by mistake, duplicate character, player request | yes, by decision |
+| `characters.permakill` | narrative: an RP consequence, definitive death in the story | **no** |
 
-Confundir os dois é caro nas duas direções: reverter um CK narrativo destrói a
-consequência que o servidor inteiro existe para produzir; **não** reverter um
-erro administrativo pune o jogador por um erro da staff.
+Confusing the two is costly in both directions: reverting a narrative CK destroys the
+consequence the whole server exists to produce; **not** reverting an
+administrative error punishes the player for a staff mistake.
 
-### 5.1 `characters.restore` existe, e é a permissão mais restrita do catálogo
+### 5.1 `characters.restore` exists, and it is the most restricted permission in the catalog
 
-Ela existe porque erro administrativo acontece — o próprio repositório registra
-um caso em que aprovar uma ficha nova ressuscitava um personagem que tinha levado
-`/permakill`, corrigido com um `WHERE c.status='pending'`.
+It exists because administrative errors happen — the repository itself records
+a case in which approving a new sheet resurrected a character that had received
+`/permakill`, fixed with a `WHERE c.status='pending'`.
 
-Regras:
+Rules:
 
-1. só `SUPERADMIN`;
-2. exige caso aberto e motivo;
-3. **nunca** restaura personagem cujo registro diz `permakill` — restaura
-   `retire`. Reverter CK narrativo não é uma operação do sistema; se um dia for
-   necessário, é decisão explícita fora do painel, com o registro dizendo isso.
+1. only `SUPERADMIN`;
+2. requires an open case and a reason;
+3. **never** restores a character whose record says `permakill` — it restores
+   `retire`. Reverting a narrative CK is not a system operation; if it is ever
+   necessary, it is an explicit decision outside the panel, with the record saying so.
 
-### 5.2 O aviso que a Constituição exige e o código ainda não dá
+### 5.2 The warning the Constitution requires and the code does not yet give
 
-O Anexo A.3 da `CONSTITUICAO.md` registra em aberto: a §5 proíbe escolha
-irreversível **sem aviso**, e não existe mecanismo que avise o jogador de que
-está entrando em território irreversível.
+Annex A.3 of `CONSTITUICAO.md` records as open: §5 forbids an irreversible choice
+**without warning**, and there is no mechanism that warns the player that they
+are entering irreversible territory.
 
-Este documento não resolve isso — é gameplay, não moderação. Mas fixa a metade
-que é de moderação: **a staff é avisada.** Todo diálogo de `permakill`, ban
-permanente e revelação de identidade nomeia o alvo e declara, em uma frase, que
-não há desfazer.
+This document does not solve that — it is gameplay, not moderation. But it fixes the half
+that belongs to moderation: **staff are warned.** Every `permakill`, permanent
+ban and identity reveal dialog names the target and declares, in one sentence, that
+there is no undo.
 
 ---
 
 ## 6. Whitelist
 
-Estados, substituindo os três de hoje (`pending`, `approved`, `rejected`):
+States, replacing today's three (`pending`, `approved`, `rejected`):
 
 ```
                  ┌──────────────────┐
-   aplicação ──► │     PENDING      │
+  application ─► │     PENDING      │
                  └────────┬─────────┘
-                          │ revisor assume
+                          │ reviewer takes it
                  ┌────────▼─────────┐
             ┌────┤  UNDER_REVIEW    ├────┐
             │    └────────┬─────────┘    │
@@ -205,91 +205,91 @@ Estados, substituindo os três de hoje (`pending`, `approved`, `rejected`):
    ┌────────▼───┐  ┌──────▼──────┐  ┌────▼─────────┐
    │  APPROVED  │  │  REJECTED   │  │NEEDS_CHANGES │
    └────────────┘  └─────────────┘  └──────┬───────┘
-                                           │ jogador reenvia
+                                           │ player resubmits
                                            └──► PENDING
 ```
 
-| Estado | Significa | Quem move |
+| State | Means | Who moves it |
 |---|---|---|
-| `PENDING` | na fila, sem revisor | — |
-| `UNDER_REVIEW` | alguém assumiu | `whitelist.review` |
-| `NEEDS_CHANGES` | falta algo específico; parecer obrigatório | `whitelist.review` |
-| `APPROVED` | libera entrada no servidor | `whitelist.approve` |
-| `REJECTED` | recusada; parecer obrigatório | `whitelist.review` |
+| `PENDING` | in the queue, no reviewer | — |
+| `UNDER_REVIEW` | someone took it | `whitelist.review` |
+| `NEEDS_CHANGES` | something specific is missing; assessment mandatory | `whitelist.review` |
+| `APPROVED` | allows entry to the server | `whitelist.approve` |
+| `REJECTED` | refused; assessment mandatory | `whitelist.review` |
 
-Mudanças que os estados novos obrigam:
+Changes the new states require:
 
-1. **`reviewed_by` passa a ser `account_id`.** Hoje a coluna é
-   `VARCHAR(128)` e **nunca é preenchida** — o `PATCH` grava `reviewer_notes` e
-   `reviewed_at`, e o revisor só aparece indiretamente em `audit_logs`. Uma FK
-   para `accounts` responde "quem aprovou?" com um `JOIN`, não com uma busca em
-   texto.
-2. **`UNDER_REVIEW` é o que impede duas pessoas revisarem a mesma ficha.** É o
-   caso de concorrência real do painel: transição só vale se o estado anterior for
-   o esperado, e quem perder a corrida recebe "outro revisor assumiu", não um
-   `ok:true` mentiroso.
-3. **`NEEDS_CHANGES` precisa de reenvio.** A regra atual bloqueia nova aplicação
-   com `pending` ou `approved` ativa; `NEEDS_CHANGES` tem de deixar reenviar,
-   mantendo a aplicação original ligada à nova para o histórico.
-4. **`needs_extra_review` continua sendo dica, não porta.** A heurística de
-   conceito forte marca a ficha para atenção — nunca reprova sozinha. Está certo
-   e não muda.
+1. **`reviewed_by` becomes an `account_id`.** Today the column is
+   `VARCHAR(128)` and **is never filled in** — the `PATCH` writes `reviewer_notes` and
+   `reviewed_at`, and the reviewer only shows up indirectly in `audit_logs`. An FK
+   to `accounts` answers "who approved?" with a `JOIN`, not with a text
+   search.
+2. **`UNDER_REVIEW` is what prevents two people from reviewing the same sheet.** It is the
+   panel's real concurrency case: a transition is only valid if the previous state is
+   the expected one, and whoever loses the race gets "another reviewer took it", not a
+   lying `ok:true`.
+3. **`NEEDS_CHANGES` needs resubmission.** The current rule blocks a new application
+   while there is an active `pending` or `approved` one; `NEEDS_CHANGES` must allow resubmission,
+   keeping the original application linked to the new one for the history.
+4. **`needs_extra_review` remains a hint, not a gate.** The strong-concept heuristic
+   flags the sheet for attention — it never rejects on its own. This is right
+   and does not change.
 
 ---
 
-## 7. Apelação
+## 7. Appeal
 
-Uma apelação é uma **transição de caso**, não uma entidade nova:
+An appeal is a **case transition**, not a new entity:
 `resolved → appealed → (overturned | resolved)`.
 
-| Regra | Motivo |
+| Rule | Reason |
 |---|---|
-| Quem executou a ação não julga a própria apelação | o conflito é óbvio e o sistema deve impedi-lo, não confiar na disciplina |
-| `overturned` exige motivo e não apaga nada | a ação original continua no histórico com o desfecho registrado ao lado |
-| `overturned` de ban dispara `unban`; de `retire`, permite `restore`; de `permakill`, **não dispara nada automático** | §5.1 |
+| Whoever executed the action does not judge their own appeal | the conflict is obvious and the system must prevent it, not rely on discipline |
+| `overturned` requires a reason and deletes nothing | the original action stays in the history with the outcome recorded alongside it |
+| `overturned` of a ban triggers `unban`; of `retire`, allows `restore`; of `permakill`, **triggers nothing automatically** | §5.1 |
 
-Canal de entrada (Discord, formulário, ticket) fica em aberto — ver
-[`ADMIN_PLATFORM.md`](ADMIN_PLATFORM.md#8-fila-de-reports--preparação-não-construção).
+The intake channel (Discord, form, ticket) remains open — see
+[`ADMIN_PLATFORM.md`](ADMIN_PLATFORM.md#8-report-queue--preparation-not-construction).
 
 ---
 
-## 8. Auditoria: o que toda ação grava
+## 8. Auditing: what every action records
 
-Contra a lista pedida, com o que muda em `audit_logs` ([auditoria §4.7](../research/ADMIN_PLATFORM_AUDIT.md)):
+Against the requested list, with what changes in `audit_logs` ([audit §4.7](../research/ADMIN_PLATFORM_AUDIT.md)):
 
-| Campo | Hoje | Depois |
+| Field | Today | After |
 |---|---|---|
 | `actor_account_id` | ✅ | ✅ |
 | `action` | ✅ | ✅ |
 | `target_account_id` | ✅ | ✅ + `target_character_id` |
-| `permission` | ❌ | ✅ — a permissão que autorizou |
-| `reason` | dentro de `details` | ✅ coluna própria |
-| `before` / `after` | só `setGold`, em texto | ✅ JSON, nos campos que mudaram |
+| `permission` | ❌ | ✅ — the permission that authorized it |
+| `reason` | inside `details` | ✅ its own column |
+| `before` / `after` | only `setGold`, as text | ✅ JSON, on the fields that changed |
 | `request_id` | ❌ | ✅ |
 | `outcome` | ❌ | ✅ `allowed` · `denied` · `failed` |
 | `created_at` | ✅ | ✅ |
-| `case_id` | ❌ | ✅ quando houver |
+| `case_id` | ❌ | ✅ when there is one |
 
-**Negação é auditada.** Hoje não é: `sendDenied()` avisa o jogador e não escreve
-nada; o `403` do painel não escreve nada. Sem isso, "alguém está testando
-permissões que não tem" é invisível — e esse é o sinal que se quer ver antes do
-incidente.
+**Denial is audited.** Today it is not: `sendDenied()` warns the player and writes
+nothing; the panel's `403` writes nothing. Without this, "someone is testing
+permissions they do not have" is invisible — and that is the signal you want to see before the
+incident.
 
-**Ninguém apaga `audit_logs` pelo painel.** Não existe rota de escrita destrutiva
-sobre a tabela e não vai existir. A proteção real, porém, é de banco: hoje um
-único usuário SQL serve painel, `game-api` e gamemode, com DML completa. Fechar
-isso — usuário com `INSERT`/`SELECT` e sem `DELETE`/`UPDATE` em `audit_logs` — é
-item do [`ADMIN_SECURITY_MATRIX`](../testing/ADMIN_SECURITY_MATRIX.md) §5, e é a
-diferença entre "não há caminho" e "não é possível".
+**Nobody deletes `audit_logs` through the panel.** There is no destructive write route
+on the table and there will not be one. The real protection, however, is at the database: today a
+single SQL user serves the panel, `game-api` and the gamemode, with full DML. Closing
+that — a user with `INSERT`/`SELECT` and without `DELETE`/`UPDATE` on `audit_logs` — is
+an item of the [`ADMIN_SECURITY_MATRIX`](../testing/ADMIN_SECURITY_MATRIX.md) §5, and it is the
+difference between "there is no path" and "it is not possible".
 
 ---
 
 ## 9. Discord
 
-O Discord continua sendo **notificação**, nunca registro. `moderation-log` não é
-aguardado, engole erro e não pode atrasar nem desfazer uma decisão já gravada.
-Vale igual para caso, ban, apelação e whitelist.
+Discord remains a **notification**, never a record. `moderation-log` is not
+awaited, swallows errors and can neither delay nor undo a decision already recorded.
+The same applies to cases, bans, appeals and whitelist.
 
-O que muda: o evento passa a citar o número do caso, para que a linha no canal
-seja acionável — que é a mesma razão pela qual `nomeParaLog` já inclui o
-`actorId` em hexadecimal ao lado do nome.
+What changes: the event starts citing the case number, so that the line in the channel
+is actionable — which is the same reason `nomeParaLog` already includes the
+`actorId` in hexadecimal next to the name.
