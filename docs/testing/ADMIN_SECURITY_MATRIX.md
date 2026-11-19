@@ -1,208 +1,208 @@
-# Matriz de segurança da plataforma administrativa
+# Administrative platform security matrix
 
-**O que está travado por teste, o que está travado só por convenção, e o que não
-está travado.** As três colunas existem porque misturá-las é como um projeto acha
-que está seguro.
+**What is locked by tests, what is locked only by convention, and what is not
+locked.** The three columns exist because mixing them is how a project comes to think
+it is secure.
 
-Referências: [auditoria](../research/ADMIN_PLATFORM_AUDIT.md) ·
+References: [audit](../research/ADMIN_PLATFORM_AUDIT.md) ·
 [ADR 005](../technical/ADR_005_ADMIN_RBAC.md) · [RBAC](../admin/RBAC.md) ·
-[moderação](../admin/MODERATION_WORKFLOW.md)
+[moderation](../admin/MODERATION_WORKFLOW.md)
 
 ---
 
-## 0. Estado em 2026-08-13, dito sem eufemismo
+## 0. State on 2026-08-13, stated without euphemism
 
-> **Nenhum teste desta matriz existe.** Este documento é o portão, não o
-> relatório. Ele descreve o que precisa passar **antes** de qualquer pessoa da
-> staff receber acesso ao painel — e nada disso passa hoje.
+> **None of the tests in this matrix exist.** This document is the gate, not the
+> report. It describes what must pass **before** any member of
+> staff receives access to the panel — and none of it passes today.
 
-O que existe hoje, para não confundir os dois:
+What exists today, so the two are not confused:
 
-| Suíte | Estado | O que cobre de administrativo |
+| Suite | State | What it covers administratively |
 |---|---|---|
-| `apps/web/server.test.js` | passa | 12 rotas respondem **401 sem sessão**; validação de ficha; ticket guarda hash; contrato do master API |
-| `skymp/gamemode/permissions.behavior.test.js` | passa | matriz cargo × comando **do gamemode**, por comportamento real |
-| `skymp/gamemode/parked-staff-permissions.test.js` | passa | comandos PARKED; nenhum nível numérico sobrou |
-| `skymp/gamemode/admin-service.test.js` | passa | `hasPermission` recusa argumento inválido; cargo não sobrevive à desconexão |
+| `apps/web/server.test.js` | passes | 12 routes respond **401 without a session**; sheet validation; ticket stores a hash; master API contract |
+| `skymp/gamemode/permissions.behavior.test.js` | passes | role × command matrix **of the gamemode**, by real behavior |
+| `skymp/gamemode/parked-staff-permissions.test.js` | passes | PARKED commands; no numeric level left |
+| `skymp/gamemode/admin-service.test.js` | passes | `hasPermission` refuses an invalid argument; role does not survive disconnection |
 
-E o buraco exato: **nenhum teste do painel exercita uma sessão autenticada.**
-Todos param no 401. O caminho "staff logada, sem a permissão certa" — que é o
-único caminho que o RBAC precisa provar — nunca foi executado.
-
----
-
-## 1. As afirmações que a matriz precisa sustentar
-
-Cada uma vira teste. Nenhuma vale como intenção.
-
-1. Toda rota administrativa exige **uma permissão nomeada**, não a existência de
-   um cargo.
-2. Cargo sem a permissão **nunca** consegue o efeito, e a negação vira linha de
-   auditoria.
-3. Repetir a mesma requisição não duplica efeito.
-4. Ação 🔴 sem motivo é recusada **no servidor**, não só na UI.
-5. Ouro e item movidos pelo painel passam pelo `transaction-service` e deixam
-   linha no razão.
-6. Ban impede login; revogação de sessão impede reconexão; nenhum dos dois
-   depende da UI ter feito a coisa certa.
-7. Conta de staff banida ou com cargo expirado perde o acesso na requisição
-   seguinte.
+And the exact hole: **no panel test exercises an authenticated session.**
+They all stop at 401. The path "logged-in staff, without the right permission" — which is the
+only path RBAC needs to prove — has never been executed.
 
 ---
 
-## 2. Matriz de autorização
+## 1. The claims the matrix must sustain
 
-### 2.1 Por rota
+Each one becomes a test. None counts as intent.
 
-Cada rota administrativa recebe **três** testes, não um. O terceiro é o que
-costuma faltar.
+1. Every administrative route requires **a named permission**, not the existence of
+   a role.
+2. A role without the permission **never** achieves the effect, and the denial becomes an audit
+   row.
+3. Repeating the same request does not duplicate the effect.
+4. A 🔴 action without a reason is refused **on the server**, not only in the UI.
+5. Gold and items moved through the panel go through `transaction-service` and leave
+   a row in the ledger.
+6. A ban prevents login; session revocation prevents reconnection; neither
+   depends on the UI having done the right thing.
+7. A staff account that is banned or whose role has expired loses access on the next
+   request.
 
-| # | Teste | Esperado |
+---
+
+## 2. Authorization matrix
+
+### 2.1 Per route
+
+Each administrative route gets **three** tests, not one. The third is the one that
+is usually missing.
+
+| # | Test | Expected |
 |---|---|---|
-| A | sem sessão | `401`, nenhuma query de domínio executada |
-| B | sessão de staff **com** a permissão | `2xx` e efeito observável |
-| C | sessão de staff **sem** a permissão | `403`, **efeito ausente**, linha de auditoria `outcome='denied'` |
+| A | no session | `401`, no domain query executed |
+| B | staff session **with** the permission | `2xx` and an observable effect |
+| C | staff session **without** the permission | `403`, **no effect**, audit row `outcome='denied'` |
 
-O teste C verifica **ausência de efeito**, nunca só o código de status. Uma rota
-que responde `403` depois de escrever no banco passa num teste de status e é
-exatamente o bug que o teste existe para pegar.
+Test C checks **absence of effect**, never just the status code. A route
+that responds `403` after writing to the database passes a status test and is
+exactly the bug the test exists to catch.
 
-O teste B verifica **efeito**, nunca só `ok:true`. O `PATCH /api/whitelist/:id`
-de hoje responde `ok:true` para aplicação inexistente ([auditoria §4.12](../research/ADMIN_PLATFORM_AUDIT.md)) — a prova de que status não é evidência.
+Test B checks **effect**, never just `ok:true`. Today's `PATCH /api/whitelist/:id`
+responds `ok:true` for a nonexistent application ([audit §4.12](../research/ADMIN_PLATFORM_AUDIT.md)) — proof that status is not evidence.
 
-### 2.2 Por cargo × permissão
+### 2.2 Per role × permission
 
-Réplica do que `permissions.behavior.test.js` já faz no gamemode, aplicada ao
-painel: uma tabela `MATRIZ` no arquivo de teste, um caso gerado por célula, e uma
-mensagem de falha que diz *"isso é escalação de privilégio"*.
+A replica of what `permissions.behavior.test.js` already does in the gamemode, applied to the
+panel: a `MATRIZ` table in the test file, one case generated per cell, and a
+failure message that says *"this is privilege escalation"*.
 
-Casos obrigatórios além da matriz:
+Mandatory cases beyond the matrix:
 
-| Caso | Esperado |
+| Case | Expected |
 |---|---|
-| Cargo **sem herança**: `MODERATOR` não recebe permissão só porque `ADMIN` a tem | negado |
-| Cargo desconhecido em `staff_roles` (ex.: `'suporte'` digitado à mão) | **`403`, não acesso total** — hoje é acesso total ([auditoria §4.3](../research/ADMIN_PLATFORM_AUDIT.md)) |
-| Cargo com `expires_at` no passado | negado |
-| Cargo com `revoked_at` preenchido | negado |
-| Duas linhas de cargo ativas na mesma conta | união das permissões, ambas contadas |
-| Override `deny` sobre permissão que o cargo concede | **negado** — `deny` vence |
-| Override `grant` expirado | negado |
-| Conta de staff com `accounts.status='banned'` | negado em toda rota |
+| Role **without inheritance**: `MODERATOR` does not get a permission just because `ADMIN` has it | denied |
+| Unknown role in `staff_roles` (e.g. `'suporte'` typed by hand) | **`403`, not full access** — today it is full access ([audit §4.3](../research/ADMIN_PLATFORM_AUDIT.md)) |
+| Role with `expires_at` in the past | denied |
+| Role with `revoked_at` filled in | denied |
+| Two active role rows on the same account | union of permissions, both counted |
+| `deny` override on a permission the role grants | **denied** — `deny` wins |
+| Expired `grant` override | denied |
+| Staff account with `accounts.status='banned'` | denied on every route |
 
-### 2.3 Sincronia entre os dois lados
+### 2.3 Sync between the two sides
 
-O defeito estrutural que a auditoria encontrou é painel e gamemode lerem a mesma
-tabela com regras diferentes. O teste que impede a reincidência:
+The structural defect the audit found is that the panel and the gamemode read the same
+table with different rules. The test that prevents recurrence:
 
-| Teste | Esperado |
+| Test | Expected |
 |---|---|
-| Toda permissão de `staff_permission_catalog` tem ao menos um verificador no código | falha nomeando as órfãs |
-| Toda string passada a `requirePermission()` e a `hasPermission()` existe no catálogo | falha nomeando as inventadas |
-| A resolução de permissões do painel e a do gamemode, para a mesma conta, produzem o **mesmo conjunto** | falha na divergência |
+| Every permission in `staff_permission_catalog` has at least one checker in the code | fails naming the orphans |
+| Every string passed to `requirePermission()` and to `hasPermission()` exists in the catalog | fails naming the invented ones |
+| The panel's and the gamemode's permission resolution, for the same account, produce the **same set** | fails on divergence |
 
-O primeiro teste reprova hoje: `ban`, `view_audit` e `manage_whitelist` estão
-declaradas e nenhuma linha de código as verifica.
-
----
-
-## 3. Matriz de ameaças — §20 do briefing
-
-| Ameaça | Estado hoje | O que trava depois |
-|---|---|---|
-| **RBAC bypass** | 🔴 não há o que burlar: o gate é binário | teste C de toda rota + §2.2 |
-| **Escalação por cargo desconhecido** | 🔴 acesso total | `FK` para `staff_role_definitions` + teste |
-| **SQL injection** | 🟢 tudo parametrizado (`pool.execute`) em web, game-api e bot | teste que falha se aparecer concatenação em SQL |
-| **Mass assignment** | 🟡 rotas atuais desestruturam campos explicitamente | validação com rejeição de campo desconhecido |
-| **IDOR** | 🟡 alvo vem do path, mas ninguém confere se o recurso existe | teste: id inexistente → `404`, nunca `ok:true` |
-| **CSRF** | 🟡 `sameSite:'lax'` já bloqueia `PATCH` cross-site; sem token, sem defesa em profundidade | token + teste de rota mutável sem token → `403` |
-| **XSS** | 🟡 UI monta HTML por template string; sem CSP | CSP e teste de escape em campo de ficha (biografia é texto do jogador) |
-| **Session fixation** | 🔴 sessão não é regenerada no login | `req.session.regenerate()` no callback + teste de troca de id |
-| **Sessão em memória** | 🔴 `MemoryStore`; toda sessão morre no deploy | store MariaDB + teste de sobrevivência a restart |
-| **OAuth** | 🟢 `redirect_uri` em allowlist; secret só no servidor; ticket com hash | manter os testes existentes; avaliar PKCE (pendência do skyadmin) |
-| **API interna exposta** | 🟢 `X-Internal-Secret` em tempo constante; bot escuta em `127.0.0.1` | teste existente cobre 401 sem segredo |
-| **WebSocket auth** | 🟡 só o de voz existe; painel não usa WS | se a ponte usar WS: autenticar no handshake, testar rejeição |
-| **Adulteração de auditoria** | 🔴 usuário SQL único com DML completa | §5 |
-| **Admin API exposta** | 🟡 `GET /health` do `game-api` é público (só agregados, sem identidade) | manter agregado; teste que falha se identidade vazar |
-| **Enumeração por resposta** | 🟡 `403` não diz qual permissão faltou (correto); mas `ok:true` genérico atrapalha | padronizar corpo de erro + teste |
+The first test fails today: `ban`, `view_audit` and `manage_whitelist` are
+declared and no line of code checks them.
 
 ---
 
-## 4. Testes de comportamento — §21 do briefing
+## 3. Threat matrix — briefing §20
 
-| Cenário pedido | Teste | O que verifica de verdade |
+| Threat | State today | What locks it later |
 |---|---|---|
-| permission denied | §2.1-C em toda rota | `403` **e** ausência de efeito **e** auditoria de negação |
-| role inheritance | §2.2 | que **não** há herança: cargo só tem o que está escrito |
-| expired session | sessão além do `maxAge` | `401`; e sessão persistida sobrevive a restart |
-| kick unauthorized | cargo sem `players.kick` | nenhuma chamada a `mp.kick`; auditoria de negação |
-| economy adjustment | ajuste pelo painel | saldo muda **e** `gold_transactions` recebe linha; sem permissão, nenhum dos dois |
-| inventory grant | concessão pelo painel | `inventory_transactions` recebe linha; motivo obrigatório; `baseId` validado contra os plugins (`core/espm`) |
-| audit creation | toda ação 🟡/🔴 | linha com `permission`, `reason`, `request_id`, `outcome`, e `before`/`after` quando aplicável |
-| ban | ban de conta | `accounts.status='banned'` **e** `game_sessions.revoked_at` preenchido **na mesma transação**; login seguinte recusado |
-| whitelist review | transição de estado | `reviewed_by` gravado; transição inválida recusada; `NEEDS_CHANGES` permite reenvio |
-| concurrent staff actions | dois `PATCH` simultâneos na mesma ficha | um vence, o outro recebe conflito — **nunca dois `ok:true`** |
+| **RBAC bypass** | 🔴 there is nothing to bypass: the gate is binary | test C on every route + §2.2 |
+| **Escalation via unknown role** | 🔴 full access | `FK` to `staff_role_definitions` + test |
+| **SQL injection** | 🟢 everything parameterized (`pool.execute`) in web, game-api and bot | test that fails if concatenation in SQL appears |
+| **Mass assignment** | 🟡 current routes destructure fields explicitly | validation rejecting unknown fields |
+| **IDOR** | 🟡 the target comes from the path, but nobody checks whether the resource exists | test: nonexistent id → `404`, never `ok:true` |
+| **CSRF** | 🟡 `sameSite:'lax'` already blocks cross-site `PATCH`; no token, no defense in depth | token + test of a mutating route without a token → `403` |
+| **XSS** | 🟡 the UI builds HTML through template strings; no CSP | CSP and an escaping test on a sheet field (biography is player text) |
+| **Session fixation** | 🔴 the session is not regenerated at login | `req.session.regenerate()` in the callback + id-change test |
+| **In-memory session** | 🔴 `MemoryStore`; every session dies on deploy | MariaDB store + restart survival test |
+| **OAuth** | 🟢 `redirect_uri` in an allowlist; secret only on the server; ticket with a hash | keep the existing tests; evaluate PKCE (pending in skyadmin) |
+| **Exposed internal API** | 🟢 `X-Internal-Secret` in constant time; bot listens on `127.0.0.1` | existing test covers 401 without the secret |
+| **WebSocket auth** | 🟡 only the voice one exists; the panel does not use WS | if the bridge uses WS: authenticate at handshake, test rejection |
+| **Audit tampering** | 🔴 single SQL user with full DML | §5 |
+| **Exposed admin API** | 🟡 `game-api`'s `GET /health` is public (aggregates only, no identity) | keep it aggregated; test that fails if identity leaks |
+| **Enumeration via response** | 🟡 `403` does not say which permission was missing (correct); but a generic `ok:true` gets in the way | standardize the error body + test |
 
-### 4.1 Idempotência
+---
 
-| Teste | Esperado |
+## 4. Behavior tests — briefing §21
+
+| Requested scenario | Test | What it really verifies |
+|---|---|---|
+| permission denied | §2.1-C on every route | `403` **and** absence of effect **and** denial audit |
+| role inheritance | §2.2 | that there is **no** inheritance: a role has only what is written |
+| expired session | session beyond `maxAge` | `401`; and a persisted session survives a restart |
+| kick unauthorized | role without `players.kick` | no call to `mp.kick`; denial audit |
+| economy adjustment | adjustment through the panel | balance changes **and** `gold_transactions` gets a row; without permission, neither |
+| inventory grant | grant through the panel | `inventory_transactions` gets a row; reason mandatory; `baseId` validated against the plugins (`core/espm`) |
+| audit creation | every 🟡/🔴 action | row with `permission`, `reason`, `request_id`, `outcome`, and `before`/`after` when applicable |
+| ban | account ban | `accounts.status='banned'` **and** `game_sessions.revoked_at` filled **in the same transaction**; next login refused |
+| whitelist review | state transition | `reviewed_by` recorded; invalid transition refused; `NEEDS_CHANGES` allows resubmission |
+| concurrent staff actions | two simultaneous `PATCH`es on the same sheet | one wins, the other gets a conflict — **never two `ok:true`** |
+
+### 4.1 Idempotency
+
+| Test | Expected |
 |---|---|
-| Mesmo `Idempotency-Key`, duas requisições | um efeito, duas respostas idênticas |
-| Chave repetida com corpo diferente | recusa; chave não é apelido para "faça de novo" |
-| Duplo clique em ban | um ban, uma linha de auditoria |
+| Same `Idempotency-Key`, two requests | one effect, two identical responses |
+| Repeated key with a different body | refused; a key is not an alias for "do it again" |
+| Double click on ban | one ban, one audit row |
 
-O padrão já existe no projeto: `gold_transactions.idempotency_key` com `UNIQUE`,
-usada pelo ouro inicial de whitelist. O painel reutiliza a ideia, não inventa outra.
+The pattern already exists in the project: `gold_transactions.idempotency_key` with `UNIQUE`,
+used by the whitelist starting gold. The panel reuses the idea; it does not invent another.
 
 ---
 
-## 5. O que só o banco pode travar
+## 5. What only the database can lock
 
-Estes não são testáveis por unidade e por isso costumam ficar de fora — o que os
-torna a parte mais frágil.
+These are not unit-testable and therefore tend to be left out — which makes them
+the most fragile part.
 
-| Controle | Estado | Por que importa |
+| Control | State | Why it matters |
 |---|---|---|
-| Usuário SQL do painel sem `DELETE`/`UPDATE` em `audit_logs` | ❌ um usuário para tudo | é a diferença entre "não há rota" e "não é possível" |
-| Usuário SQL do `game-api` restrito às tabelas que usa | ❌ | menor privilégio |
-| `FK` de `staff_roles.role` para o catálogo de cargos | ❌ | fecha o cargo-fantasma da §2.2 |
-| `FK` de permissão para o catálogo | ❌ | impede permissão inventada em produção |
-| Backup e restauração ensaiados | ❌ | `audit_logs` é o registro de última instância |
+| Panel SQL user without `DELETE`/`UPDATE` on `audit_logs` | ❌ one user for everything | it is the difference between "there is no route" and "it is not possible" |
+| `game-api` SQL user restricted to the tables it uses | ❌ | least privilege |
+| `FK` from `staff_roles.role` to the role catalog | ❌ | closes the phantom role from §2.2 |
+| Permission `FK` to the catalog | ❌ | prevents an invented permission in production |
+| Rehearsed backup and restore | ❌ | `audit_logs` is the record of last resort |
 
 ---
 
-## 6. Mutação — a regra da casa
+## 6. Mutation — the house rule
 
-Quando os testes existirem, cada afirmação da §1 recebe uma mutação aplicada ao
-código real e revertida depois. Um teste que passa com o bug de volta não testa
-nada — e neste projeto isso já custou caro: 22 chamadas Papyrus com argumento
-errado passaram meses com a suíte verde (`CONTRIBUTING.md` §6).
+When the tests exist, each claim in §1 gets a mutation applied to the
+real code and reverted afterwards. A test that passes with the bug back in tests
+nothing — and in this project that has already cost dearly: 22 Papyrus calls with the wrong
+argument spent months with a green suite (`CONTRIBUTING.md` §6).
 
-Mutações mínimas, uma por afirmação:
+Minimum mutations, one per claim:
 
-| Mutação a aplicar | Deve reprovar |
+| Mutation to apply | Must fail |
 |---|---|
-| `requirePermission` devolve `next()` sempre | todo teste C |
-| Trocar a resolução de permissão por "tem linha em `staff_roles`" | §2.2 inteira |
-| Ignorar `expires_at`/`revoked_at` na resolução | testes de cargo temporário |
-| Fazer `deny` perder para `grant` | teste de override |
-| Tirar a auditoria de dentro da transação do ban | teste de ban |
-| Tirar `UPDATE game_sessions ... revoked_at` do ban | teste de reconexão após ban |
-| Ignorar `Idempotency-Key` | §4.1 |
-| Aceitar `reason` vazio no servidor | testes de ação 🔴 |
+| `requirePermission` always returns `next()` | every test C |
+| Replace permission resolution with "has a row in `staff_roles`" | all of §2.2 |
+| Ignore `expires_at`/`revoked_at` in resolution | temporary role tests |
+| Make `deny` lose to `grant` | override test |
+| Move the audit out of the ban transaction | ban test |
+| Remove `UPDATE game_sessions ... revoked_at` from the ban | reconnection-after-ban test |
+| Ignore `Idempotency-Key` | §4.1 |
+| Accept an empty `reason` on the server | 🔴 action tests |
 
 ---
 
-## 7. Portão
+## 7. Gate
 
-Nenhuma pessoa da staff além do dono recebe acesso ao painel antes de:
+No staff member other than the owner gets access to the panel before:
 
-1. §2.1 completo — três testes por rota administrativa, sem exceção;
-2. §2.2 completo, incluindo cargo desconhecido, expirado e revogado;
-3. §2.3 — nenhuma permissão órfã, nenhuma permissão inventada;
-4. sessão em MariaDB com regeneração no login;
-5. auditoria de negação funcionando;
-6. §5 linhas 1 e 3 (privilégio do usuário SQL sobre `audit_logs`, FK de cargo).
+1. §2.1 complete — three tests per administrative route, without exception;
+2. §2.2 complete, including unknown, expired and revoked roles;
+3. §2.3 — no orphan permission, no invented permission;
+4. MariaDB session with regeneration at login;
+5. denial auditing working;
+6. §5 rows 1 and 3 (SQL user privilege on `audit_logs`, role FK).
 
-Os itens 1–5 são código e teste. O item 6 é operação, e é o único que não se
-verifica rodando `npm test` — motivo pelo qual está escrito aqui e não só na
-cabeça de quem provisiona o banco.
+Items 1–5 are code and tests. Item 6 is operations, and it is the only one that cannot be
+verified by running `npm test` — which is why it is written here and not only in the
+head of whoever provisions the database.
