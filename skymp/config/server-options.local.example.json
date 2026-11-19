@@ -1,5 +1,5 @@
 {
-  "_aviso": "PARCIALMENTE IMPLEMENTADO. As opcoes ligadas estao em skymp/gamemode/core/server-options.js (SPEC); o resto ainda nao faz nada e o servidor avisa no boot se voce configurar uma delas. Valor invalido aborta o boot de proposito.",
+  "_warning": "PARTIALLY IMPLEMENTED. The wired options are in skymp/gamemode/core/server-options.js (SPEC); the rest does nothing yet and the server warns at boot if you set one of them. An invalid value aborts the boot on purpose.",
   "environment": "local",
   "rp": {
     "heavyRpEnabled": true,

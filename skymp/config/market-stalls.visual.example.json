@@ -3,7 +3,7 @@
   "strategy": "server_place_static",
   "notes": "Copy this file to market-stalls.visual.json after a licensed/custom market stall plugin is available.",
   "defaultStallBaseId": null,
-  "fallbackDisplayName": "Barraca de Comerciante",
+  "fallbackDisplayName": "Merchant Stall",
   "scale": 1.0,
   "allowedAssetSources": [
     {
