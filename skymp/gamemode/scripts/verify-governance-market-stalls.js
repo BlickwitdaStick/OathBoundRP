@@ -409,7 +409,7 @@ addCheck('artefato SkyMP registra identidade e confere o pin', () => {
   ]);
   assertFileContains(rel('scripts', 'phase0', 'Start-Phase0Server.ps1'), [
     'BUILD_INFO.json',
-    'Commit do binario nao comprovado'
+    'Binary commit not proven'
   ]);
 });
 
