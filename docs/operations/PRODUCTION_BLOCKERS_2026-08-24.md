@@ -1,51 +1,51 @@
-# Parecer de prontidão — 24/08/2026
+# Readiness assessment — 2026-08-24
 
-> **Revalidado localmente em 26/08/2026.** A decisão NO-GO permanece. O
-> gamemode agora possui 1.262 testes, todos aprovados,
-> migration v29 e 80 tabelas declaradas. MariaDB e clientes reais continuam
-> indisponíveis; portanto nenhum gate de promoção foi fechado.
+> **Revalidated locally on 2026-08-26.** The NO-GO decision stands. The
+> gamemode now has 1,262 tests, all passing,
+> migration v29 and 80 declared tables. MariaDB and real clients remain
+> unavailable; therefore no promotion gate has been closed.
 
-## Decisão atual: NO-GO para produção/alfa pública
+## Current decision: NO-GO for production/public alpha
 
-O repositório tem uma base automatizada forte e os trabalhos possíveis sem
-MariaDB foram executados, mas não existe evidência suficiente para promover o
-sistema. Esta decisão é baseada nos gates, não em percepção de acabamento.
+The repository has a strong automated foundation and the work possible without
+MariaDB has been done, but there is not enough evidence to promote the
+system. This decision is based on the gates, not on a perception of polish.
 
-## Bloqueios externos obrigatórios
+## Mandatory external blockers
 
-| Bloqueio | Evidência necessária para fechar |
+| Blocker | Evidence needed to close it |
 |---|---|
-| MariaDB/staging indisponível | migrations até v29 aplicadas, schema drift limpo, concorrência e restart |
-| clientes Skyrim reais | dois clientes por 30 min; CEF, `[E]`, Papyrus e reconexão |
-| conteúdo físico | FormDescs de nó/depot/estações e receita de Ferreiro confirmados |
-| distribuição | segunda instalação limpa, manifesto e launcher end-to-end |
-| assinatura | instalador com assinatura/timestamp válidos e SmartScreen registrado |
-| operação | responsáveis, canal, janela, backup e rollback exercitado |
-| capacidade | soak de 6–8h com 5–10 jogadores e relatório |
-| alfa | duas semanas com 10–20 convidados e sem perda de dados |
+| MariaDB/staging unavailable | migrations up to v29 applied, clean schema drift, concurrency and restart |
+| real Skyrim clients | two clients for 30 min; CEF, `[E]`, Papyrus and reconnection |
+| physical content | FormDescs for node/depot/stations and the Blacksmith recipe confirmed |
+| distribution | second clean install, manifest and launcher end to end |
+| signing | installer with a valid signature/timestamp and SmartScreen registered |
+| operations | owners, channel, window, backup and an exercised rollback |
+| capacity | 6–8h soak with 5–10 players and a report |
+| alpha | two weeks with 10–20 invitees and no data loss |
 
-## Decisão de produto pendente
+## Pending product decision
 
-F6-003 não deve ser implementada por adivinhação: “rank acessa recurso raro” no
-Depot pode significar capacidade, depósito, retirada, aba ou estoque
-institucional. Bloquear retirada do minério raro impediria a cooperação com o
-Fundidor. O dono de produto precisa definir a regra e os atores autorizados.
+F6-003 must not be implemented by guesswork: "rank accesses a rare resource" in
+the Depot could mean capacity, deposit, withdrawal, tab or institutional
+stock. Blocking withdrawal of the rare ore would prevent cooperation with the
+Smelter. The product owner needs to define the rule and the authorized actors.
 
-## Evidência automatizada disponível
+## Available automated evidence
 
-- gamemode: 1.262 testes, todos aprovados, e typecheck limpo;
-- migration dry-run: 27 arquivos, 162 instruções, até v29;
-- schema declarado: 80 tabelas;
-- registry: 76 testes listados, sem órfãos;
-- write guards: nenhuma armadilha conhecida;
-- runner de soak: testes unitários e relatório JSON, aguardando staging;
-- backup, restore, rollback, staging e auditor de configuração já versionados.
-- launcher: bootstrap fail-closed coberto por 15 testes novos, suíte 85/85,
-  typecheck/lint aprovados e instalador NSIS gerado; handshake com dois clientes
-  ainda pendente conforme
+- gamemode: 1,262 tests, all passing, and a clean typecheck;
+- migration dry-run: 27 files, 162 statements, up to v29;
+- declared schema: 80 tables;
+- registry: 76 tests listed, no orphans;
+- write guards: no known traps;
+- soak runner: unit tests and JSON report, waiting for staging;
+- backup, restore, rollback, staging and configuration auditor already versioned.
+- launcher: fail-closed bootstrap covered by 15 new tests, suite 85/85,
+  typecheck/lint passing and NSIS installer generated; handshake with two clients
+  still pending as per
   [`ADR-012`](../technical/ADR_012_LAUNCHER_CONNECTION_BOOTSTRAP.md).
 
-O documento vivo de execução continua sendo
+The living execution document remains
 [`PRODUCTION_READINESS_ACTION_PLAN.md`](../roadmap/PRODUCTION_READINESS_ACTION_PLAN.md).
-O próximo operador deve começar pelos bloqueios acima, não reabrir tarefas já
-concluídas no código sem uma regressão observada.
+The next operator should start with the blockers above, not reopen tasks already
+completed in code without an observed regression.

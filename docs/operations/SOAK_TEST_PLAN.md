@@ -1,37 +1,37 @@
-# Plano de soak test
+# Soak test plan
 
-Estado revalidado em 26/08/2026: **runner pronto; execução de 6–8 horas
-bloqueada por staging/MariaDB, rotas físicas reais e 5–10 jogadores reais**.
+State revalidated on 2026-08-26: **runner ready; the 6–8 hour run is
+blocked by staging/MariaDB, real physical routes and 5–10 real players**.
 
-## Objetivo e aceite
+## Goal and acceptance
 
-A sessão dura no mínimo 6 horas, com 5–10 jogadores conectados pelo launcher.
-Ela só passa quando:
+The session lasts at least 6 hours, with 5–10 players connected through the launcher.
+It only passes when:
 
-- nenhum item ou ouro é perdido/duplicado;
-- nenhum processo reinicia sem explicação;
-- taxa de erro dos health checks fica em até 1%;
-- login, reconexão, chat, interação, trade, depot, mineração, crafting, Public
-  Work (se habilitado na janela), crime e socorro têm ao menos uma execução registrada;
-- backup pré-teste existe e um responsável acompanha incidentes;
-- relatório JSON, telemetria do gamemode e logs dos serviços são preservados.
+- no item or gold is lost/duplicated;
+- no process restarts without explanation;
+- the health check error rate stays at or below 1%;
+- login, reconnection, chat, interaction, trade, depot, mining, crafting, Public
+  Work (if enabled in the window), crime and rescue each have at least one recorded run;
+- a pre-test backup exists and an owner is tracking incidents;
+- the JSON report, gamemode telemetry and service logs are preserved.
 
-O runner HTTP mede disponibilidade; ele **não simula jogador Skyrim**, banco,
-CEF, Papyrus, inventário ou concorrência InnoDB.
+The HTTP runner measures availability; it **does not simulate a Skyrim player**, the database,
+CEF, Papyrus, inventory or InnoDB concurrency.
 
-## Preparação
+## Preparation
 
-1. Preencher responsáveis e janela no
+1. Fill in the owners and the window in
    [`CLOSED_ALPHA_RUNBOOK.md`](CLOSED_ALPHA_RUNBOOK.md).
-2. Subir staging e aplicar migrations até v29 em banco vazio.
-3. Executar `check:schema` e criar backup com `Backup-Staging.ps1`.
-4. Confirmar manifesto, launcher, UI, FormDescs de nós/estações/rotas de Public
-   Work e duas contas.
-5. Abrir canal de incidentes e sincronizar relógio das máquinas.
+2. Bring up staging and apply migrations up to v29 on an empty database.
+3. Run `check:schema` and create a backup with `Backup-Staging.ps1`.
+4. Confirm the manifest, launcher, UI, FormDescs for nodes/stations/Public
+   Work routes and two accounts.
+5. Open the incident channel and synchronize the machines' clocks.
 
-## Coleta automatizada
+## Automated collection
 
-No host de staging, com os três serviços expostos apenas em loopback:
+On the staging host, with the three services exposed only on loopback:
 
 ```powershell
 node scripts/run-service-soak.js `
@@ -46,35 +46,35 @@ node scripts/run-service-soak.js `
   --output reports/soak-alpha.json
 ```
 
-Para 8 horas, usar `--duration-seconds 28800`. O arquivo de saída é criado com
-modo exclusivo: um relatório existente nunca é sobrescrito. O processo retorna
-`0` quando todas as URLs ficam dentro do limite, `2` quando o gate falha e `1`
-para configuração inválida.
+For 8 hours, use `--duration-seconds 28800`. The output file is created in
+exclusive mode: an existing report is never overwritten. The process returns
+`0` when every URL stays within the limit, `2` when the gate fails and `1`
+for an invalid configuration.
 
-## Roteiro humano por hora
+## Hourly human script
 
-| Momento | Ação mínima |
+| Moment | Minimum action |
 |---|---|
-| início | login pelo launcher, mesma célula, chat e painel |
-| hora 1 | mineração → depot → fundição/crafting |
-| hora 2 | trade e barraca concorrentes |
-| hora 3 | crime, revista, confisco e restituição |
-| hora 4 | downed, socorro, desconexão e reconexão |
-| hora 5 | contratos, economia e revisão dos contadores |
-| final | logout limpo, balanços, inventários, backup e coleta de logs |
+| start | login through the launcher, same cell, chat and panel |
+| hour 1 | mining → depot → smelting/crafting |
+| hour 2 | concurrent trade and stall |
+| hour 3 | crime, search, confiscation and restitution |
+| hour 4 | downed, rescue, disconnection and reconnection |
+| hour 5 | contracts, economy and review of the counters |
+| end | clean logout, balances, inventories, backup and log collection |
 
-Cada incidente registra horário, jogadores, ação, resultado esperado, resultado
-observado, requestId quando visível, severidade, mitigação e link para os logs.
+Each incident records the time, players, action, expected result, observed
+result, requestId when visible, severity, mitigation and a link to the logs.
 
-## Critérios de interrupção
+## Stop criteria
 
-Interromper e iniciar rollback se houver duplicação/perda, autenticação
-generalizadamente indisponível, corrupção de schema, segredo em log, crash loop
-ou impossibilidade de reconstruir uma transferência. Erro cosmético isolado
-pode continuar se tiver responsável e não comprometer dados.
+Stop and start a rollback if there is duplication/loss, widespread authentication
+unavailability, schema corruption, a secret in a log, a crash loop
+or the inability to reconstruct a transfer. An isolated cosmetic error
+may continue if it has an owner and does not compromise data.
 
-## Fechamento
+## Closing
 
-Anexar o JSON do runner, SHA do commit, migration final, número de jogadores,
-duração, incidentes e reconciliação econômica ao plano de prontidão. Sem esses
-artefatos, F8-005 permanece parcial independentemente de a sessão “parecer boa”.
+Attach the runner's JSON, the commit SHA, the final migration, the number of players,
+duration, incidents and economic reconciliation to the readiness plan. Without these
+artifacts, F8-005 remains partial regardless of whether the session "looked good".

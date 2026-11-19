@@ -1,66 +1,66 @@
-# Runbook da alfa fechada
+# Closed alpha runbook
 
-Este documento transforma F9 em uma operação verificável. Campos entre `< >`
-precisam ser preenchidos por uma pessoa antes da janela; ausência de responsável
-é `NO-GO`, não um valor implícito.
+This document turns F9 into a verifiable operation. Fields between `< >`
+must be filled in by a person before the window; a missing owner
+is `NO-GO`, not an implicit value.
 
-**Baseline revalidada em 26/08/2026:** migrations lineares até v29; Public Work
-continua LAB e só entra na janela depois de receber rotas/FormDescs reais.
+**Baseline revalidated on 2026-08-26:** linear migrations up to v29; Public Work
+remains LAB and only enters the window after receiving real routes/FormDescs.
 
-## Ficha da janela
+## Window sheet
 
-| Campo | Valor |
+| Field | Value |
 |---|---|
-| início/fim | `<data e timezone>` |
+| start/end | `<date and timezone>` |
 | release/commit | `<SHA>` |
-| incident commander | `<nome e contato>` |
-| operador de infraestrutura | `<nome e contato>` |
-| responsável pelo jogo/economia | `<nome e contato>` |
-| canal de incidentes | `<canal>` |
-| janela de manutenção | `<horário>` |
-| backup pré-release | `<arquivo + SHA-256>` |
-| release anterior para rollback | `<tag/SHA>` |
+| incident commander | `<name and contact>` |
+| infrastructure operator | `<name and contact>` |
+| game/economy owner | `<name and contact>` |
+| incident channel | `<channel>` |
+| maintenance window | `<time>` |
+| pre-release backup | `<file + SHA-256>` |
+| previous release for rollback | `<tag/SHA>` |
 
-## Gate antes de convidar jogadores
+## Gate before inviting players
 
-- [ ] domínio/HTTPS, Discord OAuth e segredos de produção configurados;
-- [ ] MariaDB de staging saudável, migrations até v29 e schema drift limpo;
-- [ ] backup restaurável criado e rollback ensaiado;
-- [ ] launcher assinado, timestamp válido e instalação Windows limpa aprovada;
-- [ ] dois clientes completam login, seleção, reconexão e UI CEF;
-- [ ] FormDescs físicos, rotas de Public Work e receita de Ferreiro do modpack confirmados;
-- [ ] observabilidade acessível e runner de soak iniciado;
-- [ ] responsáveis e canal acima preenchidos.
+- [ ] domain/HTTPS, Discord OAuth and production secrets configured;
+- [ ] healthy staging MariaDB, migrations up to v29 and clean schema drift;
+- [ ] restorable backup created and rollback rehearsed;
+- [ ] signed launcher, valid timestamp and clean Windows install approved;
+- [ ] two clients complete login, selection, reconnection and CEF UI;
+- [ ] physical FormDescs, Public Work routes and the modpack's Blacksmith recipe confirmed;
+- [ ] observability accessible and soak runner started;
+- [ ] owners and channel above filled in.
 
-Qualquer caixa vazia exige decisão explícita de risco. Segurança, perda de dados,
-backup, autenticação ou assinatura não podem ser dispensados informalmente.
+Any empty box requires an explicit risk decision. Security, data loss,
+backup, authentication or signing cannot be waived informally.
 
-## Rotina de duas semanas
+## Two-week routine
 
-Diariamente: revisar saúde, falhas de login, conexões, rejeições, CPU/memória,
-erros DB e incidentes; confirmar backup; registrar mudança implantada. Duas
-vezes por semana: reconciliar ouro e itens, revisar inflação/produção por hora e
-amostrar trade, depot, barraca e contratos. Toda mudança usa changelog, SHA,
-backup e plano de rollback.
+Daily: review health, login failures, connections, rejections, CPU/memory,
+DB errors and incidents; confirm the backup; record the deployed change. Twice
+a week: reconcile gold and items, review inflation/production per hour and
+sample trade, depot, stall and contracts. Every change uses a changelog, SHA,
+backup and rollback plan.
 
-Incidentes usam severidade:
+Incidents use severity:
 
-| Nível | Exemplo | Resposta |
+| Level | Example | Response |
 |---|---|---|
-| SEV-1 | perda/duplicação, vazamento, corrupção | parar alfa e rollback |
-| SEV-2 | login indisponível, crash repetido | congelar entradas e mitigar |
-| SEV-3 | feature isolada quebrada | desabilitar módulo e acompanhar |
-| SEV-4 | visual/texto sem impacto | registrar para próxima janela |
+| SEV-1 | loss/duplication, leak, corruption | stop the alpha and roll back |
+| SEV-2 | login unavailable, repeated crash | freeze entries and mitigate |
+| SEV-3 | isolated feature broken | disable the module and monitor |
+| SEV-4 | visual/text with no impact | record for the next window |
 
-## Decisão de abertura
+## Opening decision
 
-Ao final, registrar uma única decisão assinada:
+At the end, record a single signed decision:
 
-- `GO`: todos os gates obrigatórios e duas semanas sem perda de dados;
-- `GO COM RESTRIÇÕES`: somente limitações não críticas, com owner e prazo;
-- `NO-GO`: qualquer evidência crítica ausente, SEV-1 aberto ou gate de dados,
-  segurança, autenticação, rollback ou assinatura reprovado.
+- `GO`: all mandatory gates and two weeks without data loss;
+- `GO WITH RESTRICTIONS`: only non-critical limitations, with an owner and deadline;
+- `NO-GO`: any missing critical evidence, an open SEV-1 or a failed data,
+  security, authentication, rollback or signing gate.
 
-A ata deve incluir participantes, período, jogadores únicos, horas-jogador,
-incidentes por severidade, relatório de soak, reconciliação econômica, riscos
-aceitos, responsáveis e próxima revisão.
+The minutes must include participants, period, unique players, player-hours,
+incidents by severity, soak report, economic reconciliation, accepted
+risks, owners and the next review.

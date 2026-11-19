@@ -1,69 +1,69 @@
-# Runbook de rollback
+# Rollback runbook
 
-Este procedimento precisa ser exercitado em staging antes da alfa. Escrevê-lo
-reduz improviso; não prova que funciona no ambiente real.
+This procedure must be exercised in staging before the alpha. Writing it down
+reduces improvisation; it does not prove that it works in the real environment.
 
-## 1. Critérios para acionar
+## 1. Trigger criteria
 
-- login/entrada falha para usuários válidos após deploy;
-- corrupção, perda ou duplicação de estado;
-- schema drift depois de migration;
-- launcher/modpack rejeita instalação válida em massa;
-- crash loop ou degradação que não pode ser mitigada por flag.
+- login/entry fails for valid users after a deploy;
+- corruption, loss or duplication of state;
+- schema drift after a migration;
+- the launcher/modpack rejects valid installs en masse;
+- a crash loop or degradation that cannot be mitigated by a flag.
 
-Antes de alterar qualquer coisa, registre horário, commit, versões, sintomas e
-um backup. Não apague logs nem o volume defeituoso.
+Before changing anything, record the time, commit, versions, symptoms and
+a backup. Do not delete logs or the faulty volume.
 
-## 2. Código dos serviços e gamemode
+## 2. Service and gamemode code
 
-1. Pare entrada de jogadores e os serviços que escrevem no banco.
-2. Execute `Backup-Staging.ps1` mesmo se o banco parecer saudável.
-3. Identifique o último commit/release aprovado; não use `git reset --hard`.
-4. Crie uma branch de rollback a partir do commit aprovado ou reverta os
-   commits defeituosos com `git revert`.
-5. Rode as suítes sem banco e `docker compose config`.
-6. Suba serviços Node, confira `/health`, então inicie SkyMP no host.
-7. Faça login com conta de teste antes de reabrir entrada.
+1. Stop player entry and the services that write to the database.
+2. Run `Backup-Staging.ps1` even if the database looks healthy.
+3. Identify the last approved commit/release; do not use `git reset --hard`.
+4. Create a rollback branch from the approved commit or revert the
+   faulty commits with `git revert`.
+5. Run the database-free suites and `docker compose config`.
+6. Bring up the Node services, check `/health`, then start SkyMP on the host.
+7. Log in with a test account before reopening entry.
 
-Flags de módulo são a primeira mitigação quando isolam o defeito sem violar
-schema/contrato. Toda flag alterada entra no registro do incidente.
+Module flags are the first mitigation when they isolate the defect without violating
+the schema/contract. Every changed flag goes into the incident record.
 
-## 3. Banco
+## 3. Database
 
-Migrations são **forward-only**; não existe downgrade automático. Se a mudança
-for compatível, reverta apenas código e preserve colunas/tabelas novas. Se houve
-mutação destrutiva ou dados inválidos:
+Migrations are **forward-only**; there is no automatic downgrade. If the change
+is compatible, revert only the code and keep the new columns/tables. If there was
+a destructive mutation or invalid data:
 
-1. mantenha painel, Game API, bot e SkyMP parados;
-2. preserve dump pós-incidente separado;
-3. escolha o backup pré-deploy e confira SHA-256;
-4. rode `Restore-Staging.ps1`;
-5. exija `check:schema:env -- --strict` verde;
-6. valide conta/personagem/transações de teste antes do tráfego.
+1. keep the panel, Game API, bot and SkyMP stopped;
+2. keep a separate post-incident dump;
+3. choose the pre-deploy backup and check its SHA-256;
+4. run `Restore-Staging.ps1`;
+5. require a green `check:schema:env -- --strict`;
+6. validate a test account/character/transactions before traffic.
 
-Nunca improvise `DROP`, `TRUNCATE` ou UPDATE corretivo no banco oficial sem
-dump, query revisada e registro de auditoria.
+Never improvise `DROP`, `TRUNCATE` or a corrective UPDATE on the official database without
+a dump, a reviewed query and an audit record.
 
-## 4. Launcher, cliente e modpack
+## 4. Launcher, client and modpack
 
-1. Pare de promover a release defeituosa; não apague o artefato usado por quem
-   já instalou.
-2. Restaure no manifesto o último `clientVersion`, URL e SHA-256 aprovados.
-3. Restaure o manifesto de mods gerado da `Data` conhecida e sua load order.
-4. Publique uma nova release corretiva; não substitua bytes sob a mesma versão.
-5. Teste atualização/repair em instalação limpa e em instalação divergente.
+1. Stop promoting the faulty release; do not delete the artifact used by those who
+   already installed it.
+2. Restore the last approved `clientVersion`, URL and SHA-256 in the manifest.
+3. Restore the mods manifest generated from the known `Data` and its load order.
+4. Publish a new corrective release; do not replace bytes under the same version.
+5. Test update/repair on a clean install and on a divergent install.
 
-O launcher falha fechado em manifesto inválido; um rollback sem SHA-256 correto
-é indisponibilidade, não rollback.
+The launcher fails closed on an invalid manifest; a rollback without the correct SHA-256
+is an outage, not a rollback.
 
-## 5. Evidência obrigatória do exercício
+## 5. Mandatory evidence from the exercise
 
-- data, operador e duração;
-- commit/release de origem e destino;
-- backup e SHA-256;
-- saída de health checks e schema drift;
-- resultado de login, reconexão e leitura do personagem;
-- divergências encontradas e atualização deste runbook.
+- date, operator and duration;
+- source and destination commit/release;
+- backup and SHA-256;
+- output of health checks and schema drift;
+- result of login, reconnection and character read;
+- divergences found and the update of this runbook.
 
-F2-003/F8-003 permanecem parciais até esse exercício ocorrer com MariaDB e
-staging ativos.
+F2-003/F8-003 remain partial until this exercise happens with MariaDB and
+staging active.
