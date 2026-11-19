@@ -1,35 +1,35 @@
 /**
  * core/moderation-log.js
  *
- * Avisa o bot do Discord quando uma ação de moderação acontece em jogo.
+ * Notifies the Discord bot when a moderation action happens in game.
  *
- * O registro de verdade continua sendo `audit_logs`, escrito pelo
- * `admin-service` no mesmo fluxo da ação. Isto aqui é **notificação** — serve
- * pra staff ver acontecendo sem abrir o painel. Ver `apps/bot-discord/moderationLog.js`
- * e `docs/ARCHITECTURE.md` 1.3.
+ * The real record is still `audit_logs`, written by
+ * `admin-service` in the same flow as the action. This is a **notification** — it lets
+ * staff see it happen without opening the panel. See `apps/bot-discord/moderationLog.js`
+ * and `docs/ARCHITECTURE.md` 1.3.
  *
- * ─── Três decisões, e por quê ────────────────────────────────────────────────
+ * ─── Three decisions, and why ────────────────────────────────────────────────
  *
- * **1. `http.request` do core, não `fetch`.** O gamemode roda dentro do Node que
- * o SkyMP embute, e não controlamos a versão dele — `fetch` global só existe a
- * partir do Node 18. Uma dependência nova também estava fora: o `package.json`
- * do gamemode tem três, e cada uma precisa resolver a partir de
- * `skymp/gamemode/node_modules` porque o entry file roda do `%TEMP%`.
+ * **1. Core `http.request`, not `fetch`.** The gamemode runs inside the Node that
+ * SkyMP embeds, and we do not control its version — global `fetch` only exists
+ * from Node 18 on. A new dependency was also out: the gamemode's `package.json`
+ * has three, and each one has to resolve from
+ * `skymp/gamemode/node_modules` because the entry file runs from `%TEMP%`.
  *
- * **2. Manda e esquece.** Nenhuma função daqui é `await`ada por quem modera.
- * Um `/permakill` não pode ficar lento nem falhar porque o Discord está fora, e
- * a consequência da ação já está no banco antes desta chamada sair.
+ * **2. Fire and forget.** No function here is `await`ed by whoever moderates.
+ * A `/permakill` must not get slow or fail because Discord is down, and
+ * the consequence of the action is already in the DB before this call goes out.
  *
- * **3. Desligado por padrão.** Sem `BOT_INTERNAL_URL` e `INTERNAL_API_SECRET` no
- * `.env` do gamemode, `notify()` volta na primeira linha. Servidor que não quer
- * o canal não paga nada, e não vê erro nenhum.
+ * **3. Off by default.** Without `BOT_INTERNAL_URL` and `INTERNAL_API_SECRET` in
+ * the gamemode's `.env`, `notify()` returns on the first line. A server that does not want
+ * the channel pays nothing, and sees no error at all.
  */
 
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
 
-/** Curto de propósito: é notificação, e ninguém está esperando por ela. */
+/** Short on purpose: it is a notification, and nobody is waiting for it. */
 const TIMEOUT_MS = 3000;
 
 let _avisouQueEstaDesligado = false;
@@ -37,8 +37,8 @@ let _avisouQueEstaDesligado = false;
 /**
  * @param {object} evento
  * @param {'ban'|'kick'|'permakill'|'whitelist_approve'|'whitelist_reject'|'whitelist_reset'} evento.kind
- * @param {string}  evento.target     quem sofreu a ação (nome do personagem, id)
- * @param {string} [evento.moderator] quem aplicou
+ * @param {string}  evento.target     who the action was applied to (character name, id)
+ * @param {string} [evento.moderator] who applied it
  * @param {string} [evento.reason]
  */
 function notify(evento) {
@@ -46,11 +46,11 @@ function notify(evento) {
   const secret = process.env.INTERNAL_API_SECRET;
 
   if (!base || !secret) {
-    // Uma vez por boot, não por evento: a ausência é uma escolha de operação
-    // válida, e gritar a cada kick transformaria isso em ruído que a staff
-    // aprende a ignorar — que é como um aviso de verdade passa despercebido.
+    // Once per boot, not per event: its absence is a valid operational
+    // choice, and screaming on every kick would turn it into noise staff
+    // learn to ignore — which is how a real warning goes unnoticed.
     if (!_avisouQueEstaDesligado) {
-      console.log('[moderation-log] Desligado (BOT_INTERNAL_URL ou INTERNAL_API_SECRET ausente no .env).');
+      console.log('[moderation-log] Off (BOT_INTERNAL_URL or INTERNAL_API_SECRET missing from .env).');
       _avisouQueEstaDesligado = true;
     }
     return;
@@ -81,8 +81,8 @@ function notify(evento) {
       }
     },
     (res) => {
-      // O corpo é drenado e descartado: sem isto o socket fica preso até o
-      // timeout, e num servidor com moderação ativa isso vaza conexão.
+      // The body is drained and discarded: without this the socket stays stuck until the
+      // timeout, and on a server with active moderation that leaks connections.
       res.resume();
       if (res.statusCode >= 400) {
         console.error(`[moderation-log] Bot recusou o evento '${evento.kind}': HTTP ${res.statusCode}`);
@@ -90,11 +90,11 @@ function notify(evento) {
     }
   );
 
-  req.on('timeout', () => req.destroy(new Error(`sem resposta em ${TIMEOUT_MS}ms`)));
+  req.on('timeout', () => req.destroy(new Error(`no response in ${TIMEOUT_MS}ms`)));
   req.on('error', (err) => {
-    // Nunca propaga. A ação de moderação já aconteceu e está em `audit_logs`;
-    // o Discord estar fora não pode desfazer nada nem aparecer pro jogador.
-    console.error(`[moderation-log] Falha ao avisar o bot sobre '${evento.kind}':`, err.message);
+    // Never propagates. The moderation action already happened and is in `audit_logs`;
+    // Discord being down must not undo anything nor show up for the player.
+    console.error(`[moderation-log] Failed to notify the bot about '${evento.kind}':`, err.message);
   });
 
   req.end(corpo);

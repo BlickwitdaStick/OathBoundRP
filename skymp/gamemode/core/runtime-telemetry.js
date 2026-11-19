@@ -10,9 +10,9 @@ function createRuntimeTelemetry({
   logger = console,
   intervalMs = DEFAULT_INTERVAL_MS
 }) {
-  if (!connectionMonitor || typeof connectionMonitor.snapshot !== 'function') throw new Error('connectionMonitor invalido');
-  if (!uiEventRateLimiter || typeof uiEventRateLimiter.snapshot !== 'function') throw new Error('uiEventRateLimiter invalido');
-  if (!moduleRegistry || typeof moduleRegistry.healthCheckAll !== 'function') throw new Error('moduleRegistry invalido');
+  if (!connectionMonitor || typeof connectionMonitor.snapshot !== 'function') throw new Error('invalid connectionMonitor');
+  if (!uiEventRateLimiter || typeof uiEventRateLimiter.snapshot !== 'function') throw new Error('invalid uiEventRateLimiter');
+  if (!moduleRegistry || typeof moduleRegistry.healthCheckAll !== 'function') throw new Error('invalid moduleRegistry');
   let timer = null;
 
   function snapshot() {

@@ -23,19 +23,19 @@ describe('runtime compatibility gate', () => {
   test('reprova ordem divergente', () => {
     assert.throws(
       () => verifyRuntimeCompatibility(mock(['Skyrim.esm', 'Update.esm'], ['Update.esm', 'Skyrim.esm'])),
-      /load order efetiva diverge/
+      /effective load order differs/
     );
   });
 
   test('reprova plugin ausente ou extra', () => {
-    assert.throws(() => verifyRuntimeCompatibility(mock(['Skyrim.esm'], ['Skyrim.esm', 'Extra.esm'])), /diverge/);
-    assert.throws(() => verifyRuntimeCompatibility(mock(['Skyrim.esm', 'Update.esm'], ['Skyrim.esm'])), /diverge/);
+    assert.throws(() => verifyRuntimeCompatibility(mock(['Skyrim.esm'], ['Skyrim.esm', 'Extra.esm'])), /differs/);
+    assert.throws(() => verifyRuntimeCompatibility(mock(['Skyrim.esm', 'Update.esm'], ['Skyrim.esm'])), /differs/);
   });
 
   test('reprova API e configuração ausentes', () => {
     assert.throws(() => verifyRuntimeCompatibility({}), /getServerSettings/);
     assert.throws(() => verifyRuntimeCompatibility({ getServerSettings: () => ({ loadOrder: [] }) }), /getEspmLoadOrder/);
-    assert.throws(() => verifyRuntimeCompatibility(mock([], [])), /loadOrder valida/);
+    assert.throws(() => verifyRuntimeCompatibility(mock([], [])), /no valid loadOrder/);
   });
 });
 

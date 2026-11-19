@@ -1,33 +1,33 @@
 /**
  * core/skymp-adapter/papyrus-catalog.js
  *
- * As funcoes Papyrus que o servidor SkyMP realmente implementa.
+ * The Papyrus functions the SkyMP server actually implements.
  *
- * ─── Como esta lista foi feita, e por que ela existe ─────────────────────────
+ * ─── How this list was made, and why it exists ──────────────────────────────
  *
- * Extraida de `skymp5-server/cpp/server_guest_lib/script_classes/Papyrus*.cpp`
- * no commit `d85f18d8` — as chamadas `AddMethod(vm, "Nome", …)` e
- * `AddStatic(vm, "Nome", …)`. Sao 128 registros.
+ * Extracted from `skymp5-server/cpp/server_guest_lib/script_classes/Papyrus*.cpp`
+ * at commit `d85f18d8` — the `AddMethod(vm, "Name", …)` and
+ * `AddStatic(vm, "Name", …)` calls. 128 entries.
  *
- * Chamar qualquer nome fora daqui **nao lanca**: o VM loga um erro e devolve
- * `VarValue::None()`, que chega ao JavaScript como `null`. E `null <= 0` e
- * `true`, entao uma funcao inexistente nao produz erro — produz decisao errada.
+ * Calling any name outside this list **does not throw**: the VM logs an error and returns
+ * `VarValue::None()`, which reaches JavaScript as `null`. And `null <= 0` is
+ * `true`, so a missing function does not produce an error — it produces a wrong decision.
  *
- * Foi assim que `death-service.js` passou a derrubar todo jogador conectado em
- * dois segundos chamando `Actor.GetActorValue`, que nao existe. Ver
+ * That is how `death-service.js` started knocking down every connected player within
+ * two seconds by calling `Actor.GetActorValue`, which does not exist. See
  * docs/research/SKYMP_INTEGRATION_AUDIT.md §4.
  *
- * ─── Esta lista envelhece ────────────────────────────────────────────────────
+ * ─── This list ages ──────────────────────────────────────────────────────────
  *
- * Ela vale para um commit. Quando o pin de `patches/manifest.json` subir, ela
- * precisa ser refeita — o comando esta em
+ * It is valid for one commit. When the pin in `patches/manifest.json` moves up, it
+ * has to be redone — the command is in
  * docs/technical/SKYMP_COMPATIBILITY_MATRIX.md §4.1.
  *
- * O adaptador prefere a reflexao em runtime (`mp._sp3GetFunctionImplementation`)
- * quando ela existe, justamente para nao depender deste arquivo. A lista e o
- * fallback, nao a autoridade.
+ * The adapter prefers runtime reflection (`mp._sp3GetFunctionImplementation`)
+ * when it exists, precisely so it does not depend on this file. The list is the
+ * fallback, not the authority.
  *
- * Nomes em minusculo porque o VM usa `CIString`: a busca e case-insensitive.
+ * Lowercase names because the VM uses `CIString`: lookups are case-insensitive.
  */
 
 'use strict';
@@ -168,7 +168,7 @@ const STATICS = new Set([
   'utility.waitmenumode',
 ]);
 
-/** Commit upstream de onde a lista foi extraida. */
+/** Upstream commit the list was extracted from. */
 const UPSTREAM_COMMIT = 'd85f18d808f877401c4e20484d2c2f6f73cf9caa';
 
 /**
