@@ -1,24 +1,24 @@
-# Sistema de Módulos
+# Module System
 
-Arquivo: [`core/module-registry.js`](../../skymp/gamemode/core/module-registry.js) · Testes: [`core/module-registry.test.js`](../../skymp/gamemode/core/module-registry.test.js) (19 casos)
+File: [`core/module-registry.js`](../../skymp/gamemode/core/module-registry.js) · Tests: [`core/module-registry.test.js`](../../skymp/gamemode/core/module-registry.test.js) (19 cases)
 
-Um módulo é uma unidade que pode ser ligada, desligada e substituída sem que o resto do servidor saiba. Ele declara o que precisa; o registry decide se e quando ele sobe.
+A module is a unit that can be turned on, turned off and replaced without the rest of the server knowing. It declares what it needs; the registry decides whether and when it comes up.
 
 ---
 
-## 1. O descritor
+## 1. The descriptor
 
 ```js
 moduleRegistry.register({
-  id: 'market-stalls',                          // único
-  enabledBy: 'ENABLE_MARKET_STALLS_SERVICE',    // env var; só 'true' liga
+  id: 'market-stalls',                          // unique
+  enabledBy: 'ENABLE_MARKET_STALLS_SERVICE',    // env var; only 'true' turns it on
   phase: 'core' | 'lab' | 'parked',
   version: '1.1.0',
 
-  dependencies: ['governance', 'interaction'],  // sem elas, não sobe
-  optionalDependencies: ['economy-regional'],   // consulta se existir
+  dependencies: ['governance', 'interaction'],  // without them, it does not come up
+  optionalDependencies: ['economy-regional'],   // queried if present
 
-  commands: marketStalls.commandDefs(),         // registrados/removidos sozinhos
+  commands: marketStalls.commandDefs(),         // registered/removed automatically
 
   initialize: async () => { ... },
   shutdown: async () => { ... },
@@ -26,16 +26,16 @@ moduleRegistry.register({
 });
 ```
 
-`enabledBy` é obrigatório e a comparação é `=== 'true'`. Ausente conta como desligado — e é assim que todo módulo `lab` nasce.
+`enabledBy` is mandatory and the comparison is `=== 'true'`. Absent counts as off — and that is how every `lab` module is born.
 
 ---
 
-## 2. Ciclo de vida
+## 2. Lifecycle
 
 ```
-REGISTERED ──► DISABLED           (env flag ausente ou ≠ 'true')
+REGISTERED ──► DISABLED           (env flag absent or ≠ 'true')
      │
-     ├───────► FAILED             (dependência ausente, ou initialize lançou)
+     ├───────► FAILED             (missing dependency, or initialize threw)
      │
      └───────► INITIALIZING ──► READY ──► RUNNING
                                              │
@@ -43,101 +43,101 @@ REGISTERED ──► DISABLED           (env flag ausente ou ≠ 'true')
                                          STOPPING ──► STOPPED
 ```
 
-`getState(id)` devolve o estado; `isEnabled(id)` continua respondendo só "está rodando?".
+`getState(id)` returns the state; `isEnabled(id)` still answers only "is it running?".
 
-**A distinção que importa é `DISABLED` × `FAILED`.** Até 13/08/2026 o estado era um `Set`: dois estados para cinco situações, e as duas que se confundiam eram justamente essas. `isEnabled()` responde `false` para as duas, e só uma é incidente — um servidor com `governance` quebrado no boot parecia, para qualquer código e para o `list()`, um servidor que simplesmente não quis governança.
+**The distinction that matters is `DISABLED` × `FAILED`.** Until 2026-08-13 the state was a `Set`: two states for five situations, and the two that got confused were exactly these. `isEnabled()` answers `false` for both, and only one is an incident — a server with `governance` broken at boot looked, to any code and to `list()`, like a server that simply did not want governance.
 
-`FAILED` também é o estado que o Interaction Framework precisa: um módulo que registrou interações e depois falhou deixaria ações no menu apontando para um serviço que nunca inicializou. Por isso o boot limpa o registro de interações de quem falha.
+`FAILED` is also the state the Interaction Framework needs: a module that registered interactions and then failed would leave actions in the menu pointing at a service that never initialized. That is why boot clears the interaction registrations of whoever fails.
 
 ---
 
-## 3. Dependências
+## 3. Dependencies
 
-### Ordenação topológica
+### Topological ordering
 
-`bootAll()` ordena antes de subir. Toda dependência — obrigatória ou opcional — vem antes de quem depende dela, **independentemente da ordem de registro**.
+`bootAll()` sorts before bringing things up. Every dependency — mandatory or optional — comes before whatever depends on it, **regardless of registration order**.
 
-Isto conserta um bug latente. Antes, o boot percorria os módulos na ordem de inserção e só considerava satisfeita a dependência já inicializada numa iteração anterior. Funcionava porque `phase0-basic.js` registra `governance` antes de `market-stalls`; mover aquele bloco vinte linhas para cima desligava o módulo com
+This fixes a latent bug. Before, boot walked the modules in insertion order and only considered a dependency satisfied if it had already been initialized in an earlier iteration. It worked because `phase0-basic.js` registers `governance` before `market-stalls`; moving that block twenty lines up turned the module off with
 
 ```
-market-stalls: FALHOU — dependências não ativas: governance
+market-stalls: FAILED — inactive dependencies: governance
 ```
 
-— uma mensagem correta sobre um estado que não deveria existir. Era dependência invisível na camada de módulo, com a agravante de o modo de falha ser silencioso: o log dizia a verdade e ninguém lia.
+— a correct message about a state that should not exist. It was an invisible dependency at the module layer, with the aggravating factor that the failure mode was silent: the log told the truth and nobody read it.
 
-### Obrigatória × opcional
+### Mandatory × optional
 
-|  | Obrigatória | Opcional |
+|  | Mandatory | Optional |
 |---|---|---|
-| Ausente ou desligada | O módulo **falha** | O módulo sobe normalmente |
-| Presente | Sobe antes | Sobe antes |
-| Declara o quê | "não funciono sem" | "uso se existir" |
+| Absent or off | The module **fails** | The module comes up normally |
+| Present | Comes up first | Comes up first |
+| Declares what | "I do not work without it" | "I use it if it exists" |
 
-`optionalDependencies` existe por um caso real: `governance` consulta `economy-regional` se ele estiver ligado, e resolvia isso com `moduleRegistry.isEnabled()` + `require` dentro de um `try`, no meio de uma função de domínio. Declarar tira a decisão de lá.
+`optionalDependencies` exists because of a real case: `governance` queries `economy-regional` if it is on, and solved that with `moduleRegistry.isEnabled()` + `require` inside a `try`, in the middle of a domain function. Declaring it takes the decision out of there.
 
-O log de boot mostra as opcionais inativas:
-
-```
-[module-registry] [LAB] governance@1.1.0: ATIVO (18 comandos registrados, opcionais inativas: economy-regional)
-```
-
-### Ciclo
-
-Ciclo é erro de quem programa, não condição de runtime. Os módulos envolvidos são **nomeados** e ficam de fora do boot; o servidor não trava, o resto sobe, e a ordem não vira sorte.
+The boot log shows the inactive optionals:
 
 ```
-[module-registry] CICLO de dependência: a → b → a. Módulos envolvidos ficam de fora do boot.
+[module-registry] [LAB] governance@1.1.0: ACTIVE (18 commands registered, inactive optionals: economy-regional)
+```
+
+### Cycles
+
+A cycle is a programmer error, not a runtime condition. The modules involved are **named** and left out of the boot; the server does not hang, the rest comes up, and the order does not become luck.
+
+```
+[module-registry] Dependency CYCLE: a → b → a. Modules involved are left out of the boot.
 ```
 
 ---
 
-## 4. O que o registry faz sozinho
+## 4. What the registry does on its own
 
-| No boot | No shutdown |
+| At boot | At shutdown |
 |---|---|
-| Ordena por dependência | Ordem **inversa** |
-| Checa a env flag | — |
-| Checa dependências obrigatórias | — |
-| Chama `initialize()` | Chama `shutdown()` |
-| Registra `commands[]` no `command-registry` | Remove `commands[]` |
-| — | Remove as interações do módulo |
-| Remove interações de quem **falhou** no meio | — |
+| Sorts by dependency | **Reverse** order |
+| Checks the env flag | — |
+| Checks mandatory dependencies | — |
+| Calls `initialize()` | Calls `shutdown()` |
+| Registers `commands[]` in the `command-registry` | Removes `commands[]` |
+| — | Removes the module's interactions |
+| Removes the interactions of whoever **failed** midway | — |
 
-O shutdown inverso importa: sem ele, `governance` poderia sair enquanto `market-stalls` — que o consome — ainda atende pedido.
+The reverse shutdown matters: without it, `governance` could leave while `market-stalls` — which consumes it — is still serving requests.
 
-Erro no `shutdown` de um módulo não impede o desligamento dos demais, e o módulo que falhou ao desligar **não continua "ativo"**.
+An error in one module's `shutdown` does not prevent the others from shutting down, and the module that failed to shut down **does not remain "active"**.
 
 ---
 
-## 5. As três fases
+## 5. The three phases
 
-| Fase | Significa | Está no `phase0-basic.js`? |
+| Phase | Means | Is it in `phase0-basic.js`? |
 |---|---|---|
-| `core` | Infraestrutura. Sem gameplay próprio | Sim |
-| `lab` | Mecânica em validação. **Desligada por padrão** | Sim |
-| `parked` | Existe no disco, **nunca registrada** | Não |
+| `core` | Infrastructure. No gameplay of its own | Yes |
+| `lab` | Mechanic under validation. **Off by default** | Yes |
+| `parked` | Exists on disk, **never registered** | No |
 
-**PARKED não é "desligado".** Um módulo desligado tem descritor e uma flag em `false`; um módulo PARKED não tem descritor nenhum. Reativá-lo é escrever o descritor — o que exige revisar o que o parkeou.
+**PARKED is not "off".** An off module has a descriptor and a flag set to `false`; a PARKED module has no descriptor at all. Reactivating it means writing the descriptor — which requires reviewing what parked it.
 
-`CONTRIBUTING.md` §3.3 é explícito: nunca importe um módulo PARKED diretamente. `moduleRegistry.isEnabled()` é o portão, e ele só responde `true` para módulo que o registry inicializou de fato.
+`CONTRIBUTING.md` §3.3 is explicit: never import a PARKED module directly. `moduleRegistry.isEnabled()` is the gate, and it only answers `true` for a module the registry actually initialized.
 
-PARKED hoje: `economy-regional`, `housing-service`, `horse-service` (só aparecem em comentário no `phase0-basic.js`, sem `moduleRegistry.register`). `jobs-service`, `crafting-service` e `trade-service` **não são mais PARKED** — têm descritor registrado (`id: 'jobs'` / `id: 'crafting'` / `id: 'trade'`) em `phase0-basic.js`, atrás de `ENABLE_JOBS_SERVICE`/`ENABLE_CRAFTING_SERVICE`/`ENABLE_TRADE_SERVICE` (nascem `false`); jobs/crafting saíram em 20/08/2026 (ver `PARKED_SERVICES_DECISION.md` §"Terceira rodada"), trade já estava registrado antes disso.
-
----
-
-## 6. Registrar um módulo novo
-
-1. Escreva o serviço em `skymp/gamemode/`.
-2. Adicione o descritor em `phase0-basic.js`, fase `lab`, flag `ENABLE_<NOME>`.
-3. Declare `dependencies: ['interaction']` se ele registrar interações.
-4. Documente a flag no `.env.example`.
-5. Escreva o teste. `npm test` roda a suíte inteira.
-
-Não é preciso pensar na posição do bloco no arquivo: a ordenação topológica resolve.
+PARKED today: `economy-regional`, `housing-service`, `horse-service` (they only appear in a comment in `phase0-basic.js`, without `moduleRegistry.register`). `jobs-service`, `crafting-service` and `trade-service` are **no longer PARKED** — they have a registered descriptor (`id: 'jobs'` / `id: 'crafting'` / `id: 'trade'`) in `phase0-basic.js`, behind `ENABLE_JOBS_SERVICE`/`ENABLE_CRAFTING_SERVICE`/`ENABLE_TRADE_SERVICE` (born `false`); jobs/crafting came out on 2026-08-20 (see `PARKED_SERVICES_DECISION.md` §"Third round"), and trade was already registered before that.
 
 ---
 
-## 7. Diagnóstico
+## 6. Registering a new module
+
+1. Write the service in `skymp/gamemode/`.
+2. Add the descriptor in `phase0-basic.js`, phase `lab`, flag `ENABLE_<NAME>`.
+3. Declare `dependencies: ['interaction']` if it registers interactions.
+4. Document the flag in `.env.example`.
+5. Write the test. `npm test` runs the whole suite.
+
+There is no need to think about the block's position in the file: topological ordering takes care of it.
+
+---
+
+## 7. Diagnostics
 
 ```js
 moduleRegistry.list()
@@ -149,16 +149,16 @@ moduleRegistry.healthCheckAll()             // [{ id, healthy, error? }]
 moduleRegistry.topologicalOrder()           // { ordered, cycles }
 ```
 
-`healthCheckAll` só olha o que está ativo e isola exceção: um `healthCheck` que lança vira `{healthy: false, error}`, não derruba o relatório.
+`healthCheckAll` only looks at what is active and isolates exceptions: a `healthCheck` that throws becomes `{healthy: false, error}`, it does not bring down the report.
 
 ---
 
-## 8. O que este sistema deliberadamente não faz
+## 8. What this system deliberately does not do
 
-**Não distribui eventos de jogo.** O Red House despacha `onHit`/`onCellChange` para qualquer módulo que queira escutar. Avaliado em 06/08/2026 e não feito: dos módulos registrados, **um** escuta evento de jogo (`death`, e só `hit`), e `onCellChange` não tem consumidor nenhum. Um despacho genérico trocaria uma linha por um barramento que serve a um só, com uma chave viva e uma morta desde o primeiro dia.
+**It does not distribute game events.** Red House dispatches `onHit`/`onCellChange` to any module that wants to listen. Evaluated on 2026-08-06 and not done: of the registered modules, **one** listens to a game event (`death`, and only `hit`), and `onCellChange` has no consumer at all. A generic dispatch would trade one line for a bus that serves a single consumer, with one live key and one dead key from day one.
 
-O precedente do próprio projeto aponta o caminho quando o caso aparece: quando um segundo consumidor surgiu de verdade, a resposta foi `core/panel-refresh-bus.js` — um barramento pequeno e nomeado. `core/death-events.js` nasceu igual, pelo mesmo motivo.
+The project's own precedent points the way when the case appears: when a second consumer really showed up, the answer was `core/panel-refresh-bus.js` — a small, named bus. `core/death-events.js` was born the same way, for the same reason.
 
-O gatilho para reabrir: um segundo módulo que precise de um evento de jogo já capturado por outro. O raciocínio completo está no cabeçalho do [`module-registry.js`](../../skymp/gamemode/core/module-registry.js).
+The trigger to reopen it: a second module that needs a game event already captured by another. The full reasoning is in the header of [`module-registry.js`](../../skymp/gamemode/core/module-registry.js).
 
-**Não injeta dependências.** Módulos usam `require` explícito. Ver [`ADR_002`](../technical/ADR_002_INTERACTION_FRAMEWORK.md) §4.
+**It does not inject dependencies.** Modules use explicit `require`. See [`ADR_002`](../technical/ADR_002_INTERACTION_FRAMEWORK.md) §4.
