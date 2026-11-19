@@ -134,7 +134,7 @@ describe('jobs-service — commandDefs [CURRENT CONTRACT]', () => {
   it('registra somente /cortarlenha e não expõe os bypasses de mineração/pesca', () => {
     const defs = jobs.commandDefs();
     const nomes = defs.map((d) => d.name);
-    assert.deepEqual(nomes, ['/cortarlenha']);
+    assert.deepEqual(nomes, [['/chopwood', '/cortarlenha']]);
     assert.equal(new Set(nomes).size, nomes.length, 'nenhum comando duplicado');
   });
 
@@ -150,7 +150,7 @@ describe('jobs-service — commandDefs [CURRENT CONTRACT]', () => {
     resetState();
     t.mock.timers.enable({ apis: ['setTimeout'] });
     mockRandomSequence(t, [0]); // woodAmount = floor(0*3)+1 = 1
-    const handler = jobs.commandDefs().find((d) => d.name === '/cortarlenha').handler;
+    const handler = jobs.commandDefs().find((d) => [].concat(d.name).includes('/chopwood')).handler;
     handler(ATOR);
     await tickAndFlush(t, 10000);
     assert.equal(giveItemCalls.length, 1);
@@ -176,7 +176,7 @@ describe('jobs-service — personagem e ferramenta [CURRENT CONTRACT]', () => {
     jobs.chopWood(ATOR);
     await tickAndFlush(t, 10000);
     assert.equal(giveItemCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Personagem nao carregado.'));
+    assert.ok(notifications.some((n) => n.text === 'Character not loaded.'));
   });
 
   it('sem a ferramenta exigida (machado), chopWood recusa e não agenda entrega', async (t) => {
@@ -186,7 +186,7 @@ describe('jobs-service — personagem e ferramenta [CURRENT CONTRACT]', () => {
     jobs.chopWood(ATOR);
     await tickAndFlush(t, 10000);
     assert.equal(giveItemCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Você precisa de um Machado de Lenhador.'));
+    assert.ok(notifications.some((n) => n.text === "You need a Woodcutter's Axe."));
   });
 
   it('sem a ferramenta exigida (picareta), mineOre recusa e não agenda entrega', async (t) => {
@@ -196,7 +196,7 @@ describe('jobs-service — personagem e ferramenta [CURRENT CONTRACT]', () => {
     jobs.mineOre(ATOR);
     await tickAndFlush(t, 15000);
     assert.equal(giveItemCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Você precisa de uma Picareta.'));
+    assert.ok(notifications.some((n) => n.text === 'You need a Pickaxe.'));
   });
 
   it('catchFish NÃO exige ferramenta hoje (toolBaseId=null no código) [LEGACY CHARACTERIZATION — TODO no próprio arquivo]', async (t) => {
@@ -256,7 +256,7 @@ describe('jobs-service — chopWood', () => {
     mockRandomSequence(t, [0]);
     jobs.chopWood(ATOR);
     await tickAndFlush(t, 10000);
-    assert.ok(notifications.some((n) => n.text === 'Você coletou 1x Lenha.'));
+    assert.ok(notifications.some((n) => n.text === 'You gathered 1x Firewood.'));
   });
 });
 
@@ -282,7 +282,7 @@ describe('jobs-service — mineOre', () => {
     assert.ok(call.idempotencyKey.startsWith('jobs_mining_42_'));
   });
 
-  it('[LEGACY CHARACTERIZATION] Math.random() <= 0.6 entrega Minério de Ferro', async (t) => {
+  it('[LEGACY CHARACTERIZATION] Math.random() <= 0.6 entrega Iron Ore', async (t) => {
     resetState();
     t.mock.timers.enable({ apis: ['setTimeout'] });
     mockRandomSequence(t, [0.5, 0]);
@@ -291,7 +291,7 @@ describe('jobs-service — mineOre', () => {
     assert.equal(giveItemCalls[0].baseId, ITEM_IRON_ORE);
   });
 
-  it('[LEGACY CHARACTERIZATION] 0.6 < Math.random() <= 0.9 entrega Minério de Corundum', async (t) => {
+  it('[LEGACY CHARACTERIZATION] 0.6 < Math.random() <= 0.9 entrega Corundum Ore', async (t) => {
     resetState();
     t.mock.timers.enable({ apis: ['setTimeout'] });
     mockRandomSequence(t, [0.7, 0]);
@@ -300,7 +300,7 @@ describe('jobs-service — mineOre', () => {
     assert.equal(giveItemCalls[0].baseId, ITEM_CORUNDUM_ORE);
   });
 
-  it('[LEGACY CHARACTERIZATION] Math.random() > 0.9 entrega Minério de Ébano', async (t) => {
+  it('[LEGACY CHARACTERIZATION] Math.random() > 0.9 entrega Ebony Ore', async (t) => {
     resetState();
     t.mock.timers.enable({ apis: ['setTimeout'] });
     mockRandomSequence(t, [0.95, 0]);
@@ -368,7 +368,7 @@ describe('jobs-service — catchFish', () => {
     await tickAndFlush(t, 20000);
     assert.equal(giveItemCalls.length, 0, 'não chama transactionService.giveItem quando não há peixe');
     assert.ok(!jobs._activeGatherers.has(CHAR_A), 'libera o slot mesmo sem entrega, senão o jogador travaria');
-    assert.ok(notifications.some((n) => n.text === 'O peixe escapou!'));
+    assert.ok(notifications.some((n) => n.text === 'The fish got away!'));
   });
 });
 
@@ -406,7 +406,7 @@ describe('jobs-service — repetição [LEGACY CHARACTERIZATION]', () => {
 
     await tickAndFlush(t, 10000);
     assert.equal(giveItemCalls.length, 1, 'só a primeira gerou entrega — a segunda foi recusada por concorrência, não por cooldown');
-    assert.ok(notifications.some((n) => n.text === 'Você já está ocupado fazendo algo.'));
+    assert.ok(notifications.some((n) => n.text === 'You are already busy doing something.'));
   });
 });
 
@@ -425,8 +425,8 @@ describe('jobs-service — falha de transactionService.giveItem [CURRENT CONTRAC
     await tickAndFlush(t, 10000);
 
     assert.equal(giveItemCalls.length, 1, 'não existe segunda tentativa/retry automático');
-    assert.ok(notifications.some((n) => n.text === 'A coleta se perdeu antes de chegar na sua mochila.'));
-    assert.ok(!notifications.some((n) => n.text.includes('Você coletou')), 'não anuncia sucesso quando a entrega falhou');
+    assert.ok(notifications.some((n) => n.text === 'The haul was lost before reaching your pack.'));
+    assert.ok(!notifications.some((n) => n.text.includes('You gathered')), 'não anuncia sucesso quando a entrega falhou');
     assert.ok(!jobs._activeGatherers.has(CHAR_A), 'libera o slot mesmo em falha, senão o jogador travaria para sempre');
   });
 
@@ -442,7 +442,7 @@ describe('jobs-service — falha de transactionService.giveItem [CURRENT CONTRAC
     assert.doesNotThrow(() => jobs.chopWood(ATOR));
     await tickAndFlush(t, 10000);
 
-    assert.ok(!notifications.some((n) => n.text.includes('Você coletou')), 'não anuncia sucesso quando giveItem lançou');
+    assert.ok(!notifications.some((n) => n.text.includes('You gathered')), 'não anuncia sucesso quando giveItem lançou');
   });
 
   it('sessão hijack: personagem no slot muda entre início e fim — não entrega, char original permanece liberado', async (t) => {

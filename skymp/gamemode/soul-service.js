@@ -63,20 +63,20 @@ const MODULE = 'soul';
  * é tão jogável quanto `raro`, que é a §14.4 aparecendo na superfície.
  */
 const SIGN_CATALOG = Object.freeze({
-  arcana_alta:          'As chamas te obedecem rápido demais.',
-  arcana_baixa:         'A magia te ignora como se você não estivesse ali.',
-  divina_alta:          'O sacerdote te olha demais e não diz nada.',
-  divina_baixa:         'Você já entrou em três templos e nenhum deles pareceu notar.',
-  sombria_alta:         'As velas se apagam do lado onde você senta.',
-  sombria_baixa:        'Os mortos não têm nada a te dizer, e isso é um alívio.',
-  bestial_alta:         'Cães rosnam quando você passa, e você não sabe por quê.',
-  bestial_baixa:        'Nenhum animal te teme. Nenhum te procura.',
-  vontade_alta:         'Você já disse não a algo que ninguém mais conseguiu recusar.',
-  vontade_baixa:        'É mais fácil concordar. Sempre foi.',
-  sensibilidade_alta:   'Você ouve conversas em cômodos vazios.',
-  sensibilidade_baixa:  'Você não sonha. Nunca sonhou.',
-  estabilidade_alta:    'O que abala os outros passa por você como vento.',
-  estabilidade_baixa:   'Há dias em que o seu nome soa errado na sua própria boca.'
+  arcana_alta:          'Flames obey you far too quickly.',
+  arcana_baixa:         'Magic ignores you as if you were not there.',
+  divina_alta:          'The priest stares at you too long and says nothing.',
+  divina_baixa:         'You have walked into three temples and none of them seemed to notice.',
+  sombria_alta:         'Candles go out on whichever side you sit.',
+  sombria_baixa:        'The dead have nothing to say to you, and that is a relief.',
+  bestial_alta:         'Dogs growl when you pass, and you do not know why.',
+  bestial_baixa:        'No animal fears you. None seeks you out.',
+  vontade_alta:         'You have said no to something no one else could refuse.',
+  vontade_baixa:        'It is easier to agree. It always was.',
+  sensibilidade_alta:   'You hear conversations in empty rooms.',
+  sensibilidade_baixa:  'You do not dream. You never have.',
+  estabilidade_alta:    'What shakes others passes through you like wind.',
+  estabilidade_baixa:   'Some days your own name sounds wrong in your mouth.'
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,14 +94,14 @@ const SIGN_CATALOG = Object.freeze({
  * narrativo, não numérico, e não farmável, porque cada marca custou uma cena.
  */
 const MARK_CATALOG = Object.freeze({
-  mao_fria:        { kind: 'fisica',     visibility: 'visivel',   text: 'A mão que forjou aquilo não esquenta mais.' },
-  olhos_pálidos:   { kind: 'fisica',     visibility: 'visivel',   text: 'A cor saiu dos seus olhos e não voltou.' },
-  voz_dupla:       { kind: 'fisica',     visibility: 'visivel',   text: 'Às vezes a sua voz sai com outra por baixo.' },
-  sono_partido:    { kind: 'espiritual', visibility: 'sentida',   text: 'Você acorda três vezes por noite, sempre na mesma hora.' },
-  peso_no_peito:   { kind: 'espiritual', visibility: 'sentida',   text: 'Há algo apoiado no seu peito que não estava ali antes.' },
-  nome_lembrado:   { kind: 'espiritual', visibility: 'sentida',   text: 'Alguém que você não conhece repete o seu nome, longe.' },
-  fama_de_risco:   { kind: 'social',     visibility: 'conhecida', text: 'Quem entende do assunto sabe o que você tentou.' },
-  divida_de_favor: { kind: 'social',     visibility: 'conhecida', text: 'Alguém pagou parte do preço por você, e não esqueceu.' }
+  mao_fria:        { kind: 'fisica',     visibility: 'visivel',   text: 'The hand that forged it never warms up anymore.' },
+  olhos_pálidos:   { kind: 'fisica',     visibility: 'visivel',   text: 'The color drained from your eyes and never came back.' },
+  voz_dupla:       { kind: 'fisica',     visibility: 'visivel',   text: 'Sometimes your voice comes out with another beneath it.' },
+  sono_partido:    { kind: 'espiritual', visibility: 'sentida',   text: 'You wake three times a night, always at the same hour.' },
+  peso_no_peito:   { kind: 'espiritual', visibility: 'sentida',   text: 'Something rests on your chest that was not there before.' },
+  nome_lembrado:   { kind: 'espiritual', visibility: 'sentida',   text: 'Someone you do not know repeats your name, far away.' },
+  fama_de_risco:   { kind: 'social',     visibility: 'conhecida', text: 'Those who know about such things know what you attempted.' },
+  divida_de_favor: { kind: 'social',     visibility: 'conhecida', text: 'Someone paid part of the price for you, and has not forgotten.' }
 });
 
 /** Marcas candidatas por afinidade — a escolha final é determinística. */
@@ -582,7 +582,7 @@ async function advancePath({ characterId, tree, consent = false }) {
     // Anexo — aviso antes do irreversível.
     const actorId = commands.getActiveActorByCharacterId(characterId);
     if (actorId) {
-      commands.sendNotification(actorId, 'Este passo não tem volta. Ele só acontece se você disser que sim.');
+      commands.sendNotification(actorId, 'There is no going back from this step. It only happens if you say yes.');
     }
     console.log(`[soul] char ${characterId} barrado em '${proximo.node}' (${tree}): sem consentimento.`);
     return { node: atual ? atual.node : null, blocked: 'consentimento_ausente' };
@@ -659,9 +659,9 @@ function offSoulEvent(evento, handler) { _emitter.off(evento, handler); }
 function commandDefs() {
   return [
     {
-      name: ['/alma', '/soul'],
-      description: 'Mostra o que o seu personagem sabe sobre a propria alma — sinais, marcas e caminho',
-      usage: '/alma',
+      name: ['/soul', '/alma'],
+      description: 'Shows what your character knows about their own soul — signs, marks and path',
+      usage: '/soul',
       handler: (actorId) => {
         const character = commands.getActiveCharacterData(actorId);
         if (!character) return;
@@ -670,7 +670,7 @@ function commandDefs() {
             // O comando serve pra quem não abriu o painel. Mesmo conteúdo, mesma
             // regra: frases, nunca número.
             if (payload.sinais.length === 0 && payload.marcas.length === 0) {
-              commands.sendNotification(actorId, 'Ainda não há nada que você saiba sobre si mesmo.');
+              commands.sendNotification(actorId, 'There is nothing you know about yourself yet.');
               return;
             }
             for (const frase of payload.sinais) commands.sendNotification(actorId, frase);

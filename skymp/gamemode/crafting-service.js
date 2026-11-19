@@ -155,35 +155,35 @@ function registerInteractions() {
   interactionRegistry.register({
     ...common,
     id: 'crafting.recipes',
-    label: 'Ver receitas',
+    label: 'View recipes',
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     execute: async (ctx) => {
       const stationType = await resolveStation(ctx.target.formId);
-      if (!stationType) return { message: 'Estação indisponível.' };
+      if (!stationType) return { message: 'Station unavailable.' };
       const recipes = await listRecipes(ctx.actorId, stationType);
-      return { message: recipes.length > 0 ? `${recipes.length} receita(s) disponível(is).` : 'Nenhuma receita disponível.' };
+      return { message: recipes.length > 0 ? `${recipes.length} recipe(s) available.` : 'No recipes available.' };
     }
   });
 
   interactionRegistry.register({
     ...common,
     id: 'crafting.craft',
-    label: 'Criar item',
+    label: 'Craft item',
     audit: interactionRegistry.AUDIT_LEVELS.ECONOMY,
     idempotent: true,
     schema: {
-      recipeId: { type: 'int', label: 'Receita', min: 1 },
-      signatureText: { type: 'string', label: 'Dedicatória', max: 64, required: false }
+      recipeId: { type: 'int', label: 'Recipe', min: 1 },
+      signatureText: { type: 'string', label: 'Dedication', max: 64, required: false }
     },
     execute: async (ctx) => {
       const stationType = await resolveStation(ctx.target.formId);
-      if (!stationType) return { message: 'Estação indisponível.' };
+      if (!stationType) return { message: 'Station unavailable.' };
       const ok = await craftItem(ctx.actorId, ctx.characterId, ctx.data.recipeId, {
         stationType,
         signatureText: ctx.data.signatureText,
         requestId: ctx.requestId
       });
-      return { message: ok ? 'Item criado.' : 'Não foi possível criar o item.' };
+      return { message: ok ? 'Item crafted.' : 'Could not craft the item.' };
     }
   });
 }
@@ -193,7 +193,7 @@ function registerInteractions() {
  */
 async function listRecipes(actorId, stationType) {
   if (!STATION_TYPES.includes(stationType)) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Tipo de estação inválido.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Invalid station type.']);
     return [];
   }
 
@@ -203,7 +203,7 @@ async function listRecipes(actorId, stationType) {
   );
 
   if (recipes.length === 0) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Nenhuma receita disponível em ${stationType}.`]);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`No recipes available at ${stationType}.`]);
     return [];
   }
 
@@ -232,7 +232,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
   // 1. Carrega a receita
   const recipeRows = await db.query('SELECT * FROM crafting_recipes WHERE id = ?', [recipeId]);
   if (recipeRows.length === 0) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Receita não encontrada.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Recipe not found.']);
     return false;
   }
   const recipe = recipeRows[0];
@@ -243,7 +243,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
   if (opts.stationType && opts.stationType !== recipe.station_type) {
     if (typeof mp !== 'undefined') {
       mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-        `Esta receita e feita em: ${recipe.station_type}.`
+        `This recipe is made at: ${recipe.station_type}.`
       ]);
     }
     return false;
@@ -256,7 +256,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
     if (!tem) {
       if (typeof mp !== 'undefined') {
         mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-          `Você precisa ser ${recipe.required_profession} para fazer isso.`
+          `You need to be a ${recipe.required_profession} to do that.`
         ]);
       }
       return false;
@@ -266,7 +266,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
       if (!estado || estado.rank < recipe.required_rank) {
         if (typeof mp !== 'undefined') {
           mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-            `Seu rank de ${recipe.required_profession} ainda não é suficiente para esta receita.`
+            `Your ${recipe.required_profession} rank is not high enough for this recipe yet.`
           ]);
         }
         return false;
@@ -280,7 +280,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
     // Receita sem ingrediente cadastrado criaria item do nada. `addRecipe` e
     // `addIngredient` sao dois comandos separados, entao a janela entre os dois
     // existe de verdade — e um craft nela seria duplicacao de item pela staff.
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Receita incompleta: nenhum ingrediente cadastrado.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Incomplete recipe: no ingredients registered.']);
     return false;
   }
 
@@ -326,7 +326,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
   if (!resultado.ok) {
     console.error(`[crafting] Craft falhou (char=${characterId} recipe=${recipeId}): ${resultado.code} ${resultado.reason}`);
     if (typeof mp !== 'undefined') {
-      mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Craft cancelado: ${resultado.reason}`]);
+      mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Crafting cancelled: ${resultado.reason}`]);
     }
     return false;
   }
@@ -335,14 +335,14 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
     // Reenvio do mesmo pedido. Nao craftou de novo, e dizer "voce criou" seria
     // mentir sobre um item que o jogador ja tem.
     if (typeof mp !== 'undefined') {
-      mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Este craft ja havia sido concluido.']);
+      mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['This craft was already completed.']);
     }
     return true;
   }
 
   if (typeof mp !== 'undefined') {
     mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-      `✓ Você criou: ${recipe.name} (x${recipe.result_count}).`
+      `✓ You crafted: ${recipe.name} (x${recipe.result_count}).`
     ]);
   }
 
@@ -377,16 +377,16 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
         signatureText: texto || null
       });
       if (typeof mp !== 'undefined') {
-        mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['✓ Trabalho assinado.']);
+        mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['✓ Work signed.']);
       }
     } else if (typeof mp !== 'undefined') {
       mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-        `Seu rank de ${recipe.required_profession} ainda não permite assinar este trabalho.`
+        `Your ${recipe.required_profession} rank does not allow you to sign this work yet.`
       ]);
     }
   }
 
-  commands.broadcastProximityMessage(actorId, `* Trabalha com habilidade na estação.`, 500);
+  commands.broadcastProximityMessage(actorId, `* Works skillfully at the station.`, 500);
   console.log(`[crafting] Char ${characterId} crafted recipe ${recipeId}: ${recipe.name}`);
   return true;
 }
@@ -411,7 +411,7 @@ async function addRecipe(actorId, stationType, resultBaseId, resultCount, name, 
   const recipeId = res.insertId;
 
   if (typeof mp !== 'undefined') {
-    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Receita criada com ID ${recipeId}: ${name}`]);
+    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Recipe created with ID ${recipeId}: ${name}`]);
   }
   console.log(`[crafting] Recipe ${recipeId} added by actor ${actorId.toString(16)}: ${name}`);
   return recipeId;
@@ -430,7 +430,7 @@ async function addIngredient(actorId, recipeId, baseId, count) {
     [recipeId, baseId, count]
   );
   if (typeof mp !== 'undefined') {
-    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Ingrediente 0x${baseId.toString(16)} x${count} adicionado à receita ${recipeId}.`]);
+    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Ingredient 0x${baseId.toString(16)} x${count} added to recipe ${recipeId}.`]);
   }
 }
 
@@ -479,8 +479,8 @@ function commandDefs() {
   return [
     {
       name: '/addrecipe',
-      description: '[Staff] Cria uma receita (opcionalmente presa a uma profissão/rank)',
-      usage: '/addrecipe <estacao> <resultBaseId> <resultCount> <nome> [profissao] [rank]',
+      description: '[Staff] Creates a recipe (optionally tied to a profession/rank)',
+      usage: '/addrecipe <station> <resultBaseId> <resultCount> <name> [profession] [rank]',
       handler: async (actorId, args) => {
         const partes = String(args || '').trim().split(/\s+/);
         const [stationType, resultBaseIdRaw, resultCountRaw, ...resto] = partes;
@@ -489,7 +489,7 @@ function commandDefs() {
         if (!STATION_TYPES.includes(stationType) || !Number.isSafeInteger(resultBaseId) || !Number.isSafeInteger(resultCount) || resto.length === 0) {
           if (typeof mp !== 'undefined') {
             mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-              'Uso: /addrecipe <estacao> <resultBaseId hex> <resultCount> <nome> [profissao] [rank]'
+              'Usage: /addrecipe <station> <resultBaseId hex> <resultCount> <name> [profession] [rank]'
             ]);
           }
           return;
@@ -513,7 +513,7 @@ function commandDefs() {
     },
     {
       name: '/addingredient',
-      description: '[Staff] Adiciona um ingrediente a uma receita',
+      description: '[Staff] Adds an ingredient to a recipe',
       usage: '/addingredient <recipeId> <baseId hex> <count>',
       handler: async (actorId, args) => {
         const [recipeIdRaw, baseIdRaw, countRaw] = String(args || '').trim().split(/\s+/);
@@ -521,7 +521,7 @@ function commandDefs() {
         const baseId = Number.parseInt(baseIdRaw, 16);
         const count = Number.parseInt(countRaw, 10);
         if (!Number.isSafeInteger(recipeId) || !Number.isSafeInteger(baseId) || !Number.isSafeInteger(count)) {
-          if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Uso: /addingredient <recipeId> <baseId hex> <count>']);
+          if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Usage: /addingredient <recipeId> <baseId hex> <count>']);
           return;
         }
         await addIngredient(actorId, recipeId, baseId, count);

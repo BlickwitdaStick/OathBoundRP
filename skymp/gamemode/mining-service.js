@@ -102,15 +102,15 @@ const ITEM_PICKAXE = 0x000e3c16;
 const activeGatherers = new Set();
 
 const FAILURE_MESSAGES = Object.freeze({
-  depleted: 'Este veio está esgotado. Volte mais tarde.',
-  node_disabled: 'Este veio não está disponível.',
-  not_found: 'Não há nada para minerar aqui.',
-  profession_required: 'Você precisa ser Minerador para isso.',
-  rank_too_low: 'Seu rank de Minerador ainda não é suficiente para este veio.',
-  invalid_character: 'Personagem inválido.',
-  invalid_form_desc: 'Alvo inválido.',
-  invalid_request_id: 'Tentativa inválida.',
-  cooldown: 'Este veio ainda está se recuperando para você.'
+  depleted: 'This vein is depleted. Come back later.',
+  node_disabled: 'This vein is not available.',
+  not_found: 'There is nothing to mine here.',
+  profession_required: 'You need to be a Miner to do that.',
+  rank_too_low: 'Your Miner rank is not high enough for this vein yet.',
+  invalid_character: 'Invalid character.',
+  invalid_form_desc: 'Invalid target.',
+  invalid_request_id: 'Invalid attempt.',
+  cooldown: 'This vein is still recovering for you.'
 });
 
 /**
@@ -157,7 +157,7 @@ function registerMiningInteractions() {
     id: 'mining.mine',
     module: MODULE,
     target: interactionRegistry.TARGET_TYPES.OBJECT,
-    label: 'Minerar',
+    label: 'Mine',
     // Alcance físico do veio, medido pelo servidor via `target.assertRange`
     // antes de `execute` rodar — é isto que fecha o gap de distância.
     distance: serverOptions.get('mining.maxDistance'),
@@ -185,13 +185,13 @@ function registerMiningInteractions() {
 
       if (activeGatherers.has(ctx.characterId)) {
         _diag(correlationId, 'blocked_concurrent', {});
-        return { message: 'Você já está ocupado fazendo algo.' };
+        return { message: 'You are already busy doing something.' };
       }
 
       const temPicareta = _hasPickaxe(ctx.actorId);
       _diag(correlationId, 'tool_check', { hasPickaxe: temPicareta, source: 'Actor.GetItemCount (client-trusted, só decide inicio)' });
       if (!temPicareta) {
-        return { message: 'Você precisa de uma picareta.' };
+        return { message: 'You need a pickaxe.' };
       }
 
       const formDesc = _formDescOf(ctx.target.formId);
@@ -210,11 +210,11 @@ function registerMiningInteractions() {
         _diag(correlationId, 'resource_node_consume', { ok: resultado.ok, code: resultado.code || null, data: resultado.data || null });
 
         if (!resultado.ok) {
-          return { message: FAILURE_MESSAGES[resultado.code] || 'Não foi possível minerar agora.' };
+          return { message: FAILURE_MESSAGES[resultado.code] || 'Could not mine right now.' };
         }
 
         if (resultado.replay) {
-          return { message: 'Esta mineração já foi processada.', data: resultado.data };
+          return { message: 'This mining attempt was already processed.', data: resultado.data };
         }
 
         const xpPorColeta = serverOptions.get('mining.xpPerGather');
@@ -229,7 +229,7 @@ function registerMiningInteractions() {
         }
 
         return {
-          message: `Você minerou ${resultado.data.yield}x (restam ${resultado.data.capacity}/${resultado.data.maxCapacity} no veio).`,
+          message: `You mined ${resultado.data.yield}x (${resultado.data.capacity}/${resultado.data.maxCapacity} left in the vein).`,
           data: resultado.data
         };
       } finally {

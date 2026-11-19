@@ -201,7 +201,7 @@ describe('crafting-service — listRecipes [CURRENT CONTRACT]', () => {
     resetState();
     const r = await crafting.listRecipes(ACTOR, 'padaria_inexistente');
     assert.deepEqual(r, []);
-    assert.ok(notifications.some((n) => n.text === 'Tipo de estação inválido.'));
+    assert.ok(notifications.some((n) => n.text === 'Invalid station type.'));
   });
 
   it('station_type válido sem receita cadastrada: devolve [] e notifica', async () => {
@@ -209,7 +209,7 @@ describe('crafting-service — listRecipes [CURRENT CONTRACT]', () => {
     recipesByStation.set('forge', []); // esvazia a estação
     const r = await crafting.listRecipes(ACTOR, 'forge');
     assert.deepEqual(r, []);
-    assert.ok(notifications.some((n) => n.text === 'Nenhuma receita disponível em forge.'));
+    assert.ok(notifications.some((n) => n.text === 'No recipes available at forge.'));
   });
 
   it('lista as receitas cadastradas para a estação', async () => {
@@ -236,7 +236,7 @@ describe('crafting-service — craftItem: receita [CURRENT CONTRACT]', () => {
     const ok = await crafting.craftItem(ACTOR, CHAR_A, 999, {});
     assert.equal(ok, false);
     assert.equal(exchangeCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Receita não encontrada.'));
+    assert.ok(notifications.some((n) => n.text === 'Recipe not found.'));
   });
 
   it('receita sem ingrediente cadastrado: devolve false, não chama exchange — recusa criar item do nada', async () => {
@@ -244,7 +244,7 @@ describe('crafting-service — craftItem: receita [CURRENT CONTRACT]', () => {
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, {});
     assert.equal(ok, false);
     assert.equal(exchangeCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Receita incompleta: nenhum ingrediente cadastrado.'));
+    assert.ok(notifications.some((n) => n.text === 'Incomplete recipe: no ingredients registered.'));
   });
 
   it('receita válida com ingredientes: chama inventory.exchange exatamente uma vez', async () => {
@@ -271,7 +271,7 @@ describe('crafting-service — station_type [CURRENT CONTRACT + LEGACY / KNOWN G
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, { stationType: 'cooking_pot' });
     assert.equal(ok, false);
     assert.equal(exchangeCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Esta receita e feita em: forge.'));
+    assert.ok(notifications.some((n) => n.text === 'This recipe is made at: forge.'));
   });
 
   it('station ausente (opts.stationType undefined): craftItem NÃO recusa — a checagem só roda se `opts.stationType` vier preenchido', async () => {
@@ -343,7 +343,7 @@ describe('crafting-service — required_profession [CURRENT CONTRACT]', () => {
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, {});
     assert.equal(ok, false);
     assert.equal(exchangeCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Você precisa ser blacksmith para fazer isso.'));
+    assert.ok(notifications.some((n) => n.text === 'You need to be a blacksmith to do that.'));
   });
 
   it('personagem "sem profissão nenhuma" é modelado exatamente como hasProfession() devolvendo false — não existe estado terceiro no craftItem', async () => {
@@ -400,7 +400,7 @@ describe('crafting-service — required_rank [CURRENT CONTRACT]', () => {
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, {});
     assert.equal(ok, false);
     assert.equal(exchangeCalls.length, 0);
-    assert.ok(notifications.some((n) => n.text === 'Seu rank de blacksmith ainda não é suficiente para esta receita.'));
+    assert.ok(notifications.some((n) => n.text === 'Your blacksmith rank is not high enough for this recipe yet.'));
   });
 
   it('rank acima do mínimo: permite', async () => {
@@ -463,10 +463,10 @@ describe('crafting-service — Inventory Framework / atomicidade [CURRENT CONTRA
 
   it('exchange falha (ok:false): não entrega produto, retorna false, notifica com o motivo', async () => {
     resetState();
-    exchangeResult = { ok: false, code: 'insufficient_stock', reason: 'ingrediente insuficiente' };
+    exchangeResult = { ok: false, code: 'insufficient_stock', reason: 'insufficient ingredient' };
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, {});
     assert.equal(ok, false);
-    assert.ok(notifications.some((n) => n.text === 'Craft cancelado: ingrediente insuficiente'));
+    assert.ok(notifications.some((n) => n.text === 'Crafting cancelled: insufficient ingredient'));
   });
 
   it('exchange devolve duplicate:true (reenvio do mesmo requestId): devolve true SEM craftar de novo, avisa que já foi concluído', async () => {
@@ -474,8 +474,8 @@ describe('crafting-service — Inventory Framework / atomicidade [CURRENT CONTRA
     exchangeResult = { ok: true, duplicate: true };
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, {});
     assert.equal(ok, true, 'idempotência reporta sucesso, não erro');
-    assert.ok(notifications.some((n) => n.text === 'Este craft ja havia sido concluido.'));
-    assert.ok(!notifications.some((n) => n.text.includes('Você criou')), 'não anuncia criação de novo em reenvio idempotente');
+    assert.ok(notifications.some((n) => n.text === 'This craft was already completed.'));
+    assert.ok(!notifications.some((n) => n.text.includes('You crafted')), 'não anuncia criação de novo em reenvio idempotente');
   });
 
   it('exchange falha: XP não é creditado', async () => {
@@ -587,7 +587,7 @@ describe('crafting-service — Assinatura do Artesão [CURRENT CONTRACT]', () =>
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, { signatureText: 'Para Lydia' });
     assert.equal(ok, true, 'rank insuficiente não desfaz o craft, só a assinatura');
     assert.equal(insertedSignatures.length, 0);
-    assert.ok(notifications.some((n) => /ainda não permite assinar/.test(n.text)));
+    assert.ok(notifications.some((n) => /does not allow you to sign/.test(n.text)));
   });
 
   it('rank suficiente: grava a assinatura com maker/owner = quem craftou e a dedicatória truncada', async () => {
@@ -604,7 +604,7 @@ describe('crafting-service — Assinatura do Artesão [CURRENT CONTRACT]', () =>
     assert.equal(makerCharacterId, CHAR_A);
     assert.equal(ownerCharacterId, CHAR_A);
     assert.equal(signatureText.length, 64, 'dedicatória truncada em 64 caracteres');
-    assert.ok(notifications.some((n) => n.text === '✓ Trabalho assinado.'));
+    assert.ok(notifications.some((n) => n.text === '✓ Work signed.'));
   });
 
   it('resultado.duplicate (reenvio idempotente): não tenta gravar assinatura de novo', async () => {
@@ -670,7 +670,7 @@ describe('crafting-service — estações físicas autoritativas', () => {
       data: { recipeId: RECIPE_ID, signatureText: '' },
       requestId: 'interaction:craft:123'
     });
-    assert.deepEqual(result, { message: 'Item criado.' });
+    assert.deepEqual(result, { message: 'Item crafted.' });
     assert.equal(exchangeCalls.length, 1);
     assert.equal(exchangeCalls[0].requestId, 'interaction:craft:123');
   });

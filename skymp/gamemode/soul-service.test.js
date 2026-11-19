@@ -273,7 +273,7 @@ describe('soul-service — o primeiro sinal (§II.1)', () => {
       vontade: 60, sensibilidade: 5, estabilidade: 85
     });
     // Sensibilidade `surdo` está a duas bandas de `comum`; estabilidade `forte`
-    // está a uma. O sinal é "Você não sonha. Nunca sonhou." — que é identidade
+    // está a uma. O sinal é "You do not dream. You never have." — que é identidade
     // tão jogável quanto qualquer dom.
     assert.strictEqual(escolhido, 'sensibilidade_baixa');
   });
@@ -474,7 +474,7 @@ describe('soul-service — no irreversivel exige consentimento (§14.2, item 6)'
     // A.3 do Anexo: aviso antes do irreversível. Recusa silenciosa seria pior
     // que não ter a regra — o jogador precisa saber que a porta existe.
     assert.ok(
-      notificacoes.some(n => /não tem volta/i.test(n.message)),
+      notificacoes.some(n => /no going back/i.test(n.message)),
       'recusar sem avisar deixaria o jogador achando que e bug'
     );
   });

@@ -123,12 +123,12 @@ function executeMining(service) {
 }
 
 const CODE_TO_MESSAGE = {
-  depleted: 'Este veio está esgotado. Volte mais tarde.',
-  node_disabled: 'Este veio não está disponível.',
-  not_found: 'Não há nada para minerar aqui.',
-  rank_too_low: 'Seu rank de Minerador ainda não é suficiente para este veio.',
-  invalid_character: 'Personagem inválido.',
-  invalid_form_desc: 'Alvo inválido.'
+  depleted: 'This vein is depleted. Come back later.',
+  node_disabled: 'This vein is not available.',
+  not_found: 'There is nothing to mine here.',
+  rank_too_low: 'Your Miner rank is not high enough for this vein yet.',
+  invalid_character: 'Invalid character.',
+  invalid_form_desc: 'Invalid target.'
 };
 
 describe('mining-service — mining.mine no Interaction Framework', () => {
@@ -201,7 +201,7 @@ describe('mining-service — mining.mine no Interaction Framework', () => {
     assert.equal(addXpCalls[0].amount, 2);
     assert.equal(addXpCalls[0].professionCode, 'miner');
     assert.equal(addXpCalls[0].characterId, 42);
-    assert.match(r.message, /Você minerou 2x \(restam 10\/20 no veio\)\./);
+    assert.match(r.message, /You mined 2x \(10\/20 left in the vein\)\./);
     assert.ok(!mining.activeGatherers.has(42), 'finally deve liberar o characterId mesmo no sucesso');
   });
 
@@ -210,7 +210,7 @@ describe('mining-service — mining.mine no Interaction Framework', () => {
     const service = montarServico();
     const r = await executeMining(service);
     assert.equal(r.ok, true);
-    assert.equal(r.message, 'Você precisa de uma picareta.');
+    assert.equal(r.message, 'You need a pickaxe.');
     assert.equal(consumeCalls.length, 0);
   });
 
@@ -218,7 +218,7 @@ describe('mining-service — mining.mine no Interaction Framework', () => {
     mining.activeGatherers.add(42);
     const service = montarServico();
     const r = await executeMining(service);
-    assert.equal(r.message, 'Você já está ocupado fazendo algo.');
+    assert.equal(r.message, 'You are already busy doing something.');
     assert.equal(consumeCalls.length, 0);
   });
 

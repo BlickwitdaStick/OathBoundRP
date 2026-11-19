@@ -87,7 +87,7 @@ async function openContainer(actorId, characterId, objectId) {
     const access = await getContainerAccess(objectId, characterId);
     if (!access) {
       if (typeof mp !== 'undefined') {
-        mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Trancado. Você não tem permissão para abrir isto.']);
+        mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Locked. You do not have permission to open this.']);
       }
       return false;
     }
@@ -96,7 +96,7 @@ async function openContainer(actorId, characterId, objectId) {
     if (sessaoAtual && Date.now() - sessaoAtual.openedAt < CONTAINER_SESSION_TTL_MS) {
       if (sessaoAtual.characterId !== characterId) {
         if (typeof mp !== 'undefined') {
-          mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Este container já está sendo usado por outra pessoa.']);
+          mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['This container is already being used by someone else.']);
         }
         return false;
       }
@@ -162,11 +162,11 @@ async function _resolveOpenContainer(characterId, objectId) {
 
   const session = openContainers.get(objectId);
   if (!session || session.characterId !== characterId) {
-    return recusar('Você precisa abrir o container primeiro.');
+    return recusar('You need to open the container first.');
   }
   if (Date.now() - session.openedAt >= CONTAINER_SESSION_TTL_MS) {
     openContainers.delete(objectId);
-    return recusar('A sessão do baú expirou. Abra novamente.');
+    return recusar('The chest session expired. Open it again.');
   }
 
   let cRows = await db.query('SELECT id FROM containers WHERE object_id = ?', [objectId]);
@@ -174,7 +174,7 @@ async function _resolveOpenContainer(characterId, objectId) {
     await db.query('INSERT INTO containers (object_id, owner_character_id) VALUES (?, ?)', [objectId, characterId]);
     cRows = await db.query('SELECT id FROM containers WHERE object_id = ?', [objectId]);
   }
-  if (cRows.length === 0) return recusar('Não foi possível registrar este container.');
+  if (cRows.length === 0) return recusar('Could not register this container.');
 
   return { ok: true, containerId: cRows[0].id, motivo: null };
 }
@@ -260,19 +260,19 @@ async function withdrawItem(actorId, characterId, objectId, baseId, count, reque
 async function buyProperty(actorId, characterId, propertyId) {
   const propRows = await db.query('SELECT * FROM properties WHERE id = ? AND is_for_sale = 1 AND owner_character_id IS NULL', [propertyId]);
   if (propRows.length === 0) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Esta propriedade não está à venda.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['This property is not for sale.']);
     return false;
   }
 
   const prop = propRows[0];
   const paid = await transactionService.removeGold({ characterId, amount: prop.price_gold, reason: 'property_purchase', module: 'housing' });
   if (!paid) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Ouro insuficiente. Preço: ${prop.price_gold} Septims.`]);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Not enough gold. Price: ${prop.price_gold} Septims.`]);
     return false;
   }
 
   await db.query('UPDATE properties SET owner_character_id = ?, is_for_sale = 0 WHERE id = ?', [characterId, propertyId]);
-  if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Você comprou "${prop.name}" por ${prop.price_gold} Septims!`]);
+  if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`You bought "${prop.name}" for ${prop.price_gold} Septims!`]);
   console.log(`[housing] Char ${characterId} bought property ${propertyId} for ${prop.price_gold} gold.`);
   return true;
 }

@@ -279,7 +279,7 @@ async function handlePlayerDowned(actorId, killerId) {
 
   console.log(`[death-service] Player Actor ${actorId.toString(16)} caiu. Estado: DOWNED.`);
   characterState.set(character.characterId, STATES.DOWNED, { downedAt: Date.now() });
-  commands.broadcastProximityMessage(actorId, '* O corpo cai ao chão, ferido e sangrando.', 1500);
+  commands.broadcastProximityMessage(actorId, '* The body falls to the ground, wounded and bleeding.', 1500);
   panelRefreshBus.requestRefresh(actorId, 'status');
 
   // Registra a autoria no instante em que ela é conhecida. Guardar junto do
@@ -307,20 +307,20 @@ async function handlePlayerDowned(actorId, killerId) {
  */
 async function rescueTarget(rescuerActorId, targetActorId) {
   if (rescuerActorId === targetActorId) {
-    commands.sendNotification(rescuerActorId, 'Voce nao pode se socorrer sozinho — peça ajuda a alguém por perto.');
+    commands.sendNotification(rescuerActorId, 'You cannot revive yourself — ask someone nearby for help.');
     return;
   }
 
   const rescuer = commands.getActiveCharacterData(rescuerActorId);
   const target = commands.getActiveCharacterData(targetActorId);
   if (!rescuer || !target) {
-    commands.sendNotification(rescuerActorId, 'Alvo invalido.');
+    commands.sendNotification(rescuerActorId, 'Invalid target.');
     return;
   }
 
   const downed = _downedPlayers.get(target.characterId);
   if (!downed) {
-    commands.sendNotification(rescuerActorId, 'Esse personagem nao esta abatido.');
+    commands.sendNotification(rescuerActorId, 'That character is not downed.');
     return;
   }
 
@@ -343,9 +343,9 @@ async function rescueTarget(rescuerActorId, targetActorId) {
     mp.set(targetActorId, '_wasDead', false);
   }
 
-  commands.sendNotification(rescuerActorId, 'Voce estabilizou o ferido.');
-  commands.sendNotification(targetActorId, 'Voce foi socorrido e recobra a consciencia, fraco.');
-  commands.broadcastProximityMessage(rescuerActorId, '* Presta socorro a um ferido caído por perto.', 600);
+  commands.sendNotification(rescuerActorId, 'You stabilized the wounded person.');
+  commands.sendNotification(targetActorId, 'You were helped and regain consciousness, weakened.');
+  commands.broadcastProximityMessage(rescuerActorId, '* Tends to a wounded person lying nearby.', 600);
   panelRefreshBus.requestRefresh(targetActorId, 'status');
 }
 
@@ -370,7 +370,7 @@ function registerInteractions() {
     id: 'death.rescue',
     module: 'death',
     target: interactionRegistry.TARGET_TYPES.PLAYER,
-    label: 'Socorrer',
+    label: 'Revive',
     section: 'social',
     order: 15,
     distance: RESCUE_RANGE,
@@ -405,7 +405,7 @@ async function bleedOut(actorId, characterId) {
     await transactionService.removeGold({ characterId, amount: penalty, reason: 'death_penalty', module: 'death' });
   }
 
-  commands.broadcastProximityMessage(actorId, '* O corpo para de se mexer.', 1500);
+  commands.broadcastProximityMessage(actorId, '* The body stops moving.', 1500);
   panelRefreshBus.requestRefresh(actorId, 'status');
 
   // Morte permanente: o personagem não respawna, é aposentado. Mesmo caminho do
@@ -445,7 +445,7 @@ async function retireOnPermadeath(actorId, characterId) {
 
     commands.sendNotification(
       actorId,
-      'Seu personagem morreu permanentemente. Ele nao volta — crie um novo pelo painel.'
+      'Your character has died permanently. They will not come back — create a new one from the panel.'
     );
     console.log(`[death-service] PERMADEATH: personagem ${characterId} aposentado.`);
 
@@ -495,8 +495,8 @@ async function executeRespawn(actorId, characterId, penalty = 0) {
     console.log(`[death-service] Respawn complete for actor ${actorId.toString(16)}.`);
 
     commands.sendNotification(actorId, penalty > 0
-      ? `Voce foi resgatado e acordou em um local seguro. Perdeu ${penalty} septims no processo.`
-      : 'Voce foi resgatado e acordou em um local seguro.');
+      ? `You were rescued and woke up somewhere safe. You lost ${penalty} septims in the process.`
+      : 'You were rescued and woke up somewhere safe.');
     panelRefreshBus.requestRefresh(actorId, 'status');
   } catch (err) {
     console.error(`[death-service] Failed to respawn actor ${actorId.toString(16)}:`, err.message);
@@ -600,11 +600,11 @@ async function logCombatInitiation(actorId, targetActorId, reason) {
   const initiator = commands.getActiveCharacterData(actorId);
   const target = commands.getActiveCharacterData(targetActorId);
   if (!initiator || !target || actorId === targetActorId) {
-    commands.sendNotification(actorId, 'Alvo invalido.');
+    commands.sendNotification(actorId, 'Invalid target.');
     return;
   }
   if (!reason || !reason.trim()) {
-    commands.sendNotification(actorId, 'Uso: /iniciar <actorId> <motivo>');
+    commands.sendNotification(actorId, 'Usage: /initiate <actorId> <reason>');
     return;
   }
 
@@ -628,8 +628,8 @@ async function logCombatInitiation(actorId, targetActorId, reason) {
     console.error('[death-service] Falha ao registrar inicio de combate:', err.message);
   }
 
-  commands.sendNotification(actorId, 'Inicio de combate registrado.');
-  commands.broadcastProximityMessage(actorId, '* A tensao sobe visivelmente entre os dois.', 800);
+  commands.sendNotification(actorId, 'Start of combat recorded.');
+  commands.broadcastProximityMessage(actorId, '* Tension visibly rises between the two.', 800);
 }
 
 /**
@@ -679,36 +679,36 @@ function cleanup(actorId) {
 function commandDefs() {
   return [
     {
-      name: ['/socorrer', '/rescue'],
-      description: 'Estabiliza um personagem abatido por perto, cancelando o sangramento',
-      usage: '/socorrer <actorId>',
+      name: ['/revive', '/rescue', '/socorrer'],
+      description: 'Stabilizes a downed character nearby, stopping the bleeding',
+      usage: '/revive <actorId>',
       handler: (actorId, args) => {
         const targetActorId = Number.parseInt(String(args || '').replace(/^0x/i, ''), 16);
         if (!Number.isFinite(targetActorId)) {
-          commands.sendNotification(actorId, 'Uso: /socorrer <actorId>');
+          commands.sendNotification(actorId, 'Usage: /revive <actorId>');
           return;
         }
         rescueTarget(actorId, targetActorId).catch(err => {
           console.error('[death-service] Falha ao processar socorro:', err.message);
-          commands.sendNotification(actorId, 'Nao foi possivel prestar socorro.');
+          commands.sendNotification(actorId, 'Could not provide aid.');
         });
       }
     },
     {
-      name: ['/iniciar', '/initiate'],
-      description: 'Marca o início explícito de um conflito IC (evidência pra staff)',
-      usage: '/iniciar <actorId> <motivo>',
+      name: ['/initiate', '/iniciar'],
+      description: 'Marks the explicit start of an IC conflict (evidence for staff)',
+      usage: '/initiate <actorId> <reason>',
       handler: (actorId, args) => {
         const parts = String(args || '').split(' ');
         const targetActorId = Number.parseInt(parts[0].replace(/^0x/i, ''), 16);
         const reason = parts.slice(1).join(' ');
         if (!Number.isFinite(targetActorId)) {
-          commands.sendNotification(actorId, 'Uso: /iniciar <actorId> <motivo>');
+          commands.sendNotification(actorId, 'Usage: /initiate <actorId> <reason>');
           return;
         }
         logCombatInitiation(actorId, targetActorId, reason).catch(err => {
           console.error('[death-service] Falha ao registrar inicio de combate:', err.message);
-          commands.sendNotification(actorId, 'Nao foi possivel registrar o inicio do conflito.');
+          commands.sendNotification(actorId, 'Could not record the start of the conflict.');
         });
       }
     }

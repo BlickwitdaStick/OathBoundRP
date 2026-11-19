@@ -83,12 +83,12 @@ function _beginGather(actorId, toolBaseId, toolName) {
   // nada, que e exatamente o que esta migracao veio consertar.
   const character = commands.getActiveCharacterData(actorId);
   if (!character) {
-    notify('Personagem nao carregado.');
+    notify('Character not loaded.');
     return null;
   }
 
   if (activeGatherers.has(character.characterId)) {
-    notify('Você já está ocupado fazendo algo.');
+    notify('You are already busy doing something.');
     return null;
   }
 
@@ -98,7 +98,7 @@ function _beginGather(actorId, toolBaseId, toolName) {
   if (toolBaseId !== null) {
     const hasTool = mp.callPapyrusFunction('method', 'Actor', 'GetItemCount', actorRef(actorId), [toolBaseId]);
     if (hasTool <= 0) {
-      notify(`Você precisa de ${toolName}.`);
+      notify(`You need ${toolName}.`);
       return null;
     }
   }
@@ -132,17 +132,17 @@ async function _finishGather(actorId, characterId, baseId, count, reason) {
   });
 
   if (!ok) {
-    notify('A coleta se perdeu antes de chegar na sua mochila.');
+    notify('The haul was lost before reaching your pack.');
     return false;
   }
   return true;
 }
 
 function chopWood(actorId) {
-  const sessao = _beginGather(actorId, ITEM_WOODCUTTER_AXE, 'um Machado de Lenhador');
+  const sessao = _beginGather(actorId, ITEM_WOODCUTTER_AXE, 'a Woodcutter\'s Axe');
   if (!sessao) return;
 
-  commands.broadcastProximityMessage(actorId, `* Começa a cortar lenha energicamente.`, 1500);
+  commands.broadcastProximityMessage(actorId, `* Starts chopping wood energetically.`, 1500);
 
   // Toca a animacao do Skyrim (se disponivel no ator).
   // `Debug.SendAnimationEvent` e global: o `self` e null e a referencia do ator
@@ -152,14 +152,14 @@ function chopWood(actorId) {
   // contas; ficaria assim se alguem descomentasse sem reler o contrato.
   // mp.callPapyrusFunction('global', 'Debug', 'SendAnimationEvent', null, [actorRef(actorId), 'WoodChopping']);
 
-  notify('Cortando lenha... aguarde.');
+  notify('Chopping wood... please wait.');
 
   setTimeout(() => {
     const woodAmount = Math.floor(Math.random() * 3) + 1; // 1 a 3 madeiras
     _finishGather(actorId, sessao.characterId, ITEM_FIREWOOD, woodAmount, 'woodcutting')
       .then(ok => {
         if (ok) {
-          notify(`Você coletou ${woodAmount}x Lenha.`);
+          notify(`You gathered ${woodAmount}x Firewood.`);
           console.log(`[jobs-service] Char ${sessao.characterId} chopped ${woodAmount} wood.`);
         }
       })
@@ -168,23 +168,23 @@ function chopWood(actorId) {
 }
 
 function mineOre(actorId) {
-  const sessao = _beginGather(actorId, ITEM_PICKAXE, 'uma Picareta');
+  const sessao = _beginGather(actorId, ITEM_PICKAXE, 'a Pickaxe');
   if (!sessao) return;
 
-  commands.broadcastProximityMessage(actorId, `* Começa a bater a picareta contra a rocha vigorosamente.`, 1500);
-  notify('Minerando... aguarde 15 segundos.');
+  commands.broadcastProximityMessage(actorId, `* Starts swinging the pickaxe hard against the rock.`, 1500);
+  notify('Mining... wait 15 seconds.');
 
   setTimeout(() => {
     const chance = Math.random();
     let oreItem = ITEM_IRON_ORE;
-    let oreName = 'Minério de Ferro';
+    let oreName = 'Iron Ore';
 
     if (chance > 0.9) {
       oreItem = ITEM_EBONY_ORE;
-      oreName = 'Minério de Ébano';
+      oreName = 'Ebony Ore';
     } else if (chance > 0.6) {
       oreItem = ITEM_CORUNDUM_ORE;
-      oreName = 'Minério de Corundum';
+      oreName = 'Corundum Ore';
     }
 
     const amount = Math.floor(Math.random() * 2) + 1;
@@ -192,7 +192,7 @@ function mineOre(actorId) {
     _finishGather(actorId, sessao.characterId, oreItem, amount, 'mining')
       .then(ok => {
         if (ok) {
-          notify(`Você extraiu ${amount}x ${oreName}.`);
+          notify(`You extracted ${amount}x ${oreName}.`);
           console.log(`[jobs-service] Char ${sessao.characterId} mined ${amount}x 0x${oreItem.toString(16)}.`);
         }
       })
@@ -203,11 +203,11 @@ function mineOre(actorId) {
 function catchFish(actorId) {
   // TODO: passar ITEM_FISHING_ROD no lugar de null quando o FormID correto do
   // mod for confirmado. Enquanto for null, a pesca nao exige ferramenta.
-  const sessao = _beginGather(actorId, null, 'uma Vara de Pescar');
+  const sessao = _beginGather(actorId, null, 'a Fishing Rod');
   if (!sessao) return;
 
-  commands.broadcastProximityMessage(actorId, `* Lança a linha na água e aguarda pacientemente.`, 1500);
-  notify('Pescando... aguarde 20 segundos.');
+  commands.broadcastProximityMessage(actorId, `* Casts the line into the water and waits patiently.`, 1500);
+  notify('Fishing... wait 20 seconds.');
 
   setTimeout(() => {
     const chance = Math.random();
@@ -222,22 +222,22 @@ function catchFish(actorId) {
       fishName = 'Cyrodilic Spadetail';
     } else if (chance > 0.2) {
       fishItem = FISH_SALMON;
-      fishName = 'Carne de Salmão';
+      fishName = 'Salmon Meat';
     }
 
     if (!fishItem) {
       // Nao houve item, entao nao ha nada pra creditar — mas o "ocupado"
       // precisa sair do mesmo jeito, senao o jogador fica travado pra sempre.
       activeGatherers.delete(sessao.characterId);
-      notify('O peixe escapou!');
-      commands.broadcastProximityMessage(actorId, `* Puxa a vara de pescar vazia com frustração.`, 1000);
+      notify('The fish got away!');
+      commands.broadcastProximityMessage(actorId, `* Pulls up the empty fishing rod in frustration.`, 1000);
       return;
     }
 
     _finishGather(actorId, sessao.characterId, fishItem, 1, 'fishing')
       .then(ok => {
         if (ok) {
-          notify(`Você pescou: ${fishName}.`);
+          notify(`You caught: ${fishName}.`);
           console.log(`[jobs-service] Char ${sessao.characterId} caught fish 0x${fishItem.toString(16)}.`);
         }
       })
@@ -254,9 +254,9 @@ function catchFish(actorId) {
 function commandDefs() {
   return [
     {
-      name: '/cortarlenha',
-      description: '[Trabalho livre] Corta lenha (precisa de Machado de Lenhador)',
-      usage: '/cortarlenha',
+      name: ['/chopwood', '/cortarlenha'],
+      description: '[Freelance work] Chops wood (requires a Woodcutter\'s Axe)',
+      usage: '/chopwood',
       handler: (actorId) => chopWood(actorId)
     }
   ];

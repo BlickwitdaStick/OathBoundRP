@@ -278,14 +278,14 @@ function healthCheck() {
 function commandDefs() {
   return [
     {
-      name: '/tempo',
-      description: 'Mostra o dia e horário atuais do mundo',
-      usage: '/tempo',
+      name: ['/time', '/tempo'],
+      description: 'Shows the current day and time in the world',
+      usage: '/time',
       handler: async (actorId) => {
         const commands = require('./commands');
         const estado = getWorldTime();
         if (!estado) {
-          commands.sendNotification(actorId, '[Tempo] Serviço de ambiente desativado.');
+          commands.sendNotification(actorId, '[Time] Environment service disabled.');
           return;
         }
         const dia = Math.floor(estado.gameDaysPassed);
@@ -294,7 +294,7 @@ function commandDefs() {
         const minuto = Math.floor((horaFracionaria - hora) * 60);
         commands.sendNotification(
           actorId,
-          `[Tempo] Dia ${dia}, ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')} ` +
+          `[Time] Day ${dia}, ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')} ` +
           `(TimeScale ${estado.timeScale})`
         );
       }

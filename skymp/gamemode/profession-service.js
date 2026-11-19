@@ -503,9 +503,9 @@ async function addProfessionXp(opts, dependencies = {}) {
 function commandDefs() {
   return [
     {
-      name: '/profissoes',
-      description: 'Mostra suas profissões',
-      usage: '/profissoes',
+      name: ['/professions', '/profissoes'],
+      description: 'Shows your professions',
+      usage: '/professions',
       handler: async (actorId) => {
         // `sendNotification` (não `mp.sendChatMessage`, que não existe nesta
         // API) é o único caminho de notificação individual do gamemode — ver
@@ -518,7 +518,7 @@ function commandDefs() {
 
         const estados = await getCharacterProfessions(personagem.characterId);
         if (estados.length === 0) {
-          commands.sendNotification(actorId, '[Profissões] Você não tem nenhuma profissão.');
+          commands.sendNotification(actorId, '[Professions] You do not have any professions.');
           return;
         }
         const linhas = estados.map((estado) => {
@@ -526,7 +526,7 @@ function commandDefs() {
           const nome = prof ? prof.label : estado.professionCode;
           return `${nome} — status=${estado.status} rank=${estado.rank} xp=${estado.xp}`;
         });
-        commands.sendNotification(actorId, `[Profissões]\n${linhas.join('\n')}`);
+        commands.sendNotification(actorId, `[Professions]\n${linhas.join('\n')}`);
       }
     }
   ];
