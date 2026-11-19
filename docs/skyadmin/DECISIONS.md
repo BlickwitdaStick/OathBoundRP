@@ -1,20 +1,20 @@
-# Decisões arquiteturais vigentes
+# Current architectural decisions
 
-| ID | Decisão | Motivo |
+| ID | Decision | Reason |
 |---|---|---|
-| SA-001 | Evoluir `apps/web`, sem painel paralelo | preserva login, whitelist e contexto atual |
-| SA-002 | MariaDB é fonte de verdade | já é dependência central e evita infraestrutura prematura |
-| SA-003 | `profileId online === accountId` | remove ambiguidade entre Discord e identidade interna |
-| SA-004 | Discord ID não é chave de gameplay | é identidade externa, mutável no contexto do produto |
-| SA-005 | Ações passam por catálogo e fila persistente | evita shell livre, permite auditoria, timeout e retry seguro |
-| SA-006 | Sem Redis/BullMQ na primeira versão | transactional outbox MariaDB resolve a necessidade inicial |
-| SA-007 | Agent abre conexão de saída | reduz superfície de rede e permite host Windows atrás de NAT |
-| SA-008 | RBAC SQL simples antes de Casbin/Cerbos | menor custo operacional e total transparência das permissões |
+| SA-001 | Evolve `apps/web`, no parallel panel | preserves login, whitelist and current context |
+| SA-002 | MariaDB is the source of truth | it is already a central dependency and avoids premature infrastructure |
+| SA-003 | `profileId online === accountId` | removes ambiguity between Discord and internal identity |
+| SA-004 | Discord ID is not a gameplay key | it is an external identity, mutable in the product's context |
+| SA-005 | Actions go through a catalog and a persistent queue | avoids a free shell, enables auditing, timeouts and safe retries |
+| SA-006 | No Redis/BullMQ in the first version | a MariaDB transactional outbox covers the initial need |
+| SA-007 | The Agent opens an outbound connection | reduces network surface and allows a Windows host behind NAT |
+| SA-008 | Simple SQL RBAC before Casbin/Cerbos | lower operational cost and full transparency of permissions |
 
-## Decisões pendentes
+## Pending decisions
 
-- Escolher runner definitivo de migrations após piloto com MariaDB.
-- Definir duração e escopo dos bans.
-- Definir protocolo de autenticação do Agent (mTLS ou credencial rotativa inicial).
-- Definir política de múltiplos personagens por conta.
-- Validar PKCE no fluxo OAuth do launcher antes de mudança em produção.
+- Choose the definitive migrations runner after a pilot with MariaDB.
+- Define ban duration and scope.
+- Define the Agent's authentication protocol (mTLS or an initial rotating credential).
+- Define the policy for multiple characters per account.
+- Validate PKCE in the launcher's OAuth flow before changing production.

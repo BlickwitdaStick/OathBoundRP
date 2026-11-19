@@ -1,4 +1,4 @@
-# Arquitetura alvo
+# Target architecture
 
 ```mermaid
 flowchart LR
@@ -7,55 +7,55 @@ flowchart LR
   L[Launcher] --> W
   L --> G[apps/game-api]
   G --> DB
-  S[SkyMP] -->|Master API resolve sessão| W
+  S[SkyMP] -->|Master API resolves session| W
   S --> GM[gamemode]
   GM --> DB
-  W -->|ações persistidas| DB
-  A[SkyAdmin Agent - futuro] -->|canal outbound autenticado| W
+  W -->|persisted actions| DB
+  A[SkyAdmin Agent - future] -->|authenticated outbound channel| W
   A --> S
   B[bot-discord] --> W
 ```
 
-## Identidade canônica
+## Canonical identity
 
-| Identificador | Dono | Uso |
+| Identifier | Owner | Use |
 |---|---|---|
-| `discord_id` | Discord | identidade externa de login e bot |
-| `account_id` | MariaDB `accounts.id` | identidade interna permanente |
-| `profileId` online | Master API/SkyMP | é o `account_id` resolvido pela sessão |
-| `character_id` | MariaDB `characters.id` | personagem aprovado |
-| `actorId` | runtime SkyMP | entidade conectada, temporária |
+| `discord_id` | Discord | external login and bot identity |
+| `account_id` | MariaDB `accounts.id` | permanent internal identity |
+| online `profileId` | Master API/SkyMP | the `account_id` resolved from the session |
+| `character_id` | MariaDB `characters.id` | approved character |
+| `actorId` | SkyMP runtime | connected, temporary entity |
 
-Fluxo obrigatório: Discord autentica a conta; o launcher recebe um ticket opaco; `game-api` cria `game_sessions`; o Master API devolve `game_sessions.account_id`; SkyMP usa esse valor como `profileId`; o gamemode carrega o personagem daquela conta.
+Mandatory flow: Discord authenticates the account; the launcher receives an opaque ticket; `game-api` creates `game_sessions`; the Master API returns `game_sessions.account_id`; SkyMP uses that value as `profileId`; the gamemode loads that account's character.
 
-## Componentes administrativos
+## Administrative components
 
-### Painel web
+### Web panel
 
-Responsável por autenticação, leitura, autorização, validação de payload, criação de ação, auditoria e UI. Não fala diretamente com `mp`, shell ou arquivos arbitrários.
+Responsible for authentication, reading, authorization, payload validation, action creation, auditing and UI. It does not talk directly to `mp`, a shell or arbitrary files.
 
 ### MariaDB
 
-Armazena as entidades e a fila. Mudança de estado de domínio e criação de evento/outbox ocorrem na mesma transação.
+Stores the entities and the queue. Domain state changes and event/outbox creation happen in the same transaction.
 
-### Agent futuro
+### Future Agent
 
-Processo local do host SkyMP, conectado de saída ao painel. Recebe somente comandos de catálogo permitidos, confirma execução e reporta heartbeat, logs e métricas. Não deve aceitar comandos livres.
+A local process on the SkyMP host, connected outbound to the panel. It receives only allowed catalog commands, confirms execution and reports heartbeat, logs and metrics. It must not accept free-form commands.
 
-## Contrato da ação administrativa
+## Administrative action contract
 
 ```json
 {
   "actionId": "uuid",
   "requestId": "uuid",
-  "idempotencyKey": "string estável por tentativa do usuário",
+  "idempotencyKey": "stable string per user attempt",
   "type": "moderation.kick",
   "actorAccountId": 12,
   "targetAccountId": 42,
-  "reason": "texto obrigatório",
+  "reason": "required text",
   "payload": {},
   "status": "pending"
 }
 ```
 
-Estados: `pending`, `dispatched`, `acknowledged`, `succeeded`, `failed`, `cancelled`, `expired`. A transição é sempre registrada; `succeeded` não pode voltar a `pending`.
+States: `pending`, `dispatched`, `acknowledged`, `succeeded`, `failed`, `cancelled`, `expired`. Every transition is recorded; `succeeded` cannot go back to `pending`.
