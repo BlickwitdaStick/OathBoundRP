@@ -395,12 +395,12 @@ function registerInteractions(dependencies = {}) {
   interactionRegistry.register({
     ...comum,
     id: 'depot.view',
-    label: 'Ver depósito',
+    label: 'View depot',
     order: 10,
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     execute: async (ctx) => {
       const holdId = await resolveTerminal(ctx.target.formId, dependencies);
-      if (!holdId) throw new Error('Este objeto nao e um terminal de deposito.');
+      if (!holdId) throw new Error('This object is not a depot terminal.');
       const payload = await _panelPayload(ctx.characterId, holdId, ctx.target.formId, dependencies);
       // A CEF ainda não desenha nada a partir do retorno de `execute` (vira só
       // uma notificação de chat — `interaction-service.js` handleUiEvent). O
@@ -414,16 +414,16 @@ function registerInteractions(dependencies = {}) {
   interactionRegistry.register({
     ...comum,
     id: 'depot.deposit',
-    label: 'Depositar item',
+    label: 'Deposit item',
     order: 20,
     audit: interactionRegistry.AUDIT_LEVELS.ECONOMY,
     schema: {
       baseId: { type: 'formid', label: 'Item', required: true },
-      count: { type: 'int', label: 'Quantidade', min: 1, default: 1 }
+      count: { type: 'int', label: 'Quantity', min: 1, default: 1 }
     },
     execute: async (ctx) => {
       const holdId = await resolveTerminal(ctx.target.formId, dependencies);
-      if (!holdId) throw new Error('Este objeto nao e um terminal de deposito.');
+      if (!holdId) throw new Error('This object is not a depot terminal.');
       const result = await depositItem(
         { characterId: ctx.characterId, holdId, baseId: ctx.data.baseId, count: ctx.data.count },
         dependencies
@@ -439,16 +439,16 @@ function registerInteractions(dependencies = {}) {
   interactionRegistry.register({
     ...comum,
     id: 'depot.withdraw',
-    label: 'Retirar item',
+    label: 'Withdraw item',
     order: 30,
     audit: interactionRegistry.AUDIT_LEVELS.ECONOMY,
     schema: {
       baseId: { type: 'formid', label: 'Item', required: true },
-      count: { type: 'int', label: 'Quantidade', min: 1, default: 1 }
+      count: { type: 'int', label: 'Quantity', min: 1, default: 1 }
     },
     execute: async (ctx) => {
       const holdId = await resolveTerminal(ctx.target.formId, dependencies);
-      if (!holdId) throw new Error('Este objeto nao e um terminal de deposito.');
+      if (!holdId) throw new Error('This object is not a depot terminal.');
       const result = await withdrawItem(
         { characterId: ctx.characterId, holdId, baseId: ctx.data.baseId, count: ctx.data.count },
         dependencies
@@ -470,7 +470,7 @@ function commandDefs() {
   return [
     {
       name: '/depot',
-      description: 'Ve o conteudo do deposito regional (precisa estar perto de um terminal)',
+      description: 'Shows the contents of your regional depot (must be near a depot terminal)',
       usage: '/depot',
       handler: async (actorId) => {
         const commands = require('../commands');
@@ -478,7 +478,7 @@ function commandDefs() {
         if (!personagem) return;
         commands.sendNotification(
           actorId,
-          '[Deposito] Use o menu de interacao perto de um bau de deposito registrado.'
+          '[Depot] Use the interaction menu near a registered depot chest.'
         );
       }
     }

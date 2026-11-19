@@ -213,7 +213,7 @@ async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
   if (delta > 0) {
     const atual = rows.length > 0 ? Number(rows[0].count) : 0;
     if (atual + delta > MAX_STACK_COUNT) {
-      throw new Error(`Pilha cheia: ${atual} + ${delta} passa do limite de ${MAX_STACK_COUNT}`);
+      throw new Error(`Stack full: ${atual} + ${delta} exceeds the limit of ${MAX_STACK_COUNT}`);
     }
     if (rows.length > 0) {
       await conn.query(
@@ -229,11 +229,11 @@ async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
   } else {
     // Remove itens (delta é negativo)
     if (rows.length === 0) {
-      throw new Error(`Dono ${ownerId} não possui item 0x${baseId.toString(16)}`);
+      throw new Error(`Owner ${ownerId} does not own item 0x${baseId.toString(16)}`);
     }
     const currentCount = Number(rows[0].count);
     const remove = Math.abs(delta);
-    if (currentCount < remove) throw new Error(`Estoque insuficiente: tem ${currentCount}, precisa ${remove}`);
+    if (currentCount < remove) throw new Error(`Insufficient stock: have ${currentCount}, need ${remove}`);
     const newCount = currentCount - remove;
     if (newCount <= 0) {
       await conn.query(`DELETE FROM ${table} WHERE ${ownerColumn} = ? AND base_id = ?`, [ownerId, baseId]);
@@ -304,13 +304,13 @@ async function _applyGoldDelta(conn, characterId, delta) {
   // checagem de saldo suficiente, e o UPDATE relativo (gold = gold + ?) deixar
   // o saldo negativo mesmo assim.
   const [rows] = await conn.query('SELECT gold FROM characters WHERE id = ? FOR UPDATE', [characterId]);
-  if (rows.length === 0) throw new Error(`Personagem ${characterId} não encontrado`);
+  if (rows.length === 0) throw new Error(`Character ${characterId} not found`);
   const atual = Number(rows[0].gold);
 
   if (delta < 0) {
-    if (atual + delta < 0) throw new Error(`Ouro insuficiente: tem ${atual}, precisa ${Math.abs(delta)}`);
+    if (atual + delta < 0) throw new Error(`Insufficient gold: have ${atual}, need ${Math.abs(delta)}`);
   } else if (atual + delta > MAX_GOLD) {
-    throw new Error(`Patrimonio cheio: ${atual} + ${delta} passa do limite de ${MAX_GOLD}`);
+    throw new Error(`Wealth cap reached: ${atual} + ${delta} exceeds the limit of ${MAX_GOLD}`);
   }
 
   await conn.query('UPDATE characters SET gold = gold + ? WHERE id = ?', [delta, characterId]);
@@ -354,7 +354,7 @@ function _applyToClient(actorId, baseId, delta) {
  */
 async function giveItem(opts) {
   const { actorId, characterId, baseId, count, reason, module: mod, idempotencyKey } = opts;
-  if (count <= 0) throw new Error('count deve ser positivo');
+  if (count <= 0) throw new Error('count must be positive');
 
   // Verificação de idempotência antes da transação
   if (idempotencyKey) {
@@ -401,7 +401,7 @@ async function giveItem(opts) {
  */
 async function removeItem(opts) {
   const { actorId, characterId, baseId, count, reason, module: mod, idempotencyKey } = opts;
-  if (count <= 0) throw new Error('count deve ser positivo');
+  if (count <= 0) throw new Error('count must be positive');
 
   if (idempotencyKey) {
     const existing = await db.query(
@@ -520,7 +520,7 @@ async function transfer(opts) {
  */
 async function addGold(opts) {
   const { characterId, amount, reason, module: mod, idempotencyKey } = opts;
-  if (amount <= 0) throw new Error('amount deve ser positivo');
+  if (amount <= 0) throw new Error('amount must be positive');
 
   if (idempotencyKey) {
     const existing = await db.query('SELECT transaction_id FROM gold_transactions WHERE idempotency_key = ?', [idempotencyKey]);
@@ -561,7 +561,7 @@ async function addGold(opts) {
  */
 async function removeGold(opts) {
   const { characterId, amount, reason, module: mod, idempotencyKey } = opts;
-  if (amount <= 0) throw new Error('amount deve ser positivo');
+  if (amount <= 0) throw new Error('amount must be positive');
 
   if (idempotencyKey) {
     const existing = await db.query('SELECT transaction_id FROM gold_transactions WHERE idempotency_key = ?', [idempotencyKey]);

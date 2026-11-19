@@ -62,10 +62,10 @@ const CODE_SHAPE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
  * mesma coisa.
  */
 const CATEGORIES = Object.freeze({
-  gathering: 'Extrai recurso bruto do mundo (minério, madeira, caça, colheita).',
-  crafting: 'Transforma recurso bruto em produto (fundição, forja, curtume, cozinha, encantamento).',
-  service: 'Presta serviço a outro jogador ou à cidade (tratador de cavalos, taberneiro, mensageiro).',
-  institutional: 'Cargo ligado a uma instituição do mundo, não a uma cadeia econômica.'
+  gathering: 'Gathers raw resources from the world (ore, wood, game, crops).',
+  crafting: 'Turns raw resources into goods (smelting, smithing, tanning, cooking, enchanting).',
+  service: 'Provides a service to other players or the city (stablehand, innkeeper, courier).',
+  institutional: 'A post tied to an institution of the world, not to an economic chain.'
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,23 +189,23 @@ function _reset() {
  * @type {ReadonlyArray<{code:string,label:string,category:string,description?:string,gameplayImplemented?:boolean}>}
  */
 const BUILTIN_PROFESSIONS = Object.freeze([
-  { code: 'miner', label: 'Minerador', category: 'gathering', gameplayImplemented: true },
-  { code: 'lumberjack', label: 'Lenhador', category: 'gathering' },
-  { code: 'hunter', label: 'Caçador', category: 'gathering' },
-  { code: 'farmer', label: 'Fazendeiro', category: 'gathering' },
-  { code: 'smelter', label: 'Fundidor', category: 'crafting' },
-  { code: 'blacksmith', label: 'Ferreiro', category: 'crafting' },
-  { code: 'tanner', label: 'Curtidor', category: 'crafting' },
-  { code: 'enchanter', label: 'Encantador', category: 'crafting' },
-  { code: 'cook', label: 'Cozinheiro', category: 'crafting' },
-  { code: 'stablehand', label: 'Tratador de Cavalos', category: 'service' },
-  { code: 'innkeeper', label: 'Taberneiro', category: 'service' },
-  { code: 'courier', label: 'Mensageiro', category: 'service' },
+  { code: 'miner', label: 'Miner', category: 'gathering', gameplayImplemented: true },
+  { code: 'lumberjack', label: 'Lumberjack', category: 'gathering' },
+  { code: 'hunter', label: 'Hunter', category: 'gathering' },
+  { code: 'farmer', label: 'Farmer', category: 'gathering' },
+  { code: 'smelter', label: 'Smelter', category: 'crafting' },
+  { code: 'blacksmith', label: 'Blacksmith', category: 'crafting' },
+  { code: 'tanner', label: 'Tanner', category: 'crafting' },
+  { code: 'enchanter', label: 'Enchanter', category: 'crafting' },
+  { code: 'cook', label: 'Cook', category: 'crafting' },
+  { code: 'stablehand', label: 'Stablehand', category: 'service' },
+  { code: 'innkeeper', label: 'Innkeeper', category: 'service' },
+  { code: 'courier', label: 'Courier', category: 'service' },
   {
     code: 'guard',
-    label: 'Guarda',
+    label: 'Guard',
     category: 'institutional',
-    description: 'Ocupação/RP. NÃO é a autoridade da guarda — essa é governance-service.js.'
+    description: 'Occupation/RP. NOT the guard authority — that lives in governance-service.js.'
   }
 ]);
 

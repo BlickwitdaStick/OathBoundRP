@@ -237,13 +237,13 @@ describe('module-registry — ciclo de vida', () => {
 
   it('recusa o mesmo id registrado duas vezes', () => {
     moduleRegistry.register(modulo('unico'));
-    assert.throws(() => moduleRegistry.register(modulo('unico')), /registrado duas vezes/);
+    assert.throws(() => moduleRegistry.register(modulo('unico')), /registered twice/);
   });
 
   it('recusa descritor sem id, sem enabledBy ou sem initialize', () => {
-    assert.throws(() => moduleRegistry.register({ enabledBy: 'X', initialize: async () => {} }), /sem id/);
-    assert.throws(() => moduleRegistry.register({ id: 'a', initialize: async () => {} }), /sem enabledBy/);
-    assert.throws(() => moduleRegistry.register({ id: 'a', enabledBy: 'X' }), /sem função initialize/);
+    assert.throws(() => moduleRegistry.register({ enabledBy: 'X', initialize: async () => {} }), /has no id/);
+    assert.throws(() => moduleRegistry.register({ id: 'a', initialize: async () => {} }), /has no enabledBy/);
+    assert.throws(() => moduleRegistry.register({ id: 'a', enabledBy: 'X' }), /has no initialize function/);
   });
 
   it('list expõe estado, versão e dependências', async () => {

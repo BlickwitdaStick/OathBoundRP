@@ -153,7 +153,7 @@ async function resolveExactTarget(actorId, rawTargetId, options = {}) {
   return {
     targetId,
     targetType,
-    label: actions.length === 1 ? actions[0].label : 'Interagir',
+    label: actions.length === 1 ? actions[0].label : 'Interact',
     count: actions.length,
     sections: result.sections
   };

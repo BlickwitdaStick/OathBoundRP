@@ -50,7 +50,7 @@ describe('range-utils — getLoc/assertRange contra mp.get() que lança [regress
     };
     let resultado;
     assert.doesNotThrow(() => { resultado = rangeUtils.assertRange(ATOR, FORM_ID_INEXISTENTE, 200); });
-    assert.deepEqual(resultado, { ok: false, reason: 'Nao foi possivel validar proximidade.' });
+    assert.deepEqual(resultado, { ok: false, reason: 'Could not verify proximity.' });
   });
 
   it('distanceBetween com um dos dois FormIds lançando: devolve null (não Infinity, não exceção)', () => {

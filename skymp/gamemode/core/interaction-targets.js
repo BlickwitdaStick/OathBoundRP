@@ -211,7 +211,7 @@ function createTargetResolvers({ getCharacter, logger = console }) {
       // cliente mandou um tipo que não existe. A mensagem é a mesma para os
       // dois — descrever a diferença ensinaria a sondar o servidor.
       logger.warn(`[interaction-targets] sem resolvedor para tipo '${targetType}'`);
-      return { ok: false, reason: 'Tipo de alvo nao suportado.' };
+      return { ok: false, reason: 'Unsupported target type.' };
     }
 
     let target;
@@ -219,10 +219,10 @@ function createTargetResolvers({ getCharacter, logger = console }) {
       target = resolver(rawTargetId, actorId);
     } catch (err) {
       logger.error(`[interaction-targets] resolvedor de '${targetType}' falhou:`, err.message);
-      return { ok: false, reason: 'Alvo invalido.' };
+      return { ok: false, reason: 'Invalid target.' };
     }
 
-    if (!target) return { ok: false, reason: 'Alvo invalido.' };
+    if (!target) return { ok: false, reason: 'Invalid target.' };
     return { ok: true, target };
   }
 

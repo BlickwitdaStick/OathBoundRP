@@ -29,35 +29,35 @@ const { STATES } = characterState;
 const STATE_RESTRICTIONS = {
   [STATES.RESTRAINED]: {
     blocked: ['gameplay', 'combat', 'trade', 'craft', 'gather', 'move', 'use_item'],
-    message: 'Você está algemado e não pode realizar essa ação.'
+    message: 'You are restrained and cannot do that.'
   },
   [STATES.IMPRISONED]: {
     blocked: ['trade', 'craft', 'gather', 'work', 'combat', 'move_world', 'sell'],
-    message: 'Você está preso e não pode realizar essa ação.'
+    message: 'You are imprisoned and cannot do that.'
   },
   [STATES.DOWNED]: {
     blocked: ['gameplay', 'combat', 'trade', 'craft', 'gather', 'move', 'use_item', 'speak_rp'],
-    message: 'Você está abatido e não pode agir. Aguarde socorro.'
+    message: 'You are downed and cannot act. Wait for help.'
   },
   [STATES.DEAD]: {
     blocked: ['gameplay', 'combat', 'trade', 'craft', 'gather', 'move', 'use_item', 'speak_rp'],
-    message: 'Você está morto.'
+    message: 'You are dead.'
   },
   [STATES.IN_TRADE]: {
     blocked: ['gather', 'work', 'craft', 'combat', 'move_world'],
-    message: 'Você está em uma negociação. Cancele antes de realizar essa ação.'
+    message: 'You are in a trade. Cancel it before doing that.'
   },
   [STATES.IN_CRAFT]: {
     blocked: ['gather', 'work', 'trade', 'combat', 'move_world'],
-    message: 'Você está fabricando um item. Conclua ou cancele antes.'
+    message: 'You are crafting an item. Finish or cancel it first.'
   },
   [STATES.IN_DIALOG]: {
     blocked: ['gather', 'work', 'trade', 'craft', 'combat'],
-    message: 'Você está em um diálogo. Conclua-o antes.'
+    message: 'You are in a conversation. Finish it first.'
   },
   [STATES.BUSY]: {
     blocked: ['gather', 'work', 'craft', 'trade', 'combat'],
-    message: 'Você está ocupado com outra atividade.'
+    message: 'You are busy with something else.'
   }
 };
 
@@ -88,27 +88,27 @@ function registerAction(actionId, categories, label) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Ações CORE pré-registradas (sempre disponíveis)
 // ─────────────────────────────────────────────────────────────────────────────
-registerAction('speak',       ['speak_rp'],           'Falar');
-registerAction('whisper',     ['speak_rp'],           'Sussurrar');
-registerAction('shout',       ['speak_rp'],           'Gritar');
+registerAction('speak',       ['speak_rp'],           'Speak');
+registerAction('whisper',     ['speak_rp'],           'Whisper');
+registerAction('shout',       ['speak_rp'],           'Shout');
 registerAction('me',          ['speak_rp'],           '/me');
 registerAction('do',          ['speak_rp'],           '/do');
 registerAction('try',         ['speak_rp'],           '/try');
-registerAction('introduce',   ['speak_rp'],           'Apresentar-se');
-registerAction('alias',       ['speak_rp'],           'Dar apelido');
-registerAction('woodcutting', ['gameplay', 'gather'], 'Cortar madeira');
-registerAction('mining',      ['gameplay', 'gather'], 'Minerar');
-registerAction('fishing',     ['gameplay', 'gather'], 'Pescar');
-registerAction('craft',       ['gameplay', 'craft'],  'Fabricar');
-registerAction('trade',       ['gameplay', 'trade'],  'Negociar');
-registerAction('sell',        ['gameplay', 'sell'],   'Vender');
-registerAction('buy',         ['gameplay', 'sell'],   'Comprar');
-registerAction('move_world',  ['move', 'move_world'], 'Mover entre células');
-registerAction('use_item',    ['use_item'],            'Usar item');
-registerAction('eat',         ['use_item'],            'Comer');
-registerAction('drink',       ['use_item'],            'Beber');
-registerAction('sleep',       ['use_item'],            'Dormir');
-registerAction('public_work', ['gameplay', 'work'],    'Trabalho público');
+registerAction('introduce',   ['speak_rp'],           'Introduce yourself');
+registerAction('alias',       ['speak_rp'],           'Give a nickname');
+registerAction('woodcutting', ['gameplay', 'gather'], 'Chop wood');
+registerAction('mining',      ['gameplay', 'gather'], 'Mine');
+registerAction('fishing',     ['gameplay', 'gather'], 'Fish');
+registerAction('craft',       ['gameplay', 'craft'],  'Craft');
+registerAction('trade',       ['gameplay', 'trade'],  'Trade');
+registerAction('sell',        ['gameplay', 'sell'],   'Sell');
+registerAction('buy',         ['gameplay', 'sell'],   'Buy');
+registerAction('move_world',  ['move', 'move_world'], 'Move between cells');
+registerAction('use_item',    ['use_item'],            'Use item');
+registerAction('eat',         ['use_item'],            'Eat');
+registerAction('drink',       ['use_item'],            'Drink');
+registerAction('sleep',       ['use_item'],            'Sleep');
+registerAction('public_work', ['gameplay', 'work'],    'Public work');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API Pública
@@ -138,7 +138,7 @@ function canPerform(characterId, actionId, context = {}) {
   const action = _actions.get(actionId);
   if (!action) {
     // Ação não registrada — bloquear por segurança
-    return { allowed: false, reason: `Ação desconhecida: ${actionId}` };
+    return { allowed: false, reason: `Unknown action: ${actionId}` };
   }
 
   const currentState = characterState.get(characterId);
@@ -168,8 +168,8 @@ function canPerform(characterId, actionId, context = {}) {
         return {
           allowed: false,
           reason: veredito.side === 'target'
-            ? `Seu alvo está sob proteção de ${onde}.`
-            : `Você está em ${onde} e não pode fazer isso aqui.`
+            ? `Your target is under the protection of ${onde}.`
+            : `You are in ${onde} and can't do that here.`
         };
       }
     }

@@ -52,7 +52,7 @@ function registerInteractions(dependencies) {
   targets.registerResolver(interactionRegistry.TARGET_TYPES.SELF, (_rawTargetId, actorId) => ({
     type: interactionRegistry.TARGET_TYPES.SELF,
     id: `self:${actorId}`,
-    label: 'Você',
+    label: 'You',
     actorId
     // Sem `assertRange`: `buildContext` (`interaction-service.js`) só checa
     // distância quando o alvo resolvido expõe essa função — de propósito,
@@ -64,7 +64,7 @@ function registerInteractions(dependencies) {
     module: MODULE_ID,
     target: interactionRegistry.TARGET_TYPES.SELF,
     section: 'self',
-    label: 'Ver personagem',
+    label: 'View character',
     order: 10,
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     execute: async (ctx) => {

@@ -70,7 +70,19 @@ const MIN_REQUEST_ID_LENGTH = 8;
 const MAX_REQUEST_ID_LENGTH = 48;
 
 /** Mensagem única para tudo que o jogador não deveria conseguir distinguir. */
-const RECUSA_GENERICA = 'Acao indisponivel.';
+const RECUSA_GENERICA = 'Action unavailable.';
+
+// Display names for interaction-menu sections. The section id stays the
+// internal key; only the label sent to the CEF is translated.
+const SECTION_LABELS = Object.freeze({
+  self: 'You',
+  social: 'Social',
+  guarda: 'Guard',
+  barraca: 'Stall',
+  deposito: 'Depot',
+  crime: 'Crime',
+  crafting: 'Crafting'
+});
 
 /**
  * Normaliza o retorno de `canSee`/`canExecute`.
@@ -178,7 +190,7 @@ function createInteractionService({
    */
   async function buildContext(actorId, entry, rawTargetId, rawPayload, options = {}) {
     const actor = getCharacter(actorId);
-    if (!actor) return fail(STAGES.TARGET, 'Personagem nao carregado.');
+    if (!actor) return fail(STAGES.TARGET, 'Character not loaded.');
 
     // ── Alvo ────────────────────────────────────────────────────────────────
     // Refeito a cada chamada, e é aqui que a desconexão do alvo entre a consulta
@@ -213,7 +225,7 @@ function createInteractionService({
       const verdict = await checkPermission(actorId, entry.permission, { target, interactionId: entry.id });
       const normalized = normalizeVerdict(verdict);
       if (!normalized.allowed) {
-        return fail(STAGES.PERMISSION, normalized.reason || 'Voce nao tem autorizacao para isso.');
+        return fail(STAGES.PERMISSION, normalized.reason || 'You are not authorized to do that.');
       }
       permission = normalized;
     }
@@ -235,7 +247,7 @@ function createInteractionService({
     let distanceUnverified = false;
     if (entry.distance !== null && typeof target.assertRange === 'function') {
       const verdict = target.assertRange(actorId, entry.distance);
-      if (!verdict.ok) return fail(STAGES.DISTANCE, verdict.reason || 'Alvo fora de alcance.');
+      if (!verdict.ok) return fail(STAGES.DISTANCE, verdict.reason || 'Target out of range.');
       distanceUnverified = Boolean(verdict.unverified);
       distanceVerified = !distanceUnverified;
     }
@@ -319,10 +331,10 @@ function createInteractionService({
    */
   async function query(actorId, request) {
     if (!request || typeof request !== 'object') {
-      return fail(STAGES.ENVELOPE, 'Pedido invalido.');
+      return fail(STAGES.ENVELOPE, 'Invalid request.');
     }
     if (!checkRate(actorId, 'query')) {
-      return fail(STAGES.RATE_LIMIT, 'Aguarde um instante.');
+      return fail(STAGES.RATE_LIMIT, 'Wait a moment.');
     }
     return _computeSections(actorId, request);
   }
@@ -341,14 +353,14 @@ function createInteractionService({
    */
   async function peek(actorId, request) {
     if (!request || typeof request !== 'object') {
-      return fail(STAGES.ENVELOPE, 'Pedido invalido.');
+      return fail(STAGES.ENVELOPE, 'Invalid request.');
     }
     return _computeSections(actorId, request);
   }
 
   async function _computeSections(actorId, request) {
     const targetType = typeof request.targetType === 'string' ? request.targetType : null;
-    if (!targetType) return fail(STAGES.ENVELOPE, 'Tipo de alvo ausente.');
+    if (!targetType) return fail(STAGES.ENVELOPE, 'Missing target type.');
 
     const candidates = registry.listForTarget(targetType);
     if (candidates.length === 0) {
@@ -371,7 +383,7 @@ function createInteractionService({
       if (!verdict.allowed) continue;
 
       if (!sections.has(entry.section)) {
-        sections.set(entry.section, { id: entry.section, label: entry.section, actions: [] });
+        sections.set(entry.section, { id: entry.section, label: SECTION_LABELS[entry.section] || entry.section, actions: [] });
       }
       sections.get(entry.section).actions.push({
         action: entry.id,
@@ -400,10 +412,10 @@ function createInteractionService({
    */
   async function execute(actorId, request) {
     if (!request || typeof request !== 'object') {
-      return fail(STAGES.ENVELOPE, 'Pedido invalido.');
+      return fail(STAGES.ENVELOPE, 'Invalid request.');
     }
     if (!checkRate(actorId, 'execute')) {
-      return fail(STAGES.RATE_LIMIT, 'Aguarde um instante antes de tentar de novo.');
+      return fail(STAGES.RATE_LIMIT, 'Wait a moment before trying again.');
     }
 
     const actionId = typeof request.action === 'string' ? request.action : null;
@@ -433,7 +445,7 @@ function createInteractionService({
     if (entry.idempotent) {
       const requestId = typeof request.requestId === 'string' ? request.requestId.trim() : '';
       if (requestId.length < MIN_REQUEST_ID_LENGTH || requestId.length > MAX_REQUEST_ID_LENGTH) {
-        return fail(STAGES.DUPLICATE, 'Solicitacao invalida.');
+        return fail(STAGES.DUPLICATE, 'Invalid request.');
       }
       ctx.requestId = requestId;
       dedupKey = `${actorId}:${requestId}`;
@@ -446,7 +458,7 @@ function createInteractionService({
         // `done` é o retry depois da resposta. Os dois devolvem sem executar.
         return previous.state === 'done' && previous.result
           ? { ...previous.result, duplicate: true }
-          : fail(STAGES.DUPLICATE, 'Esta solicitacao ja esta sendo processada.');
+          : fail(STAGES.DUPLICATE, 'This request is already being processed.');
       }
       seen.set(dedupKey, { state: 'running', at: timestamp });
     }
@@ -472,7 +484,7 @@ function createInteractionService({
       if (dedupKey) seen.delete(dedupKey);
       logger.error(`[interaction-service] '${entry.id}' falhou:`, err.message);
       await record(entry, ctx, 'error', err.message);
-      return fail(STAGES.EXECUTE, 'Nao foi possivel concluir a acao.');
+      return fail(STAGES.EXECUTE, 'Could not complete the action.');
     }
   }
 

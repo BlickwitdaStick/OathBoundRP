@@ -334,7 +334,7 @@ describe('transferência entre personagens', () => {
     });
 
     assert.strictEqual(r.ok, false);
-    assert.match(r.reason, /insuficiente/i);
+    assert.match(r.reason, /insufficient/i);
     assert.strictEqual(itemDo(1, 10), 2);
     assert.strictEqual(itemDo(2, 10), 0);
     assert.strictEqual(ledger.length, 0);
@@ -633,7 +633,7 @@ describe('a primitiva de pilha valida o que o wrapper validava (auditoria §6)',
       source: 'staff', reason: 'admin_give', module: 'admin', requestId: REQ
     });
     assert.strictEqual(r.ok, false);
-    assert.match(r.reason, /Pilha cheia/);
+    assert.match(r.reason, /Stack full/);
   });
 });
 

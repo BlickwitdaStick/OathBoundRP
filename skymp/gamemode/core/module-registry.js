@@ -213,10 +213,10 @@ function register(descriptor) {
     healthCheck = () => true
   } = descriptor;
 
-  if (!id) throw new Error('[module-registry] Módulo sem id');
-  if (!enabledBy) throw new Error(`[module-registry] Módulo '${id}' sem enabledBy`);
-  if (typeof initialize !== 'function') throw new Error(`[module-registry] Módulo '${id}' sem função initialize`);
-  if (_modules.has(id)) throw new Error(`[module-registry] Módulo '${id}' registrado duas vezes`);
+  if (!id) throw new Error('[module-registry] Module has no id');
+  if (!enabledBy) throw new Error(`[module-registry] Module '${id}' has no enabledBy`);
+  if (typeof initialize !== 'function') throw new Error(`[module-registry] Module '${id}' has no initialize function`);
+  if (_modules.has(id)) throw new Error(`[module-registry] Module '${id}' registered twice`);
 
   _modules.set(id, {
     id, enabledBy, phase, version,
@@ -255,13 +255,13 @@ function getState(id) {
  * Deve ser chamado UMA VEZ no boot (phase0-basic.js).
  */
 async function bootAll() {
-  console.log('[module-registry] Iniciando boot de módulos...');
+  console.log('[module-registry] Starting module boot...');
 
   const results = { enabled: [], disabled: [], failed: [], order: [] };
 
   const { ordered, cycles } = topologicalOrder();
   for (const cycle of cycles) {
-    console.error(`[module-registry] CICLO de dependência: ${cycle}. Módulos envolvidos ficam de fora do boot.`);
+    console.error(`[module-registry] Dependency CYCLE: ${cycle}. The modules involved are left out of boot.`);
   }
   results.order = ordered;
 
@@ -270,7 +270,7 @@ async function bootAll() {
     const shouldEnable = process.env[mod.enabledBy] === 'true';
 
     if (!shouldEnable) {
-      console.log(`[module-registry] [${mod.phase.toUpperCase()}] ${id}: DESATIVADO (${mod.enabledBy}=false ou não definido)`);
+      console.log(`[module-registry] [${mod.phase.toUpperCase()}] ${id}: DISABLED (${mod.enabledBy}=false or not set)`);
       _states.set(id, STATES.DISABLED);
       results.disabled.push(id);
       continue;
@@ -282,9 +282,9 @@ async function bootAll() {
     // não chegou a vez dela, que era o modo de falha antigo.
     const missingDeps = mod.dependencies.filter(dep => !_active.has(dep));
     if (missingDeps.length > 0) {
-      console.error(`[module-registry] ${id}: FALHOU — dependências não ativas: ${missingDeps.join(', ')}`);
+      console.error(`[module-registry] ${id}: FAILED — inactive dependencies: ${missingDeps.join(', ')}`);
       _states.set(id, STATES.FAILED);
-      results.failed.push({ id, reason: `dependências ausentes: ${missingDeps.join(', ')}` });
+      results.failed.push({ id, reason: `missing dependencies: ${missingDeps.join(', ')}` });
       continue;
     }
 
@@ -309,9 +309,9 @@ async function bootAll() {
       _states.set(id, STATES.RUNNING);
       const inativas = mod.optionalDependencies.filter(dep => !_active.has(dep));
       console.log(
-        `[module-registry] [${mod.phase.toUpperCase()}] ${id}@${mod.version}: ATIVO ` +
-        `(${mod.commands.length} comandos registrados` +
-        `${inativas.length > 0 ? `, opcionais inativas: ${inativas.join(', ')}` : ''})`
+        `[module-registry] [${mod.phase.toUpperCase()}] ${id}@${mod.version}: ACTIVE ` +
+        `(${mod.commands.length} commands registered` +
+        `${inativas.length > 0 ? `, inactive optional deps: ${inativas.join(', ')}` : ''})`
       );
       results.enabled.push(id);
     } catch (err) {
@@ -320,17 +320,17 @@ async function bootAll() {
       // aparecem no menu e executam contra um serviço que nunca inicializou.
       const orfas = interactionRegistry.unregisterModule(id);
       console.error(
-        `[module-registry] ${id}: FALHOU ao inicializar:`, err.message +
-        (orfas > 0 ? ` (${orfas} interações órfãs removidas)` : '')
+        `[module-registry] ${id}: FAILED to initialize:`, err.message +
+        (orfas > 0 ? ` (${orfas} orphaned interactions removed)` : '')
       );
       _states.set(id, STATES.FAILED);
       results.failed.push({ id, reason: err.message });
     }
   }
 
-  console.log(`[module-registry] Boot concluído: ${results.enabled.length} ativos, ${results.disabled.length} desativados, ${results.failed.length} com falha`);
+  console.log(`[module-registry] Boot complete: ${results.enabled.length} active, ${results.disabled.length} disabled, ${results.failed.length} failed`);
   if (results.failed.length > 0) {
-    console.error('[module-registry] Módulos com falha:', results.failed.map(f => `${f.id} (${f.reason})`).join('; '));
+    console.error('[module-registry] Failed modules:', results.failed.map(f => `${f.id} (${f.reason})`).join('; '));
   }
 
   return results;
@@ -346,7 +346,7 @@ async function bootAll() {
  * Chamado no shutdown do servidor.
  */
 async function shutdownAll() {
-  console.log('[module-registry] Iniciando shutdown de módulos...');
+  console.log('[module-registry] Starting module shutdown...');
   const { ordered } = topologicalOrder();
   for (const id of [...ordered].reverse()) {
     const mod = _modules.get(id);
@@ -364,9 +364,9 @@ async function shutdownAll() {
       await mod.shutdown();
       _active.delete(id);
       _states.set(id, STATES.STOPPED);
-      console.log(`[module-registry] ${id}: desligado`);
+      console.log(`[module-registry] ${id}: shut down`);
     } catch (err) {
-      console.error(`[module-registry] Erro ao desligar ${id}:`, err.message);
+      console.error(`[module-registry] Error shutting down ${id}:`, err.message);
       _states.set(id, STATES.FAILED);
       _active.delete(id);
     }
@@ -402,7 +402,7 @@ function list() {
     state: _states.get(mod.id) || STATES.REGISTERED,
     enabled: _active.has(mod.id),
     enabledBy: mod.enabledBy,
-    envValue: process.env[mod.enabledBy] || 'não definido',
+    envValue: process.env[mod.enabledBy] || 'not set',
     dependencies: mod.dependencies,
     optionalDependencies: mod.optionalDependencies,
     commandCount: mod.commands.length

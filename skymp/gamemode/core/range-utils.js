@@ -91,8 +91,8 @@ function distanceBetween(a, b) {
 function assertRange(sourceActorId, targetActorId, maxRange) {
   if (typeof mp === 'undefined') return { ok: true, unverified: true };
   const distance = distanceBetween(sourceActorId, targetActorId);
-  if (distance === null) return { ok: false, reason: 'Nao foi possivel validar proximidade.' };
-  if (distance > maxRange) return { ok: false, reason: 'Alvo fora de alcance.' };
+  if (distance === null) return { ok: false, reason: 'Could not verify proximity.' };
+  if (distance > maxRange) return { ok: false, reason: 'Target out of range.' };
   return { ok: true };
 }
 

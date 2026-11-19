@@ -176,7 +176,7 @@ describe('interaction-service — alvo', () => {
     const r = await service.execute(ATOR, { action: 'test.porta', targetId: 1 });
     assert.equal(r.ok, false);
     assert.equal(r.stage, STAGES.TARGET);
-    assert.match(r.reason, /nao suportado/);
+    assert.match(r.reason, /Unsupported target type/);
   });
 
   it('resolvedor registrado por um módulo passa a funcionar sem tocar o core', async () => {
@@ -217,7 +217,7 @@ describe('interaction-service — alvo', () => {
     const r = await service.execute(ATOR, { action: 'test.acao', targetId: ALVO });
     assert.equal(r.ok, false);
     assert.equal(r.stage, STAGES.TARGET);
-    assert.match(r.reason, /Personagem nao carregado/);
+    assert.match(r.reason, /Character not loaded/);
   });
 });
 
@@ -300,7 +300,7 @@ describe('interaction-service — permissão, política e distância', () => {
       const r = originais(tipo, raw, actorId);
       if (r.ok) {
         r.target.assertRange = (_from, max) => (longe
-          ? { ok: false, reason: 'Alvo fora de alcance.' }
+          ? { ok: false, reason: 'Target out of range.' }
           : { ok: true });
       }
       return r;
@@ -308,7 +308,7 @@ describe('interaction-service — permissão, política e distância', () => {
 
     const recusa = await service.execute(ATOR, { action: 'test.acao', targetId: ALVO });
     assert.equal(recusa.stage, STAGES.DISTANCE);
-    assert.equal(recusa.reason, 'Alvo fora de alcance.');
+    assert.equal(recusa.reason, 'Target out of range.');
 
     longe = false;
     assert.equal((await service.execute(ATOR, { action: 'test.acao', targetId: ALVO })).ok, true);
@@ -426,7 +426,7 @@ describe('interaction-service — query', () => {
   beforeEach(() => registry._reset());
 
   it('agrupa por seção e só devolve o que o cliente precisa desenhar', async () => {
-    registrar({ id: 'law.search', module: 'gov', section: 'guarda', label: 'Revistar',
+    registrar({ id: 'law.search', module: 'gov', section: 'guarda', label: 'Search',
       permission: 'p', schema: { reason: { type: 'string', label: 'Motivo' } } });
     registrar({ id: 'law.fine', module: 'gov', section: 'guarda', label: 'Multar' });
     registrar({ id: 'social.apresentar', module: 'identity', section: 'social', label: 'Apresentar-se' });
@@ -453,7 +453,7 @@ describe('interaction-service — query', () => {
     const original = targets.resolve;
     targets.resolve = (tipo, raw, actorId) => {
       const r = original(tipo, raw, actorId);
-      if (r.ok) r.target.assertRange = (_f, max) => (max >= 3000 ? { ok: true } : { ok: false, reason: 'Alvo fora de alcance.' });
+      if (r.ok) r.target.assertRange = (_f, max) => (max >= 3000 ? { ok: true } : { ok: false, reason: 'Target out of range.' });
       return r;
     };
 
@@ -790,7 +790,7 @@ describe('interaction-service — ponte com a UI', () => {
       type: 'interaction:execute',
       data: { action: 'test.acao', targetId: 0x999 }
     });
-    assert.equal(notificacoes[1].message, 'Alvo invalido.');
+    assert.equal(notificacoes[1].message, 'Invalid target.');
   });
 
   it('data que não é objeto não derruba a ponte', async () => {

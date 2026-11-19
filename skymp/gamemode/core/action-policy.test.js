@@ -156,7 +156,7 @@ describe('action-policy', () => {
     it('deve bloquear ação não registrada por segurança', () => {
       const { allowed, reason } = actionPolicy.canPerform(CHAR_ID, 'acao_inexistente_xyz');
       assert.strictEqual(allowed, false, 'Ação desconhecida deve ser bloqueada');
-      assert.ok(reason.includes('desconhecida'), 'Mensagem deve mencionar "desconhecida"');
+      assert.ok(reason.includes('Unknown'), 'Mensagem deve mencionar "Unknown"');
     });
   });
 });
@@ -234,19 +234,19 @@ describe('action-policy — bloqueio por lugar', () => {
     characterState.set(CHAR, STATES.RESTRAINED, {});
     const r = actionPolicy.canPerform(CHAR, 'woodcutting', { actorId: DENTRO });
     assert.strictEqual(r.allowed, false);
-    assert.match(r.reason, /algemado/i, 'estado explica melhor que lugar quando os dois valem');
+    assert.match(r.reason, /restrained/i, 'estado explica melhor que lugar quando os dois valem');
   });
 
   it('alvo protegido barra quem age de fora, e a mensagem diz de quem é a proteção', () => {
     const r = actionPolicy.canPerform(CHAR, 'woodcutting', { actorId: FORA, targetActorId: DENTRO });
     assert.strictEqual(r.allowed, false);
-    assert.match(r.reason, /alvo/i, 'sem isso a mensagem diria "você está em zona segura", que parece bug');
+    assert.match(r.reason, /target/i, 'sem isso a mensagem diria "você está em zona segura", que parece bug');
   });
 
   it('agressor protegido não age sobre quem está fora', () => {
     const r = actionPolicy.canPerform(CHAR, 'woodcutting', { actorId: DENTRO, targetActorId: FORA });
     assert.strictEqual(r.allowed, false);
-    assert.match(r.reason, /Você está/i);
+    assert.match(r.reason, /You are in/i);
   });
 
   it('sem zona configurada, informar actorId não muda nada', () => {

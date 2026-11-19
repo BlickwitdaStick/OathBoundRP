@@ -175,7 +175,7 @@ function validatePayload(schema, payload) {
 
   if (payload !== undefined && payload !== null &&
     (typeof payload !== 'object' || Array.isArray(payload))) {
-    return { ok: false, reason: 'Dados da acao invalidos.' };
+    return { ok: false, reason: 'Invalid action data.' };
   }
   const source = /** @type {Record<string, unknown>} */ (payload || {});
   /** @type {Record<string, unknown>} */
@@ -186,7 +186,7 @@ function validatePayload(schema, payload) {
     const present = Object.hasOwn(source, name) && source[name] !== undefined && source[name] !== '';
 
     if (!present) {
-      if (spec.required) return { ok: false, reason: `Campo obrigatorio ausente: ${name}.` };
+      if (spec.required) return { ok: false, reason: `Missing required field: ${name}.` };
       if (Object.hasOwn(spec, 'default')) data[name] = spec.default;
       continue;
     }
@@ -195,45 +195,45 @@ function validatePayload(schema, payload) {
 
     switch (spec.type) {
       case 'string': {
-        if (typeof value !== 'string') return { ok: false, reason: `Campo ${name} deve ser texto.` };
+        if (typeof value !== 'string') return { ok: false, reason: `Field ${name} must be text.` };
         const trimmed = value.trim();
         if (spec.min !== undefined && trimmed.length < spec.min) {
-          return { ok: false, reason: `Campo ${name} e curto demais.` };
+          return { ok: false, reason: `Field ${name} is too short.` };
         }
         // O teto existe em todo campo de texto, com ou sem `max` declarado: um
         // payload de CEF sem limite é memória do servidor controlada por quem
         // joga.
         const max = spec.max === undefined ? 240 : spec.max;
-        if (trimmed.length > max) return { ok: false, reason: `Campo ${name} e longo demais.` };
+        if (trimmed.length > max) return { ok: false, reason: `Field ${name} is too long.` };
         data[name] = trimmed;
         break;
       }
       case 'int': {
         const parsed = strictInteger(value);
-        if (parsed === null) return { ok: false, reason: `Campo ${name} deve ser um numero inteiro.` };
+        if (parsed === null) return { ok: false, reason: `Field ${name} must be a whole number.` };
         if (spec.min !== undefined && parsed < spec.min) {
-          return { ok: false, reason: `Campo ${name} abaixo do minimo (${spec.min}).` };
+          return { ok: false, reason: `Field ${name} is below the minimum (${spec.min}).` };
         }
         if (spec.max !== undefined && parsed > spec.max) {
-          return { ok: false, reason: `Campo ${name} acima do maximo (${spec.max}).` };
+          return { ok: false, reason: `Field ${name} is above the maximum (${spec.max}).` };
         }
         data[name] = parsed;
         break;
       }
       case 'formid': {
         const parsed = strictFormId(value);
-        if (parsed === null) return { ok: false, reason: `Campo ${name} nao e um FormID valido.` };
+        if (parsed === null) return { ok: false, reason: `Field ${name} is not a valid FormID.` };
         data[name] = parsed;
         break;
       }
       case 'bool': {
         if (typeof value === 'boolean') { data[name] = value; break; }
         if (value === 'true' || value === 'false') { data[name] = value === 'true'; break; }
-        return { ok: false, reason: `Campo ${name} deve ser verdadeiro ou falso.` };
+        return { ok: false, reason: `Field ${name} must be true or false.` };
       }
       case 'enum': {
         if (typeof value !== 'string' || !spec.values.includes(value)) {
-          return { ok: false, reason: `Campo ${name} tem valor invalido.` };
+          return { ok: false, reason: `Field ${name} has an invalid value.` };
         }
         data[name] = value;
         break;
@@ -241,7 +241,7 @@ function validatePayload(schema, payload) {
       default:
         // Só acontece se `register` deixar passar um tipo novo — por isso ele
         // valida o schema no registro, e não aqui, com o jogador esperando.
-        return { ok: false, reason: `Campo ${name} tem tipo desconhecido no servidor.` };
+        return { ok: false, reason: `Field ${name} has a type the server does not know.` };
     }
   }
 

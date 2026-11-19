@@ -52,7 +52,7 @@ describe('profession-registry — register()', () => {
   });
 
   it('rejeita registro duplicado', () => {
-    assert.throws(() => registry.register({ code: 'miner', label: 'Minerador 2', category: 'gathering' }));
+    assert.throws(() => registry.register({ code: 'miner', label: 'Miner 2', category: 'gathering' }));
   });
 
   it('permite adicionar profissão nova sem tocar nas builtins (§33 do briefing)', () => {

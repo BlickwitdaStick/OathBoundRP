@@ -120,7 +120,7 @@ async function buy(request, dependencies = {}) {
       'UPDATE market_prices SET stock = stock - ? WHERE hold_id = ? AND base_id = ? AND stock >= ?',
       [valid.count, request.holdId, request.baseId, valid.count]
     );
-    if (stockUpdate.affectedRows !== 1) throw new Error('Estoque regional mudou durante a compra');
+    if (stockUpdate.affectedRows !== 1) throw new Error('Regional stock changed during the purchase');
     // O ledger de ouro ja foi gravado pela transferencia acima.
     await tx.recordInventoryLedger(conn, { characterId: request.characterId, baseId: request.baseId, delta: valid.count, reason: 'regional_purchase', module: 'economy-regional', idempotencyKey: `${valid.key}:inventory` });
     const transactionId = await record(conn, { key: valid.key, characterId: request.characterId, holdId: request.holdId, direction: 'buy', baseId: request.baseId, count: valid.count, unitPrice, gross, tax: 0 });
@@ -178,7 +178,7 @@ async function sell(request, dependencies = {}) {
       actorCharacterId: request.characterId,
       idempotencyKey: `${valid.key}:gold`
     });
-    if (!pagamento.ok) throw new Error(`Pagamento regional recusado: ${pagamento.code}`);
+    if (!pagamento.ok) throw new Error(`Regional payment refused: ${pagamento.code}`);
 
     if (tax > 0) {
       const imposto = await economy.transferInTransaction(conn, {
@@ -190,7 +190,7 @@ async function sell(request, dependencies = {}) {
         actorCharacterId: request.characterId,
         idempotencyKey: `${valid.key}:tax`
       });
-      if (!imposto.ok) throw new Error(`Imposto regional recusado: ${imposto.code}`);
+      if (!imposto.ok) throw new Error(`Regional tax refused: ${imposto.code}`);
     }
     await conn.query(
       `INSERT INTO market_prices (hold_id, base_id, sell_price, buy_price, stock)
