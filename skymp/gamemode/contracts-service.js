@@ -626,31 +626,31 @@ function _notify(actorId, message) {
 
 /** Tradução dos `code` de retorno para mensagem de jogador. */
 const _ERROR_MESSAGES = Object.freeze({
-  invalid_creator: 'Personagem não carregado.',
-  invalid_actor: 'Personagem não carregado.',
-  invalid_title: 'Título inválido (até 96 caracteres).',
-  invalid_reward: 'Recompensa inválida.',
-  invalid_category: `Categoria inválida. Use: ${CATEGORIES.join(', ')}.`,
-  invalid_description: 'Descrição inválida.',
-  invalid_idempotency_key: 'Falha interna, tente de novo.',
-  invalid_expiry: 'Prazo inválido.',
-  invalid_contract: 'Uso: informe o número do contrato.',
-  contract_not_found: 'Contrato não encontrado.',
-  invalid_status: 'Este contrato não está nesse estado agora.',
-  creator_cannot_accept: 'Você não pode aceitar o próprio contrato.',
-  not_the_worker: 'Só quem aceitou o contrato pode fazer isso.',
-  not_the_creator: 'Só o criador do contrato pode fazer isso.',
-  not_yet_expired: 'Este contrato ainda não venceu.',
-  not_expirable: 'Este contrato não pode expirar agora.',
-  review_window_open: 'A janela de revisão ainda não fechou.',
-  insufficient_funds: 'Ouro insuficiente para travar a recompensa no escrow.'
+  invalid_creator: 'Character not loaded.',
+  invalid_actor: 'Character not loaded.',
+  invalid_title: 'Invalid title (up to 96 characters).',
+  invalid_reward: 'Invalid reward.',
+  invalid_category: `Invalid category. Use: ${CATEGORIES.join(', ')}.`,
+  invalid_description: 'Invalid description.',
+  invalid_idempotency_key: 'Internal error, please try again.',
+  invalid_expiry: 'Invalid deadline.',
+  invalid_contract: 'Usage: provide the contract number.',
+  contract_not_found: 'Contract not found.',
+  invalid_status: 'This contract is not in that state right now.',
+  creator_cannot_accept: 'You cannot accept your own contract.',
+  not_the_worker: 'Only whoever accepted the contract can do that.',
+  not_the_creator: 'Only the contract\'s creator can do that.',
+  not_yet_expired: 'This contract has not expired yet.',
+  not_expirable: 'This contract cannot expire right now.',
+  review_window_open: 'The review window has not closed yet.',
+  insufficient_funds: 'Not enough gold to lock the reward in escrow.'
 });
 
 function _reply(actorId, result, successMessage) {
   if (result.ok) {
-    _notify(actorId, result.replayed ? 'Ação já registrada anteriormente.' : successMessage(result));
+    _notify(actorId, result.replayed ? 'Action already recorded.' : successMessage(result));
   } else {
-    _notify(actorId, _ERROR_MESSAGES[result.code] || `Não foi possível: ${result.code}`);
+    _notify(actorId, _ERROR_MESSAGES[result.code] || `Could not do that: ${result.code}`);
   }
   return result;
 }
@@ -663,104 +663,104 @@ function _parseContractId(args) {
 function commandDefs() {
   return [
     {
-      name: '/contratocriar',
-      description: '[Contratos] Publica um contrato, travando a recompensa no escrow',
-      usage: '/contratocriar <categoria> <recompensa> <titulo>',
+      name: ['/contractcreate', '/contratocriar'],
+      description: '[Contracts] Posts a contract, locking the reward in escrow',
+      usage: '/contractcreate <category> <reward> <title>',
       handler: async (actorId, args) => {
         const creatorCharacterId = _characterIdFor(actorId);
-        if (!creatorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!creatorCharacterId) return _notify(actorId, 'Character not loaded.');
 
         const partes = String(args || '').trim().split(/\s+/);
         const category = partes[0];
         const reward = Number.parseInt(partes[1], 10);
         const title = partes.slice(2).join(' ');
         if (!category || !title || !Number.isFinite(reward)) {
-          return _notify(actorId, 'Uso: /contratocriar <categoria> <recompensa> <titulo>');
+          return _notify(actorId, 'Usage: /contractcreate <category> <reward> <title>');
         }
 
         const result = await create({ creatorCharacterId, title, category, reward, idempotencyKey: uuid() });
-        return _reply(actorId, result, r => `Contrato #${r.contractId} publicado. ${r.reward} septims travados no escrow.`);
+        return _reply(actorId, result, r => `Contract #${r.contractId} posted. ${r.reward} septims locked in escrow.`);
       }
     },
     {
-      name: '/contratoaceitar',
-      description: '[Contratos] Aceita um contrato aberto',
-      usage: '/contratoaceitar <id>',
+      name: ['/contractaccept', '/contratoaceitar'],
+      description: '[Contracts] Accepts an open contract',
+      usage: '/contractaccept <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoaceitar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractaccept <id>');
 
         const result = await accept({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} aceito.`);
+        return _reply(actorId, result, () => `Contract #${contractId} accepted.`);
       }
     },
     {
-      name: '/contratoentregar',
-      description: '[Contratos] Declara a entrega de um contrato aceito',
-      usage: '/contratoentregar <id>',
+      name: ['/contractdeliver', '/contratoentregar'],
+      description: '[Contracts] Declares delivery of an accepted contract',
+      usage: '/contractdeliver <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoentregar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractdeliver <id>');
 
         const result = await deliver({ contractId, actorCharacterId, idempotencyKey: uuid() });
         return _reply(actorId, result, () =>
-          `Entrega do contrato #${contractId} declarada. O criador tem ${Math.round(REVIEW_WINDOW_MS / 3_600_000)}h para revisar antes do acerto automático.`
+          `Delivery of contract #${contractId} declared. The creator has ${Math.round(REVIEW_WINDOW_MS / 3_600_000)}h to review before automatic settlement.`
         );
       }
     },
     {
-      name: '/contratocontestar',
-      description: '[Contratos] Contesta a entrega de um contrato (trava o escrow para revisão da staff)',
-      usage: '/contratocontestar <id>',
+      name: ['/contractdispute', '/contratocontestar'],
+      description: '[Contracts] Disputes a contract delivery (locks the escrow for staff review)',
+      usage: '/contractdispute <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratocontestar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractdispute <id>');
 
         const result = await dispute({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} contestado. A staff vai revisar — o escrow fica travado.`);
+        return _reply(actorId, result, () => `Contract #${contractId} disputed. Staff will review it — the escrow stays locked.`);
       }
     },
     {
-      name: '/contratoacertar',
-      description: '[Contratos] Libera a recompensa entregue para o trabalhador',
-      usage: '/contratoacertar <id>',
+      name: ['/contractsettle', '/contratoacertar'],
+      description: '[Contracts] Releases the reward to the worker who delivered',
+      usage: '/contractsettle <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoacertar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractsettle <id>');
 
         const result = await settle({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} acertado.`);
+        return _reply(actorId, result, () => `Contract #${contractId} settled.`);
       }
     },
     {
-      name: '/contratocancelar',
-      description: '[Contratos] Cancela um contrato ainda aberto e devolve o escrow',
-      usage: '/contratocancelar <id>',
+      name: ['/contractcancel', '/contratocancelar'],
+      description: '[Contracts] Cancels a still-open contract and refunds the escrow',
+      usage: '/contractcancel <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratocancelar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractcancel <id>');
 
         const result = await cancel({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} cancelado. Escrow devolvido.`);
+        return _reply(actorId, result, () => `Contract #${contractId} cancelled. Escrow refunded.`);
       }
     },
     {
-      name: '/contratolistar',
-      description: '[Contratos] Lista os contratos abertos',
-      usage: '/contratolistar',
+      name: ['/contracts', '/contratolistar'],
+      description: '[Contracts] Lists open contracts',
+      usage: '/contracts',
       handler: async (actorId) => {
         const abertos = await listOpen();
-        if (abertos.length === 0) return _notify(actorId, 'Nenhum contrato aberto no momento.');
+        if (abertos.length === 0) return _notify(actorId, 'No open contracts right now.');
         const linhas = abertos
           .slice(0, 10)
           .map(c => `#${c.id} [${c.category}] ${c.title} — ${c.reward} septims`)
@@ -769,14 +769,14 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratoinfo',
-      description: '[Contratos] Mostra detalhes de um contrato',
-      usage: '/contratoinfo <id>',
+      name: ['/contractinfo', '/contratoinfo'],
+      description: '[Contracts] Shows a contract\'s details',
+      usage: '/contractinfo <id>',
       handler: async (actorId, args) => {
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoinfo <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractinfo <id>');
         const contrato = await getContract(contractId);
-        if (!contrato) return _notify(actorId, 'Contrato não encontrado.');
+        if (!contrato) return _notify(actorId, 'Contract not found.');
         return _notify(
           actorId,
           `#${contrato.id} [${contrato.category}] ${contrato.title} — ${contrato.reward} septims — status: ${contrato.status}`

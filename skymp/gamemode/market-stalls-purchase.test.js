@@ -253,7 +253,7 @@ describe('buyItem — tudo numa transacao so', () => {
     assert.equal(ledgerOuro.length, 4, 'o replay nao grava um segundo conjunto de pernas');
     assert.equal(ledgerItem.length, 1);
     assert.equal(vendas.length, 1);
-    assert.ok(notificacoes.some(n => /ja havia sido confirmada/i.test(n.message)));
+    assert.ok(notificacoes.some(n => /was already confirmed/i.test(n.message)));
   });
 });
 
@@ -268,7 +268,7 @@ describe('buyItem — recusa sem deixar rastro parcial', () => {
     assert.equal(ledgerOuro.length, 0, 'ledger nao registra o que nao aconteceu');
     assert.equal(saldos[VENDEDOR_CHAR], 0, 'vendedor nao pode ser creditado');
     assert.ok(
-      notificacoes.some(n => /insuficiente/i.test(n.message)),
+      notificacoes.some(n => /insufficient/i.test(n.message)),
       'o comprador precisa saber que o ouro nao bastou'
     );
   });
@@ -280,7 +280,7 @@ describe('buyItem — recusa sem deixar rastro parcial', () => {
 
     assert.ok(eventos.includes('rollback'));
     assert.equal(ledgerOuro.length, 0);
-    assert.ok(notificacoes.some(n => /propria barraca/i.test(n.message)));
+    assert.ok(notificacoes.some(n => /your own stall/i.test(n.message)));
   });
 
   it('item indisponivel (barraca suspensa) e recusado', async () => {
@@ -315,6 +315,6 @@ describe('buyItem — erro interno nao vaza pro jogador', () => {
       !/Table|skymp_rp|doesn't exist/i.test(paraOJogador),
       'nome de tabela e coluna nao podem chegar na tela de quem clicou em comprar'
     );
-    assert.ok(/nao foi possivel/i.test(paraOJogador), 'ainda assim o jogador precisa saber que falhou');
+    assert.ok(/could not/i.test(paraOJogador), 'ainda assim o jogador precisa saber que falhou');
   });
 });

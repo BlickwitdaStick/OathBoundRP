@@ -346,7 +346,7 @@ describe('Fluxo Tarefa 13: rendição -> roubo -> revista -> confisco', () => {
     await governance.issueWarrant(OFFICER_ACTOR, THIEF_ACTOR, 'minor', 'suspeita de roubo');
     await governance.requestSearch(OFFICER_ACTOR, THIEF_ACTOR, 'revista de rotina');
 
-    const provenanceMsg = notifications.find((n) => n.actorId === OFFICER_ACTOR && /Proveniencia/.test(n.message));
+    const provenanceMsg = notifications.find((n) => n.actorId === OFFICER_ACTOR && /Provenance]/.test(n.message));
     assert.ok(provenanceMsg, 'guarda deveria ter recebido uma notificacao de proveniencia');
     assert.match(provenanceMsg.message, /Balgruuf Pedra-Cinzenta/, 'mensagem deve nomear o dono original, nao rotular o ladrao');
     assert.doesNotMatch(provenanceMsg.message, /ladr[aã]o/i, 'a UI nao deve emitir veredito ("ele e ladrao") — so o fato de proveniencia');

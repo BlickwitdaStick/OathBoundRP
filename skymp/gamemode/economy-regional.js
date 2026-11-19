@@ -106,19 +106,19 @@ async function sellToMarket(actorId, characterId, baseId, qty = 1, idempotencyKe
     result = await regionalMarketTransactions.sell({ actorId, characterId, holdId, baseId, count: qty, idempotencyKey });
   } catch (err) {
     console.error(`[economy-regional] Falha atomica na venda em ${holdId}:`, err.message);
-    const message = /Estoque insuficiente|não possui item/i.test(err.message)
-      ? 'Voce nao tem itens suficientes.'
-      : 'Falha tecnica: a venda nao foi concluida.';
+    const message = /Insufficient stock|does not own item/i.test(err.message)
+      ? 'You do not have enough items.'
+      : 'Technical failure: the sale was not completed.';
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [message]);
     return false;
   }
   if (!result.ok) {
     const messages = {
-      invalid_character: 'Personagem invalido.', invalid_item: 'ID invalido.', invalid_count: 'Quantidade invalida.',
-      invalid_idempotency_key: 'Solicitacao invalida. Tente novamente.', invalid_hold: 'Mercado invalido.',
-      hold_not_found: 'Mercado indisponivel nesta cidade.'
+      invalid_character: 'Invalid character.', invalid_item: 'Invalid ID.', invalid_count: 'Invalid quantity.',
+      invalid_idempotency_key: 'Invalid request. Try again.', invalid_hold: 'Invalid market.',
+      hold_not_found: 'Market unavailable in this city.'
     };
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [messages[result.code] || 'Venda recusada.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [messages[result.code] || 'Sale refused.']);
     return false;
   }
   if (!result.replayed) await refreshCacheAfterCommit('venda');
@@ -126,8 +126,8 @@ async function sellToMarket(actorId, characterId, baseId, qty = 1, idempotencyKe
   if (typeof mp !== 'undefined') {
     mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
       result.replayed
-        ? `Venda de ${qty}x item ja havia sido confirmada.`
-        : `Vendeu ${qty}x item por ${result.net}g (imposto: ${result.tax}g para ${holdCache[holdId]?.name || holdId}).`
+        ? `Sale of ${qty}x item was already confirmed.`
+        : `Sold ${qty}x item for ${result.net}g (tax: ${result.tax}g to ${holdCache[holdId]?.name || holdId}).`
     ]);
   }
   console.log(`[economy-regional] Char ${characterId} sold ${qty}x 0x${baseId.toString(16)} for ${result.net}g (+${result.tax}g tax) in ${holdId}${result.replayed ? ' (replay)' : ''}`);
@@ -144,24 +144,24 @@ async function buyFromMarket(actorId, characterId, baseId, qty = 1, idempotencyK
     result = await regionalMarketTransactions.buy({ actorId, characterId, holdId, baseId, count: qty, idempotencyKey });
   } catch (err) {
     console.error(`[economy-regional] Falha atomica na compra em ${holdId}:`, err.message);
-    const message = /Ouro insuficiente/i.test(err.message) ? 'Ouro insuficiente.' : 'Falha tecnica: a compra nao foi concluida.';
+    const message = /Insufficient gold/i.test(err.message) ? 'Insufficient gold.' : 'Technical failure: the purchase was not completed.';
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [message]);
     return false;
   }
   if (!result.ok) {
     const messages = {
-      invalid_character: 'Personagem invalido.', invalid_item: 'ID invalido.', invalid_count: 'Quantidade invalida.',
-      invalid_idempotency_key: 'Solicitacao invalida. Tente novamente.', invalid_hold: 'Mercado invalido.',
-      out_of_stock: 'Item indisponivel neste mercado.'
+      invalid_character: 'Invalid character.', invalid_item: 'Invalid ID.', invalid_count: 'Invalid quantity.',
+      invalid_idempotency_key: 'Invalid request. Try again.', invalid_hold: 'Invalid market.',
+      out_of_stock: 'Item unavailable in this market.'
     };
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [messages[result.code] || 'Compra recusada.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [messages[result.code] || 'Purchase refused.']);
     return false;
   }
   if (!result.replayed) await refreshCacheAfterCommit('compra');
 
   if (typeof mp !== 'undefined') {
     mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-      result.replayed ? `Compra de ${qty}x item ja havia sido confirmada.` : `Comprou ${qty}x item por ${result.gross}g.`
+      result.replayed ? `Purchase of ${qty}x item was already confirmed.` : `Bought ${qty}x item for ${result.gross}g.`
     ]);
   }
   return true;
@@ -177,7 +177,7 @@ async function showMarketInfo(actorId, characterId) {
 
   const prices = Object.values(pricesCache[holdId] || {}).slice(0, 5);
   if (prices.length === 0) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Mercado sem itens registrados.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['This market has no registered items.']);
     return;
   }
 
@@ -185,7 +185,7 @@ async function showMarketInfo(actorId, characterId) {
     const base = getBaseValue(p);
     const buy = getDynamicBuyPrice(p.stock, base);
     const sell = getDynamicSellPrice(p.stock, base);
-    return `0x${p.base_id.toString(16)}: compra=${buy}g, venda=${sell}g (estoque:${p.stock})`;
+    return `0x${p.base_id.toString(16)}: buy=${buy}g, sell=${sell}g (stock:${p.stock})`;
   }).join(' | ');
   if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`[${hold.name}] ${summary}`]);
 }
@@ -212,18 +212,18 @@ async function withdrawHoldTreasury(actorId, characterId, amount, idempotencyKey
     });
   } catch (err) {
     console.error(`[economy-regional] Falha atomica no saque do hold ${holdId}:`, err.message);
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Falha tecnica: nenhum ouro foi transferido.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Technical failure: no gold was transferred.']);
     return false;
   }
 
   if (!result.ok) {
     const messages = {
-      invalid_amount: 'Valor invalido.',
-      invalid_idempotency_key: 'Solicitacao invalida. Tente novamente.',
-      hold_not_found: 'Hold desconhecido.',
-      no_ruling_faction: 'Esta cidade nao tem um lorde.',
-      not_ruling_leader: 'Apenas o Lorde desta cidade pode sacar os impostos.',
-      insufficient_treasury: `Tesouro local insuficiente${result.treasury !== undefined ? `: ${result.treasury}g.` : '.'}`
+      invalid_amount: 'Invalid amount.',
+      invalid_idempotency_key: 'Invalid request. Try again.',
+      hold_not_found: 'Unknown hold.',
+      no_ruling_faction: 'This city has no lord.',
+      not_ruling_leader: 'Only the Lord of this city can withdraw taxes.',
+      insufficient_treasury: `Insufficient local treasury${result.treasury !== undefined ? `: ${result.treasury}g.` : '.'}`
     };
     if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [messages[result.code] || 'Transferencia recusada.']);
     return false;
@@ -232,8 +232,8 @@ async function withdrawHoldTreasury(actorId, characterId, amount, idempotencyKey
   if (!result.replayed) await refreshCacheAfterCommit('saque institucional');
   if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
     result.replayed
-      ? `Transferencia ${result.amount}g ja havia sido confirmada.`
-      : `Voce transferiu ${result.amount}g da cidade para o cofre da faccao.`
+      ? `Transfer of ${result.amount}g was already confirmed.`
+      : `You transferred ${result.amount}g from the city to the faction vault.`
   ]);
   console.log(`[economy-regional] Lord ${characterId} withdrew ${result.amount}g from ${holdId} to faction ${result.factionId}${result.replayed ? ' (replay)' : ''}.`);
   return true;
@@ -251,7 +251,7 @@ async function setTaxRate(actorId, holdId, rate) {
   if (!admin.hasPermission(actorId, 'set_gold')) return;
   await db.query('UPDATE holds SET tax_rate = ? WHERE id = ?', [rate, holdId]);
   await loadCache();
-  if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Imposto de ${holdId} definido para ${(rate * 100).toFixed(1)}%.`]);
+  if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Tax for ${holdId} set to ${(rate * 100).toFixed(1)}%.`]);
   const ch = commands.getActiveCharacterData(actorId);
   await admin.auditLog(ch?.accountId, null, 'economy:setTax', `hold=${holdId} rate=${rate}`);
 }
@@ -275,11 +275,11 @@ async function getInteractionSections(actorId, targetActorId) {
 
   return [{
     id: 'npc_market',
-    label: `Mercado ${holdName}`,
+    label: `${holdName} Market`,
     actions: [
-      { action: 'npc.market_view', label: 'Ver Precos' },
-      { action: 'npc.market_buy', label: 'Comprar Item' },
-      { action: 'npc.market_sell', label: 'Vender Item' }
+      { action: 'npc.market_view', label: 'View Prices' },
+      { action: 'npc.market_buy', label: 'Buy Item' },
+      { action: 'npc.market_sell', label: 'Sell Item' }
     ]
   }];
 }
@@ -296,13 +296,13 @@ async function handleInteractionAction(actorId, action, payload = {}) {
       return showMarketInfo(actorId, ch.characterId);
     case 'npc.market_buy':
       if (!baseId || !qty || qty > 100) {
-        if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['ID Invalido.']);
+        if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Invalid ID.']);
         return;
       }
       return buyFromMarket(actorId, ch.characterId, baseId, qty, payload.requestId);
     case 'npc.market_sell':
       if (!baseId || !qty || qty > 100) {
-        if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['ID Invalido.']);
+        if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Invalid ID.']);
         return;
       }
       return sellToMarket(actorId, ch.characterId, baseId, qty, payload.requestId);

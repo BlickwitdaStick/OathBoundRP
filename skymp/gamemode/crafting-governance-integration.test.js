@@ -318,7 +318,7 @@ describe('Fluxo Assinatura do Artesão: craft assinado -> revista mostra autoria
     await governance.issueWarrant(OFFICER_ACTOR, ARTESAO_ACTOR, 'minor', 'checagem de rotina');
     await governance.requestSearch(OFFICER_ACTOR, ARTESAO_ACTOR, 'revista de rotina');
 
-    const signatureMsg = notifications.find((n) => n.actorId === OFFICER_ACTOR && /Assinatura/.test(n.message));
+    const signatureMsg = notifications.find((n) => n.actorId === OFFICER_ACTOR && /Signature]/.test(n.message));
     assert.ok(signatureMsg, 'guarda deveria ter recebido uma notificação de assinatura');
     assert.match(signatureMsg.message, /Joao Ferreiro/, 'mensagem deve nomear o artesão');
     assert.match(signatureMsg.message, /Para Lydia, com honra/, 'mensagem deve trazer a dedicatória');
