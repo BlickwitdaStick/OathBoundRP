@@ -5,8 +5,8 @@ const commandRegistry = require('./core/command-registry');
 const characterState = require('./core/character-state');
 const inventoryService = require('./inventory-service');
 
-// Cache em memoria dos personagens ativos no servidor
-// Chave: actorId (number), Valor: { characterId, firstName, lastName, accountId, profileId }
+// In-memory cache of the characters active on the server
+// Key: actorId (number), Value: { characterId, firstName, lastName, accountId, profileId }
 const activeCharacters = new Map();
 
 function registerActiveCharacter(actorId, character, accountId, profileId) {
@@ -26,15 +26,15 @@ function getActiveCharacterData(actorId) {
 }
 
 /**
- * actorIds com personagem carregado, agora.
+ * actorIds with a loaded character, right now.
  *
- * O `death-service` responde a mesma pergunta varrendo até 50 profileIds com
- * `mp.getActorsByProfileId` — o que custa uma ida à API por profileId e devolve
- * também quem não tem personagem. Este mapa já sabe a resposta exata e de graça:
- * ele é escrito no login e limpo no `removeActiveCharacter`.
+ * `death-service` answers the same question by sweeping up to 50 profileIds with
+ * `mp.getActorsByProfileId` — which costs one API call per profileId and also returns
+ * whoever has no character. This map already knows the exact answer for free:
+ * it is written on login and cleared in `removeActiveCharacter`.
  *
- * Devolve cópia: quem itera não pode segurar referência para o Map interno, que
- * é mutado por login e logout no meio de qualquer laço.
+ * Returns a copy: whoever iterates must not hold a reference to the internal Map, which
+ * is mutated by login and logout in the middle of any loop.
  */
 function listActiveActorIds() {
   return [...activeCharacters.keys()];
@@ -57,54 +57,54 @@ function removeActiveCharacter(actorId) {
     characterState.cleanup(char.characterId);
     inventoryService.clearSyncCache(char.characterId);
 
-    // O staffCache do admin-service e chaveado por actorId, nao por conta — e o
-    // SkyMP reaproveita actorId entre sessoes. Sem limpar aqui, o cargo ficava
-    // preso ao slot: quem entrasse depois no mesmo actorId herdava `ban`,
-    // `set_gold` e `retire_character` de um admin que ja tinha saido.
-    // `registerStaffRole` so e chamado no login (whitelist.js), entao nada
-    // reescrevia a entrada obsoleta pra um jogador comum.
+    // admin-service's staffCache is keyed by actorId, not by account — and
+    // SkyMP reuses actorIds across sessions. Without clearing it here, the role stayed
+    // stuck to the slot: whoever later took the same actorId inherited `ban`,
+    // `set_gold` and `retire_character` from an admin who had already left.
+    // `registerStaffRole` is only called on login (whitelist.js), so nothing
+    // rewrote the stale entry for a regular player.
     //
-    // require preguicoso pelo mesmo motivo dos handlers de staff abaixo:
-    // admin-service requer este modulo no topo, entao importar la em cima
-    // fecharia o ciclo.
+    // Lazy require for the same reason as the staff handlers below:
+    // admin-service requires this module at the top, so importing it up there
+    // would close the cycle.
     require('./admin-service').removeStaffRole(actorId);
 
-    // Mesma classe de problema, mesmo motivo de require preguicoso
-    // (death-service requer este modulo no topo): `_lastHealth` guarda a ultima
-    // leitura de vida por actorId, e o slot reaproveitado fazia o primeiro tick
-    // do jogador seguinte virar um `damage_spike` falso no contexto de morte —
-    // evidencia de RDM contra quem nao levou golpe nenhum. Ver a explicacao
-    // completa em death-service.cleanup().
+    // Same class of problem, same reason for the lazy require
+    // (death-service requires this module at the top): `_lastHealth` keeps the last
+    // health reading per actorId, and the reused slot made the next player's first tick
+    // become a fake `damage_spike` in the death context —
+    // RDM evidence against someone who never took a hit. See the full
+    // explanation in death-service.cleanup().
     require('./death-service').cleanup(actorId);
 
-    // A alma em cache e chaveada por characterId, entao nao sofre do
-    // reaproveitamento de slot — mas cache que so cresce e vazamento, e reler no
-    // proximo login custa uma query. Atras do isEnabled porque o soul-service
-    // lanca no boot quando falta SOUL_SECRET: com a flag desligada, nem o
-    // require acontece.
+    // The cached soul is keyed by characterId, so it does not suffer from
+    // slot reuse — but a cache that only grows is a leak, and rereading it on the
+    // next login costs one query. Behind isEnabled because soul-service
+    // throws at boot when SOUL_SECRET is missing: with the flag off, not even the
+    // require happens.
     if (require('./core/module-registry').isEnabled('soul')) {
       require('./soul-service').cleanup(char.characterId);
     }
 
     activeCharacters.delete(actorId);
 
-    // Assinantes registrados por módulos que podem estar desligados.
+    // Subscribers registered by modules that may be turned off.
     //
-    // Os `require` preguiçosos acima são a forma antiga, e ela funciona porque
-    // aqueles cinco módulos ou são core ou têm `isEnabled` para consultar. Um
-    // módulo `lab` sem esse tratamento — `trade` é o primeiro — não pode entrar
-    // naquela lista: `commands.js` passaria a conhecer por nome fixo um serviço
-    // que o `module-registry` talvez não tenha ligado, que é o acoplamento que
-    // o `governance-service` cita como a pior ideia possível.
+    // The lazy `require`s above are the old way, and it works because
+    // those five modules are either core or have `isEnabled` to check. A
+    // `lab` module without that treatment — `trade` is the first — cannot go into
+    // that list: `commands.js` would come to know by fixed name a service
+    // the `module-registry` may not have turned on, which is the coupling
+    // `governance-service` cites as the worst possible idea.
     //
-    // Aqui a seta se inverte, pelo mesmo motivo do Interaction Framework: quem
-    // precisa saber da desconexão assina no `initialize()` e é removido no
-    // `shutdown()`. `commands.js` não sabe quem são.
+    // Here the arrow is reversed, for the same reason as the Interaction Framework: whoever
+    // needs to know about disconnects subscribes in `initialize()` and is removed in
+    // `shutdown()`. `commands.js` does not know who they are.
     for (const assinante of _characterRemovedSubscribers) {
       try {
         assinante(actorId, char);
       } catch (err) {
-        console.error('[commands] Assinante de desconexao falhou:', err.message);
+        console.error('[commands] Disconnect subscriber failed:', err.message);
       }
     }
   }
@@ -114,11 +114,11 @@ function removeActiveCharacter(actorId) {
 const _characterRemovedSubscribers = new Set();
 
 /**
- * Assina a saída de um personagem. Devolve a função de cancelamento.
+ * Subscribes to a character leaving. Returns the unsubscribe function.
  * @param {(actorId: number, character: object) => void} fn
  */
 function onCharacterRemoved(fn) {
-  if (typeof fn !== 'function') throw new Error('[commands] assinante invalido');
+  if (typeof fn !== 'function') throw new Error('[commands] invalid subscriber');
   _characterRemovedSubscribers.add(fn);
   return () => _characterRemovedSubscribers.delete(fn);
 }
@@ -156,12 +156,12 @@ async function logRpChatEvent(event) {
   }
 }
 
-// Envia uma notificação PRIVADA (só a tela do próprio actorId) via o canal
-// browserModal (isVisibleByOwner=true, isVisibleByNeighbors=false — ver
-// phase0-basic.js). Antes disso usava Debug.Notification 'global', que a
-// engine transmite pra TODOS os clientes conectados — vazando ficha
-// criminal, inventário revistado e mensagens de staff pra tela de todo
-// mundo. Renderizado como toast pela UI (index.html: handleServerModal).
+// Sends a PRIVATE notification (only the actorId's own screen) through the
+// browserModal channel (isVisibleByOwner=true, isVisibleByNeighbors=false — see
+// phase0-basic.js). Before this it used the 'global' Debug.Notification, which the
+// engine broadcasts to ALL connected clients — leaking criminal records,
+// searched inventories and staff messages onto everyone's
+// screen. Rendered as a toast by the UI (index.html: handleServerModal).
 function sendNotification(actorId, message) {
   if (typeof mp === 'undefined') return;
   try {
@@ -172,12 +172,12 @@ function sendNotification(actorId, message) {
 }
 
 /**
- * Notificação de escolha binária (aceitar/recusar), mesmo canal `browserModal`
- * que o toast já usa — PLAYER_ACTION_SHORTCUTS_PLAN.md Fase 5. Este arquivo só
- * entrega o convite pra CEF desenhar os dois botões; o que "aceitar" significa
- * é de quem chamou (o `acceptEvent`/`denyEvent` do payload é o `uiEvent.type`
- * que a CEF manda de volta ao clicar, e o dono de registrar um handler pra
- * esse prefixo no `core/ui-event-router.js` é o módulo que chamou isto, nunca
+ * A binary-choice notification (accept/refuse), the same `browserModal` channel
+ * the toast already uses — PLAYER_ACTION_SHORTCUTS_PLAN.md Phase 5. This file only
+ * delivers the invitation for the CEF to draw the two buttons; what "accept" means
+ * belongs to the caller (the payload's `acceptEvent`/`denyEvent` is the `uiEvent.type`
+ * the CEF sends back on click, and registering a handler for
+ * that prefix in `core/ui-event-router.js` is the job of the module that called this, never
  * `commands.js`).
  * @param {number} actorId
  * @param {{title: string, message: string, acceptLabel: string, denyLabel: string, acceptEvent: string, denyEvent: string, eventData?: object}} payload
@@ -191,7 +191,7 @@ function sendChoice(actorId, payload) {
   }
 }
 
-// Transmite a mensagem para o autor e vizinhos dentro de um raio de proximidade
+// Broadcasts the message to the author and neighbors within a proximity radius
 function renderMessageForRecipient(message, recipientActorId) {
   return typeof message === 'function' ? message(recipientActorId) : message;
 }
@@ -200,12 +200,12 @@ function broadcastProximityMessage(sourceActorId, message, radius = 1500) {
   const logMessage = typeof message === 'function' ? message(sourceActorId) : message;
   console.log(`[chat-log] Broadcast: "${logMessage}"`);
   
-  // 1. Mostrar para o próprio autor
+  // 1. Show it to the author themselves
   sendNotification(sourceActorId, renderMessageForRecipient(message, sourceActorId));
 
   if (typeof mp === 'undefined') return;
 
-  // 2. Mostrar para os vizinhos
+  // 2. Show it to the neighbors
   try {
     const neighbors = mp.get(sourceActorId, 'neighbors') || [];
     const sourceLoc = mp.get(sourceActorId, 'locationalData');
@@ -225,7 +225,7 @@ function broadcastProximityMessage(sourceActorId, message, radius = 1500) {
 
           const neighborPos = neighborLoc.pos;
           
-          // Distância Euclidiana 3D
+          // 3D Euclidean distance
           const dx = sourcePos[0] - neighborPos[0];
           const dy = sourcePos[1] - neighborPos[1];
           const dz = sourcePos[2] - neighborPos[2];
@@ -258,15 +258,15 @@ function parseActorId(raw) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comandos CORE (sempre ativos, independente de módulos)
+// CORE commands (always active, regardless of modules)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Alcance de uma apresentacao, em unidades do Skyrim.
+ * Range of an introduction, in Skyrim units.
  *
- * O mesmo do `broadcastProximityMessage` que anuncia a cena logo abaixo, e
- * precisa continuar sendo: apresentar-se de uma distancia em que ninguem le o
- * `* fulano se apresenta` seria uma apresentacao sem cena.
+ * The same as the `broadcastProximityMessage` that announces the scene right below, and
+ * it has to stay that way: introducing yourself from a distance at which nobody reads
+ * `* so-and-so introduces themselves` would be an introduction without a scene.
  */
 const INTRODUCE_RANGE = 450;
 
@@ -336,32 +336,32 @@ async function handleAliasCommand(actorId, args) {
 }
 
 /**
- * `identity.introduce` no Interaction Framework.
+ * `identity.introduce` in the Interaction Framework.
  *
- * ─── Por que esta interação existe ──────────────────────────────────────────
+ * ─── Why this interaction exists ────────────────────────────────────────────
  *
- * Até 13/08/2026 "Apresentar-se" era um botão que a **CEF** inventava:
- * `DEFAULT_INTERACTION_SECTIONS` em `skymp/ui/index.html` acrescentava três
- * ações às do servidor, incondicionalmente, para todo alvo. Duas delas eram
- * botões mortos (`/trade` e `/groupinvite`, que não existem) e foram removidas;
- * esta era a única viva, e continuava sendo uma ação que aparecia sem o
- * servidor ter autorizado nada.
+ * Until 2026-08-13 "Introduce yourself" was a button the **CEF** made up:
+ * `DEFAULT_INTERACTION_SECTIONS` in `skymp/ui/index.html` added three
+ * actions to the server's, unconditionally, for every target. Two of them were
+ * dead buttons (`/trade` and `/groupinvite`, which did not exist) and were removed;
+ * this was the only live one, and it was still an action that showed up without the
+ * server having authorized anything.
  *
- * Registrando-a aqui, a lista do menu passa a vir **inteira** do servidor — que
- * é a condição para o `canSee` significar alguma coisa. Ver
+ * By registering it here, the menu list comes **entirely** from the server — which
+ * is the condition for `canSee` to mean anything. See
  * `docs/research/CORE_FRAMEWORK_AUDIT.md` §7.
  *
- * ─── O que o `canSee` esconde, e por quê ────────────────────────────────────
+ * ─── What `canSee` hides, and why ───────────────────────────────────────────
  *
- * A ação some quando o alvo **já conhece** o personagem. Apresentar-se duas
- * vezes não é erro nem exploit — `upsertKnownIdentity` é idempotente —, mas é
- * um botão que não faz nada, e um menu de RP que oferece gestos vazios ensina o
- * jogador a ignorá-lo.
+ * The action disappears when the target **already knows** the character. Introducing yourself twice
+ * is neither an error nor an exploit — `upsertKnownIdentity` is idempotent —, but it is
+ * a button that does nothing, and an RP menu that offers empty gestures teaches the
+ * player to ignore it.
  *
- * O alcance é o mesmo do `broadcastProximityMessage` que o comando já usa para
- * anunciar a cena (450). Os dois números precisam ser o mesmo: apresentar-se de
- * uma distância em que ninguém vê o `* fulano se apresenta` seria uma
- * apresentação sem cena.
+ * The range is the same as the `broadcastProximityMessage` the command already uses to
+ * announce the scene (450). Both numbers must be the same: introducing yourself from
+ * a distance at which nobody sees `* so-and-so introduces themselves` would be an
+ * introduction without a scene.
  */
 function registerIdentityInteractions() {
   const interactionRegistry = require('./core/interaction-registry');
@@ -376,14 +376,14 @@ function registerIdentityInteractions() {
     label: 'Introduce yourself',
     order: 10,
     distance: INTRODUCE_RANGE,
-    // Apresentar-se é fala: quem está algemado, abatido ou morto não o faz.
-    // A `action-policy` já responde isso pela ação `introduce`, registrada lá
-    // desde sempre — reusar é o que evita uma segunda tabela de estados.
+    // Introducing yourself is speech: whoever is restrained, downed or dead does not do it.
+    // `action-policy` already answers that through the `introduce` action, registered there
+    // since forever — reusing it is what avoids a second state table.
     policyAction: 'introduce',
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
-    // Sincrono e de graca: le o cache em memoria do observador, carregado no
-    // login dele. Um `canSee` que fosse ao banco custaria uma query por acao
-    // por mira — exatamente o que o §22 do pedido manda nao fazer.
+    // Synchronous and free: reads the observer's in-memory cache, loaded at their
+    // login. A `canSee` that went to the DB would cost one query per action
+    // per aim — exactly what §22 of the request says not to do.
     canSee: ctx => !identity.getKnownDisplayName(ctx.target.characterId, ctx.characterId),
     execute: async ctx => {
       await handleIntroduceCommand(ctx.actorId, `0x${ctx.target.actorId.toString(16)}`);
@@ -392,7 +392,7 @@ function registerIdentityInteractions() {
   });
 }
 
-// Comandos de Staff (CORE — disponíveis independente de módulos)
+// Staff commands (CORE — available regardless of modules)
 function registerCoreCommands() {
   registerIdentityInteractions();
 
@@ -404,12 +404,12 @@ function registerCoreCommands() {
   }, {
     module: 'identity', phase: 'core',
     description: 'Introduces your character to someone else', usage: '/introduce <actorId>',
-    // Tarefa 11 (Legacy Command Cleanup): redundante desde que virou
-    // `identity.introduce` no Interaction Framework (linha 352 deste
-    // arquivo) — some do menu de interação quando o alvo já conhece o
-    // personagem, e o prompt `[E]` chega no mesmo lugar. O comando continua
-    // registrado (fallback de rede ruim/staff), só não aparece num /help
-    // futuro que passe `playerFacing: true`.
+    // Task 11 (Legacy Command Cleanup): redundant since it became
+    // `identity.introduce` in the Interaction Framework (earlier in this
+    // file) — it disappears from the interaction menu when the target already knows the
+    // character, and the `[E]` prompt lands in the same place. The command stays
+    // registered (bad-network/staff fallback), it just does not show up in a future /help
+    // that passes `playerFacing: true`.
     hidden: true
   });
 
@@ -462,10 +462,10 @@ function registerCoreCommands() {
     }
   }, { module: 'admin', phase: 'core', description: '[Staff] Sets a player\'s gold', usage: '/setgold <actorId> <amount>' });
 
-  // Alias técnico em inglês pelo mesmo padrão de /apresentar → /introduce.
-  // `parseActorId` (e não `parseInt(args, 16)` como os outros de staff) porque
-  // este é o comando que a staff digita copiando um id de um log ou do painel,
-  // onde ele aparece com o prefixo `0x`.
+  // The English name comes first, the Portuguese one is kept as an alias.
+  // `parseActorId` (and not `parseInt(args, 16)` like the other staff ones) because
+  // this is the command staff type by copying an id from a log or the panel,
+  // where it shows up with the `0x` prefix.
   commandRegistry.register(['/revealidentity', '/revelaridentidade'], (actorId, args) => {
     const targetActorId = parseActorId(args);
     if (!Number.isFinite(targetActorId)) {
@@ -473,12 +473,12 @@ function registerCoreCommands() {
       return;
     }
     require('./admin-service').revealIdentity(actorId, targetActorId).catch(err => {
-      console.error('[identity] Falha ao revelar identidade:', err.message);
+      console.error('[identity] Failed to reveal identity:', err.message);
       sendNotification(actorId, '[Staff] Could not reveal the identity.');
     });
   }, { module: 'admin', phase: 'core', description: '[Staff] Reveals a character\'s real name (audited)', usage: '/revealidentity <actorId>' });
 
-  // /status — diagnóstico de estado do personagem (staff)
+  // /status — character state diagnostics (staff)
   commandRegistry.register('/status', (actorId, args) => {
     const charData = getActiveCharacterData(actorId);
     if (!charData) return;
@@ -489,18 +489,18 @@ function registerCoreCommands() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Handler principal de input do chat
+// Main chat input handler
 // ─────────────────────────────────────────────────────────────────────────────
 
 function handleChatInput(actorId, text) {
   if (!text || typeof text !== 'string') return;
 
-  // 1. Tentar o rp-chat-service (comandos /falar, /me, /do, etc.)
+  // 1. Try rp-chat-service (/say, /me, /do commands, etc.)
   if (rpChat.handleChatInput(actorId, text)) {
     return;
   }
 
-  // 2. Tentar o command-registry (comandos de módulos)
+  // 2. Try the command-registry (module commands)
   if (text.startsWith('/')) {
     const parts = text.split(' ');
     const command = parts[0].toLowerCase();
@@ -513,12 +513,12 @@ function handleChatInput(actorId, text) {
     return;
   }
 
-  // 3. Chat padrão (falar no local)
+  // 3. Default chat (local speech)
   const charName = getCharacterName(actorId);
   broadcastProximityMessage(actorId, `${charName} says: ${text}`, 1200);
 }
 
-// Registrar comandos CORE ao carregar o módulo
+// Register the CORE commands when the module loads
 registerCoreCommands();
 
 module.exports = {
@@ -526,16 +526,16 @@ module.exports = {
   removeActiveCharacter,
   getActiveCharacterData,
 
-  // Apelido de `getActiveCharacterData`, e não decoração: `phase0-basic.js`
-  // passa `commands.getCharacterData` para `createTargetResolvers` e para
-  // `createInteractionService` desde 13/08/2026, e o nome nunca esteve neste
-  // objeto. `createTargetResolvers` lança quando o recebe `undefined`, e o
-  // lançamento acontece no corpo do módulo — ou seja, **o servidor não subia**,
-  // e nenhum teste pegava porque nenhum deles carrega `phase0-basic.js`.
+  // An alias of `getActiveCharacterData`, not decoration: `phase0-basic.js`
+  // passes `commands.getCharacterData` to `createTargetResolvers` and to
+  // `createInteractionService` since 2026-08-13, and the name was never on this
+  // object. `createTargetResolvers` throws when it receives `undefined`, and the
+  // throw happens in the module body — meaning **the server did not start**,
+  // and no test caught it because none of them loads `phase0-basic.js`.
   //
-  // O apelido, e não a renomeação: `getActiveCharacterData` é o nome usado por
-  // uma dúzia de chamadores e por vários testes, e o core prefere `getCharacter`
-  // porque para ele não existe "ativo" — existe "o servidor sabe quem é".
+  // The alias, and not a rename: `getActiveCharacterData` is the name used by
+  // a dozen callers and several tests, and the core prefers `getCharacter`
+  // because for it there is no "active" — there is "the server knows who it is".
   getCharacterData: getActiveCharacterData,
 
   getActiveActorByCharacterId,

@@ -1,44 +1,44 @@
 /**
- * trade-service.js — troca entre jogadores, autoritativa no servidor
+ * trade-service.js — trading between players, authoritative on the server
  *
- * ─── O que existia antes ────────────────────────────────────────────────────
+ * ─── What existed before ────────────────────────────────────────────────────
  *
- * 90 linhas que negociavam o **convite** e guardavam `{initiatorId, targetId,
- * status}` num `Map`. Não havia oferta, confirmação, revalidação, transação,
- * timeout nem limpeza em desconexão — e o próprio cabeçalho dizia que a
- * transferência "nunca foi escrita". Ver
+ * 90 lines that negotiated the **invitation** and kept `{initiatorId, targetId,
+ * status}` in a `Map`. There was no offer, confirmation, revalidation, transaction,
+ * timeout or cleanup on disconnect — and the header itself said the
+ * transfer "was never written". See
  * `docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md` §12.
  *
- * ─── A regra que organiza este arquivo ──────────────────────────────────────
+ * ─── The rule that organizes this file ──────────────────────────────────────
  *
- * > **Confirmação é sobre uma oferta específica, não sobre a sessão.**
+ * > **A confirmation is about a specific offer, not about the session.**
  *
- * Toda mudança de oferta incrementa a `version` da sessão e derruba as duas
- * confirmações. Sem isso existe o golpe clássico: A confirma vendo a oferta X,
- * B troca a oferta por Y e confirma, e A é levado a fechar um negócio que nunca
- * viu. É a mesma razão pela qual `canSee` não autoriza nada no Interaction
- * Framework — o que foi mostrado num instante anterior não vale como
- * autorização agora.
+ * Every change to an offer increments the session's `version` and drops both
+ * confirmations. Without that there is the classic scam: A confirms seeing offer X,
+ * B swaps the offer for Y and confirms, and A is led to close a deal they never
+ * saw. It is the same reason `canSee` authorizes nothing in the Interaction
+ * Framework — what was shown at an earlier instant does not count as
+ * authorization now.
  *
- * O commit **revalida tudo do zero** (distância, estado, posse) e move os dois
- * lados numa `inventory.exchange` só. Uma troca em que só uma perna commita é
- * doação.
+ * The commit **revalidates everything from scratch** (distance, state, ownership) and moves both
+ * sides in a single `inventory.exchange`. A trade where only one leg commits is a
+ * donation.
  *
- * ─── Estado: PARKED ─────────────────────────────────────────────────────────
+ * ─── Status: PARKED ─────────────────────────────────────────────────────────
  *
- * Este módulo tem descritor em `phase0-basic.js` atrás de
- * `ENABLE_TRADE_SERVICE`, que nasce `false`. Ele não tem UI CEF: os comandos de
- * chat abaixo são a interface inteira, e `trade.request` é a única interação
- * registrada. Nada disto rodou numa sessão real — mesmo peso que a mesma frase
- * tem no `INTERACTION_FRAMEWORK.md`.
+ * This module has a descriptor in `phase0-basic.js` behind
+ * `ENABLE_TRADE_SERVICE`, which starts `false`. It has no CEF UI: the chat
+ * commands below are the whole interface, and `trade.request` is the only
+ * registered interaction. None of this ran in a real session — the same weight that sentence
+ * carries in `INTERACTION_FRAMEWORK.md`.
  *
- * ─── Ouro ───────────────────────────────────────────────────────────────────
+ * ─── Gold ───────────────────────────────────────────────────────────────────
  *
- * §11 do pedido: ouro em troca **é possível e não está feito**. Quando entrar,
- * entra pelas primitivas `tx.*` do `core/transaction-service` dentro da mesma
- * transação da `exchange` — o que hoje o `core/inventory.js` não expõe, porque
- * expor "mexa em ouro também" numa API de item é como o `economy-service`
- * começou. Ver `docs/gameplay/TRADE_SYSTEM.md` §7.
+ * §11 of the request: gold in trades **is possible and not done**. When it comes in,
+ * it comes through the `tx.*` primitives of `core/transaction-service` inside the same
+ * transaction as the `exchange` — which `core/inventory.js` does not expose today, because
+ * exposing "touch gold too" in an item API is how `economy-service`
+ * started. See `docs/gameplay/TRADE_SYSTEM.md` §7.
  */
 
 const commands = require('./commands');
@@ -50,30 +50,30 @@ const interactionRegistry = require('./core/interaction-registry');
 const MODULE = 'trade';
 
 /**
- * Alcance da troca, em unidades do Skyrim.
+ * Trade range, in Skyrim units.
  *
- * O mesmo de fala normal, pelo motivo do `market-stalls`: quem consegue
- * conversar consegue negociar. Inventar um número aqui repetiria o defeito que
- * `core/proximity-ranges.js` existe por ter consertado.
+ * The same as normal speech, for the same reason as `market-stalls`: whoever can
+ * talk can trade. Inventing a number here would repeat the defect that
+ * `core/proximity-ranges.js` exists for having fixed.
  */
 const TRADE_RANGE = require('./core/proximity-ranges').RANGES.say;
 
-/** Uma troca parada morre. §12 do pedido: timeout é obrigatório. */
+/** A stalled trade dies. §12 of the request: a timeout is mandatory. */
 const SESSION_TTL_MS = 3 * 60 * 1000;
 
-/** Convite não aceito expira antes da sessão: ele é só um toque no ombro. */
+/** An unaccepted invitation expires before the session: it is just a tap on the shoulder. */
 const INVITE_TTL_MS = 45 * 1000;
 
-/** Teto por lado. O `core/inventory` tem o dele (32 no total das duas pernas). */
+/** Cap per side. `core/inventory` has its own (32 in total across both legs). */
 const MAX_ITEMS_PER_SIDE = 12;
 
 /**
- * A máquina de estados.
+ * The state machine.
  *
- * `COMMITTING` existe e não é decorativo: é ele que impede que um segundo
- * `/tradeconfirm`, chegando enquanto a transação roda, entre no `exchange` de
- * novo. A idempotência do `core/inventory` já protegeria o banco — este estado
- * protege a **sessão**, que é memória, e onde o `requestId` não alcança.
+ * `COMMITTING` exists and is not decorative: it is what stops a second
+ * `/tradeconfirm`, arriving while the transaction runs, from entering the `exchange`
+ * again. `core/inventory`'s idempotency would already protect the DB — this state
+ * protects the **session**, which is memory, where the `requestId` does not reach.
  */
 const STATES = Object.freeze({
   REQUESTED: 'REQUESTED',
@@ -85,13 +85,13 @@ const STATES = Object.freeze({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Registro de sessões
+// Session registry
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** @type {Map<string, object>} sessionId → sessão */
+/** @type {Map<string, object>} sessionId → session */
 const _sessions = new Map();
 
-/** @type {Map<number, string>} actorId → sessionId. Índice, não autoridade. */
+/** @type {Map<number, string>} actorId → sessionId. An index, not an authority. */
 const _byActor = new Map();
 
 function now() {
@@ -103,13 +103,13 @@ function notify(actorId, message) {
 }
 
 /**
- * A sessão viva de um ator, já expirando o que passou do prazo.
+ * An actor's live session, already expiring whatever is past its deadline.
  *
- * A expiração acontece **na leitura**, e não num `setInterval`. Um timer teria
- * que ser desligado no `shutdown` do módulo e é mais uma coisa que sobrevive ao
- * desligamento; a expiração preguiçosa não tem ciclo de vida próprio. O custo é
- * que uma sessão abandonada ocupa memória até alguém tocar nela — e para isso
- * existe o `sweep()`, chamado no `shutdown`.
+ * Expiry happens **on read**, not in a `setInterval`. A timer would have
+ * to be turned off in the module's `shutdown` and is one more thing that survives
+ * shutdown; lazy expiry has no lifecycle of its own. The cost is
+ * that an abandoned session takes up memory until someone touches it — and that is what
+ * `sweep()` is for, called on `shutdown`.
  *
  * @param {number} actorId
  * @returns {object|null}
@@ -134,7 +134,7 @@ function sessionOf(actorId) {
   return session;
 }
 
-/** Encerra a sessão e solta os dois índices. */
+/** Ends the session and releases both indexes. */
 function finish(session, state) {
   session.state = state;
   _sessions.delete(session.id);
@@ -142,7 +142,7 @@ function finish(session, state) {
   if (_byActor.get(session.b.actorId) === session.id) _byActor.delete(session.b.actorId);
 }
 
-/** O lado da sessão que corresponde a este ator, e o outro. */
+/** The session side that belongs to this actor, and the other one. */
 function sidesOf(session, actorId) {
   return session.a.actorId === actorId
     ? { eu: session.a, outro: session.b }
@@ -150,11 +150,11 @@ function sidesOf(session, actorId) {
 }
 
 /**
- * Qualquer mudança de oferta invalida as duas confirmações. §10 do pedido.
+ * Any change to an offer invalidates both confirmations. §10 of the request.
  *
- * A `version` também vai no `requestId` do commit: se alguém conseguisse
- * disparar dois commits de versões diferentes, eles teriam chaves de
- * idempotência diferentes — e é por isso que o estado `COMMITTING` existe.
+ * The `version` also goes into the commit's `requestId`: if someone managed to
+ * fire two commits for different versions, they would have different
+ * idempotency keys — and that is why the `COMMITTING` state exists.
  */
 function touch(session) {
   session.version += 1;
@@ -168,7 +168,7 @@ function touch(session) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A solicita troca com B.
+ * A asks B to trade.
  *
  * @param {number} actorId
  * @param {number} targetActorId
@@ -231,7 +231,7 @@ function acceptTrade(actorId) {
     notify(actorId, 'No pending trade invitation.');
     return false;
   }
-  // Quem convidou não aceita o próprio convite.
+  // Whoever invited cannot accept their own invitation.
   if (session.a.actorId === actorId) {
     notify(actorId, 'Waiting for the other person to accept.');
     return false;
@@ -245,13 +245,13 @@ function acceptTrade(actorId) {
 }
 
 /**
- * Adiciona (ou remove, com quantidade negativa) item da própria oferta.
+ * Adds (or removes, with a negative quantity) an item to/from one's own offer.
  *
- * A posse **não é conferida aqui como autoridade** — ela é conferida no commit,
- * dentro da transação, pelo `FOR UPDATE`. A checagem abaixo existe só para dar
- * a mensagem certa na hora certa: ofertar o que não se tem e descobrir três
- * minutos depois, no fechamento, é o tipo de silêncio que faz jogador desistir
- * do sistema.
+ * Ownership **is not checked here as an authority** — it is checked at commit,
+ * inside the transaction, by the `FOR UPDATE`. The check below exists only to give
+ * the right message at the right time: offering what you do not have and finding out three
+ * minutes later, at closing, is the kind of silence that makes players give up
+ * on the system.
  */
 async function addItem(actorId, baseId, quantity) {
   const session = sessionOf(actorId);
@@ -297,7 +297,7 @@ async function addItem(actorId, baseId, quantity) {
   return true;
 }
 
-/** Manda a oferta atual para os dois lados. É a UI inteira, por enquanto. */
+/** Sends the current offer to both sides. It is the whole UI, for now. */
 function descrever(session) {
   const linha = (lado) => lado.items.size === 0
     ? '(nothing)'
@@ -310,9 +310,9 @@ function descrever(session) {
 }
 
 /**
- * Confirma a oferta **desta versão**.
+ * Confirms the offer **for this version**.
  *
- * Quando os dois confirmarem a mesma versão, o commit dispara.
+ * When both confirm the same version, the commit fires.
  */
 async function confirmTrade(actorId) {
   const session = sessionOf(actorId);
@@ -340,20 +340,20 @@ async function confirmTrade(actorId) {
 }
 
 /**
- * O fechamento. **Revalida tudo do zero** e move as duas pernas numa transação.
+ * The closing. **Revalidates everything from scratch** and moves both legs in one transaction.
  *
- * O que é revalidado, e por que cada um:
+ * What is revalidated, and why each one:
  *
- * | Revalidação | O que aconteceu entre a confirmação e agora |
+ * | Revalidation | What happened between the confirmation and now |
  * |---|---|
- * | os dois ainda logados | um caiu — `getActiveCharacterData` deixa de responder |
- * | mesmo personagem | um trocou de personagem no mesmo ator |
- * | distância | um andou para longe |
- * | estado (algemado, preso) | a guarda chegou no meio da cena |
- * | posse | vendeu na barraca, largou, craftou com o item |
+ * | both still logged in | one dropped — `getActiveCharacterData` stops answering |
+ * | same character | one switched characters on the same actor |
+ * | distance | one walked away |
+ * | state (restrained, jailed) | the guard arrived in the middle of the scene |
+ * | ownership | sold it at a stall, dropped it, crafted with the item |
  *
- * As quatro primeiras são desta função. A quinta é do `FOR UPDATE` dentro da
- * `exchange`, e é a única que precisa ser — as outras não têm lock possível.
+ * The first four belong to this function. The fifth belongs to the `FOR UPDATE` inside
+ * `exchange`, and it is the only one that has to — the others have no possible lock.
  */
 async function commitTrade(session) {
   session.state = STATES.COMMITTING;
@@ -376,11 +376,11 @@ async function commitTrade(session) {
   if (!alcance.ok) return falhar(alcance.reason || 'you moved too far apart.');
 
   for (const lado of [session.a, session.b]) {
-    // `core/action-policy` é a autoridade sobre "este personagem pode negociar
-    // agora", e `trade` já é uma ação registrada lá desde antes deste arquivo.
-    // Chamar a política em vez de ler `character-state` direto é o que faz
-    // algemado, preso, abatido, morto e zona segura valerem aqui sem que este
-    // arquivo precise conhecer nenhum dos cinco.
+    // `core/action-policy` is the authority on "can this character trade
+    // right now", and `trade` has been a registered action there since before this file.
+    // Calling the policy instead of reading `character-state` directly is what makes
+    // restrained, jailed, downed, dead and safe zones apply here without this
+    // file needing to know any of the five.
     const veredito = actionPolicy.canPerform(lado.characterId, 'trade', {
       actorId: lado.actorId,
       targetActorId: lado === session.a ? session.b.actorId : session.a.actorId
@@ -404,8 +404,8 @@ async function commitTrade(session) {
     });
   }
 
-  // A versão entra na chave: um commit da v3 e outro da v4 são pedidos
-  // diferentes, e nunca devem se deduplicar entre si.
+  // The version goes into the key: a v3 commit and a v4 commit are different
+  // requests, and must never deduplicate each other.
   const resultado = await inventory.exchange({
     legs,
     reason: 'trade',
@@ -425,7 +425,7 @@ async function commitTrade(session) {
   return true;
 }
 
-/** Qualquer um dos dois cancela, a qualquer momento antes do `COMMITTING`. */
+/** Either of the two cancels, at any moment before `COMMITTING`. */
 function cancelTrade(actorId, motivo = 'the trade was cancelled.') {
   const session = sessionOf(actorId);
   if (!session) return false;
@@ -441,13 +441,13 @@ function cancelTrade(actorId, motivo = 'the trade was cancelled.') {
 }
 
 /**
- * Desconexão. **O item nunca esteve em custódia**, então não há nada a
- * devolver: as ofertas são intenção em memória, e a troca só move item no
- * commit. Este é o motivo de a oferta não ser "depositada" numa sessão — um
- * modelo de custódia precisaria de uma tabela e de um caminho de recuperação
- * para item preso numa sessão que morreu com o servidor.
+ * Disconnect. **The item was never in custody**, so there is nothing to
+ * return: the offers are intent in memory, and the trade only moves items on
+ * commit. This is why the offer is not "deposited" into a session — a
+ * custody model would need a table and a recovery path
+ * for items stuck in a session that died with the server.
  *
- * Chamado pelo `initialize()` do módulo, via `commands.removeActiveCharacter`.
+ * Called by the module's `initialize()`, via `commands.removeActiveCharacter`.
  */
 function onDisconnect(actorId) {
   const id = _byActor.get(actorId);
@@ -463,7 +463,7 @@ function onDisconnect(actorId) {
   notify(outro.actorId, 'The other party left. Trade cancelled.');
 }
 
-/** Encerra tudo. Chamado no `shutdown` do módulo. */
+/** Ends everything. Called on the module's `shutdown`. */
 function sweep() {
   for (const session of [..._sessions.values()]) {
     finish(session, STATES.EXPIRED);
@@ -472,15 +472,15 @@ function sweep() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Superfície
+// Surface
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Registra `trade.request` no Interaction Framework.
+ * Registers `trade.request` in the Interaction Framework.
  *
- * Só o convite é interação: o resto da troca acontece dentro de uma sessão que
- * já tem os dois lados, e um menu contextual sobre o outro jogador não é o
- * lugar de "adicionar item à minha oferta".
+ * Only the invitation is an interaction: the rest of the trade happens inside a session that
+ * already has both sides, and a context menu about the other player is not the
+ * place for "add an item to my offer".
  */
 function registerInteractions() {
   interactionRegistry.register({
@@ -494,8 +494,8 @@ function registerInteractions() {
     policyAction: 'trade',
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     idempotent: false,
-    // Some do menu de quem já está numa troca, dos dois lados. Um botão que só
-    // responde "voce ja esta numa troca" ensina o jogador a ignorar o menu.
+    // Disappears from the menu of whoever is already in a trade, on both sides. A button that only
+    // answers "you are already in a trade" teaches the player to ignore the menu.
     canSee: async ctx => !sessionOf(ctx.actorId) && !sessionOf(ctx.target.actorId),
     execute: async ctx => {
       const ok = requestTrade(ctx.actorId, ctx.target.actorId);
@@ -505,17 +505,17 @@ function registerInteractions() {
 }
 
 /**
- * Ponte pro `trade-overlay` da CEF (`index.html`) — mesmo formato de
- * `player-panel-service.js handleUiEvent`. Até 22/08/2026 o botão "Fechar"
- * da overlay chamava `mp.trigger('cef::trade:cancel', {})`, que não tinha
- * NENHUM listener server-side (grep confirmou) — aceitar/confirmar/cancelar
- * dependiam 100% de `/tradeaccept`/`/tradeconfirm`/`/tradecancel`
- * digitados, mesmo com uma UI na tela sugerindo o contrário. Ver
- * `docs/technical/PLAYER_ACTION_SHORTCUTS_PLAN.md` Fase 1.
+ * Bridge to the CEF's `trade-overlay` (`index.html`) — same shape as
+ * `player-panel-service.js handleUiEvent`. Until 2026-08-22 the overlay's "Close"
+ * button called `mp.trigger('cef::trade:cancel', {})`, which had
+ * NO server-side listener (grep confirmed) — accept/confirm/cancel
+ * depended 100% on typed `/tradeaccept`/`/tradeconfirm`/`/tradecancel`,
+ * even with a UI on screen suggesting otherwise. See
+ * `docs/technical/PLAYER_ACTION_SHORTCUTS_PLAN.md` Phase 1.
  *
- * As três funções (`acceptTrade`/`confirmTrade`/`cancelTrade`) já existem e
- * já são o que os comandos de texto chamam — isto não duplica lógica, só
- * dá a ela um segundo chamador.
+ * The three functions (`acceptTrade`/`confirmTrade`/`cancelTrade`) already exist and
+ * are already what the text commands call — this does not duplicate logic, it only
+ * gives it a second caller.
  * @param {number} actorId
  * @param {{type?: string}} uiEvent
  * @returns {Promise<boolean>|boolean}
@@ -601,8 +601,8 @@ module.exports = {
   commandDefs,
   handleUiEvent,
 
-  // Só para teste: a sessão é memória, e o teste precisa envelhecê-la sem
-  // esperar três minutos e inspecionar o estado sem passar pela UI.
+  // Test only: the session is memory, and the test needs to age it without
+  // waiting three minutes and to inspect the state without going through the UI.
   _sessions,
   _sessionOf: sessionOf
 };
