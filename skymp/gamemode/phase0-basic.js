@@ -154,7 +154,7 @@ const interactionService = createInteractionService({
   // é o `governance-service`, não o core.
   checkPermission: async (actorId, permission) => ({
     allowed: admin.hasPermission(actorId, permission),
-    reason: 'Voce nao tem autorizacao para isso.'
+    reason: 'You are not authorized to do that.'
   }),
   audit: async (entrada) => {
     const alvo = entrada.target || {};

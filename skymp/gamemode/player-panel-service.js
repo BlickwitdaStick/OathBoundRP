@@ -120,7 +120,7 @@ async function buildSocialSnapshot(actorId) {
       source: k.source,
       at: k.updated_at
     })),
-    hint: 'Use o menu de interação (clique direito) em outro jogador para negociar, se apresentar ou entrar em grupo.'
+    hint: 'Use the interaction menu (right-click) on another player to trade, introduce yourself or join a group.'
   };
 }
 
@@ -429,12 +429,12 @@ async function handleUiEvent(actorId, uiEvent) {
     case 'panel:social:rename': {
       const payload = validateRenamePayload(uiEvent.data);
       if (!payload.ok) {
-        commands.sendNotification(actorId, 'Dados de apelido invalidos.');
+        commands.sendNotification(actorId, 'Invalid nickname data.');
         return true;
       }
       const renamed = await renameKnownPerson(actorId, payload.targetCharacterId, payload.alias);
       if (renamed) await pushSocial(actorId);
-      else commands.sendNotification(actorId, 'Nao foi possivel alterar esse apelido.');
+      else commands.sendNotification(actorId, 'Could not change that nickname.');
       return true;
     }
     default:
@@ -445,9 +445,9 @@ async function handleUiEvent(actorId, uiEvent) {
 function commandDefs() {
   return [
     {
-      name: ['/painel', '/panel'],
-      description: 'Abre o painel do jogador (status, governança, economia, social)',
-      usage: '/painel',
+      name: ['/panel', '/painel'],
+      description: 'Opens the player panel (status, governance, economy, social)',
+      usage: '/panel',
       handler: (actorId) => openPanel(actorId)
     }
   ];

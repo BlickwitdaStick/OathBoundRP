@@ -276,11 +276,11 @@ async function handleIntroduceCommand(actorId, args) {
   const targetCharacter = getActiveCharacterData(targetActorId);
 
   if (!sourceCharacter) {
-    sendNotification(actorId, 'Seu personagem ainda nao esta carregado.');
+    sendNotification(actorId, 'Your character is not loaded yet.');
     return;
   }
   if (!targetCharacter || targetActorId === actorId) {
-    sendNotification(actorId, 'Uso correto: /apresentar <actorId>');
+    sendNotification(actorId, 'Usage: /introduce <actorId>');
     return;
   }
 
@@ -298,11 +298,11 @@ async function handleIntroduceCommand(actorId, args) {
     `sourceCharacterId=${sourceCharacter.characterId} targetCharacterId=${targetCharacter.characterId}`
   );
 
-  sendNotification(actorId, `Voce se apresentou para ${getDisplayNameForObserver(targetActorId, actorId)}.`);
-  sendNotification(targetActorId, `${realName} se apresentou a voce.`);
+  sendNotification(actorId, `You introduced yourself to ${getDisplayNameForObserver(targetActorId, actorId)}.`);
+  sendNotification(targetActorId, `${realName} introduced themselves to you.`);
   broadcastProximityMessage(
     actorId,
-    (observerActorId) => `* ${getDisplayNameForObserver(actorId, observerActorId)} se apresenta.`,
+    (observerActorId) => `* ${getDisplayNameForObserver(actorId, observerActorId)} introduces themselves.`,
     INTRODUCE_RANGE
   );
 }
@@ -315,7 +315,7 @@ async function handleAliasCommand(actorId, args) {
   const targetCharacter = getActiveCharacterData(targetActorId);
 
   if (!sourceCharacter || !targetCharacter || targetActorId === actorId || !alias) {
-    sendNotification(actorId, 'Uso correto: /apelido <actorId> <nome conhecido>');
+    sendNotification(actorId, 'Usage: /alias <actorId> <known name>');
     return;
   }
 
@@ -332,7 +332,7 @@ async function handleAliasCommand(actorId, args) {
     `observerCharacterId=${sourceCharacter.characterId} targetCharacterId=${targetCharacter.characterId} alias=${alias}`
   );
 
-  sendNotification(actorId, `Voce passara a reconhecer essa pessoa como: ${alias}.`);
+  sendNotification(actorId, `You will now recognize this person as: ${alias}.`);
 }
 
 /**
@@ -373,7 +373,7 @@ function registerIdentityInteractions() {
     module: 'identity',
     target: interactionRegistry.TARGET_TYPES.PLAYER,
     section: 'social',
-    label: 'Apresentar-se',
+    label: 'Introduce yourself',
     order: 10,
     distance: INTRODUCE_RANGE,
     // Apresentar-se é fala: quem está algemado, abatido ou morto não o faz.
@@ -396,14 +396,14 @@ function registerIdentityInteractions() {
 function registerCoreCommands() {
   registerIdentityInteractions();
 
-  commandRegistry.register(['/apresentar', '/introduce'], (actorId, args) => {
+  commandRegistry.register(['/introduce', '/apresentar'], (actorId, args) => {
     handleIntroduceCommand(actorId, args).catch(err => {
       console.error('[identity] Failed to introduce character:', err.message);
-      sendNotification(actorId, 'Nao foi possivel registrar a apresentacao.');
+      sendNotification(actorId, 'Could not record the introduction.');
     });
   }, {
     module: 'identity', phase: 'core',
-    description: 'Apresenta seu personagem a outro', usage: '/apresentar <actorId>',
+    description: 'Introduces your character to someone else', usage: '/introduce <actorId>',
     // Tarefa 11 (Legacy Command Cleanup): redundante desde que virou
     // `identity.introduce` no Interaction Framework (linha 352 deste
     // arquivo) — some do menu de interação quando o alvo já conhece o
@@ -413,12 +413,12 @@ function registerCoreCommands() {
     hidden: true
   });
 
-  commandRegistry.register(['/apelido', '/alias'], (actorId, args) => {
+  commandRegistry.register(['/alias', '/apelido'], (actorId, args) => {
     handleAliasCommand(actorId, args).catch(err => {
       console.error('[identity] Failed to set alias:', err.message);
-      sendNotification(actorId, 'Nao foi possivel registrar o apelido.');
+      sendNotification(actorId, 'Could not save the nickname.');
     });
-  }, { module: 'identity', phase: 'core', description: 'Define como você reconhece outra pessoa', usage: '/apelido <actorId> <nome>' });
+  }, { module: 'identity', phase: 'core', description: 'Sets the name you know someone by', usage: '/alias <actorId> <name>' });
 
   commandRegistry.register('/anim', (actorId, args) => {
     if (args) {
@@ -426,26 +426,26 @@ function registerCoreCommands() {
       const adminService = require('./admin-service');
       adminService.playAnimation(actorId, parseInt(parts[0], 16), parts[1] || 'IdleStop');
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Reproduz animação em ator', usage: '/anim <actorId> <animName>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Plays an animation on an actor', usage: '/anim <actorId> <animName>' });
 
   commandRegistry.register('/additem', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
       require('./admin-service').giveItemAdmin(actorId, parseInt(parts[0], 16), parseInt(parts[1], 16), parseInt(parts[2]) || 1);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Entrega item a jogador', usage: '/additem <actorId> <baseId> <count>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Gives an item to a player', usage: '/additem <actorId> <baseId> <count>' });
 
   commandRegistry.register('/tp', (actorId, args) => {
     if (args) require('./admin-service').teleportTo(actorId, parseInt(args, 16));
-  }, { module: 'admin', phase: 'core', description: '[Staff] Teleporta para jogador', usage: '/tp <actorId>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Teleports to a player', usage: '/tp <actorId>' });
 
   commandRegistry.register('/kick', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
-      const reason = parts.slice(1).join(' ') || 'Sem motivo';
+      const reason = parts.slice(1).join(' ') || 'No reason given';
       require('./admin-service').kickPlayer(actorId, parseInt(parts[0], 16), reason);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Expulsa jogador', usage: '/kick <actorId> <motivo>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Kicks a player', usage: '/kick <actorId> <reason>' });
 
   commandRegistry.register('/permakill', (actorId, args) => {
     if (args) {
@@ -453,30 +453,30 @@ function registerCoreCommands() {
       const reason = parts.slice(1).join(' ');
       require('./admin-service').retireCharacter(actorId, parseInt(parts[0], 16), reason);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Encerra um personagem permanentemente (soft-delete)', usage: '/permakill <actorId> <motivo>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Permanently retires a character (soft-delete)', usage: '/permakill <actorId> <reason>' });
 
   commandRegistry.register('/setgold', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
       require('./admin-service').setGold(actorId, parseInt(parts[0], 16), parseInt(parts[1]));
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Define ouro de jogador', usage: '/setgold <actorId> <valor>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Sets a player\'s gold', usage: '/setgold <actorId> <amount>' });
 
   // Alias técnico em inglês pelo mesmo padrão de /apresentar → /introduce.
   // `parseActorId` (e não `parseInt(args, 16)` como os outros de staff) porque
   // este é o comando que a staff digita copiando um id de um log ou do painel,
   // onde ele aparece com o prefixo `0x`.
-  commandRegistry.register(['/revelaridentidade', '/revealidentity'], (actorId, args) => {
+  commandRegistry.register(['/revealidentity', '/revelaridentidade'], (actorId, args) => {
     const targetActorId = parseActorId(args);
     if (!Number.isFinite(targetActorId)) {
-      sendNotification(actorId, 'Uso correto: /revelaridentidade <actorId>');
+      sendNotification(actorId, 'Usage: /revealidentity <actorId>');
       return;
     }
     require('./admin-service').revealIdentity(actorId, targetActorId).catch(err => {
       console.error('[identity] Falha ao revelar identidade:', err.message);
-      sendNotification(actorId, '[Staff] Nao foi possivel revelar a identidade.');
+      sendNotification(actorId, '[Staff] Could not reveal the identity.');
     });
-  }, { module: 'admin', phase: 'core', description: '[Staff] Revela o nome real de um personagem (auditado)', usage: '/revelaridentidade <actorId>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Reveals a character\'s real name (audited)', usage: '/revealidentity <actorId>' });
 
   // /status — diagnóstico de estado do personagem (staff)
   commandRegistry.register('/status', (actorId, args) => {
@@ -484,8 +484,8 @@ function registerCoreCommands() {
     if (!charData) return;
     const state = characterState.get(charData.characterId);
     const meta = characterState.getMetadata(charData.characterId);
-    sendNotification(actorId, `[Staff] Estado: ${state} | ${JSON.stringify(meta)}`);
-  }, { module: 'admin', phase: 'core', description: '[Staff] Exibe estado atual do personagem', usage: '/status' });
+    sendNotification(actorId, `[Staff] State: ${state} | ${JSON.stringify(meta)}`);
+  }, { module: 'admin', phase: 'core', description: '[Staff] Shows the character\'s current state', usage: '/status' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,14 +508,14 @@ function handleChatInput(actorId, text) {
 
     const handled = commandRegistry.dispatch(actorId, command, args);
     if (!handled) {
-      sendNotification(actorId, `Comando desconhecido: ${command}`);
+      sendNotification(actorId, `Unknown command: ${command}`);
     }
     return;
   }
 
   // 3. Chat padrão (falar no local)
   const charName = getCharacterName(actorId);
-  broadcastProximityMessage(actorId, `${charName} diz: ${text}`, 1200);
+  broadcastProximityMessage(actorId, `${charName} says: ${text}`, 1200);
 }
 
 // Registrar comandos CORE ao carregar o módulo

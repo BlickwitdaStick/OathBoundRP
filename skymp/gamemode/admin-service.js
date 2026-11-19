@@ -233,7 +233,7 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
   const espm = require('./core/espm');
   const veredito = espm.pareceItem(baseId);
   if (!veredito.ok) {
-    commands.sendNotification(actorId, `[Staff] Item invalido: ${veredito.motivo}.`);
+    commands.sendNotification(actorId, `[Staff] Invalid item: ${veredito.motivo}.`);
     console.warn(`[admin] ${actorId.toString(16)} tentou dar 0x${baseId.toString(16)}: ${veredito.motivo}`);
     return;
   }
@@ -248,7 +248,7 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
   });
 
   if (!success) {
-    commands.sendNotification(actorId, '[Staff] Falha ao entregar item.');
+    commands.sendNotification(actorId, '[Staff] Failed to give the item.');
     return;
   }
 
@@ -292,7 +292,7 @@ async function kickPlayer(actorId, targetActorId, reason) {
   const charData = commands.getActiveCharacterData(actorId);
   const targetData = commands.getActiveCharacterData(targetActorId);
   await auditLog(charData?.accountId, targetData?.accountId, 'staff:kick', `role=${getRole(actorId)} reason=${reason}`);
-  commands.sendNotification(targetActorId, `Você foi expulso: ${reason}`);
+  commands.sendNotification(targetActorId, `You were kicked: ${reason}`);
   if (typeof mp !== 'undefined') {
     setTimeout(() => {
       // `mp.kick` recebe `userId`, nao FormID; o adaptador converte. Ver
@@ -356,7 +356,7 @@ async function setGold(actorId, targetActorId, amount) {
     // `parseInt(parts[1])` no handler devolve NaN pra `/setgold <id>` sem
     // valor. Antes isso virava `SET gold = NaN`, que o MySQL grava como 0 —
     // um erro de digitação zerava o patrimônio do jogador em silêncio.
-    commands.sendNotification(actorId, '[Staff] Valor invalido. Uso: /setgold <actorId> <valor>');
+    commands.sendNotification(actorId, '[Staff] Invalid amount. Usage: /setgold <actorId> <amount>');
     return;
   }
 
@@ -380,12 +380,12 @@ async function setGold(actorId, targetActorId, amount) {
       });
 
     if (!ok) {
-      commands.sendNotification(actorId, '[Staff] Falha ao ajustar o ouro. Nada foi alterado.');
+      commands.sendNotification(actorId, '[Staff] Failed to adjust gold. Nothing was changed.');
       return;
     }
   }
 
-  commands.sendNotification(actorId, `[Staff] Ouro definido para ${alvo} Septims.`);
+  commands.sendNotification(actorId, `[Staff] Gold set to ${alvo} Septims.`);
   const charData = commands.getActiveCharacterData(actorId);
   await auditLog(
     charData?.accountId, targetChar.accountId,
@@ -411,13 +411,13 @@ async function retireCharacter(actorId, targetActorId, reason) {
     return;
   }
   if (!reason || !reason.trim()) {
-    commands.sendNotification(actorId, 'Motivo obrigatorio: /permakill <actorId> <motivo>');
+    commands.sendNotification(actorId, 'A reason is required: /permakill <actorId> <reason>');
     return;
   }
 
   const targetChar = commands.getActiveCharacterData(targetActorId);
   if (!targetChar) {
-    commands.sendNotification(actorId, 'Alvo nao encontrado ou personagem nao carregado.');
+    commands.sendNotification(actorId, 'Target not found or character not loaded.');
     return;
   }
 
@@ -430,7 +430,7 @@ async function retireCharacter(actorId, targetActorId, reason) {
     `role=${getRole(actorId)} characterId=${targetChar.characterId} reason=${reason}`
   );
 
-  commands.sendNotification(targetActorId, `Seu personagem foi permanentemente encerrado pela staff. Motivo: ${reason}`);
+  commands.sendNotification(targetActorId, `Your character was permanently retired by staff. Reason: ${reason}`);
   console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) retired character ${targetChar.characterId}: ${reason}`);
 
   moderationLog.notify({
@@ -519,7 +519,7 @@ async function revealIdentity(actorId, targetActorId) {
 
   const targetChar = commands.getActiveCharacterData(targetActorId);
   if (!targetChar) {
-    commands.sendNotification(actorId, '[Staff] Alvo nao encontrado ou personagem nao carregado.');
+    commands.sendNotification(actorId, '[Staff] Target not found or character not loaded.');
     return;
   }
 
@@ -545,7 +545,7 @@ async function revealIdentity(actorId, targetActorId) {
 
   commands.sendNotification(
     actorId,
-    `[Staff] 0x${targetActorId.toString(16)} e ${realName} (personagem ${targetChar.characterId}). Revelacao registrada.`
+    `[Staff] 0x${targetActorId.toString(16)} is ${realName} (character ${targetChar.characterId}). Reveal logged.`
   );
   console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) revelou identidade de ${targetActorId.toString(16)} (char ${targetChar.characterId})`);
 }
@@ -565,7 +565,7 @@ function nomeParaLog(charData, actorId) {
 }
 
 function sendDenied(actorId) {
-  commands.sendNotification(actorId, '[Staff] Permissão negada.');
+  commands.sendNotification(actorId, '[Staff] Permission denied.');
 }
 
 module.exports = {

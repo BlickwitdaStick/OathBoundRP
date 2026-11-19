@@ -34,7 +34,7 @@ Module._load = function(request, parent, isMain) {
           return [{ gold: 777 }];
         }
         if (/governance_memberships/i.test(sql)) {
-          return [{ scope_type: 'city', scope_id: 'whiterun', on_duty: 1, role_name: 'guard', label: 'Guarda', weight: 50 }];
+          return [{ scope_type: 'city', scope_id: 'whiterun', on_duty: 1, role_name: 'guard', label: 'Guard', weight: 50 }];
         }
         if (/FROM warrants/i.test(sql)) return [];
         if (/FROM fines/i.test(sql)) return [];
@@ -144,7 +144,7 @@ describe('player-panel-service', () => {
       assert.ok(snapshot);
       assert.strictEqual(snapshot.professions.length, 1);
       assert.strictEqual(snapshot.professions[0].code, 'blacksmith');
-      assert.strictEqual(snapshot.professions[0].label, 'Ferreiro');
+      assert.strictEqual(snapshot.professions[0].label, 'Blacksmith');
       assert.strictEqual(snapshot.professions[0].rank, 2);
       assert.strictEqual(snapshot.professions[0].xp, 150);
       assert.strictEqual(snapshot.professions[0].status, 'active');

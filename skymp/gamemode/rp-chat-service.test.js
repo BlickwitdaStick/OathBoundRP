@@ -16,7 +16,7 @@ function createHarness() {
     getDisplayName: (actorId, observerActorId) => {
       if (observerActorId === actorId) return 'Aela Nord';
       if (observerActorId === 0xaa) return 'Guerreira Conhecida';
-      return 'Desconhecido';
+      return 'Stranger';
     },
     getCharacterData: () => ({ characterId: 7, accountId: 3 }),
     sendNotification: (actorId, message) => notifications.push({ actorId, message }),
@@ -50,7 +50,7 @@ function createHarness() {
     actorId: 0xff,
     message: '* Aela Nord observa a porta',
     knownObserverMessage: '* Guerreira Conhecida observa a porta',
-    unknownObserverMessage: '* Desconhecido observa a porta',
+    unknownObserverMessage: '* Stranger observa a porta',
     radius: RANGES.emote
   });
   assert.strictEqual(h.logs[0].type, 'me');
@@ -60,11 +60,11 @@ function createHarness() {
   const h = createHarness();
   h.service.handleChatInput(0xff, '/s cuidado');
   h.service.handleChatInput(0xff, '/g guardas!');
-  assert.strictEqual(h.broadcasts[0].message, 'Aela Nord sussurra: cuidado');
-  assert.strictEqual(h.broadcasts[0].unknownObserverMessage, 'Desconhecido sussurra: cuidado');
+  assert.strictEqual(h.broadcasts[0].message, 'Aela Nord whispers: cuidado');
+  assert.strictEqual(h.broadcasts[0].unknownObserverMessage, 'Stranger whispers: cuidado');
   assert.strictEqual(h.broadcasts[0].radius, RANGES.whisper);
-  assert.strictEqual(h.broadcasts[1].message, 'Aela Nord grita: guardas!');
-  assert.strictEqual(h.broadcasts[1].knownObserverMessage, 'Guerreira Conhecida grita: guardas!');
+  assert.strictEqual(h.broadcasts[1].message, 'Aela Nord shouts: guardas!');
+  assert.strictEqual(h.broadcasts[1].knownObserverMessage, 'Guerreira Conhecida shouts: guardas!');
   assert.strictEqual(h.broadcasts[1].radius, RANGES.shout);
 }
 
@@ -72,15 +72,15 @@ function createHarness() {
   const h = createHarness();
   h.setRandom(0.99);
   h.service.handleChatInput(0xff, '/roll 20');
-  assert.strictEqual(h.broadcasts[0].message, '* Aela Nord rolou um dado d20 e tirou: 20');
+  assert.strictEqual(h.broadcasts[0].message, '* Aela Nord rolls a d20 and gets: 20');
 }
 
 {
   const h = createHarness();
   h.service.handleChatInput(0xff, '/report jogador preso em porta');
   h.service.handleChatInput(0xff, '/report segundo report');
-  assert.strictEqual(h.notifications[0].message, 'Report enviado para a staff.');
-  assert.strictEqual(h.notifications[1].message, 'Aguarde antes de enviar outro report.');
+  assert.strictEqual(h.notifications[0].message, 'Report sent to staff.');
+  assert.strictEqual(h.notifications[1].message, 'Wait before sending another report.');
   assert.strictEqual(h.logs[0].type, 'report');
 }
 
@@ -90,7 +90,7 @@ function createHarness() {
     h.service.handleChatInput(0xff, `fala ${i}`);
   }
   assert.strictEqual(h.broadcasts.length, 5);
-  assert.strictEqual(h.notifications[0].message, 'Voce esta enviando mensagens rapido demais.');
+  assert.strictEqual(h.notifications[0].message, 'You are sending messages too fast.');
 
   h.setNow(12000);
   h.service.handleChatInput(0xff, 'voltou ao normal');
@@ -105,7 +105,7 @@ function createHarness() {
 {
   const observer = { characterId: 10, firstName: 'Jon', lastName: 'Battleborn' };
   const target = { characterId: 20, firstName: 'Jarl', lastName: 'Balgruuf' };
-  assert.strictEqual(identity.getDisplayName(observer, target), 'Desconhecido');
+  assert.strictEqual(identity.getDisplayName(observer, target), 'Stranger');
   identity.cacheKnownIdentity(10, 20, 'Jarl Balgruuf', 'introduced');
   assert.strictEqual(identity.getDisplayName(observer, target), 'Jarl Balgruuf');
   assert.strictEqual(identity.getDisplayName(target, target), 'Jarl Balgruuf');
