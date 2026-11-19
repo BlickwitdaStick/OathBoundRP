@@ -1,61 +1,61 @@
 /**
  * core/interaction-targets.js
  *
- * Traduz o que o cliente **diz** que é o alvo para o que o servidor **sabe**
- * sobre ele.
+ * Translates what the client **says** the target is into what the server **knows**
+ * about it.
  *
- * ─── A única regra deste arquivo ────────────────────────────────────────────
+ * ─── The only rule in this file ─────────────────────────────────────────────
  *
- * O cliente sugere; o servidor confirma. Um pedido de interação chega com
- * `{targetType, targetId}` — dois campos que a máquina do jogador escolheu. O
- * resolvedor pega esses dois campos e devolve **o objeto que o servidor já
- * tinha**: o personagem carregado, a barraca do banco, a porta da célula. Se
- * não achar, o pedido morre aqui.
+ * The client suggests; the server confirms. An interaction request arrives with
+ * `{targetType, targetId}` — two fields the player's machine picked. The
+ * resolver takes those two fields and returns **the object the server already
+ * had**: the loaded character, the stall from the DB, the cell's door. If it
+ * does not find one, the request dies here.
  *
- * O que nunca entra num alvo resolvido: distância, dono, saldo, estado, preço
- * ou permissão vindos do payload. Esses o servidor calcula ou lê do banco —
- * §7 do pedido, e `CONTRIBUTING.md` §3.6 ("evento de cliente é uma dica, não
- * uma prova").
+ * What never goes into a resolved target: distance, owner, balance, state, price
+ * or permission coming from the payload. Those the server computes or reads from the DB —
+ * §7 of the request, and `CONTRIBUTING.md` §3.6 ("a client event is a hint, not
+ * proof").
  *
- * ─── Por que só `player` e `object` têm resolvedor ──────────────────────────
+ * ─── Why only `player` and `object` have resolvers ──────────────────────────
  *
- * Porque são os únicos com consumidor. `container`, `door`, `npc`, `property`
- * e `world_point` continuam vocabulário reservado no `interaction-registry`;
- * o dia em que um módulo precisar de um deles, ele chama
- * `registerResolver('container', fn)` no `initialize()` e nada aqui muda.
+ * Because they are the only ones with a consumer. `container`, `door`, `npc`, `property`
+ * and `world_point` remain reserved vocabulary in `interaction-registry`;
+ * the day a module needs one of them, it calls
+ * `registerResolver('container', fn)` in `initialize()` and nothing here changes.
  *
- * `object` (desde o Minerador MVP, ver `docs/gameplay/MINING.md` §1) é o
- * primeiro alvo que não é um ator: qualquer `MpObjectReference` do mundo,
- * identificada pelo próprio FormId que o cliente reporta ao interagir — nunca
- * um FormDesc digitado à mão. `mp.get(formId, 'locationalData')` é **[DOC]**
- * em `types/mp.d.ts` (a interface `LocationalData` descreve posição "de um
- * objeto", não "de um ator", e a assinatura de `get()` é genérica sobre
- * `FormId`) — mas nunca foi exercitada por este projeto contra uma referência
- * que não fosse ator. Decisão tomada com o usuário: confiar na documentação
- * oficial e implementar, marcando isto como **assumido, não testado em
- * jogo**, até a primeira validação manual em servidor real.
+ * `object` (since the Miner MVP, see `docs/gameplay/MINING.md` §1) is the
+ * first target that is not an actor: any `MpObjectReference` in the world,
+ * identified by the FormId the client itself reports when interacting — never
+ * a hand-typed FormDesc. `mp.get(formId, 'locationalData')` is **[DOC]**
+ * in `types/mp.d.ts` (the `LocationalData` interface describes the position "of an
+ * object", not "of an actor", and the `get()` signature is generic over
+ * `FormId`) — but it was never exercised by this project against a reference
+ * that was not an actor. Decision made with the user: trust the official
+ * documentation and implement, marking this as **assumed, not tested in
+ * game**, until the first manual validation on a real server.
  *
- * Escrever os quatro restantes agora seria escrever funções sem chamador,
- * contra APIs do SkyMP que este projeto nunca exercitou (`mp.get(id,'inventory')`
- * continua marcada **[DOC]** e não testada — ver `ARCHITECTURE.md` §1.4.9). É o
- * mesmo critério registrado no cabeçalho do `module-registry` em 06/08/2026, e
- * a alternativa — resolvedores adivinhados — é pior que ausência, porque
- * parece pronta.
+ * Writing the remaining four now would mean writing functions with no caller,
+ * against SkyMP APIs this project never exercised (`mp.get(id,'inventory')`
+ * is still marked **[DOC]** and untested — see `ARCHITECTURE.md` §1.4.9). It is the
+ * same criterion recorded in the `module-registry` header on 2026-08-06, and
+ * the alternative — guessed resolvers — is worse than absence, because it
+ * looks finished.
  *
- * Um tipo sem resolvedor falha **fechado e por nome**: "tipo de alvo nao
- * suportado", com log. Nunca `undefined` seguindo pipeline abaixo.
+ * A type with no resolver fails **closed and by name**: "unsupported target
+ * type", with a log. Never `undefined` flowing down the pipeline.
  */
 
 const rangeUtils = require('./range-utils');
 const { TARGET_TYPES } = require('./interaction-registry');
 
 /**
- * Aceita `123`, `"123"`, `"0x7b"` e `"7B"`.
+ * Accepts `123`, `"123"`, `"0x7b"` and `"7B"`.
  *
- * Os quatro chegam de verdade: o menu de interação formata actorId como
- * `0x...` (`ui/index.html`, `formatActorId`), o chat manda decimal, e o
- * `browserModal` faz ida e volta por JSON. Recusar um dos formatos quebraria um
- * caminho que hoje funciona.
+ * All four really arrive: the interaction menu formats actorId as
+ * `0x...` (`ui/index.html`, `formatActorId`), chat sends decimal, and
+ * `browserModal` round-trips through JSON. Rejecting one of the formats would break a
+ * path that works today.
  *
  * @param {unknown} raw
  * @returns {number|null}
@@ -72,9 +72,9 @@ function parseActorId(raw) {
 }
 
 /**
- * Mesma forma de `parseActorId` — aceita `123`, `"123"`, `"0x7b"`, `"7B"` —
- * com nome próprio porque aqui o número não é um ator, é o FormId de uma
- * `MpObjectReference` qualquer que o cliente reportou ao interagir.
+ * Same shape as `parseActorId` — accepts `123`, `"123"`, `"0x7b"`, `"7B"` —
+ * with its own name because here the number is not an actor, it is the FormId of some
+ * `MpObjectReference` the client reported when interacting.
  *
  * @param {unknown} raw
  * @returns {number|null}
@@ -85,50 +85,50 @@ function parseFormId(raw) {
 
 /**
  * @typedef {object} AlvoResolvido
- * @property {string} type           o tipo declarado (já validado)
- * @property {string} id             identificador estável, para log e dedupe
- * @property {string} label          nome curto para a UI e para a auditoria
- * @property {number} [actorId]      quando o alvo é um ator no mundo
- * @property {number} [formId]       quando o alvo é uma MpObjectReference qualquer
- * @property {number} [characterId]  quando o alvo é um personagem persistido
+ * @property {string} type           the declared type (already validated)
+ * @property {string} id             stable identifier, for logging and dedupe
+ * @property {string} label          short name for the UI and the audit
+ * @property {number} [actorId]      when the target is an actor in the world
+ * @property {number} [formId]       when the target is any MpObjectReference
+ * @property {number} [characterId]  when the target is a persisted character
  * @property {number|null} [accountId]
- * @property {object} [character]    o registro que o servidor já tinha em mãos
+ * @property {object} [character]    the record the server already had at hand
  * @property {(actorId: number, maxRange: number) => {ok: boolean, reason?: string, unverified?: boolean}} [assertRange]
  */
 
 /**
- * Cria o conjunto de resolvedores.
+ * Creates the set of resolvers.
  *
- * Recebe `getCharacter` por injeção em vez de importar `commands.js`: quem sabe
- * quem está logado é o `commands.js`, que importa meio gamemode. Uma
- * dependência dessas aqui tornaria este arquivo — que precisa ser testável sem
- * servidor — impossível de carregar num teste.
+ * Receives `getCharacter` by injection instead of importing `commands.js`: whoever knows
+ * who is logged in is `commands.js`, which imports half the gamemode. A
+ * dependency like that here would make this file — which must be testable without a
+ * server — impossible to load in a test.
  *
  * @param {{getCharacter: (actorId: number) => object|null|undefined, logger?: Pick<Console,'warn'|'error'>}} deps
  */
 function createTargetResolvers({ getCharacter, logger = console }) {
   if (typeof getCharacter !== 'function') {
-    throw new Error('[interaction-targets] getCharacter invalido');
+    throw new Error('[interaction-targets] invalid getCharacter');
   }
 
   /** @type {Map<string, (rawTargetId: unknown, actorId: number) => AlvoResolvido|null>} */
   const resolvers = new Map();
 
   /**
-   * O alvo é outra pessoa no mundo.
+   * The target is someone else in the world.
    *
-   * Duas recusas, e as duas importam:
+   * Two refusals, and both matter:
    *
-   *   1. **Sem personagem carregado, não há alvo.** Um actorId cru pode ser um
-   *      NPC vanilla, um ator de outro jogador ainda escolhendo personagem, ou
-   *      um número inventado. `getCharacter` só responde para quem passou pela
-   *      whitelist e escolheu personagem.
-   *   2. **Ninguém é alvo de si mesmo por este caminho.** Interação consigo é
-   *      painel (`/painel`), não menu contextual. A governança já fazia essa
-   *      recusa (`actorId === targetActorId`) — e ela é a razão de o ramo
-   *      `isSelf` do `market-stalls` nunca ter sido alcançável
-   *      (`CORE_FRAMEWORK_AUDIT.md` §6.7a). Manter a regra aqui, num lugar só,
-   *      é o que permite consertar aquilo sem duplicar a decisão.
+   *   1. **No loaded character, no target.** A raw actorId can be a
+   *      vanilla NPC, another player's actor still choosing a character, or
+   *      a made-up number. `getCharacter` only answers for whoever went through the
+   *      whitelist and picked a character.
+   *   2. **Nobody is their own target through this path.** Interacting with yourself is the
+   *      panel (`/panel`), not a context menu. Governance already made that
+   *      refusal (`actorId === targetActorId`) — and it is why the
+   *      `isSelf` branch of `market-stalls` was never reachable
+   *      (`CORE_FRAMEWORK_AUDIT.md` §6.7a). Keeping the rule here, in a single place,
+   *      is what allows fixing that without duplicating the decision.
    */
   resolvers.set(TARGET_TYPES.PLAYER, (rawTargetId, actorId) => {
     const targetActorId = parseActorId(rawTargetId);
@@ -151,19 +151,19 @@ function createTargetResolvers({ getCharacter, logger = console }) {
   });
 
   /**
-   * O alvo é uma `MpObjectReference` qualquer do mundo — um veio de mineração
-   * hoje, potencialmente qualquer objeto interativo amanhã.
+   * The target is any `MpObjectReference` in the world — a mining vein
+   * today, potentially any interactive object tomorrow.
    *
-   * Diferente de `player`, o cliente aqui reporta o **FormId** de quem ele
-   * está mirando, não um FormDesc digitado. É o mesmo padrão de confiança que
-   * `player` já usa (o cliente indica o alvo, o servidor mede distância e
-   * decide o resto) — a diferença é só o tipo de objeto do outro lado.
+   * Unlike `player`, the client here reports the **FormId** of what it is
+   * aiming at, not a typed FormDesc. It is the same trust pattern that
+   * `player` already uses (the client points at the target, the server measures distance and
+   * decides the rest) — the only difference is the kind of object on the other side.
    *
-   * `assertRange` reaproveita `rangeUtils.assertRange` sem modificação: a
-   * implementação já era genérica sobre `mp.get(id, 'locationalData')`, nunca
-   * exigiu que o segundo id fosse um ator. Ver o aviso de procedência no
-   * cabeçalho deste arquivo — `locationalData` contra um objeto comum é
-   * **assumido a partir da doc oficial, não validado em jogo**.
+   * `assertRange` reuses `rangeUtils.assertRange` unchanged: the
+   * implementation was already generic over `mp.get(id, 'locationalData')`, it never
+   * required the second id to be an actor. See the provenance warning in the
+   * header of this file — `locationalData` against an ordinary object is
+   * **assumed from the official docs, not validated in game**.
    */
   resolvers.set(TARGET_TYPES.OBJECT, (rawTargetId) => {
     const formId = parseFormId(rawTargetId);
@@ -179,21 +179,21 @@ function createTargetResolvers({ getCharacter, logger = console }) {
   });
 
   /**
-   * Registra um resolvedor para um tipo de alvo que ainda não tem.
+   * Registers a resolver for a target type that does not have one yet.
    *
-   * Chamado no `initialize()` de quem for o dono daquele tipo — `properties`
-   * para `property`, `crafting` para `object`, e assim por diante. O core não
-   * precisa saber que eles existem.
+   * Called in the `initialize()` of whoever owns that type — `properties`
+   * for `property`, `crafting` for `object`, and so on. The core does not
+   * need to know they exist.
    *
    * @param {string} targetType
    * @param {(rawTargetId: unknown, actorId: number) => AlvoResolvido|null} resolver
    */
   function registerResolver(targetType, resolver) {
     if (typeof resolver !== 'function') {
-      throw new Error(`[interaction-targets] resolvedor de '${targetType}' invalido`);
+      throw new Error(`[interaction-targets] resolver for '${targetType}' is invalid`);
     }
     if (resolvers.has(targetType)) {
-      throw new Error(`[interaction-targets] '${targetType}' ja tem resolvedor`);
+      throw new Error(`[interaction-targets] '${targetType}' already has a resolver`);
     }
     resolvers.set(targetType, resolver);
   }
@@ -201,16 +201,16 @@ function createTargetResolvers({ getCharacter, logger = console }) {
   /**
    * @param {string} targetType
    * @param {unknown} rawTargetId
-   * @param {number} actorId  quem está interagindo
+   * @param {number} actorId  who is interacting
    * @returns {{ok: true, target: AlvoResolvido}|{ok: false, reason: string}}
    */
   function resolve(targetType, rawTargetId, actorId) {
     const resolver = resolvers.get(targetType);
     if (!resolver) {
-      // Não é erro de jogador: ou o tipo é válido e ainda não tem dono, ou o
-      // cliente mandou um tipo que não existe. A mensagem é a mesma para os
-      // dois — descrever a diferença ensinaria a sondar o servidor.
-      logger.warn(`[interaction-targets] sem resolvedor para tipo '${targetType}'`);
+      // Not a player error: either the type is valid and has no owner yet, or the
+      // client sent a type that does not exist. The message is the same for
+      // both — describing the difference would teach people to probe the server.
+      logger.warn(`[interaction-targets] no resolver for type '${targetType}'`);
       return { ok: false, reason: 'Unsupported target type.' };
     }
 
@@ -218,7 +218,7 @@ function createTargetResolvers({ getCharacter, logger = console }) {
     try {
       target = resolver(rawTargetId, actorId);
     } catch (err) {
-      logger.error(`[interaction-targets] resolvedor de '${targetType}' falhou:`, err.message);
+      logger.error(`[interaction-targets] resolver for '${targetType}' failed:`, err.message);
       return { ok: false, reason: 'Invalid target.' };
     }
 

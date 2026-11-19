@@ -1,30 +1,30 @@
 /**
  * core/action-policy.js
  *
- * Política central de ações — a única fonte de verdade sobre
- * "quem pode fazer o quê em qual estado".
+ * Central action policy — the single source of truth about
+ * "who can do what in which state".
  *
- * TODA ação de gameplay DEVE ser validada aqui antes de executar.
- * Nenhum serviço individual deve implementar suas próprias verificações de estado.
+ * EVERY gameplay action MUST be validated here before running.
+ * No individual service should implement its own state checks.
  *
- * Uso:
+ * Usage:
  *   const { allowed, reason } = actionPolicy.canPerform(characterId, 'woodcutting');
  *   if (!allowed) { sendNotification(actorId, reason); return; }
  */
 
 const characterState = require('./character-state');
-// Toca `mp` (com guard) e le config de disco; por isso fica em modulo proprio
-// em vez de dentro deste, que precisa continuar testavel sem servidor.
+// Touches `mp` (guarded) and reads config from disk; that is why it lives in its own module
+// instead of inside this one, which must stay testable without a server.
 const safeZones = require('./safe-zones');
 const { STATES } = characterState;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Definição das restrições por estado
+// State restriction definitions
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Mapa de estados → lista de categorias de ação BLOQUEADAS naquele estado.
- * Uma ação pode pertencer a múltiplas categorias.
+ * Map of states → list of action categories BLOCKED in that state.
+ * An action can belong to several categories.
  */
 const STATE_RESTRICTIONS = {
   [STATES.RESTRAINED]: {
@@ -62,31 +62,31 @@ const STATE_RESTRICTIONS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Registro de ações
+// Action registry
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Registro central de ações e suas categorias.
- * Cada ação pertence a uma ou mais categorias usadas nas restrições acima.
+ * Central registry of actions and their categories.
+ * Each action belongs to one or more of the categories used in the restrictions above.
  *
- * Estrutura: actionId → { categories: string[], label: string }
+ * Shape: actionId → { categories: string[], label: string }
  */
 const _actions = new Map();
 
 /**
- * Registra uma ação na política.
- * Chamado pelos módulos ao se inicializar via module-registry.
+ * Registers an action in the policy.
+ * Called by modules when they initialize via module-registry.
  *
- * @param {string} actionId - Identificador único da ação (ex: 'woodcutting')
- * @param {string[]} categories - Categorias da ação (ex: ['gameplay', 'gather'])
- * @param {string} label - Nome legível para mensagens de erro
+ * @param {string} actionId - Unique action identifier (e.g. 'woodcutting')
+ * @param {string[]} categories - Action categories (e.g. ['gameplay', 'gather'])
+ * @param {string} label - Human-readable name for error messages
  */
 function registerAction(actionId, categories, label) {
   _actions.set(actionId, { categories, label });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ações CORE pré-registradas (sempre disponíveis)
+// Pre-registered CORE actions (always available)
 // ─────────────────────────────────────────────────────────────────────────────
 registerAction('speak',       ['speak_rp'],           'Speak');
 registerAction('whisper',     ['speak_rp'],           'Whisper');
@@ -111,33 +111,33 @@ registerAction('sleep',       ['use_item'],            'Sleep');
 registerAction('public_work', ['gameplay', 'work'],    'Public work');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API Pública
+// Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Verifica se um personagem pode executar uma ação.
+ * Checks whether a character can perform an action.
  *
- * Duas dimensões, nesta ordem:
+ * Two dimensions, in this order:
  *
- *   1. **Estado** do personagem — algemado, abatido, preso. Sempre checado.
- *   2. **Lugar** onde ele está — zona segura. Só checado quando quem chama
- *      informa `context.actorId`, porque localização é do ator e esta função
- *      recebe `characterId`.
+ *   1. The character's **state** — restrained, downed, imprisoned. Always checked.
+ *   2. The **place** they are in — safe zone. Only checked when the caller
+ *      passes `context.actorId`, because location belongs to the actor and this function
+ *      receives `characterId`.
  *
- * O estado vem primeiro de propósito: "você está algemado" é uma explicação
- * melhor que "aqui é zona segura" para quem está algemado dentro de uma.
+ * State comes first on purpose: "you are restrained" is a better explanation
+ * than "this is a safe zone" for someone restrained inside one.
  *
  * @param {number} characterId
- * @param {string} actionId - ID da ação registrada
+ * @param {string} actionId - ID of the registered action
  * @param {object} [context]
- * @param {number} [context.actorId] - habilita a checagem de lugar
- * @param {number} [context.targetActorId] - checa os dois lados (ver safe-zones.blocksBetween)
+ * @param {number} [context.actorId] - enables the place check
+ * @param {number} [context.targetActorId] - checks both sides (see safe-zones.blocksBetween)
  * @returns {{ allowed: boolean, reason: string }}
  */
 function canPerform(characterId, actionId, context = {}) {
   const action = _actions.get(actionId);
   if (!action) {
-    // Ação não registrada — bloquear por segurança
+    // Unregistered action — block it for safety
     return { allowed: false, reason: `Unknown action: ${actionId}` };
   }
 
@@ -145,15 +145,15 @@ function canPerform(characterId, actionId, context = {}) {
   const restrictions = STATE_RESTRICTIONS[currentState];
 
   if (restrictions) {
-    // Verificar se alguma categoria da ação está bloqueada pelo estado atual
+    // Check whether any of the action's categories is blocked by the current state
     const isBlocked = action.categories.some(cat => restrictions.blocked.includes(cat));
     if (isBlocked) {
       return { allowed: false, reason: restrictions.message };
     }
   }
 
-  // Lugar. Só entra quando o chamador passa o actorId — todos os chamadores
-  // antigos continuam funcionando exatamente como antes, sem checagem de lugar.
+  // Place. Only applies when the caller passes the actorId — all older callers
+  // keep working exactly as before, without a place check.
   if (context.actorId !== undefined && context.actorId !== null) {
     for (const categoria of action.categories) {
       const veredito = context.targetActorId !== undefined && context.targetActorId !== null
@@ -161,9 +161,9 @@ function canPerform(characterId, actionId, context = {}) {
         : safeZones.blocksCategory(context.actorId, categoria);
 
       if (veredito.blocked) {
-        // A mensagem diz de quem é a proteção quando ela não é de quem agiu —
-        // sem isso, atacar alguém protegido devolveria "você está em zona
-        // segura", que é confuso e parece bug.
+        // The message says whose protection it is when it is not the actor's —
+        // without this, attacking someone protected would return "you are in a safe
+        // zone", which is confusing and looks like a bug.
         const onde = veredito.zone.label;
         return {
           allowed: false,
@@ -179,13 +179,13 @@ function canPerform(characterId, actionId, context = {}) {
 }
 
 /**
- * Verifica uma ação e lança erro se não permitida.
- * Útil para código que prefere exceções.
+ * Checks an action and throws if it is not allowed.
+ * Useful for code that prefers exceptions.
  *
  * @param {number} characterId
  * @param {string} actionId
  * @param {object} [context]
- * @throws {Error} Se a ação não for permitida
+ * @throws {Error} If the action is not allowed
  */
 function assertCanPerform(characterId, actionId, context = {}) {
   const result = canPerform(characterId, actionId, context);
@@ -193,7 +193,7 @@ function assertCanPerform(characterId, actionId, context = {}) {
 }
 
 /**
- * Retorna todas as ações registradas (para debug/staff).
+ * Returns every registered action (for debug/staff).
  */
 function listActions() {
   return Array.from(_actions.entries()).map(([id, info]) => ({ id, ...info }));

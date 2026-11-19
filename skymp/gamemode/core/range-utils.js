@@ -1,34 +1,34 @@
 /**
  * core/range-utils.js
  *
- * Utilitários de distância/alcance compartilhados entre serviços que precisam
- * validar proximidade entre dois atores (governance-service, death-service, ...).
- * Extraído de governance-service.js pra não duplicar a mesma lógica em cada
- * novo sistema que precisa de "alvo tem que estar perto".
+ * Distance/range utilities shared between services that need to
+ * validate proximity between two actors (governance-service, death-service, ...).
+ * Extracted from governance-service.js so the same logic is not duplicated in every
+ * new system that needs "the target has to be close".
  */
 
 /**
- * `mp.get(formId, 'locationalData')` **lança** quando `formId` não existe em
- * `WorldState` — confirmado lendo o addon upstream (`ScampServer::Get` chama
- * `GetFormAt<MpObjectReference>`, que lança `std::runtime_error` para form
- * inexistente e o addon rejoga como `Napi::Error`; ver
+ * `mp.get(formId, 'locationalData')` **throws** when `formId` does not exist in
+ * `WorldState` — confirmed by reading the upstream addon (`ScampServer::Get` calls
+ * `GetFormAt<MpObjectReference>`, which throws `std::runtime_error` for a
+ * missing form and the addon rethrows it as `Napi::Error`; see
  * `docs/research/MINING_RUNTIME_VALIDATION_REPORT.md` §"SkyMP API
- * Investigation"). Isto nunca apareceu enquanto só atores (sempre existentes
- * em `WorldState` por definição) passavam por aqui — `object` como tipo de
- * alvo (`core/interaction-targets.js`) é o primeiro caminho que entrega um
- * FormId que o cliente escolheu e o servidor não validou antes de perguntar
- * a posição, o que inclui FormId forjado ou de um objeto nunca carregado.
+ * Investigation"). This never showed up while only actors (always present
+ * in `WorldState` by definition) went through here — `object` as a target
+ * type (`core/interaction-targets.js`) is the first path that hands over a
+ * FormId the client picked and the server did not validate before asking for
+ * its position, which includes a forged FormId or one for an object that was never loaded.
  *
- * Sem este `try/catch`, essa lançada escapava de `assertRange` (que não tem
- * `try/catch` próprio) para dentro do `buildContext` assíncrono de
- * `core/interaction-service.js`, virava uma promise rejeitada, e só era pega
- * pelo `catch` genérico de `core/ui-event-gateway.js` — nunca pelo estágio
- * `DISTANCE` do pipeline, que é onde este tipo de recusa deveria aparecer
- * (mensagem específica, auditoria correta). `null` aqui é o mesmo valor que
- * `getLoc` já devolve para "não consegui saber onde isto está" — a chamada
- * volta a cair no `if (!la || !lb) return null;` de `distanceBetween`, que
- * `assertRange` já traduzia em `{ok:false, reason:'Nao foi possivel validar
- * proximidade.'}`.
+ * Without this `try/catch`, that throw escaped `assertRange` (which has no
+ * `try/catch` of its own) into the async `buildContext` of
+ * `core/interaction-service.js`, became a rejected promise, and was only caught
+ * by the generic `catch` of `core/ui-event-gateway.js` — never by the
+ * `DISTANCE` stage of the pipeline, which is where this kind of refusal should show up
+ * (specific message, correct audit). `null` here is the same value that
+ * `getLoc` already returns for "I could not tell where this is" — the call
+ * falls back into `if (!la || !lb) return null;` in `distanceBetween`, which
+ * `assertRange` already turned into `{ok:false, reason:'Could not verify
+ * proximity.'}`.
  */
 function getLoc(actorId) {
   if (typeof mp === 'undefined') return null;
@@ -69,19 +69,19 @@ function distanceBetween(a, b) {
 }
 
 /**
- * Sem `mp`, esta função deixa passar — e é preciso que deixe: é o que permite
- * exercitar `fineTarget`, `arrestTarget` e o pipeline de interação sem subir o
- * jogo, e mudar isso quebraria dezenas de testes por motivo nenhum.
+ * Without `mp`, this function lets things through — and it has to: that is what makes it possible
+ * to exercise `fineTarget`, `arrestTarget` and the interaction pipeline without starting the
+ * game, and changing that would break dozens of tests for no reason.
  *
- * O que mudou em 13/08/2026 foi só a honestidade do retorno. `{ok: true}` é uma
- * **afirmação positiva sobre o mundo** — "o alvo está perto" —, e este caminho
- * não mediu nada. O resto do projeto falha para o lado neutro quando não sabe
- * (`safe-zones.zoneOf` devolve `null`, `espm.pareceItem` responde `ok` marcando
- * `indisponivel`); aqui a marca é `unverified`.
+ * What changed on 2026-08-13 was only the honesty of the return value. `{ok: true}` is a
+ * **positive claim about the world** — "the target is close" —, and this path
+ * measured nothing. The rest of the project fails toward the neutral side when it does not know
+ * (`safe-zones.zoneOf` returns `null`, `espm.pareceItem` answers `ok` while marking
+ * `indisponivel`); here the marker is `unverified`.
  *
- * Quem chama continua livre para ignorá-la. O `core/interaction-service.js` a
- * usa para não gravar "distância validada" numa auditoria em que ninguém mediu
- * distância — ver `docs/research/CORE_FRAMEWORK_AUDIT.md` §5.
+ * Callers remain free to ignore it. `core/interaction-service.js` uses it
+ * to avoid writing "distance validated" into an audit where nobody measured
+ * distance — see `docs/research/CORE_FRAMEWORK_AUDIT.md` §5.
  *
  * @param {number} sourceActorId
  * @param {number} targetActorId
@@ -97,10 +97,10 @@ function assertRange(sourceActorId, targetActorId, maxRange) {
 }
 
 /**
- * Lista atores próximos de actorId dentro de maxRange, na mesma célula.
- * Usado pra montar contexto de evidência (ex: quem estava por perto na
- * hora de uma morte ou de um pico de dano) — não é rastreamento contínuo,
- * só um snapshot no momento da chamada.
+ * Lists actors near actorId within maxRange, in the same cell.
+ * Used to build evidence context (e.g. who was nearby at the
+ * time of a death or a damage spike) — it is not continuous tracking,
+ * just a snapshot at the moment of the call.
  * @param {number} actorId
  * @param {number} maxRange
  * @returns {{actorId: number, distance: number}[]}
@@ -132,7 +132,7 @@ function nearbyActors(actorId, maxRange) {
       if (distance <= maxRange) results.push({ actorId: neighborId, distance });
     }
   } catch (err) {
-    console.error('[range-utils] Falha ao calcular vizinhos:', err.message);
+    console.error('[range-utils] Failed to compute neighbors:', err.message);
   }
   return results;
 }

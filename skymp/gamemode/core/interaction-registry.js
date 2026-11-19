@@ -1,60 +1,60 @@
 /**
  * core/interaction-registry.js
  *
- * O catálogo de interações contextuais do servidor. Um módulo declara aqui o
- * que é possível fazer com um alvo; o `core/interaction-service.js` decide, a
- * cada pedido, se aquilo vale **agora**.
+ * The server's catalog of contextual interactions. A module declares here
+ * what can be done to a target; `core/interaction-service.js` decides, on
+ * every request, whether that holds **right now**.
  *
- * ─── Por que isto existe, e o que ele substitui ─────────────────────────────
+ * ─── Why this exists, and what it replaces ──────────────────────────────────
  *
- * O menu de interação já existia dentro do `governance-service.js`
- * (`getInteractionActions` / `handleInteractionAction`), e o **fluxo** dele
- * estava certo: o servidor monta a lista, o cliente escolhe, o servidor
- * revalida antes de executar. O que estava errado era onde ele morava.
+ * The interaction menu already existed inside `governance-service.js`
+ * (`getInteractionActions` / `handleInteractionAction`), and its **flow**
+ * was right: the server builds the list, the client picks, the server
+ * revalidates before executing. What was wrong was where it lived.
  *
- * Para uma barraca aparecer no menu, a governança precisava
- * `require('./market-stalls-service')` por nome fixo, dentro de uma função de
- * domínio — e `market-stalls` já declara `dependencies: ['governance']` no
- * registry, então a seta apontava para os dois lados. O vocabulário de ações
- * era a regex `/^(guard|stall|npc)\.[a-z_]+$/` no core da governança: três
- * namespaces, e nenhum caminho para um quarto que não fosse editar aquele
- * arquivo. Detalhes em `docs/research/CORE_FRAMEWORK_AUDIT.md` §6.
+ * For a stall to show up in the menu, governance had to
+ * `require('./market-stalls-service')` by a fixed name, inside a domain
+ * function — and `market-stalls` already declares `dependencies: ['governance']` in the
+ * registry, so the arrow pointed both ways. The action vocabulary
+ * was the regex `/^(guard|stall|npc)\.[a-z_]+$/` in governance's core: three
+ * namespaces, and no way to add a fourth other than editing that
+ * file. Details in `docs/research/CORE_FRAMEWORK_AUDIT.md` §6.
  *
- * Aqui a seta se inverte. Quem tem uma ação a oferecer **registra**; ninguém
- * busca ninguém. `governance-service` deixa de conhecer `market-stalls`, e um
- * módulo futuro (`medical`, `carry`, `crafting`) passa a existir no menu sem
- * uma linha de mudança no core. É o §23 do pedido, e a razão de não haver
- * Service Locator neste projeto — ver
+ * Here the arrow is reversed. Whoever has an action to offer **registers** it; nobody
+ * looks anybody up. `governance-service` no longer knows `market-stalls`, and a
+ * future module (`medical`, `carry`, `crafting`) shows up in the menu without
+ * a single line of change in the core. It is §23 of the request, and the reason there is no
+ * Service Locator in this project — see
  * `docs/technical/ADR_002_INTERACTION_FRAMEWORK.md` §4.
  *
- * ─── O que este arquivo deliberadamente NÃO faz ─────────────────────────────
+ * ─── What this file deliberately does NOT do ────────────────────────────────
  *
- * Não toca `mp`, não abre banco, não conhece ator, personagem, distância nem
- * permissão. Ele guarda descritores e recusa os malformados. Toda decisão sobre
- * um pedido concreto é do `interaction-service`, que é onde a fronteira de
- * confiança fica. Isto é o mesmo motivo pelo qual `core/soul.js` é função pura:
- * a parte que dá para provar fora do servidor fica onde dá para provar.
+ * It does not touch `mp`, does not open the DB, knows nothing about actors, characters, distance or
+ * permissions. It stores descriptors and rejects malformed ones. Every decision about
+ * a concrete request belongs to `interaction-service`, which is where the trust
+ * boundary lives. Same reason `core/soul.js` is a pure function:
+ * the part that can be proven outside the server lives where it can be proven.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tipos de alvo
+// Target types
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * O que uma interação pode ter como alvo.
+ * What an interaction can target.
  *
- * **Só `PLAYER` tem resolvedor implementado hoje** (`core/interaction-targets.js`),
- * porque só ele tem consumidor. Os outros seis estão aqui como vocabulário
- * reservado: registrar uma interação contra um deles é aceito, e o pedido falha
- * no resolvedor com "tipo de alvo nao suportado" — falha fechada, nomeada e
- * visível, em vez de um `undefined` atravessando o pipeline.
+ * **Only `PLAYER` has a resolver implemented today** (`core/interaction-targets.js`),
+ * because only it has a consumer. The other six are here as reserved
+ * vocabulary: registering an interaction against one of them is accepted, and the request fails
+ * in the resolver with "unsupported target type" — a closed, named and
+ * visible failure, instead of an `undefined` flowing through the pipeline.
  *
- * O critério é o mesmo que o cabeçalho do `module-registry` usou em 06/08/2026
- * para **não** construir distribuição de eventos de jogo: uma chave viva e seis
- * mortas seria abstração prematura; um vocabulário fechado com um resolvedor
- * registrável (`interactionTargets.registerResolver`) é ponto de extensão. O
- * dia em que `container` tiver dono, ele registra o resolvedor dele e nada aqui
- * muda.
+ * The criterion is the same the `module-registry` header used on 2026-08-06
+ * to **not** build game-event distribution: one live key and six
+ * dead ones would be premature abstraction; a closed vocabulary with a registrable
+ * resolver (`interactionTargets.registerResolver`) is an extension point. The
+ * day `container` has an owner, it registers its resolver and nothing here
+ * changes.
  */
 const TARGET_TYPES = Object.freeze({
   PLAYER: 'player',
@@ -64,10 +64,10 @@ const TARGET_TYPES = Object.freeze({
   DOOR: 'door',
   PROPERTY: 'property',
   WORLD_POINT: 'world_point',
-  // Tarefa 11 (Character Dashboard). O próprio ator — nunca fora de alcance
-  // de si mesmo, então quem registra pra este tipo não declara `distance`
-  // (o resolvedor não expõe `assertRange`, e sem ela `buildContext` pula a
-  // checagem de distância por completo).
+  // Task 11 (Character Dashboard). The actor themselves — never out of range
+  // of themselves, so whoever registers for this type does not declare `distance`
+  // (the resolver does not expose `assertRange`, and without it `buildContext` skips the
+  // distance check entirely).
   SELF: 'self'
 });
 
@@ -75,16 +75,16 @@ const TARGET_TYPES = Object.freeze({
 const VALID_TARGET_TYPES = new Set(Object.values(TARGET_TYPES));
 
 /**
- * Classes de auditoria. O §20 do pedido é explícito nos dois sentidos: ação
- * crítica gera registro, e o servidor não gera milhões de linhas inúteis.
+ * Audit classes. §20 of the request is explicit both ways: a critical
+ * action produces a record, and the server does not produce millions of useless rows.
  *
- * - `TRACE`    — nada é gravado. Consulta, leitura, abrir vitrine.
- * - `GAMEPLAY` — grava. Ação que muda o mundo de forma reversível.
- * - `SECURITY` — grava. Ação de um jogador **sobre outro** sem consentimento.
- * - `ADMIN`    — grava. Poder de staff.
- * - `ECONOMY`  — grava. Move ouro ou item.
+ * - `TRACE`    — nothing is written. Queries, reads, opening wares.
+ * - `GAMEPLAY` — written. An action that changes the world reversibly.
+ * - `SECURITY` — written. An action by one player **on another** without consent.
+ * - `ADMIN`    — written. Staff power.
+ * - `ECONOMY`  — written. Moves gold or items.
  *
- * O padrão é `GAMEPLAY`: quem não escolheu, grava. Silêncio é opt-in.
+ * The default is `GAMEPLAY`: if you did not choose, it is written. Silence is opt-in.
  */
 const AUDIT_LEVELS = Object.freeze({
   TRACE: 'TRACE',
@@ -97,30 +97,30 @@ const AUDIT_LEVELS = Object.freeze({
 /** @type {Set<string>} */
 const VALID_AUDIT_LEVELS = new Set(Object.values(AUDIT_LEVELS));
 
-/** `<modulo>.<acao>`, minúsculas. Substitui a regex de três namespaces fixos. */
+/** `<module>.<action>`, lowercase. Replaces the regex of three fixed namespaces. */
 const ID_PATTERN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
 
 const MAX_ID_LENGTH = 64;
 const MAX_LABEL_LENGTH = 48;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Validação de payload declarativa
+// Declarative payload validation
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Tipos aceitos num `schema` de interação. Deliberadamente poucos: cada tipo
- * novo é uma forma nova de um payload de cliente atravessar a fronteira, e a
- * lista curta é o que torna a revisão possível.
+ * Types accepted in an interaction `schema`. Deliberately few: every new
+ * type is a new way for a client payload to cross the boundary, and the
+ * short list is what makes review possible.
  */
 const FIELD_TYPES = new Set(['string', 'int', 'bool', 'enum', 'formid']);
 
 /**
- * Um inteiro positivo escrito por quem controla o cliente.
+ * A positive integer written by whoever controls the client.
  *
- * Recusa `"1e3"`, `" 1"`, `"01"`, `1.5`, `Infinity` e `"0x10"` — a mesma
- * disciplina do `isStrictPositiveInteger` da governança, que esta função
- * substitui. `Number("1e3")` é 1000 e `parseInt(" 1")` é 1: as duas formas
- * frouxas atravessariam uma validação ingênua de "dá pra converter".
+ * Rejects `"1e3"`, `" 1"`, `"01"`, `1.5`, `Infinity` and `"0x10"` — the same
+ * discipline as governance's `isStrictPositiveInteger`, which this function
+ * replaces. `Number("1e3")` is 1000 and `parseInt(" 1")` is 1: both loose
+ * forms would slip through a naive "can it be converted" validation.
  *
  * @param {unknown} raw
  * @returns {number|null}
@@ -135,14 +135,14 @@ function strictInteger(raw) {
 }
 
 /**
- * Um FormID do Skyrim, escrito em hexadecimal com ou sem `0x`.
+ * A Skyrim FormID, written in hexadecimal with or without `0x`.
  *
- * Separado de `int` porque o jogador digita `0x0000000F` no formulário e
- * `Number("0x0000000F")` é 15 — o que funciona, mas por acidente: a mesma
- * conversão aceitaria `0b1010` e `0o17`. Aqui a forma é conferida antes.
+ * Separate from `int` because the player types `0x0000000F` in the form and
+ * `Number("0x0000000F")` is 15 — which works, but by accident: the same
+ * conversion would accept `0b1010` and `0o17`. Here the shape is checked first.
  *
- * Isto valida **digitação**, não existência: se o FormID aponta para um item de
- * verdade é pergunta do `core/espm.js`, que é quem tem os plugins carregados.
+ * This validates **typing**, not existence: whether the FormID points to a real
+ * item is a question for `core/espm.js`, which is what has the plugins loaded.
  *
  * @param {unknown} raw
  * @returns {number|null}
@@ -159,12 +159,12 @@ function strictFormId(raw) {
 }
 
 /**
- * Confere um payload de cliente contra o `schema` declarado na interação.
+ * Checks a client payload against the `schema` declared on the interaction.
  *
- * Devolve um objeto **novo**, com só os campos declarados e já convertidos —
- * nunca o payload original. É a diferença entre validar e sanear: se o
- * `execute` recebesse o objeto do cliente, um campo extra (`characterId`,
- * `price`, `allowed`) viajaria junto até alguém, um dia, lê-lo.
+ * Returns a **new** object, with only the declared fields, already converted —
+ * never the original payload. That is the difference between validating and sanitizing: if
+ * `execute` received the client's object, an extra field (`characterId`,
+ * `price`, `allowed`) would travel along until someone, one day, read it.
  *
  * @param {Record<string, object>|undefined} schema
  * @param {unknown} payload
@@ -200,9 +200,9 @@ function validatePayload(schema, payload) {
         if (spec.min !== undefined && trimmed.length < spec.min) {
           return { ok: false, reason: `Field ${name} is too short.` };
         }
-        // O teto existe em todo campo de texto, com ou sem `max` declarado: um
-        // payload de CEF sem limite é memória do servidor controlada por quem
-        // joga.
+        // The cap exists on every text field, with or without a declared `max`: a
+        // CEF payload with no limit is server memory controlled by whoever
+        // is playing.
         const max = spec.max === undefined ? 240 : spec.max;
         if (trimmed.length > max) return { ok: false, reason: `Field ${name} is too long.` };
         data[name] = trimmed;
@@ -239,8 +239,8 @@ function validatePayload(schema, payload) {
         break;
       }
       default:
-        // Só acontece se `register` deixar passar um tipo novo — por isso ele
-        // valida o schema no registro, e não aqui, com o jogador esperando.
+        // Only happens if `register` lets a new type through — which is why it
+        // validates the schema at registration, and not here, with the player waiting.
         return { ok: false, reason: `Field ${name} has a type the server does not know.` };
     }
   }
@@ -249,12 +249,12 @@ function validatePayload(schema, payload) {
 }
 
 /**
- * Confere o `schema` no momento do registro, e não no primeiro clique.
+ * Checks the `schema` at registration time, and not on the first click.
  *
- * Um `type` escrito errado num descritor é um erro de quem programa, e o lugar
- * de descobri-lo é o boot do servidor — não a tela de um jogador tentando
- * pagar uma multa. Mesma disciplina de `safe-zones.parseZones` e de
- * `admin-service.hasPermission`: configuração errada grita onde é lida.
+ * A misspelled `type` in a descriptor is a programmer error, and the place
+ * to find it is server boot — not the screen of a player trying to
+ * pay a fine. Same discipline as `safe-zones.parseZones` and
+ * `admin-service.hasPermission`: wrong configuration screams where it is read.
  *
  * @param {string} interactionId
  * @param {unknown} schema
@@ -262,21 +262,21 @@ function validatePayload(schema, payload) {
 function assertValidSchema(interactionId, schema) {
   if (schema === undefined) return;
   if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) {
-    throw new Error(`[interaction-registry] '${interactionId}': schema deve ser um objeto`);
+    throw new Error(`[interaction-registry] '${interactionId}': schema must be an object`);
   }
   for (const [name, rawSpec] of Object.entries(schema)) {
     const spec = /** @type {any} */ (rawSpec);
     if (!spec || typeof spec !== 'object') {
-      throw new Error(`[interaction-registry] '${interactionId}': campo '${name}' sem especificacao`);
+      throw new Error(`[interaction-registry] '${interactionId}': field '${name}' has no specification`);
     }
     if (!FIELD_TYPES.has(spec.type)) {
       throw new Error(
-        `[interaction-registry] '${interactionId}': campo '${name}' tem tipo '${spec.type}'. ` +
-        `Validos: ${[...FIELD_TYPES].join(', ')}`
+        `[interaction-registry] '${interactionId}': field '${name}' has type '${spec.type}'. ` +
+        `Valid: ${[...FIELD_TYPES].join(', ')}`
       );
     }
     if (spec.type === 'enum' && (!Array.isArray(spec.values) || spec.values.length === 0)) {
-      throw new Error(`[interaction-registry] '${interactionId}': campo enum '${name}' sem 'values'`);
+      throw new Error(`[interaction-registry] '${interactionId}': enum field '${name}' has no 'values'`);
     }
   }
 }
@@ -289,24 +289,24 @@ function assertValidSchema(interactionId, schema) {
 const _interactions = new Map();
 
 /**
- * Registra uma interação.
+ * Registers an interaction.
  *
  * @param {object} descriptor
- * @param {string}   descriptor.id        - `<modulo>.<acao>`, ex: `law.search`
- * @param {string}   descriptor.module    - módulo dono (usado no desligamento)
- * @param {string}   descriptor.target    - um de `TARGET_TYPES`
- * @param {string}   descriptor.label     - texto do botão, já em português
+ * @param {string}   descriptor.id        - `<module>.<action>`, e.g. `law.search`
+ * @param {string}   descriptor.module    - owning module (used on shutdown)
+ * @param {string}   descriptor.target    - one of `TARGET_TYPES`
+ * @param {string}   descriptor.label     - button text, already in its display language
  * @param {Function} descriptor.execute   - `async (ctx) => void`
- * @param {Function} [descriptor.canSee]     - `async (ctx) => boolean` — aparece no menu?
+ * @param {Function} [descriptor.canSee]     - `async (ctx) => boolean` — does it show up in the menu?
  * @param {Function} [descriptor.canExecute] - `async (ctx) => boolean|{allowed,reason}`
- * @param {string}   [descriptor.permission] - permissão consultada pelo adaptador do módulo
- * @param {number}   [descriptor.distance]   - alcance máximo em unidades do Skyrim
- * @param {string}   [descriptor.policyAction] - id de ação da `core/action-policy.js`
- * @param {object}   [descriptor.schema]     - campos aceitos no payload
- * @param {string}   [descriptor.audit]      - um de `AUDIT_LEVELS` (padrão `GAMEPLAY`)
- * @param {boolean}  [descriptor.idempotent] - exige `requestId` e deduplica (§19)
- * @param {number}   [descriptor.order]      - ordenação no menu (menor primeiro)
- * @param {string}   [descriptor.section]    - agrupamento no menu (padrão: o módulo)
+ * @param {string}   [descriptor.permission] - permission checked by the module's adapter
+ * @param {number}   [descriptor.distance]   - maximum range in Skyrim units
+ * @param {string}   [descriptor.policyAction] - action id in `core/action-policy.js`
+ * @param {object}   [descriptor.schema]     - fields accepted in the payload
+ * @param {string}   [descriptor.audit]      - one of `AUDIT_LEVELS` (default `GAMEPLAY`)
+ * @param {boolean}  [descriptor.idempotent] - requires a `requestId` and deduplicates (§19)
+ * @param {number}   [descriptor.order]      - menu ordering (lowest first)
+ * @param {string}   [descriptor.section]    - menu grouping (default: the module)
  */
 function register(descriptor) {
   const {
@@ -321,49 +321,49 @@ function register(descriptor) {
 
   if (typeof id !== 'string' || !ID_PATTERN.test(id) || id.length > MAX_ID_LENGTH) {
     throw new Error(
-      `[interaction-registry] id invalido: ${JSON.stringify(id)}. ` +
-      `Esperado '<modulo>.<acao>' em minusculas, ex: 'law.search'`
+      `[interaction-registry] invalid id: ${JSON.stringify(id)}. ` +
+      `Expected '<module>.<action>' in lowercase, e.g. 'law.search'`
     );
   }
-  // Duplicata é erro, não aviso. O `command-registry` avisa e sobrescreve, e
-  // aquilo é defensável para um comando de chat — quem digita vê o resultado na
-  // hora. Aqui a ação sobrescrita continuaria **aparecendo no menu com o mesmo
-  // rótulo** e executando o código de outro módulo. Duas ações com o mesmo id
-  // é um bug de quem programa, e o boot é onde ele deve morrer.
+  // A duplicate is an error, not a warning. `command-registry` warns and overrides, and
+  // that is defensible for a chat command — whoever types it sees the result
+  // right away. Here the overridden action would keep **showing up in the menu with the same
+  // label** and running another module's code. Two actions with the same id
+  // is a programmer bug, and boot is where it should die.
   if (_interactions.has(id)) {
     const dono = _interactions.get(id).module;
     throw new Error(
-      `[interaction-registry] '${id}' ja registrado pelo modulo '${dono}'. ` +
-      `Ids duplicados sobrescreveriam a acao em silencio.`
+      `[interaction-registry] '${id}' already registered by module '${dono}'. ` +
+      `Duplicate ids would silently override the action.`
     );
   }
   if (typeof moduleId !== 'string' || !moduleId) {
-    throw new Error(`[interaction-registry] '${id}': sem 'module'`);
+    throw new Error(`[interaction-registry] '${id}': no 'module'`);
   }
   if (!VALID_TARGET_TYPES.has(target)) {
     throw new Error(
-      `[interaction-registry] '${id}': target '${target}' desconhecido. ` +
-      `Validos: ${[...VALID_TARGET_TYPES].join(', ')}`
+      `[interaction-registry] '${id}': unknown target '${target}'. ` +
+      `Valid: ${[...VALID_TARGET_TYPES].join(', ')}`
     );
   }
   if (typeof label !== 'string' || !label.trim() || label.length > MAX_LABEL_LENGTH) {
-    throw new Error(`[interaction-registry] '${id}': label invalido`);
+    throw new Error(`[interaction-registry] '${id}': invalid label`);
   }
   if (typeof execute !== 'function') {
-    throw new Error(`[interaction-registry] '${id}': sem funcao execute`);
+    throw new Error(`[interaction-registry] '${id}': no execute function`);
   }
   for (const [nome, fn] of [['canSee', canSee], ['canExecute', canExecute]]) {
     if (fn !== undefined && typeof fn !== 'function') {
-      throw new Error(`[interaction-registry] '${id}': ${nome} deve ser funcao`);
+      throw new Error(`[interaction-registry] '${id}': ${nome} must be a function`);
     }
   }
   if (distance !== undefined && !(Number.isFinite(distance) && distance > 0)) {
-    throw new Error(`[interaction-registry] '${id}': distance deve ser um numero positivo`);
+    throw new Error(`[interaction-registry] '${id}': distance must be a positive number`);
   }
   if (!VALID_AUDIT_LEVELS.has(audit)) {
     throw new Error(
-      `[interaction-registry] '${id}': audit '${audit}' desconhecido. ` +
-      `Validos: ${[...VALID_AUDIT_LEVELS].join(', ')}`
+      `[interaction-registry] '${id}': unknown audit '${audit}'. ` +
+      `Valid: ${[...VALID_AUDIT_LEVELS].join(', ')}`
     );
   }
   assertValidSchema(id, schema);
@@ -393,10 +393,10 @@ function get(id) {
 }
 
 /**
- * Interações candidatas a um tipo de alvo, já na ordem do menu.
+ * Candidate interactions for a target type, already in menu order.
  *
- * "Candidatas" e não "disponíveis": aqui não há ator, alvo nem permissão. Quem
- * filtra por `canSee` é o `interaction-service`, com contexto na mão.
+ * "Candidates" and not "available": there is no actor, target or permission here. Filtering
+ * by `canSee` is `interaction-service`'s job, with context at hand.
  *
  * @param {string} targetType
  * @returns {object[]}
@@ -410,14 +410,14 @@ function listForTarget(targetType) {
 }
 
 /**
- * Remove tudo que um módulo registrou.
+ * Removes everything a module registered.
  *
- * Chamado no `shutdown` do módulo, pelo mesmo motivo que o `module-registry`
- * remove os comandos: uma ação que continua no menu depois do módulo desligar
- * executa contra um serviço que não inicializou.
+ * Called on the module's `shutdown`, for the same reason `module-registry`
+ * removes commands: an action that stays in the menu after its module shuts down
+ * runs against a service that never initialized.
  *
  * @param {string} moduleId
- * @returns {number} quantas foram removidas
+ * @returns {number} how many were removed
  */
 function unregisterModule(moduleId) {
   let removed = 0;
@@ -430,7 +430,7 @@ function unregisterModule(moduleId) {
   return removed;
 }
 
-/** Todas as interações registradas, para diagnóstico e para a staff. */
+/** Every registered interaction, for diagnostics and for staff. */
 function list() {
   return Array.from(_interactions.values()).map(entry => ({
     id: entry.id,
@@ -444,7 +444,7 @@ function list() {
   }));
 }
 
-/** Só para teste: devolve o registro ao estado vazio entre casos. */
+/** Test only: resets the registry to empty between cases. */
 function _reset() {
   _interactions.clear();
 }

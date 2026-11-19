@@ -193,20 +193,20 @@ const REQ = 'req.teste.0001';
 
 describe('core/inventory-owner — vocabulário', () => {
   it('recusa tipo de dono desconhecido', () => {
-    assert.throws(() => ownerLib.owner('dragao', 1), /tipo de dono desconhecido/);
+    assert.throws(() => ownerLib.owner('dragao', 1), /unknown owner type/);
   });
 
   it('recusa origem de sistema fora da lista fechada', () => {
     // A lista fechada é o que torna "que caminhos criam item?" respondível por
     // leitura. Um rótulo novo é decisão de economia, não string solta.
-    assert.throws(() => ownerLib.system('presente_de_natal'), /origem de sistema desconhecida/);
+    assert.throws(() => ownerLib.system('presente_de_natal'), /unknown system source/);
     assert.doesNotThrow(() => ownerLib.system('craft'));
   });
 
   it('recusa ref vazio, negativo e longo demais', () => {
-    assert.throws(() => ownerLib.character(0), /ref invalido/);
-    assert.throws(() => ownerLib.character(-5), /ref invalido/);
-    assert.throws(() => ownerLib.owner('container', 'x'.repeat(65)), /ref invalido/);
+    assert.throws(() => ownerLib.character(0), /invalid ref/);
+    assert.throws(() => ownerLib.character(-5), /invalid ref/);
+    assert.throws(() => ownerLib.owner('container', 'x'.repeat(65)), /invalid ref/);
   });
 
   it('ref é sempre string, mesmo vindo número', () => {

@@ -195,7 +195,7 @@ function parseZones(bruto) {
       // e uma regra que quem escreveu acha que criou e nao criou.
       console.error(
         `[safe-zones] Zona '${z.id || z.cellId}' lista categoria(s) desconhecida(s): ${invalidas.join(', ')}. ` +
-        `Validas: ${[...CATEGORIAS_VALIDAS].join(', ')}. Ignoradas.`
+        `Valid: ${[...CATEGORIAS_VALIDAS].join(', ')}. Ignored.`
       );
     }
     if (blocks.length === 0) {

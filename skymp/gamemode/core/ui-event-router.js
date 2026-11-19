@@ -1,63 +1,63 @@
 /**
  * core/ui-event-router.js
  *
- * Roteamento centralizado de eventos vindos da UI (CEF) para os módulos.
- * Substitui o hardcode de um handler chamando um único módulo por vez. O
- * evento chega até aqui via `core/ui-event-gateway.js`, que recebe da CEF
- * por `mp.makeEventSource('_onUiEvent', ...)` — não por `mp.onUiEvent`
- * (property que o SkyMP nunca chamou; ver BOUND-004 no cabeçalho daquele
- * arquivo e em `docs/research/SKYMP_INTEGRATION_AUDIT.md` §5).
+ * Central routing of events coming from the UI (CEF) to the modules.
+ * Replaces the hardcoded single handler that called one module at a time. The
+ * event arrives here via `core/ui-event-gateway.js`, which receives it from the CEF
+ * through `mp.makeEventSource('_onUiEvent', ...)` — not through `mp.onUiEvent`
+ * (a property SkyMP never called; see BOUND-004 in that file's header
+ * and `docs/research/SKYMP_INTEGRATION_AUDIT.md` §5).
  *
- * Cada módulo registra um prefixo (a parte do uiEvent.type antes do primeiro ':'),
- * ex: 'governance:interaction:actions' → prefixo 'governance'.
+ * Each module registers a prefix (the part of uiEvent.type before the first ':'),
+ * e.g. 'governance:interaction:actions' → prefix 'governance'.
  *
- * Uso:
+ * Usage:
  *   uiEventRouter.register('governance', governance.handleUiEvent);
  *   uiEventRouter.register('panel', playerPanel.handleUiEvent);
  *   ...
- *   uiEventRouter.dispatch(actorId, uiEvent); // despacha para todos os handlers registrados
+ *   uiEventRouter.dispatch(actorId, uiEvent); // dispatches to the handler for its prefix
  *
- * Um handler retorna true se tratou o evento.
+ * A handler returns true if it handled the event.
  *
- * ─── O despacho a todos os handlers foi removido (13/08/2026) ───────────────
+ * ─── Dispatching to every handler was removed (2026-08-13) ──────────────────
  *
- * Até aqui, `dispatch` chamava o handler do prefixo e **depois todos os
- * outros**, incondicionalmente. O comentário original chamava isso de
- * compatibilidade com eventos `governance:interaction:*` tratados por handlers
- * que não seguiam o próprio prefixo.
+ * Until then, `dispatch` called the prefix handler and **then all the
+ * others**, unconditionally. The original comment called that
+ * compatibility with `governance:interaction:*` events handled by handlers
+ * that did not follow their own prefix.
  *
- * Aquele caso não existe mais: os dois handlers registrados hoje
- * (`governance-service` e `player-panel-service`) só agem sobre o próprio
- * prefixo, e os dois recusam o resto com `return false` — a proteção era a boa
- * educação de cada handler, não o roteador. O custo era real: **todo módulo com
- * UI via o payload de todo evento de UI de todo jogador**, e o preço de cada
- * evento crescia com o número de módulos, não com o de eventos.
+ * That case no longer exists: the two handlers registered today
+ * (`governance-service` and `player-panel-service`) only act on their own
+ * prefix, and both reject the rest with `return false` — the protection was each
+ * handler's good manners, not the router. The cost was real: **every module with
+ * UI saw the payload of every UI event from every player**, and the price of each
+ * event grew with the number of modules, not with the number of events.
  *
- * Foi o que a auditoria classificou como REFACTOR
- * (`docs/research/CORE_FRAMEWORK_AUDIT.md` §3): não era falha de segurança —
- * nenhum handler agia sobre evento alheio —, era a superfície onde a próxima
- * nasceria, e o acoplamento que o Interaction Framework existe para eliminar.
+ * That is what the audit classified as REFACTOR
+ * (`docs/research/CORE_FRAMEWORK_AUDIT.md` §3): it was not a security flaw —
+ * no handler acted on someone else's event —, it was the surface where the next one
+ * would be born, and the coupling the Interaction Framework exists to remove.
  *
- * Um evento sem dono agora é registrado uma vez por tipo, e não a cada
- * ocorrência: o `type` é escolhido pelo cliente, e um log por evento seria um
- * jeito de encher o disco do servidor de fora.
+ * An event with no owner is now logged once per type, not on every
+ * occurrence: the `type` is chosen by the client, and one log per event would be a
+ * way to fill the server's disk from the outside.
  */
 
-// Mapa de prefixo → handler(actorId, uiEvent) => boolean | Promise<boolean>
+// Map of prefix → handler(actorId, uiEvent) => boolean | Promise<boolean>
 const _handlers = new Map();
 const MAX_EVENT_TYPE_LENGTH = 128;
 
-// Tipos já reportados como sem dono. Limitado para que um cliente hostil não
-// transforme o diagnóstico em vazamento de memória.
+// Types already reported as ownerless. Bounded so a hostile client cannot
+// turn the diagnostic into a memory leak.
 const _semDono = new Set();
 const MAX_TIPOS_SEM_DONO_REPORTADOS = 64;
 
 /**
- * Valida o envelope minimo que cruza a fronteira CEF -> gamemode.
+ * Validates the minimal envelope that crosses the CEF -> gamemode boundary.
  *
- * Isto nao valida o `data`: cada modulo e dono do schema do seu comando.
- * O objetivo aqui e impedir que um payload malformado chegue a handlers que
- * assumem `uiEvent.type` como string.
+ * This does not validate `data`: each module owns the schema of its command.
+ * The goal here is to stop a malformed payload from reaching handlers that
+ * assume `uiEvent.type` is a string.
  *
  * @param {unknown} uiEvent
  * @returns {boolean}
@@ -77,18 +77,18 @@ function isValidEventEnvelope(uiEvent) {
 }
 
 /**
- * Registra um handler para um prefixo de evento.
- * @param {string} prefix - Prefixo do uiEvent.type (ex: 'governance', 'panel')
+ * Registers a handler for an event prefix.
+ * @param {string} prefix - uiEvent.type prefix (e.g. 'governance', 'panel')
  * @param {Function} handler - async (actorId, uiEvent) => boolean
  */
 function register(prefix, handler) {
-  if (!prefix) throw new Error('[ui-event-router] Handler sem prefixo');
-  if (typeof handler !== 'function') throw new Error(`[ui-event-router] Handler '${prefix}' inválido`);
+  if (!prefix) throw new Error('[ui-event-router] Handler has no prefix');
+  if (typeof handler !== 'function') throw new Error(`[ui-event-router] Handler '${prefix}' is invalid`);
   _handlers.set(prefix, handler);
 }
 
 /**
- * Remove um handler registrado.
+ * Removes a registered handler.
  * @param {string} prefix
  */
 function unregister(prefix) {
@@ -96,14 +96,14 @@ function unregister(prefix) {
 }
 
 /**
- * Despacha um uiEvent para o handler cujo prefixo bate com uiEvent.type.
+ * Dispatches a uiEvent to the handler whose prefix matches uiEvent.type.
  *
- * Só para ele. Um evento sem handler registrado para o seu prefixo não é
- * oferecido a mais ninguém — ver a nota no topo deste arquivo.
+ * Only to that one. An event with no handler registered for its prefix is not
+ * offered to anyone else — see the note at the top of this file.
  *
  * @param {number} actorId
  * @param {object} uiEvent - { type: string, data?: object }
- * @returns {Promise<boolean>} true se o handler tratou o evento
+ * @returns {Promise<boolean>} true if the handler handled the event
  */
 async function dispatch(actorId, uiEvent) {
   if (!isValidEventEnvelope(uiEvent)) return false;
@@ -114,17 +114,17 @@ async function dispatch(actorId, uiEvent) {
   if (!handler) {
     if (!_semDono.has(prefix) && _semDono.size < MAX_TIPOS_SEM_DONO_REPORTADOS) {
       _semDono.add(prefix);
-      console.warn(`[ui-event-router] Nenhum handler registrado para o prefixo '${prefix}' (primeira ocorrência).`);
+      console.warn(`[ui-event-router] No handler registered for prefix '${prefix}' (first occurrence).`);
     }
     return false;
   }
 
   try {
-    // A exceção de um handler não sobe até o gateway: lá em cima ela viraria um
-    // `return false` genérico e o nome do módulo culpado se perderia.
+    // A handler's exception does not bubble up to the gateway: up there it would become a
+    // generic `return false` and the name of the guilty module would be lost.
     return Boolean(await handler(actorId, uiEvent));
   } catch (err) {
-    console.error(`[ui-event-router] Erro no handler '${prefix}':`, err.message);
+    console.error(`[ui-event-router] Error in handler '${prefix}':`, err.message);
     return false;
   }
 }

@@ -1,44 +1,44 @@
 /**
  * core/command-registry.js
  *
- * Registro centralizado de comandos de chat.
- * Substitui o switch monolítico em commands.js.
+ * Central registry of chat commands.
+ * Replaces the monolithic switch in commands.js.
  *
- * Módulos registram seus comandos via:
+ * Modules register their commands via:
  *   commandRegistry.register('chopwood', handler, { module: 'woodcutting', phase: 'lab' });
  *
- * O dispatch é feito via:
+ * Dispatch happens via:
  *   commandRegistry.dispatch(actorId, '/chopwood', 'args...');
  *
- * Se o módulo que originou o comando não estiver habilitado,
- * o comando não é registrado e não existe para o jogador.
+ * If the module that owns a command is not enabled,
+ * the command is not registered and does not exist for the player.
  */
 
-// Mapa de comando → { handler, module, phase, description }
+// Map of command → { handler, module, phase, description }
 const _commands = new Map();
 
 /**
- * Registra um comando no registry.
+ * Registers a command in the registry.
  *
- * @param {string|string[]} command - Comando (ex: '/chopwood') ou lista de aliases
+ * @param {string|string[]} command - Command (e.g. '/chopwood') or a list of aliases
  * @param {Function} handler - async function(actorId, args) → void
  * @param {object} [opts]
- * @param {string} [opts.module] - ID do módulo de origem
- * @param {string} [opts.phase] - Fase do módulo ('core', 'lab', 'parked')
- * @param {string} [opts.description] - Descrição para /help
- * @param {string} [opts.usage] - Exemplo de uso
- * @param {boolean} [opts.hidden] - Tarefa 11 (Legacy Command Cleanup): não
- *   aparece na listagem voltada pro jogador (`list({ playerFacing: true })`),
- *   mas continua registrado e funcional — é pra debug/staff/fallback de rede
- *   ruim, não pra sumir. Comando que virou ação contextual real (o menu de
- *   interação, o prompt `[E]`) marca `hidden: true` em vez de ser removido.
+ * @param {string} [opts.module] - ID of the owning module
+ * @param {string} [opts.phase] - Module phase ('core', 'lab', 'parked')
+ * @param {string} [opts.description] - Description for /help
+ * @param {string} [opts.usage] - Usage example
+ * @param {boolean} [opts.hidden] - Task 11 (Legacy Command Cleanup): does not
+ *   show up in the player-facing listing (`list({ playerFacing: true })`),
+ *   but stays registered and working — it is for debug/staff/bad-network
+ *   fallback, not for disappearing. A command that became a real contextual
+ *   action (the interaction menu, the `[E]` prompt) is marked `hidden: true` instead of being removed.
  */
 function register(command, handler, opts = {}) {
   const commands = Array.isArray(command) ? command : [command];
   for (const cmd of commands) {
     const normalized = cmd.toLowerCase().startsWith('/') ? cmd.toLowerCase() : `/${cmd.toLowerCase()}`;
     if (_commands.has(normalized)) {
-      console.warn(`[command-registry] Aviso: Comando ${normalized} sobrescrito por módulo '${opts.module || 'unknown'}'`);
+      console.warn(`[command-registry] Warning: command ${normalized} overridden by module '${opts.module || 'unknown'}'`);
     }
     _commands.set(normalized, {
       handler,
@@ -52,7 +52,7 @@ function register(command, handler, opts = {}) {
 }
 
 /**
- * Remove um comando do registry (usado quando um módulo é desligado).
+ * Removes a command from the registry (used when a module shuts down).
  * @param {string|string[]} command
  */
 function unregister(command) {
@@ -64,37 +64,37 @@ function unregister(command) {
 }
 
 /**
- * Despacha um comando para o handler registrado.
+ * Dispatches a command to its registered handler.
  *
  * @param {number} actorId
- * @param {string} command - Comando com '/' (ex: '/chopwood')
- * @param {string} args - Argumentos como string
- * @returns {boolean} true se o comando foi encontrado e despachado, false se não existe
+ * @param {string} command - Command with '/' (e.g. '/chopwood')
+ * @param {string} args - Arguments as a string
+ * @returns {boolean} true if the command was found and dispatched, false if it does not exist
  */
 function dispatch(actorId, command, args) {
   const normalized = command.toLowerCase();
   const entry = _commands.get(normalized);
 
   if (!entry) {
-    return false; // Comando não encontrado
+    return false; // Command not found
   }
 
   try {
     const result = entry.handler(actorId, args);
     if (result instanceof Promise) {
       result.catch((err) => {
-        console.error(`[command-registry] Erro no handler de ${normalized} (módulo: ${entry.module}):`, err.message);
+        console.error(`[command-registry] Error in handler for ${normalized} (module: ${entry.module}):`, err.message);
       });
     }
   } catch (err) {
-    console.error(`[command-registry] Erro síncrono no handler de ${normalized} (módulo: ${entry.module}):`, err.message);
+    console.error(`[command-registry] Synchronous error in handler for ${normalized} (module: ${entry.module}):`, err.message);
   }
 
   return true;
 }
 
 /**
- * Verifica se um comando está registrado.
+ * Checks whether a command is registered.
  * @param {string} command
  * @returns {boolean}
  */
@@ -104,13 +104,13 @@ function has(command) {
 }
 
 /**
- * Lista comandos registrados.
+ * Lists registered commands.
  *
- * Sem opções, lista TUDO — inclusive `hidden` — porque é isso que um painel
- * de staff/debug precisa ver. Ainda não existe um `/help` neste projeto (Tarefa
- * 11 não inventou um); quando um for escrito, ele é quem passa
- * `playerFacing: true`, não este arquivo quem decide sozinho o que o jogador
- * vê.
+ * With no options it lists EVERYTHING — including `hidden` — because that is
+ * what a staff/debug panel needs to see. There is no `/help` in this project
+ * yet (Task 11 did not invent one); when one is written, it is the one that
+ * passes `playerFacing: true`, not this file deciding on its own what the
+ * player sees.
  *
  * @param {{playerFacing?: boolean}} [opcoes]
  * @returns {Array<{command: string, module: string, phase: string, description: string, usage: string, hidden: boolean}>}
