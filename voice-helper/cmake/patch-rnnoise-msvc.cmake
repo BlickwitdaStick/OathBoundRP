@@ -1,17 +1,17 @@
-# Converte as 5 arrays de tamanho variável (VLA, C99) do rnnoise v0.1.1 em
-# alocação por _alloca. O compilador C do MSVC não aceita VLA; clang e gcc sim.
-# Mesma semântica (pilha, liberada no retorno da função), sem precisar saber o
-# limite superior de cada uma.
+# Converts the 5 variable-length arrays (VLA, C99) in rnnoise v0.1.1 into
+# _alloca allocations. MSVC's C compiler doesn't accept VLAs; clang and gcc do.
+# Same semantics (stack, freed when the function returns), without needing to
+# know each one's upper bound.
 #
-# Idempotente: depois da troca o padrão antigo não casa mais. Passado como
-# PATCH_COMMAND do FetchContent_Declare(rnnoise ...).
+# Idempotent: after the replacement the old pattern no longer matches. Passed as
+# the PATCH_COMMAND of FetchContent_Declare(rnnoise ...).
 
 set(_src "${RNNOISE_SRC_DIR}")
 
 function(_patch file)
   set(path "${_src}/src/${file}")
   file(READ "${path}" content)
-  # garante <malloc.h> para _alloca no MSVC
+  # ensures <malloc.h> for _alloca on MSVC
   if(NOT content MATCHES "#include <malloc.h>")
     set(content "#ifdef _MSC_VER\n#include <malloc.h>\n#endif\n${content}")
   endif()
@@ -40,4 +40,4 @@ endfunction()
 
 _patch(celt_lpc.c)
 _patch(pitch.c)
-message(STATUS "rnnoise: VLAs convertidas para _alloca (patch MSVC)")
+message(STATUS "rnnoise: VLAs converted to _alloca (MSVC patch)")

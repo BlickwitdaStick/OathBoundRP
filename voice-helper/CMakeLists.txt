@@ -1,29 +1,29 @@
 cmake_minimum_required(VERSION 3.21)
 
-# Projeto deliberadamente separado do resto do monorepo: o gamemode é JS puro
-# carregado direto pelo SkyMP e não tem etapa de build. Amarrar um toolchain C++
-# ao `npm test` faria todo contribuidor precisar de MSVC pra rodar teste de
-# JavaScript. Este diretório se compila sozinho.
-project(voice-helper LANGUAGES CXX C)  # C: rnnoise (FetchContent) é C puro
+# Project deliberately kept separate from the rest of the monorepo: the gamemode
+# is plain JS loaded directly by SkyMP and has no build step. Tying a C++
+# toolchain to `npm test` would make every contributor need MSVC to run
+# JavaScript tests. This directory builds on its own.
+project(voice-helper LANGUAGES CXX C)  # C: rnnoise (FetchContent) is plain C
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Empacotamento sem DLLs: o build padrão é o triplet estático do vcpkg
-# (`x64-windows-static`), então `opus` e `zlib` entram no exe e o launcher
-# carrega um arquivo só. Ver docs/technical/LAUNCHER_DISTRIBUTION.md §2.
+# DLL-free packaging: the default build is vcpkg's static triplet
+# (`x64-windows-static`), so `opus` and `zlib` go into the exe and the launcher
+# ships a single file. See docs/technical/LAUNCHER_DISTRIBUTION.md §2.
 #
-# Triplet estático linka a CRT estática (/MT); nosso código e o alvo `rnnoise`
-# têm que casar com isso, senão o link falha com LNK2038 (RuntimeLibrary
-# mismatch) — o vcpkg cuida das dependências, não dos alvos deste arquivo.
+# The static triplet links the static CRT (/MT); our code and the `rnnoise`
+# target have to match it, otherwise the link fails with LNK2038 (RuntimeLibrary
+# mismatch) — vcpkg takes care of the dependencies, not of this file's targets.
 if(VCPKG_TARGET_TRIPLET MATCHES "-static")
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
 find_package(unofficial-miniaudio CONFIG QUIET)
 if(NOT unofficial-miniaudio_FOUND)
-  # A port do miniaudio no vcpkg ja exportou o alvo com nomes diferentes ao
-  # longo do tempo. Sendo header-only, achar o cabecalho basta.
+  # The vcpkg miniaudio port has exported the target under different names over
+  # time. Since it's header-only, finding the header is enough.
   find_path(MINIAUDIO_INCLUDE_DIR miniaudio.h REQUIRED)
 endif()
 
@@ -31,14 +31,15 @@ find_package(ixwebsocket CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Opus CONFIG REQUIRED)
 
-# rnnoise: supressão de ruído.
+# rnnoise: noise suppression.
 #
-# NÃO vem do vcpkg: a port `rnnoise` é declarada `!windows` (usa autotools e
-# falha no MSVC — visto no primeiro build, 07/08/2026). Em vez de forçar com
-# `--allow-unsupported`, buscamos o fonte direto na tag v0.1.1 do Xiph, que é a
-# última antes de o modelo virar download separado — os pesos da rede vêm em
-# `src/rnn_data.c`, no próprio repositório. São ~7 arquivos C sem dependência
-# nenhuma; compilamos como lib estática aqui.
+# It does NOT come from vcpkg: the `rnnoise` port is declared `!windows` (it
+# uses autotools and fails on MSVC — seen on the first build, 2026-08-07).
+# Instead of forcing it with `--allow-unsupported`, we fetch the source straight
+# from Xiph's v0.1.1 tag, the last one before the model became a separate
+# download — the network weights live in `src/rnn_data.c`, in the repository
+# itself. It's ~7 C files with no dependencies at all; we build them as a
+# static lib here.
 include(FetchContent)
 FetchContent_Declare(rnnoise
   GIT_REPOSITORY https://github.com/xiph/rnnoise
@@ -62,9 +63,9 @@ add_library(rnnoise STATIC
 target_include_directories(rnnoise PUBLIC ${rnnoise_SOURCE_DIR}/include)
 target_include_directories(rnnoise PRIVATE ${rnnoise_SOURCE_DIR}/src)
 if(MSVC)
-  # kiss_fft.c e pitch.c usam M_PI; o MSVC só o expõe com esta macro.
+  # kiss_fft.c and pitch.c use M_PI; MSVC only exposes it with this macro.
   target_compile_definitions(rnnoise PRIVATE _USE_MATH_DEFINES _CRT_SECURE_NO_WARNINGS)
-  target_compile_options(rnnoise PRIVATE /w)  # fonte de terceiros, sem /W4
+  target_compile_options(rnnoise PRIVATE /w)  # third-party source, no /W4
 endif()
 
 add_executable(voice-helper src/main.cpp)
@@ -84,14 +85,14 @@ target_link_libraries(voice-helper PRIVATE
 target_link_libraries(voice-helper PRIVATE rnnoise)
 
 if(WIN32)
-  # WASAPI vem do backend do miniaudio; estas sao as libs de socket e de
-  # enumeracao de dispositivo que ele e o ixwebsocket precisam no Windows.
+  # WASAPI comes from miniaudio's backend; these are the socket and device
+  # enumeration libs that it and ixwebsocket need on Windows.
   #
-  # bcrypt: o ixwebsocket arrasta mbedtls (TLS), e o entropy_poll do mbedcrypto
-  # chama BCryptGenRandom, que mora em bcrypt.lib. Sem ela o link falha com
-  # LNK2019 mesmo sem usarmos TLS em lugar nenhum — o objeto entra na lib
-  # inteira, nao so o que a gente chama. Descoberto no primeiro build de
-  # verdade, 07/08/2026; ver VOICE_NATIVE_HELPER.md §8.3.
+  # bcrypt: ixwebsocket pulls in mbedtls (TLS), and mbedcrypto's entropy_poll
+  # calls BCryptGenRandom, which lives in bcrypt.lib. Without it the link fails
+  # with LNK2019 even though we don't use TLS anywhere — the object brings in
+  # the whole lib, not just what we call. Found on the first real build,
+  # 2026-08-07; see VOICE_NATIVE_HELPER.md §8.3.
   target_link_libraries(voice-helper PRIVATE ws2_32 ole32 winmm bcrypt)
   target_compile_definitions(voice-helper PRIVATE
     WIN32_LEAN_AND_MEAN

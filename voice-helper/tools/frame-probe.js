@@ -1,32 +1,33 @@
 #!/usr/bin/env node
 /**
- * frame-probe.js — fala o mesmo protocolo do helper nativo, em Node.
+ * frame-probe.js — speaks the same protocol as the native helper, in Node.
  *
- * Existe porque o helper em C++ e o relay do servidor falham de formas
- * diferentes, e depurar os dois ao mesmo tempo é como o projeto acabou com um
- * VOIP que nunca produziu áudio. Esta sonda isola as metades: se ela envia e o
- * navegador toca, o problema (quando houver) está na captura WASAPI, não no
- * transporte, no relay ou na reprodução.
+ * It exists because the C++ helper and the server relay fail in different
+ * ways, and debugging both at once is how the project ended up with a VOIP
+ * that never produced audio. This probe isolates the halves: if it sends and
+ * the browser plays, the problem (when there is one) is in WASAPI capture, not
+ * in the transport, the relay or playback.
  *
- * Foi o que validou o servidor e a UI na Fase 1 — ver
+ * It's what validated the server and the UI in Phase 1 — see
  * docs/technical/VOICE_NATIVE_HELPER.md §7.
  *
- * NÃO substitui o helper: não captura microfone nenhum, gera um tom sintético.
+ * It does NOT replace the helper: it captures no microphone, it generates a
+ * synthetic tone.
  *
- * Uso:
+ * Usage:
  *   node frame-probe.js --actor-id 0xFF000A12 --ticket <token> [--host h] [--port p]
  *                       [--freq 440] [--seconds 10] [--role sender|listener]
  *   node frame-probe.js --listen --actor-id 0xFF000A13 --ticket <token>
  *
- * O papel segue o modo: gerando tom autentica como `sender` (o que o helper faz),
- * com `--listen` autentica como `listener` (o que a UI faz). Como os tickets são
- * por papel, peça ao harness o ticket certo: `/ticket?actorId=…&role=sender`.
- * Ver docs/technical/VOICE_NATIVE_HELPER.md §10.
+ * The role follows the mode: generating a tone authenticates as `sender` (what
+ * the helper does), with `--listen` it authenticates as `listener` (what the UI
+ * does). Since tickets are per role, ask the harness for the right ticket:
+ * `/ticket?actorId=…&role=sender`. See docs/technical/VOICE_NATIVE_HELPER.md §10.
  */
 
-// `ws` é resolvido a partir do gamemode, onde ele já é dependência declarada.
-// Um `node_modules` próprio aqui seria uma segunda cópia da mesma biblioteca
-// podendo divergir de versão justamente no componente que testa o protocolo.
+// `ws` is resolved from the gamemode, where it's already a declared dependency.
+// A separate `node_modules` here would be a second copy of the same library
+// that could drift in version precisely in the component that tests the protocol.
 const path = require('path');
 const { createRequire } = require('module');
 const gamemodeRequire = createRequire(
@@ -34,7 +35,7 @@ const gamemodeRequire = createRequire(
 );
 const WebSocket = gamemodeRequire('ws');
 
-// Tem que bater com AUDIO_* em voip-service.js e com o main.cpp do helper.
+// Must match AUDIO_* in voip-service.js and the helper's main.cpp.
 const SAMPLE_RATE = 48000;
 const FRAME_MS = 20;
 const SAMPLES_PER_FRAME = (SAMPLE_RATE / 1000) * FRAME_MS; // 960
@@ -55,32 +56,32 @@ function parseArgs(argv) {
     else if (a === '--freq') opt.freq = Number.parseFloat(argv[++i]);
     else if (a === '--seconds') opt.seconds = Number.parseFloat(argv[++i]);
     else if (a === '--amplitude') opt.amplitude = Number.parseFloat(argv[++i]);
-    else { console.error(`argumento desconhecido: ${a}`); process.exit(2); }
+    else { console.error(`unknown argument: ${a}`); process.exit(2); }
   }
   if (!Number.isFinite(opt.actorId) || !opt.ticket) {
-    console.error('faltou --actor-id e/ou --ticket. Ver o cabeçalho deste arquivo.');
+    console.error('missing --actor-id and/or --ticket. See the header of this file.');
     process.exit(2);
   }
   if (opt.role !== null && opt.role !== 'listener' && opt.role !== 'sender') {
-    console.error(`--role invalido: ${opt.role} (use 'listener' ou 'sender')`);
+    console.error(`invalid --role: ${opt.role} (use 'listener' or 'sender')`);
     process.exit(2);
   }
   return opt;
 }
 
-/** Papel efetivo: explícito se veio, senão o que o modo implica. */
+/** Effective role: explicit if given, otherwise what the mode implies. */
 function effectiveRole(opt) {
   if (opt.role !== null) return opt.role;
   return opt.listen ? 'listener' : 'sender';
 }
 
-/** Um quadro de 20ms de senoide, PCM 16-bit LE mono, contínuo entre quadros. */
+/** One 20ms sine frame, 16-bit LE mono PCM, continuous across frames. */
 function makeToneFrame(phase, freq, amplitude) {
   const buf = Buffer.allocUnsafe(SAMPLES_PER_FRAME * 2);
   const step = (2 * Math.PI * freq) / SAMPLE_RATE;
   for (let i = 0; i < SAMPLES_PER_FRAME; i++) {
-    // A fase continua de um quadro pro outro de propósito: reiniciar em zero a
-    // cada 20ms produziria um clique de 50Hz que mascararia problema de jitter.
+    // The phase carries over from one frame to the next on purpose: restarting
+    // at zero every 20ms would produce a 50Hz click that would mask jitter problems.
     const v = Math.sin(phase + i * step) * amplitude;
     buf.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(v * 32767))), i * 2);
   }
@@ -96,12 +97,12 @@ let sent = 0;
 let phase = 0;
 
 ws.on('open', () => {
-  console.log(`[probe] conectado em ${url}; autenticando como 0x${opt.actorId.toString(16)}`);
-  // O papel espelha o modo: quem gera tom faz o que o helper faz (`sender`),
-  // quem só mede faz o que a UI faz (`listener`). Assim a sonda exercita a
-  // mesma conexão dupla de um jogador real, e não o arranjo de dois atores
-  // distintos que a Fase 1 usou pra contornar a colisão de actorId.
-  // `--role` força, pra testar explicitamente o lado errado.
+  console.log(`[probe] connected to ${url}; authenticating as 0x${opt.actorId.toString(16)}`);
+  // The role mirrors the mode: generating a tone does what the helper does
+  // (`sender`), only measuring does what the UI does (`listener`). That way the
+  // probe exercises the same dual connection as a real player, rather than the
+  // two-distinct-actors arrangement Phase 1 used to work around the actorId
+  // collision. `--role` forces it, to test the wrong side explicitly.
   ws.send(JSON.stringify({
     type: 'auth', actorId: opt.actorId, ticket: opt.ticket, role: effectiveRole(opt)
   }));
@@ -113,14 +114,14 @@ ws.on('message', (raw) => {
   const msg = JSON.parse(raw.toString());
 
   if (msg.type === 'auth_ok') {
-    console.log('[probe] autenticado.');
-    if (opt.listen) { console.log('[probe] modo escuta; aguardando audio_frame.'); return; }
+    console.log('[probe] authenticated.');
+    if (opt.listen) { console.log('[probe] listen mode; waiting for audio_frame.'); return; }
     startSending();
     return;
   }
 
   if (msg.type === 'auth_failed') {
-    console.error('[probe] auth recusada — ticket expirado (30s), já usado, ou de outro ator.');
+    console.error('[probe] auth rejected — ticket expired (30s), already used, or for another actor.');
     process.exit(1);
   }
 
@@ -131,7 +132,7 @@ ws.on('message', (raw) => {
     s.bytes += Buffer.from(msg.data, 'base64').length;
     s.volumes.add(msg.volume);
     if (s.frames === 1 || s.frames % 50 === 0) {
-      console.log(`[probe] <- 0x${msg.fromActorId.toString(16)}: ${s.frames} quadros, ` +
+      console.log(`[probe] <- 0x${msg.fromActorId.toString(16)}: ${s.frames} frames, ` +
                   `${s.bytes} bytes, volumes ${[...s.volumes].join(',')}`);
     }
     return;
@@ -144,27 +145,27 @@ ws.on('message', (raw) => {
 
 function startSending() {
   const started = Date.now();
-  console.log(`[probe] enviando tom de ${opt.freq}Hz, quadros de ${FRAME_MS}ms.`);
+  console.log(`[probe] sending a ${opt.freq}Hz tone, ${FRAME_MS}ms frames.`);
   timer = setInterval(() => {
     const t = makeToneFrame(phase, opt.freq, opt.amplitude);
     phase = t.phase;
     ws.send(JSON.stringify({ type: 'audio_frame', seq: sent, data: t.buf.toString('base64') }));
     sent++;
-    if (sent % 50 === 0) console.log(`[probe] -> ${sent} quadros enviados (${sent * FRAME_MS / 1000}s)`);
+    if (sent % 50 === 0) console.log(`[probe] -> ${sent} frames sent (${sent * FRAME_MS / 1000}s)`);
     if (opt.seconds > 0 && Date.now() - started >= opt.seconds * 1000) shutdown();
   }, FRAME_MS);
 }
 
 function shutdown() {
   if (timer) clearInterval(timer);
-  console.log(`[probe] fim. enviados=${sent}`);
+  console.log(`[probe] done. sent=${sent}`);
   for (const [id, s] of received) {
-    console.log(`[probe] recebidos de 0x${id.toString(16)}: ${s.frames} quadros, ${s.bytes} bytes`);
+    console.log(`[probe] received from 0x${id.toString(16)}: ${s.frames} frames, ${s.bytes} bytes`);
   }
   ws.close();
   setTimeout(() => process.exit(0), 100);
 }
 
-ws.on('error', (err) => { console.error('[probe] erro:', err.message); process.exit(1); });
-ws.on('close', () => { console.log('[probe] socket fechado.'); if (timer) clearInterval(timer); });
+ws.on('error', (err) => { console.error('[probe] error:', err.message); process.exit(1); });
+ws.on('close', () => { console.log('[probe] socket closed.'); if (timer) clearInterval(timer); });
 process.on('SIGINT', shutdown);

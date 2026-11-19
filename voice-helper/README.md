@@ -1,57 +1,59 @@
 # voice-helper
 
-Executável Windows que captura o microfone **fora do navegador embutido do
-client SkyMP** e envia os quadros para o `voip-service` do gamemode, que
-retransmite por proximidade.
+A Windows executable that captures the microphone **outside the SkyMP client's
+embedded browser** and sends the frames to the gamemode's `voip-service`, which
+relays them by proximity.
 
-Existe porque o CEF do client não libera `getUserMedia`, e a flag do Chromium que
-liberava foi **removida de propósito** na SkyrimPlatform 2.1 — revertê-la
-exporia o microfone do jogador a qualquer servidor SkyMP que ele conectasse
-depois. A arquitetura e o porquê estão em
+It exists because the client's CEF does not allow `getUserMedia`, and the
+Chromium flag that allowed it was **deliberately removed** in SkyrimPlatform 2.1
+— reverting that would expose the player's microphone to any SkyMP server they
+connected to afterwards. The architecture and the reasoning are in
 [`docs/technical/VOICE_NATIVE_HELPER.md`](../docs/technical/VOICE_NATIVE_HELPER.md).
 
-> ✅ **Compilado e executado em 07/08/2026.** O primeiro build de verdade passou
-> (MSVC 19.44, CMake 4.4.2, vcpkg 2026-07-27) e o helper **capturou áudio real**:
-> 50,1 quadros/s contra 50 nominal, enquadramento exato, zero descartes. Números
-> e o erro de link que apareceu no caminho: VOICE_NATIVE_HELPER.md §8.3 e §8.4.
+> ✅ **Built and run on 2026-08-07.** The first real build passed (MSVC 19.44,
+> CMake 4.4.2, vcpkg 2026-07-27) and the helper **captured real audio**: 50.1
+> frames/s against 50 nominal, exact framing, zero drops. Numbers and the link
+> error that came up along the way: VOICE_NATIVE_HELPER.md §8.3 and §8.4.
 >
-> ⚠️ **Ainda ninguém escutou.** Que a captura entrega sinal está medido; que a
-> voz sai **inteligível** não — isso precisa de uma pessoa (§8.2). É o passo 6 da
-> etapa 8.2 do `FASE_0_ROTEIRO.md`.
+> ⚠️ **Nobody has listened yet.** That capture delivers a signal is measured;
+> that the voice comes out **intelligible** is not — that needs a person (§8.2).
+> It's step 6 of stage 8.2 in `FASE_0_ROTEIRO.md`.
 
-## Limitações desta fase (deliberadas)
+## Limitations of this phase (deliberate)
 
-- **O ticket é passado à mão**, por linha de comando. Não há handoff automático
-  entre o jogo e o helper — é trabalho da Fase 3. Para conseguir ler o ticket
-  durante um teste manual existe um andaime temporário
-  (`VOIP_DEBUG_EXPOSE_TICKET`), descrito em VOICE_NATIVE_HELPER.md §11.
-- ~~**O helper e a UI do mesmo jogador não coexistem.**~~ **Resolvido em
-  07/08/2026.** O `auth` passou a levar `role` (`listener` para a UI, `sender`
-  para o helper) e o `voip-service` guarda as duas conexões por ator. O helper
-  manda `role: "sender"` sozinho — não há nada a fazer na linha de comando. Ver
-  VOICE_NATIVE_HELPER.md §10.
-- **Sem UI, sem bandeja, sem serviço.** É um processo de terminal; sai com Ctrl+C.
-- **Supressão de ruído: RNNoise, ligada por padrão.** Roda no laço de envio,
-  quadro a quadro, e tira teclado/ventilador/chiado de ambiente antes do relay.
-  `--no-denoise` desliga (pra comparar A/B). Se o RNNoise não inicializar o
-  helper segue com áudio cru em vez de abortar.
-- **Sem cancelamento de eco.** RNNoise só faz supressão de ruído, não AEC — quem
-  usa caixa de som em vez de fone ainda realimenta a própria voz na cena.
-- **Opus por padrão** (24 kbit/s VOIP, ~30x menos banda que o PCM cru). O quadro
-  vai marcado `codec:"opus"`; o servidor não decodifica, só repassa a etiqueta, e
-  o `index.html` decodifica via WebCodecs (`AudioDecoder`). `--pcm` volta ao PCM
-  s16le cru — é o que a sonda `frame-probe.js` fala e o modo de isolar defeito.
-  **Precisa de WebCodecs no runtime do client** (CEF 108 tem; se a build do
-  SkyrimPlatform tiver desligado, use `--pcm` até resolver).
+- **The ticket is passed by hand**, on the command line. There is no automatic
+  handoff between the game and the helper — that's Phase 3 work. To be able to
+  read the ticket during a manual test there is temporary scaffolding
+  (`VOIP_DEBUG_EXPOSE_TICKET`), described in VOICE_NATIVE_HELPER.md §11.
+- ~~**The helper and the UI of the same player can't coexist.**~~ **Fixed on
+  2026-08-07.** `auth` now carries `role` (`listener` for the UI, `sender` for
+  the helper) and the `voip-service` keeps both connections per actor. The
+  helper sends `role: "sender"` on its own — there's nothing to do on the
+  command line. See VOICE_NATIVE_HELPER.md §10.
+- **No UI, no tray icon, no service.** It's a terminal process; quit with Ctrl+C.
+- **Noise suppression: RNNoise, on by default.** It runs in the send loop, frame
+  by frame, and removes keyboard/fan/ambient hiss before the relay.
+  `--no-denoise` turns it off (for A/B comparison). If RNNoise fails to
+  initialize, the helper continues with raw audio instead of aborting.
+- **No echo cancellation.** RNNoise only does noise suppression, not AEC —
+  someone using speakers instead of headphones still feeds their own voice back
+  into the scene.
+- **Opus by default** (24 kbit/s VOIP, ~30x less bandwidth than raw PCM). The
+  frame is tagged `codec:"opus"`; the server doesn't decode, it just passes the
+  tag along, and `index.html` decodes via WebCodecs (`AudioDecoder`). `--pcm`
+  goes back to raw s16le PCM — it's what the `frame-probe.js` probe speaks and
+  the way to isolate defects. **Requires WebCodecs in the client runtime** (CEF
+  108 has it; if the SkyrimPlatform build has it disabled, use `--pcm` until
+  that's resolved).
 
-## Compilar
+## Building
 
-Requisitos: Windows, Visual Studio 2022 (workload "Desenvolvimento para desktop
-com C++"), CMake ≥ 3.21 e vcpkg.
+Requirements: Windows, Visual Studio 2022 ("Desktop development with C++"
+workload), CMake ≥ 3.21 and vcpkg.
 
-**0. Se a máquina não tiver o toolchain** (é o caso da máquina de
-desenvolvimento até 07/08/2026 — ver VOICE_NATIVE_HELPER.md §8.1). Cada comando
-pede elevação; o primeiro baixa ~5–8 GB e demora:
+**0. If the machine doesn't have the toolchain** (the case for the development
+machine until 2026-08-07 — see VOICE_NATIVE_HELPER.md §8.1). Each command asks
+for elevation; the first one downloads ~5–8 GB and takes a while:
 
 ```bash
 winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
@@ -61,11 +63,11 @@ winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--quiet -
 winget install --id Kitware.CMake
 ```
 
-Depois abra um terminal novo (o PATH só vale a partir dele) e confirme com
-`where cmake` e `where cl` antes de seguir. Se `cl` não aparecer, use o
-"Developer Command Prompt for VS 2022" em vez do terminal comum.
+Then open a new terminal (PATH only applies from there on) and confirm with
+`where cmake` and `where cl` before continuing. If `cl` doesn't show up, use the
+"Developer Command Prompt for VS 2022" instead of a regular terminal.
 
-**1. vcpkg, se ainda não houver**
+**1. vcpkg, if not already present**
 
 ```bash
 git clone https://github.com/microsoft/vcpkg C:/vcpkg
@@ -75,123 +77,126 @@ git clone https://github.com/microsoft/vcpkg C:/vcpkg
 C:/vcpkg/bootstrap-vcpkg.bat
 ```
 
-**2. Configurar** (a partir de `voice-helper/`). O `vcpkg.json` está em modo
-manifesto: as dependências (`miniaudio`, `ixwebsocket`, `nlohmann-json`, `opus`)
-são baixadas e compiladas nesta etapa, sem `vcpkg install` separado.
+**2. Configure** (from `voice-helper/`). `vcpkg.json` is in manifest mode: the
+dependencies (`miniaudio`, `ixwebsocket`, `nlohmann-json`, `opus`) are
+downloaded and built in this step, with no separate `vcpkg install`.
 
 ```bash
 cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
 ```
 
-**Triplet estático de propósito:** `opus` e `zlib` entram no exe, que sai
-**standalone** — só depende de DLLs de sistema do Windows. É o que o
-empacotamento pelo launcher espera (um arquivo, não um exe + DLLs soltas). O
-`CMakeLists.txt` casa a CRT estática (`/MT`) sozinho quando o triplet termina em
-`-static`. Com `x64-windows` (dinâmico) o build também passa, mas aí `opus.dll`
-e `z.dll` precisam ficar ao lado do exe.
+**Static triplet on purpose:** `opus` and `zlib` go into the exe, which comes
+out **standalone** — it only depends on Windows system DLLs. That's what
+packaging through the launcher expects (one file, not an exe + loose DLLs).
+`CMakeLists.txt` matches the static CRT (`/MT`) on its own when the triplet ends
+in `-static`. With `x64-windows` (dynamic) the build also passes, but then
+`opus.dll` and `z.dll` must sit next to the exe.
 
-**3. Compilar**
+**3. Build**
 
 ```bash
 cmake --build build --config Release
 ```
 
-O binário sai em `build/Release/voice-helper.exe` (~2,2 MB, standalone).
+The binary ends up in `build/Release/voice-helper.exe` (~2.2 MB, standalone).
 
-Se alguma port não resolver, **anote o erro exato em VOICE_NATIVE_HELPER.md §8
-antes de trocar de biblioteca** — a decisão de usar `miniaudio` está registrada
-com motivo, e trocá-la em silêncio apagaria o motivo junto.
+If some port doesn't resolve, **write down the exact error in
+VOICE_NATIVE_HELPER.md §8 before switching libraries** — the decision to use
+`miniaudio` is recorded with its reasoning, and swapping it silently would erase
+the reasoning along with it.
 
-**O que de fato aconteceu no primeiro build (07/08/2026).** As três ports
-resolveram com os nomes que já estavam no `vcpkg.json`.
+**What actually happened on the first build (2026-08-07).** All three ports
+resolved with the names already in `vcpkg.json`.
 
-A falha que este README antecipava — símbolo duplicado do `miniaudio` se a port
-viesse pré-compilada — **não aconteceu**: a port é header-only (instala só o
-`miniaudio.h`), então o `#define MINIAUDIO_IMPLEMENTATION` está certo e o
-`find_path` do `CMakeLists.txt` é o caminho correto.
+The failure this README anticipated — a duplicate `miniaudio` symbol if the
+port came precompiled — **did not happen**: the port is header-only (it installs
+only `miniaudio.h`), so `#define MINIAUDIO_IMPLEMENTATION` is right and the
+`find_path` in `CMakeLists.txt` is the correct path.
 
-O erro real foi no **link**, e de outra dependência:
+The real error was at **link** time, and from another dependency:
 
 ```
-mbedcrypto.lib(entropy_poll.c.obj) : error LNK2019: símbolo externo não
-resolvido, BCryptGenRandom
+mbedcrypto.lib(entropy_poll.c.obj) : error LNK2019: unresolved external
+symbol BCryptGenRandom
 ```
 
-O `ixwebsocket` arrasta `mbedtls`, que precisa de `bcrypt.lib` no Windows —
-mesmo sem usarmos TLS. Corrigido adicionando `bcrypt` ao `target_link_libraries`.
-Detalhe em VOICE_NATIVE_HELPER.md §8.3.
+`ixwebsocket` pulls in `mbedtls`, which needs `bcrypt.lib` on Windows — even
+though we don't use TLS. Fixed by adding `bcrypt` to `target_link_libraries`.
+Details in VOICE_NATIVE_HELPER.md §8.3.
 
-## Rodar
+## Running
 
 ```bash
 voice-helper.exe --actor-id 0xFF000A12 --ticket 753f03d8fa3c944a4c7b1dff7e7a08fb --host 127.0.0.1 --port 7778
 ```
 
-| Argumento | Obrigatório | Padrão | O quê |
+| Argument | Required | Default | What |
 |---|---|---|---|
-| `--actor-id` | sim | — | formID do ator, decimal ou `0x`-hex |
-| `--ticket` | sim | — | token de uso único emitido pelo `/voz` |
-| `--host` | não | `127.0.0.1` | host do `voip-service` |
-| `--port` | não | `7778` | porta do `voip-service` |
+| `--actor-id` | yes | — | actor formID, decimal or `0x`-hex |
+| `--ticket` | yes | — | single-use token issued by `/voice` |
+| `--host` | no | `127.0.0.1` | `voip-service` host |
+| `--port` | no | `7778` | `voip-service` port |
 
-**O ticket vale 30 segundos e serve uma vez só.** Auth recusada quase sempre é
-ticket vencido entre o `/voz` e o comando — rode `/voz` de novo e use o novo.
+**The ticket is valid for 30 seconds and works only once.** A rejected auth is
+almost always a ticket that expired between `/voice` and the command — run
+`/voice` again and use the new one.
 
-O servidor precisa estar com `ENABLE_VOIP_SERVICE=true`.
+The server needs `ENABLE_VOIP_SERVICE=true`.
 
-## Testar sem compilar nada
+## Testing without building anything
 
-`tools/` tem as duas ferramentas que validaram a Fase 1. As duas usam o `ws` do
-gamemode; nenhuma tem `node_modules` próprio.
+`tools/` has the two tools that validated Phase 1. Both use the gamemode's
+`ws`; neither has its own `node_modules`.
 
-**Harness** — sobe o `voip-service` real com posições falsas e serve o
-`index.html` de verdade:
+**Harness** — starts the real `voip-service` with fake positions and serves the
+real `index.html`:
 
 ```bash
 node voice-helper/tools/e2e-harness.js --voip-port 7778 --http-port 8099
 ```
 
-> ⚠️ O harness emite ticket de voz para qualquer `actorId` que pedir, **sem
-> autenticação** — é exatamente o furo que o handshake por ticket fecha. Só em
-> `127.0.0.1`, em máquina de desenvolvimento.
+> ⚠️ The harness issues a voice ticket for any `actorId` that asks, **with no
+> authentication** — exactly the hole the ticket handshake closes. Only on
+> `127.0.0.1`, on a development machine.
 
-Rotas: `/` (a UI), `/ticket?actorId=&role=`, `/move?actorId=&x=&y=&z=`, `/state`.
+Routes: `/` (the UI), `/ticket?actorId=&role=`, `/move?actorId=&x=&y=&z=`, `/state`.
 
-O `role` do `/ticket` é `listener` (padrão, o que a página busca) ou `sender` (o
-que a sonda e o helper usam). São tickets diferentes de propósito — um não serve
-no lugar do outro, e é isso que deixa os dois papéis do mesmo jogador conectados
-ao mesmo tempo. Ver VOICE_NATIVE_HELPER.md §10.
+The `/ticket` `role` is `listener` (default, what the page fetches) or `sender`
+(what the probe and the helper use). They are different tickets on purpose —
+neither works in place of the other, and that's what lets both roles of the
+same player be connected at the same time. See VOICE_NATIVE_HELPER.md §10.
 
-**Sonda** — fala o mesmo protocolo do helper, com um tom de 440Hz no lugar do
-microfone. É o que isola falha de captura de falha de transporte:
+**Probe** — speaks the same protocol as the helper, with a 440Hz tone instead of
+the microphone. It's what separates a capture failure from a transport failure:
 
 ```bash
-node voice-helper/tools/frame-probe.js --actor-id 0xFF000A12 --ticket <token de sender> --seconds 10
+node voice-helper/tools/frame-probe.js --actor-id 0xFF000A12 --ticket <sender token> --seconds 10
 ```
 
 ```bash
-node voice-helper/tools/frame-probe.js --listen --actor-id 0xFF000A13 --ticket <token de listener>
+node voice-helper/tools/frame-probe.js --listen --actor-id 0xFF000A13 --ticket <listener token>
 ```
 
-O papel segue o modo: gerando tom ela autentica como `sender` (o que o helper
-faz), com `--listen` como `listener` (o que a UI faz). `--role` força o contrário,
-pra testar o lado errado de propósito. Peça ao harness o ticket do papel certo —
-`/ticket?actorId=0xFF000A12&role=sender` — ou a auth é recusada.
+The role follows the mode: generating a tone it authenticates as `sender` (what
+the helper does), with `--listen` as `listener` (what the UI does). `--role`
+forces the opposite, to test the wrong side on purpose. Ask the harness for the
+ticket of the right role — `/ticket?actorId=0xFF000A12&role=sender` — or auth is
+rejected.
 
-Roteiro completo do teste e os números medidos: VOICE_NATIVE_HELPER.md §7.
+Full test script and measured numbers: VOICE_NATIVE_HELPER.md §7.
 
-## Formato do fio
+## Wire format
 
-Mono, 48kHz, quadros de 20ms (960 amostras). O que vai dentro de `data` (base64):
+Mono, 48kHz, 20ms frames (960 samples). What goes inside `data` (base64):
 
-- **Opus** (padrão) — pacote Opus VOIP, `codec:"opus"` no JSON. ~60 bytes/quadro.
-- **PCM** (`--pcm`) — s16le cru, 1920 bytes/quadro → 2560 chars base64, sem `codec`.
+- **Opus** (default) — an Opus VOIP packet, `codec:"opus"` in the JSON. ~60 bytes/frame.
+- **PCM** (`--pcm`) — raw s16le, 1920 bytes/frame → 2560 base64 chars, no `codec`.
 
-A taxa e o tamanho de quadro aparecem em três arquivos e os três precisam
-concordar; divergir faz o áudio sair em velocidade errada em vez de falhar limpo:
+The rate and frame size appear in three files and all three must agree;
+diverging makes the audio come out at the wrong speed instead of failing cleanly:
 
 - `src/main.cpp` — `kSampleRate`, `kChannels`, `kFrameMs`
 - `skymp/gamemode/voip-service.js` — `AUDIO_SAMPLE_RATE`, `AUDIO_CHANNELS`, `AUDIO_FRAME_MS`
 - `skymp/ui/index.html` — `RELAY_SAMPLE_RATE`, `RELAY_FRAME_US`
 
-O servidor nunca olha dentro de `data` — carrega a etiqueta `codec` e repassa.
+The server never looks inside `data` — it carries the `codec` tag and passes it on.

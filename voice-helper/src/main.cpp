@@ -1,18 +1,18 @@
-// voice-helper — captura o microfone fora do CEF e manda os quadros pro
-// voip-service do gamemode.
+// voice-helper — captures the microphone outside CEF and sends the frames to
+// the gamemode's voip-service.
 //
-// Por que este processo existe: o navegador embutido do client SkyMP (CEF) não
-// libera `getUserMedia`. A flag do Chromium que liberava foi *removida de
-// propósito* na SkyrimPlatform 2.1, e revertê-la exporia o microfone do jogador
-// a qualquer servidor SkyMP que ele conectasse depois — o client abre a URL que
-// o servidor mandar. Ver docs/technical/VOICE_NATIVE_HELPER.md.
+// Why this process exists: the SkyMP client's embedded browser (CEF) does not
+// allow `getUserMedia`. The Chromium flag that allowed it was *deliberately
+// removed* in SkyrimPlatform 2.1, and reverting that would expose the player's
+// microphone to any SkyMP server they connected to afterwards — the client
+// opens whatever URL the server sends. See docs/technical/VOICE_NATIVE_HELPER.md.
 //
-// A captura sai do navegador; a reprodução continua nele (tocar áudio recebido
-// nunca foi bloqueado). O servidor vira relay: recebe daqui, decide por
-// proximidade quem ouve e com que volume, e reenvia.
+// Capture leaves the browser; playback stays in it (playing received audio was
+// never blocked). The server becomes a relay: it receives from here, decides by
+// proximity who hears it and at what volume, and forwards it.
 //
-// Fase 1 (prova de conceito). Sem UI, sem handoff automático de ticket, sem
-// empacotamento. Argumentos na linha de comando e Ctrl+C pra sair.
+// Phase 1 (proof of concept). No UI, no automatic ticket handoff, no
+// packaging. Command-line arguments and Ctrl+C to quit.
 
 #include <atomic>
 #include <chrono>
@@ -41,39 +41,39 @@
 
 namespace {
 
-// Formato do fio — tem que bater com AUDIO_* em skymp/gamemode/voip-service.js
-// e com RELAY_SAMPLE_RATE em skymp/ui/index.html. Três lugares, uma taxa de
-// amostragem e um tamanho de quadro; se algum divergir o áudio sai em
-// velocidade errada em vez de falhar limpo.
+// Wire format — must match AUDIO_* in skymp/gamemode/voip-service.js and
+// RELAY_SAMPLE_RATE in skymp/ui/index.html. Three places, one sample rate and
+// one frame size; if any of them diverges, audio comes out at the wrong speed
+// instead of failing cleanly.
 //
-// O que vai DENTRO de `data` é Opus por padrão (etiqueta `codec:"opus"` no
-// JSON) ou PCM s16le cru com `--pcm`. O servidor não olha os bytes; quem decide
-// o decoder é o listener pela etiqueta. Opus a 48kHz mono, quadro de 20ms.
+// What goes INSIDE `data` is Opus by default (tagged `codec:"opus"` in the
+// JSON) or raw s16le PCM with `--pcm`. The server doesn't look at the bytes;
+// the listener picks the decoder from the tag. Opus at 48kHz mono, 20ms frames.
 constexpr ma_uint32 kSampleRate = 48000;
 constexpr ma_uint32 kChannels = 1;
 constexpr ma_uint32 kFrameMs = 20;
 constexpr ma_uint32 kSamplesPerFrame = kSampleRate / 1000 * kFrameMs;  // 960
 
-// Opus. 24 kbit/s é o ponto em que a voz fica transparente (libopus VOIP); FEC
-// embutido + 10% de perda declarada dão robustez a jitter de rede sem exigir
-// nada do lado de quem decodifica. Teto de pacote folgado — um quadro de 20ms a
-// 24k passa longe de 200 bytes, mas Opus pode inflar em transitório.
+// Opus. 24 kbit/s is where voice becomes transparent (libopus VOIP); in-band
+// FEC + 10% declared loss give robustness to network jitter without requiring
+// anything from the decoding side. Generous packet cap — a 20ms frame at 24k
+// stays well under 200 bytes, but Opus can inflate on transients.
 constexpr opus_int32 kOpusBitrate = 24000;
 constexpr int kOpusMaxPacket = 1500;
 
-// RNNoise processa quadros de 480 amostras (10ms @ 48kHz) — o valor fixo que
-// `rnnoise_get_frame_size()` devolve. Nosso quadro de fio (20ms) tem que ser um
-// múltiplo exato dele, senão sobraria um pedaço sem denoise por quadro.
+// RNNoise processes frames of 480 samples (10ms @ 48kHz) — the fixed value
+// `rnnoise_get_frame_size()` returns. Our wire frame (20ms) must be an exact
+// multiple of it, otherwise a chunk of every frame would go without denoising.
 constexpr ma_uint32 kDenoiseFrame = 480;
 static_assert(kSamplesPerFrame % kDenoiseFrame == 0,
-              "quadro de fio precisa ser multiplo do quadro do RNNoise");
+              "wire frame must be a multiple of the RNNoise frame");
 
-// Teto da fila entre a thread de áudio e a de rede, em quadros (~1s).
+// Cap of the queue between the audio thread and the network thread, in frames (~1s).
 //
-// Não é otimização: o callback do miniaudio roda numa thread de tempo real e
-// não pode bloquear esperando a rede. Se o socket engasgar, a fila cresce; ao
-// bater no teto descartamos o quadro mais ANTIGO. Numa conversa, áudio velho
-// não tem valor — entregá-lo atrasado é pior do que não entregar.
+// This is not an optimization: the miniaudio callback runs on a real-time
+// thread and must not block waiting on the network. If the socket stalls, the
+// queue grows; on hitting the cap we drop the OLDEST frame. In a conversation,
+// old audio has no value — delivering it late is worse than not delivering it.
 constexpr size_t kMaxQueuedFrames = 50;
 
 std::atomic<bool> g_running{true};
@@ -81,8 +81,8 @@ std::atomic<bool> g_running{true};
 void OnSignal(int) { g_running = false; }
 
 // ── base64 ────────────────────────────────────────────────────────────────
-// Escrito à mão em vez de puxar mais uma dependência: são 20 linhas e é o único
-// uso de base64 no programa inteiro.
+// Hand-written instead of pulling in another dependency: it's 20 lines and the
+// only use of base64 in the whole program.
 const char kB64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 std::string Base64Encode(const uint8_t* data, size_t len) {
@@ -108,18 +108,18 @@ std::string Base64Encode(const uint8_t* data, size_t len) {
   return out;
 }
 
-// ── supressão de ruído (RNNoise) ─────────────────────────────────────────
-// Roda no laço de envio, não no callback de áudio: mantém o callback de tempo
-// real fazendo só o mínimo, e o custo do RNNoise (poucos µs por quadro de 10ms)
-// cabe folgado no orçamento de 20ms do laço de rede.
+// ── noise suppression (RNNoise) ──────────────────────────────────────────
+// Runs in the send loop, not in the audio callback: it keeps the real-time
+// callback doing the bare minimum, and RNNoise's cost (a few µs per 10ms frame)
+// fits comfortably in the network loop's 20ms budget.
 //
-// O estado é mantido entre chamadas e os quadros têm que chegar em ordem. Se a
-// rede engasgar e a FrameQueue descartar um quadro antigo (§ kMaxQueuedFrames),
-// o RNNoise vê uma descontinuidade — um clique curto, não uma falha. É o mesmo
-// trade-off que já existe pro áudio cru.
+// State is kept between calls and frames must arrive in order. If the network
+// stalls and the FrameQueue drops an old frame (§ kMaxQueuedFrames), RNNoise
+// sees a discontinuity — a short click, not a failure. It's the same trade-off
+// that already exists for raw audio.
 //
-// As amostras que o RNNoise espera são float na MESMA escala do int16
-// (-32768..32767), não normalizadas pra [-1,1].
+// The samples RNNoise expects are floats on the SAME scale as int16
+// (-32768..32767), not normalized to [-1,1].
 class Denoiser {
  public:
   Denoiser() : state_(rnnoise_create(nullptr)) {}
@@ -131,7 +131,7 @@ class Denoiser {
 
   bool ok() const { return state_ != nullptr; }
 
-  // Filtra o quadro no lugar. frame.size() tem que ser múltiplo de kDenoiseFrame.
+  // Filters the frame in place. frame.size() must be a multiple of kDenoiseFrame.
   void Process(std::vector<int16_t>& frame) {
     if (state_ == nullptr) return;
     float buf[kDenoiseFrame];
@@ -154,13 +154,13 @@ class Denoiser {
 };
 
 // ── codec (Opus) ─────────────────────────────────────────────────────────
-// Roda no laço de envio, junto do denoise: o callback de áudio continua só
-// acumulando. Um encoder, alimentado em ordem, um quadro de 20ms por vez.
+// Runs in the send loop, alongside the denoiser: the audio callback keeps only
+// accumulating. One encoder, fed in order, one 20ms frame at a time.
 //
-// `--pcm` pula isto e manda PCM s16le cru — é o formato histórico do fio, o que
-// a sonda `frame-probe.js` fala, e o modo de isolar defeito (mesma lógica de
-// PCM-vs-codec da §3 do doc: se a voz sai quebrada, `--pcm` diz se o problema é
-// o Opus ou o transporte).
+// `--pcm` skips this and sends raw s16le PCM — the historical wire format, the
+// one the `frame-probe.js` probe speaks, and the way to isolate defects (same
+// PCM-vs-codec logic as §3 of the doc: if the voice comes out broken, `--pcm`
+// tells you whether the problem is Opus or the transport).
 class OpusEncoderWrap {
  public:
   OpusEncoderWrap() {
@@ -185,8 +185,8 @@ class OpusEncoderWrap {
 
   bool ok() const { return enc_ != nullptr; }
 
-  // Devolve o nº de bytes do pacote, ou -1 em erro. `frame` tem que ter
-  // exatamente kSamplesPerFrame amostras.
+  // Returns the packet size in bytes, or -1 on error. `frame` must have
+  // exactly kSamplesPerFrame samples.
   int Encode(const std::vector<int16_t>& frame, uint8_t* out, int max_out) {
     if (enc_ == nullptr) return -1;
     const int n = opus_encode(enc_, frame.data(),
@@ -198,7 +198,7 @@ class OpusEncoderWrap {
   OpusEncoder* enc_ = nullptr;
 };
 
-// ── fila entre a thread de áudio e a de rede ──────────────────────────────
+// ── queue between the audio thread and the network thread ─────────────────
 class FrameQueue {
  public:
   void Push(std::vector<int16_t>&& frame) {
@@ -213,7 +213,7 @@ class FrameQueue {
     cv_.notify_one();
   }
 
-  // Devolve false quando é hora de encerrar.
+  // Returns false when it's time to shut down.
   bool Pop(std::vector<int16_t>& out) {
     std::unique_lock<std::mutex> lock(mutex_);
     cv_.wait_for(lock, std::chrono::milliseconds(100),
@@ -234,16 +234,16 @@ class FrameQueue {
   std::atomic<uint64_t> dropped_{0};
 };
 
-// Estado partilhado com o callback de áudio. Fica em ponteiro no
-// ma_device_config::pUserData; nada aqui aloca no caminho quente além do
-// vector do quadro pronto.
+// State shared with the audio callback. Held by pointer in
+// ma_device_config::pUserData; nothing here allocates on the hot path other
+// than the vector of the finished frame.
 struct CaptureState {
   FrameQueue* queue = nullptr;
-  std::vector<int16_t> accumulator;  // sobra entre callbacks
+  std::vector<int16_t> accumulator;  // leftover between callbacks
 };
 
-// Chamado pelo miniaudio numa thread de tempo real. Regra: nada de rede, nada
-// de I/O, nada de lock demorado. Só acumula e empurra pra fila.
+// Called by miniaudio on a real-time thread. Rule: no network, no I/O, no
+// long-held locks. It only accumulates and pushes to the queue.
 void OnCapture(ma_device* device, void* /*output*/, const void* input,
                ma_uint32 frameCount) {
   auto* state = static_cast<CaptureState*>(device->pUserData);
@@ -252,9 +252,9 @@ void OnCapture(ma_device* device, void* /*output*/, const void* input,
   const int16_t* samples = static_cast<const int16_t*>(input);
   state->accumulator.insert(state->accumulator.end(), samples, samples + frameCount);
 
-  // O tamanho do buffer do WASAPI não é múltiplo de 20ms, então quase sempre
-  // sobra um pedaço — ele fica no acumulador pro próximo callback. Cortar o
-  // resto fora produziria estalos periódicos.
+  // The WASAPI buffer size is not a multiple of 20ms, so there is almost always
+  // a leftover chunk — it stays in the accumulator for the next callback.
+  // Cutting off the remainder would produce periodic pops.
   while (state->accumulator.size() >= kSamplesPerFrame) {
     std::vector<int16_t> frame(state->accumulator.begin(),
                                state->accumulator.begin() + kSamplesPerFrame);
@@ -270,27 +270,27 @@ struct Options {
   std::string host = "127.0.0.1";
   uint16_t port = 7778;
   bool denoise = true;
-  bool pcm = false;  // manda PCM cru em vez de Opus
+  bool pcm = false;  // send raw PCM instead of Opus
   bool valid = false;
 };
 
 void PrintUsage(const char* argv0) {
   std::fprintf(stderr,
-    "voice-helper — captura o microfone e envia pro voip-service do SkyMP\n"
+    "voice-helper — captures the microphone and sends it to the SkyMP voip-service\n"
     "\n"
-    "Uso:\n"
-    "  %s --actor-id <id> --ticket <token> [--host <host>] [--port <porta>]\n"
+    "Usage:\n"
+    "  %s --actor-id <id> --ticket <token> [--host <host>] [--port <port>]\n"
     "\n"
-    "  --actor-id  formID do ator, decimal ou 0x-hex (ex.: 0xFF000A12)\n"
-    "  --ticket    token de uso unico emitido pelo servidor (comando /voz)\n"
-    "  --host       host do voip-service (padrao: 127.0.0.1)\n"
-    "  --port       porta do voip-service (padrao: 7778)\n"
-    "  --no-denoise desliga a supressao de ruido (RNNoise); ligada por padrao\n"
-    "  --pcm        manda PCM s16le cru em vez de Opus (para depuracao/sonda)\n"
+    "  --actor-id   actor formID, decimal or 0x-hex (e.g. 0xFF000A12)\n"
+    "  --ticket     single-use token issued by the server (/voice command)\n"
+    "  --host       voip-service host (default: 127.0.0.1)\n"
+    "  --port       voip-service port (default: 7778)\n"
+    "  --no-denoise turns off noise suppression (RNNoise); on by default\n"
+    "  --pcm        sends raw s16le PCM instead of Opus (for debugging/probe)\n"
     "\n"
-    "O ticket vale 30 segundos e so pode ser usado uma vez. Na Fase 1 ele e\n"
-    "passado a mao — nao existe handoff automatico entre o jogo e o helper.\n"
-    "Ver voice-helper/README.md.\n",
+    "The ticket is valid for 30 seconds and can only be used once. In Phase 1 it\n"
+    "is passed by hand — there is no automatic handoff between the game and the helper.\n"
+    "See voice-helper/README.md.\n",
     argv0);
 }
 
@@ -300,12 +300,12 @@ Options ParseArgs(int argc, char** argv) {
     const std::string arg = argv[i];
     const bool has_next = (i + 1 < argc);
     if (arg == "--actor-id" && has_next) {
-      // stoul base 0: aceita 0xFF000A12 e decimal. FormIDs passam de 2^31,
-      // então o tipo tem que ser sem sinal — com int, 0xFF000A12 estoura.
+      // stoul base 0: accepts 0xFF000A12 and decimal. FormIDs go beyond 2^31,
+      // so the type must be unsigned — with int, 0xFF000A12 overflows.
       try {
         opt.actor_id = static_cast<uint32_t>(std::stoul(argv[++i], nullptr, 0));
       } catch (const std::exception&) {
-        std::fprintf(stderr, "[helper] --actor-id invalido: %s\n", argv[i]);
+        std::fprintf(stderr, "[helper] invalid --actor-id: %s\n", argv[i]);
         return opt;
       }
     } else if (arg == "--ticket" && has_next) {
@@ -321,7 +321,7 @@ Options ParseArgs(int argc, char** argv) {
     } else if (arg == "--help" || arg == "-h") {
       return opt;
     } else {
-      std::fprintf(stderr, "[helper] argumento desconhecido: %s\n", arg.c_str());
+      std::fprintf(stderr, "[helper] unknown argument: %s\n", arg.c_str());
       return opt;
     }
   }
@@ -343,27 +343,28 @@ int main(int argc, char** argv) {
 
   ix::initNetSystem();
 
-  // ── supressão de ruído ─────────────────────────────────────────────────
-  // Criada antes do microfone: se o RNNoise não inicializar, o helper segue
-  // enviando áudio cru em vez de abortar — perder o denoise é degradação, não
-  // falha. `--no-denoise` pula isso de propósito (útil pra comparar A/B e pra
-  // isolar defeito, na linha do que a §3 do doc já faz com PCM vs Opus).
+  // ── noise suppression ──────────────────────────────────────────────────
+  // Created before the microphone: if RNNoise fails to initialize, the helper
+  // keeps sending raw audio instead of aborting — losing the denoiser is a
+  // degradation, not a failure. `--no-denoise` skips it on purpose (useful for
+  // A/B comparison and for isolating defects, in line with what §3 of the doc
+  // already does with PCM vs Opus).
   Denoiser denoiser;
   bool denoise = opt.denoise && denoiser.ok();
   if (opt.denoise && !denoiser.ok()) {
     std::fprintf(stderr,
-      "[helper] RNNoise nao inicializou; seguindo com audio cru.\n");
+      "[helper] RNNoise failed to initialize; continuing with raw audio.\n");
   }
-  std::printf("[helper] Supressao de ruido: %s\n", denoise ? "ligada" : "desligada");
+  std::printf("[helper] Noise suppression: %s\n", denoise ? "on" : "off");
 
   // ── codec ──────────────────────────────────────────────────────────────
-  // Mesma política do denoise: se o encoder Opus não criar, cai pra PCM cru em
-  // vez de abortar. `--pcm` força PCM de propósito.
+  // Same policy as the denoiser: if the Opus encoder can't be created, fall
+  // back to raw PCM instead of aborting. `--pcm` forces PCM on purpose.
   OpusEncoderWrap encoder;
   bool use_opus = !opt.pcm && encoder.ok();
   if (!opt.pcm && !encoder.ok()) {
     std::fprintf(stderr,
-      "[helper] Encoder Opus nao inicializou; enviando PCM cru.\n");
+      "[helper] Opus encoder failed to initialize; sending raw PCM.\n");
   }
   std::printf("[helper] Codec: %s\n", use_opus ? "opus" : "pcm");
 
@@ -372,10 +373,10 @@ int main(int argc, char** argv) {
   capture_state.queue = &queue;
   capture_state.accumulator.reserve(kSamplesPerFrame * 4);
 
-  // ── microfone (WASAPI em modo compartilhado) ────────────────────────────
-  // Compartilhado, não exclusivo: em modo exclusivo o helper tomaria o
-  // dispositivo do resto do sistema, e o jogador perderia o áudio do Discord,
-  // do navegador e de qualquer outra coisa enquanto joga.
+  // ── microphone (WASAPI in shared mode) ─────────────────────────────────
+  // Shared, not exclusive: in exclusive mode the helper would take the device
+  // away from the rest of the system, and the player would lose audio from
+  // Discord, the browser and anything else while playing.
   ma_device_config config = ma_device_config_init(ma_device_type_capture);
   config.capture.format = ma_format_s16;
   config.capture.channels = kChannels;
@@ -386,41 +387,41 @@ int main(int argc, char** argv) {
 
   ma_device device;
   if (ma_device_init(nullptr, &config, &device) != MA_SUCCESS) {
-    std::fprintf(stderr, "[helper] Falha ao abrir o microfone padrao.\n");
+    std::fprintf(stderr, "[helper] Failed to open the default microphone.\n");
     ix::uninitNetSystem();
     return 1;
   }
 
-  // O que o miniaudio realmente conseguiu negociar pode não ser o que pedimos.
-  // O servidor e a UI assumem 48kHz mono fixo, então divergência aqui viraria
-  // áudio em velocidade errada do outro lado — falhar alto é melhor.
+  // What miniaudio actually managed to negotiate may not be what we asked for.
+  // The server and the UI assume a fixed 48kHz mono, so a mismatch here would
+  // become wrong-speed audio on the other end — failing loudly is better.
   if (device.capture.internalSampleRate != kSampleRate) {
     std::fprintf(stderr,
-      "[helper] Aviso: dispositivo em %u Hz; miniaudio esta reamostrando pra %u Hz.\n",
+      "[helper] Warning: device at %u Hz; miniaudio is resampling to %u Hz.\n",
       device.capture.internalSampleRate, kSampleRate);
   }
 
   // ── WebSocket ───────────────────────────────────────────────────────────
-  // Mesma porta e mesmo handshake por ticket que o index.html já usa. Inventar
-  // um segundo sistema de autenticação pra mesma coisa seria dobrar a
-  // superfície de ataque em troca de nada.
+  // Same port and same ticket handshake that index.html already uses. Inventing
+  // a second authentication system for the same thing would double the attack
+  // surface in exchange for nothing.
   const std::string url = "ws://" + opt.host + ":" + std::to_string(opt.port);
   ix::WebSocket ws;
   ws.setUrl(url);
-  ws.disableAutomaticReconnection();  // ticket e de uso unico: reconectar sozinho falharia
+  ws.disableAutomaticReconnection();  // the ticket is single-use: reconnecting on its own would fail
 
   std::atomic<bool> authed{false};
   std::atomic<bool> auth_failed{false};
 
   ws.setOnMessageCallback([&](const ix::WebSocketMessagePtr& msg) {
     if (msg->type == ix::WebSocketMessageType::Open) {
-      std::printf("[helper] Conectado em %s; autenticando como sender.\n", url.c_str());
-      // `role: "sender"` é o que permite este processo coexistir com o
-      // index.html do MESMO jogador. Sem o campo o servidor assume "listener"
-      // (o padrão de compatibilidade), e as duas conexões brigariam pelo mesmo
-      // slot — quem autenticasse por último derrubaria o outro. O ticket também
-      // é por papel: o `/voz` emite um pra UI e um pro helper.
-      // Ver docs/technical/VOICE_NATIVE_HELPER.md §10.
+      std::printf("[helper] Connected to %s; authenticating as sender.\n", url.c_str());
+      // `role: "sender"` is what lets this process coexist with the SAME
+      // player's index.html. Without the field the server assumes "listener"
+      // (the compatibility default), and the two connections would fight over
+      // the same slot — whoever authenticated last would knock the other out.
+      // The ticket is per role too: `/voice` issues one for the UI and one for
+      // the helper. See docs/technical/VOICE_NATIVE_HELPER.md §10.
       nlohmann::json auth{{"type", "auth"},
                           {"actorId", opt.actor_id},
                           {"ticket", opt.ticket},
@@ -432,24 +433,24 @@ int main(int argc, char** argv) {
       const std::string type = parsed["type"].get<std::string>();
       if (type == "auth_ok") {
         authed = true;
-        std::printf("[helper] Autenticado. Capturando; Ctrl+C pra sair.\n");
+        std::printf("[helper] Authenticated. Capturing; Ctrl+C to quit.\n");
       } else if (type == "auth_failed") {
         auth_failed = true;
         std::fprintf(stderr,
-          "[helper] Auth recusada. O ticket vale 30s e so serve uma vez — "
-          "rode /voz de novo e use o token novo.\n");
+          "[helper] Auth rejected. The ticket is valid for 30s and works only once — "
+          "run /voice again and use the new token.\n");
         g_running = false;
         queue.Wake();
       }
-      // proximity_update / audio_frame chegam aqui tambem e sao ignorados de
-      // proposito: quem toca audio e o navegador do jogo, nao este processo.
+      // proximity_update / audio_frame arrive here too and are ignored on
+      // purpose: the game's browser plays audio, not this process.
     } else if (msg->type == ix::WebSocketMessageType::Error) {
-      std::fprintf(stderr, "[helper] Erro de socket: %s\n",
+      std::fprintf(stderr, "[helper] Socket error: %s\n",
                    msg->errorInfo.reason.c_str());
       g_running = false;
       queue.Wake();
     } else if (msg->type == ix::WebSocketMessageType::Close) {
-      std::fprintf(stderr, "[helper] Conexao fechada pelo servidor.\n");
+      std::fprintf(stderr, "[helper] Connection closed by the server.\n");
       g_running = false;
       queue.Wake();
     }
@@ -458,14 +459,14 @@ int main(int argc, char** argv) {
   ws.start();
 
   if (ma_device_start(&device) != MA_SUCCESS) {
-    std::fprintf(stderr, "[helper] Falha ao iniciar a captura.\n");
+    std::fprintf(stderr, "[helper] Failed to start capture.\n");
     ma_device_uninit(&device);
     ws.stop();
     ix::uninitNetSystem();
     return 1;
   }
 
-  // ── laço de envio ───────────────────────────────────────────────────────
+  // ── send loop ───────────────────────────────────────────────────────────
   uint64_t seq = 0;
   uint64_t sent = 0;
   std::vector<int16_t> frame;
@@ -473,9 +474,9 @@ int main(int argc, char** argv) {
   while (g_running) {
     if (!queue.Pop(frame) || frame.empty()) continue;
 
-    // Quadros capturados antes do auth_ok são descartados: o servidor os
-    // ignoraria de qualquer forma, e guardá-los só adicionaria atraso à
-    // primeira sílaba que alguém de fato ouvir.
+    // Frames captured before auth_ok are discarded: the server would ignore
+    // them anyway, and keeping them would only add delay to the first syllable
+    // anyone actually hears.
     if (!authed) { frame.clear(); continue; }
 
     if (denoise) denoiser.Process(frame);
@@ -485,8 +486,8 @@ int main(int argc, char** argv) {
       uint8_t packet[kOpusMaxPacket];
       const int n = encoder.Encode(frame, packet, kOpusMaxPacket);
       if (n < 0) {
-        // Erro de encode é raro e não recuperável quadro a quadro; conta como
-        // quadro perdido, igual a um descarte de fila.
+        // An encode error is rare and not recoverable frame by frame; it counts
+        // as a lost frame, same as a queue drop.
         frame.clear();
         continue;
       }
@@ -502,14 +503,14 @@ int main(int argc, char** argv) {
     frame.clear();
 
     if (++sent % 250 == 0) {  // ~5s
-      std::printf("[helper] %llu quadros enviados (%llu descartados na fila).\n",
+      std::printf("[helper] %llu frames sent (%llu dropped in the queue).\n",
                   static_cast<unsigned long long>(sent),
                   static_cast<unsigned long long>(queue.dropped()));
       std::fflush(stdout);
     }
   }
 
-  std::printf("[helper] Encerrando. %llu quadros enviados.\n",
+  std::printf("[helper] Shutting down. %llu frames sent.\n",
               static_cast<unsigned long long>(sent));
 
   ma_device_uninit(&device);

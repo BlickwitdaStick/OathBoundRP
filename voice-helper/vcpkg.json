@@ -1,7 +1,7 @@
 {
   "name": "voice-helper",
   "version-string": "0.1.0",
-  "description": "Captura de microfone fora do CEF para a voz por proximidade do skymp-heavy-rp",
+  "description": "Microphone capture outside CEF for skymp-heavy-rp proximity voice",
   "homepage": "https://github.com/vinicius3232/skymp-heavy-rp",
   "dependencies": [
     "miniaudio",
