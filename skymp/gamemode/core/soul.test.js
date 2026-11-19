@@ -149,8 +149,8 @@ describe('III.12.3 — determinismo', () => {
   });
 
   it('recusa derivar sem segredo, em vez de cair num padrão', () => {
-    assert.throws(() => soul.deriveSeed('', 42, ficha), /segredo/i);
-    assert.throws(() => soul.deriveSeed(undefined, 42, ficha), /segredo/i);
+    assert.throws(() => soul.deriveSeed('', 42, ficha), /secret/i);
+    assert.throws(() => soul.deriveSeed(undefined, 42, ficha), /secret/i);
   });
 });
 
@@ -224,7 +224,7 @@ describe('III.12.4 — a resolução NUNCA falha', () => {
   it('recusa afinidade inexistente em vez de escolher uma', () => {
     assert.throws(
       () => soul.resolve({ soul: alma, affinity: 'marcial', seed: 's', eventId: 'e' }),
-      /afinidade desconhecida/
+      /unknown affinity/
     );
   });
 });
