@@ -1,540 +1,540 @@
-# Afinidade da Alma (Soul Affinity) — desenho fechado
+# Soul Affinity — closed design
 
-**Proposta:** substituir Soul DNA por um sistema único de afinidades que explique magia, vampirismo, licantropia, bênçãos, maldições, corrupção, encantamento e linhagem nobre.
+**Proposal:** replace Soul DNA with a single affinity system that explains magic, vampirism, lycanthropy, blessings, curses, corruption, enchanting and noble lineage.
 
-**Estado: DESENHO FECHADO. Domínio implementado e testado.** Um veto e quatro condições, todos incorporados. Emendou a §8 da Constituição (v1.1).
+**Status: DESIGN CLOSED. Domain implemented and tested.** One veto and four conditions, all incorporated. Amended §8 of the Constitution (v1.1).
 
-`skymp/gamemode/core/soul.js` — gerador, bandas e resolução — **existe, com 28 testes** (§III.13). É função pura: não abre banco, não toca `mp`, não sabe que existe um jogo. `skymp/gamemode/soul-service.js` também está implementado e registrado atrás de `ENABLE_SOUL_SERVICE`: persiste a alma, entrega sinais, grava marcas, avança árvores e expõe `/alma`. Ele fica desligado por padrão e ainda precisa de homologação com cliente real na Fase 0.
+`skymp/gamemode/core/soul.js` — generator, bands and resolution — **exists, with 28 tests** (§III.13). It is a pure function: it opens no database, does not touch `mp`, does not know a game exists. `skymp/gamemode/soul-service.js` is also implemented and registered behind `ENABLE_SOUL_SERVICE`: it persists the soul, delivers signs, records marks, advances trees and exposes `/alma`. It is off by default and still needs validation with a real client in Phase 0.
 
-O documento tem três partes. A **Parte I** é a análise de 15 pontos exigida pela Constituição §15 — o que a proposta resolve e o que ela quebra. A **Parte II** é o desenho que sai dela: como o sistema vira jogo bom sem perder jogabilidade nem diversão. A **Parte III** é a especificação — valores, fórmula, schema, eventos e testes.
+The document has three parts. **Part I** is the 15-point analysis required by Constitution §15 — what the proposal solves and what it breaks. **Part II** is the design that comes out of it: how the system becomes good gameplay without losing playability or fun. **Part III** is the specification — values, formula, schema, events and tests.
 
-Se você só vai ler uma: **Parte II**. Ela contém a resposta; a I contém o porquê e a III contém o como.
+If you are only going to read one: **Part II**. It contains the answer; I contains the why and III contains the how.
 
-Análise conforme [`CONSTITUICAO.md`](../CONSTITUICAO.md) §15.
-
----
-
-## Veredito primeiro
-
-A ideia central está certa e resolve um problema real do Skyrim: no vanilla, todo mundo aprende tudo, e isso é veneno para Heavy RP. Uma alma que muda **custo e risco** cria especialização sem classe fechada, e a **Árvore de Transformação** ("você não vira vampiro, você percorre um caminho") é a melhor ideia da proposta — resolve o estado binário e transforma maldição em trajetória.
-
-Três coisas precisam mudar antes de existir:
-
-1. **VETO: a rolagem de 70% de morte na mordida.** Detalhado em §3.1. Na forma proposta, ela transforma qualquer vampiro num botão de `/permakill` ambulante.
-2. **"2 meses vs 2 anos" é uma classe fechada com outro nome.** §3.2.
-3. **Número oculto que decide resultado é indistinguível de bug e de favorecimento da staff.** §4.2.
-
-E uma adição do conselho que resolve o problema que você mesmo levantou ("nasce melhor não é divertido") na raiz: **nenhuma alma pode ser estritamente melhor que outra.** §14.
+Analysis according to [`CONSTITUICAO.md`](../CONSTITUICAO.md) §15.
 
 ---
 
-## 1. Objetivo
+## Verdict first
 
-Que a progressão seja narrativa e não uma árvore de talentos: dois personagens percorrendo o mesmo caminho chegam a lugares diferentes por causa de quem são e do que escolheram.
+The central idea is right and solves a real Skyrim problem: in vanilla, everyone learns everything, and that is poison for Heavy RP. A soul that changes **cost and risk** creates specialization without a closed class, and the **Transformation Tree** ("you do not become a vampire, you walk a path") is the best idea in the proposal — it solves the binary state and turns a curse into a trajectory.
 
-## 2. Problema que resolve
+Three things need to change before it exists:
 
-- **O Skyrim é uma máquina de personagens idênticos.** Todo mundo vira arquimago, Companion, Lâmina e Ouvinte na mesma save. Isso apaga identidade, que é a moeda do Heavy RP.
-- **Poder sem escassez.** Hoje qualquer um encanta, então encantador não é profissão — e a Constituição §11 exige que toda cadeia tenha gargalo.
-- **Vampiro e lobisomem como buff.** A Constituição §9 já proíbe; faltava o mecanismo que torna a maldição rara e cara.
-- **Casas Nobres sem identidade mecânica.** Hoje são tabela.
+1. **VETO: the 70% death roll on a bite.** Detailed in §3.1. In the proposed form, it turns any vampire into a walking `/permakill` button.
+2. **"2 months vs 2 years" is a closed class by another name.** §3.2.
+3. **A hidden number that decides outcomes is indistinguishable from a bug and from staff favoritism.** §4.2.
 
-## 3. Problemas que a proposta cria
+And an addition from the council that solves the problem you raised yourself ("being born better is not fun") at the root: **no soul may be strictly better than another.** §14.
 
-### 3.1 🔴 VETO — a mordida com 70% de morte
+---
 
-O cenário: personagem aprovado na whitelist, jogado por meses, com laços sociais e história. Entra numa cena, é mordido. O servidor rola. **70% das vezes o personagem morre — permanentemente, por dado, por causa da ação de outro jogador.**
+## 1. Goal
 
-Isso viola três coisas ao mesmo tempo:
+That progression is narrative and not a talent tree: two characters walking the same path arrive at different places because of who they are and what they chose.
 
-- **`HEAVY_RP_RULES.md` §6 (powergaming):** "forçar outro personagem a aceitar consequências permanentes sem o processo exigido". A mordida faz exatamente isso, com o servidor como cúmplice.
-- **Constituição §5:** escolha irreversível sem aviso.
-- **Faz o vampiro injogável também.** Um vampiro que quer criar progênie mata 7 em cada 10 tentativas. Não dá para construir clã, e clã é a parte política que justifica vampirismo existir.
+## 2. Problem it solves
 
-E cria um vetor de grief limpo: basta morder para permakillar, com a defesa pronta de "foi o dado".
+- **Skyrim is a machine for identical characters.** Everyone becomes archmage, Companion, Blade and Listener in the same save. That erases identity, which is the currency of Heavy RP.
+- **Power without scarcity.** Today anyone enchants, so enchanter is not a profession — and Constitution §11 requires every chain to have a bottleneck.
+- **Vampire and werewolf as a buff.** Constitution §9 already forbids it; what was missing was the mechanism that makes the curse rare and expensive.
+- **Noble Houses without mechanical identity.** Today they are a table.
 
-**Alternativa:** a mordida **nunca resolve nada sozinha**. Ela inicia um processo — o primeiro passo da árvore, não um lance de moeda sobre a vida de alguém. Ver §14.2.
+## 3. Problems the proposal creates
 
-### 3.2 🔴 "2 meses vs 2 anos" é classe fechada disfarçada
+### 3.1 🔴 VETO — the bite with 70% death
 
-Servidor de RP tem retenção medida em meses. Um caminho de 2 anos não é um caminho difícil: é uma porta fechada com placa de "aberta". A Constituição §5 proíbe classe fechada.
+The scenario: a character approved at whitelist, played for months, with social bonds and history. They enter a scene and get bitten. The server rolls. **70% of the time the character dies — permanently, by dice, because of another player's action.**
 
-Pior: como o número é oculto, Pedro não sabe que escolheu um caminho de 2 anos. Ele só sente que o jogo não responde, e sai.
+That violates three things at once:
 
-**Alternativa:** afinidade não muda **tempo até desbloquear**, muda **custo, risco e teto**. Pedro lança Fireball — mas precisa de mestre, componente, ritual mais longo, e falha mais. Ele chega. Chega mais caro e com mais cicatriz. Isso é Heavy RP; "espere dois anos" é ausência de jogo.
+- **`HEAVY_RP_RULES.md` §6 (powergaming):** "forcing another character to accept permanent consequences without the required process". The bite does exactly that, with the server as accomplice.
+- **Constitution §5:** an irreversible choice without warning.
+- **It makes the vampire unplayable too.** A vampire who wants to create progeny kills 7 out of 10 attempts. You cannot build a clan, and the clan is the political part that justifies vampirism existing.
 
-### 3.3 🟠 Reroll até tirar alma boa
+And it creates a clean grief vector: just bite to permakill, with the ready defense of "it was the dice".
 
-Alma gerada na criação é engenharia-reversa pela comunidade em semanas. Whitelist + permadeath encarecem o reroll, mas isso é **contenção acidental** — e não protege o começo do servidor, quando ninguém tem apego a personagem.
+**Alternative:** the bite **never resolves anything on its own**. It starts a process — the first step of the tree, not a coin toss over someone's life. See §14.2.
 
-**Alternativa em §14.1:** derivar a alma da ficha aprovada, não do acaso.
+### 3.2 🔴 "2 months vs 2 years" is a disguised closed class
 
-### 3.4 🟠 Monopólio por nascimento
+An RP server's retention is measured in months. A 2-year path is not a hard path: it is a closed door with an "open" sign. Constitution §5 forbids closed classes.
 
-Se encantador de verdade nasce pronto, o servidor pode acabar com um ou dois. Isso é escassez (bom, §11) até a pessoa parar de jogar — e aí uma indústria inteira morre com ela. Ponto único de falha que é uma **pessoa**.
+Worse: since the number is hidden, Pedro does not know he chose a 2-year path. He just feels the game is not responding, and he leaves.
 
-**Mitigação:** afinidade é necessária para a **maestria**, não para a **prática**. Aprendiz com afinidade baixa produz peça comum; a peça excepcional exige o mestre. E mestre pode treinar — lentamente, transferindo técnica, não alma.
+**Alternative:** affinity does not change **time to unlock**, it changes **cost, risk and ceiling**. Pedro casts Fireball — but he needs a master, a component, a longer ritual, and he fails more. He gets there. He gets there at a higher price and with more scars. That is Heavy RP; "wait two years" is an absence of gameplay.
 
-### 3.5 🟡 Linhagem nobre hereditária
+### 3.3 🟠 Rerolling until you get a good soul
 
-Cria identidade política ótima. Mas mecanizar herança de sangue esbarra rápido em casamento como estatística e em exclusão por nascimento. Precisa ser **tendência**, nunca requisito de cargo, e a Casa precisa poder adotar, reconhecer bastardo e errar na sucessão — que é onde as histórias estão.
+A soul generated at creation gets reverse-engineered by the community within weeks. Whitelist + permadeath make rerolling more expensive, but that is **accidental containment** — and it does not protect the server's early days, when nobody is attached to a character.
 
-## 4. Exploits possíveis
+**Alternative in §14.1:** derive the soul from the approved sheet, not from chance.
 
-### 4.1 Descoberta e otimização do oculto
-A comunidade vai medir. Sempre mede. Em 3 meses existe uma planilha comunitária de "como saber sua afinidade em 20 minutos".
+### 3.4 🟠 Monopoly by birth
 
-**Isso não é evitável — é gerenciável.** O sistema tem que continuar interessante **depois** de conhecido. Um sistema que só funciona enquanto é segredo já nasce com data de morte.
+If a true enchanter is born ready, the server may end up with one or two. That is scarcity (good, §11) until the person stops playing — and then a whole industry dies with them. A single point of failure that is a **person**.
 
-### 4.2 🔴 O oculto como escudo de acusação
-Este é o risco de comunidade, e é mais perigoso que qualquer exploit mecânico.
+**Mitigation:** affinity is necessary for **mastery**, not for **practice**. An apprentice with low affinity produces a common piece; the exceptional piece requires the master. And a master can train — slowly, transferring technique, not soul.
 
-Jogador falha cinco rituais seguidos. Ele não consegue distinguir entre: afinidade baixa, bug, e **a staff favorecendo um amigo**. Com o número invisível, a acusação de favorecimento é **infalsificável** — e servidor de RP morre disso, não de bug.
+### 3.5 🟡 Hereditary noble lineage
 
-**Condição obrigatória:** toda rolagem grava em `audit_logs` as entradas, o resultado e a semente. Semente determinística derivada do personagem + do evento, de modo que a staff possa **reproduzir e provar** qualquer resultado contestado. O número segue oculto para o jogador; a auditoria não.
+Creates great political identity. But mechanizing blood inheritance quickly runs into marriage as a statistic and exclusion by birth. It needs to be a **tendency**, never a requirement for office, and the House needs to be able to adopt, recognize a bastard and get succession wrong — which is where the stories are.
 
-### 4.3 Grief por transformação forçada
-Alterar permanentemente a alma de outro personagem sem consentimento é a versão sobrenatural do RDM. Precisa do mesmo processo que consequência permanente já exige.
+## 4. Possible exploits
 
-### 4.4 Suicídio de personagem como reroll
-Se a alma vier do acaso, matar o próprio personagem vira estratégia. Resolvido pela §14.1.
+### 4.1 Discovering and optimizing the hidden
+The community will measure. It always does. Within 3 months there is a community spreadsheet on "how to find out your affinity in 20 minutes".
 
-## 5. Impacto na economia
+**This is not avoidable — it is manageable.** The system has to remain interesting **after** it is known. A system that only works while it is a secret is born with an expiration date.
 
-**Positivo e estrutural.** Encantamento deixa de ser produção infinita e vira cadeia com gargalo humano (§11): Soul Gems → encantador com afinidade → peça com assinatura e histórico. Cria mercado, cria fama, cria alvo de roubo, cria encomenda.
+### 4.2 🔴 The hidden as a shield for accusations
+This is the community risk, and it is more dangerous than any mechanical exploit.
 
-**Risco:** hiperinflação de preço em serviço de mestre único. Mitigado pela §3.4 (aprendiz produz o comum).
+A player fails five rituals in a row. They cannot distinguish between: low affinity, a bug, and **staff favoring a friend**. With the number invisible, the favoritism accusation is **unfalsifiable** — and RP servers die of that, not of bugs.
 
-**Requisito duro:** tudo que gerar valor passa por `core/transaction-service`. Nenhum caminho novo de ouro ou item fora dele — foi assim que o `economy-service` foi apagado.
+**Mandatory condition:** every roll writes its inputs, result and seed to `audit_logs`. A deterministic seed derived from the character + the event, so that staff can **reproduce and prove** any contested result. The number stays hidden from the player; the audit does not.
 
-## 6. Impacto político
+### 4.3 Grief through forced transformation
+Permanently altering another character's soul without consent is the supernatural version of RDM. It needs the same process that a permanent consequence already requires.
 
-Alto e desejável. Se Casa A tende ao divino e Casa B ao marcial, a disputa por cargos ganha substrato. Um Jarl com afinidade sombria escondida é uma trama inteira.
+### 4.4 Character suicide as a reroll
+If the soul comes from chance, killing your own character becomes a strategy. Solved by §14.1.
 
-**Cuidado:** afinidade **nunca** pode ser requisito de cargo público. No instante em que for, o jogo político vira consulta a uma tabela — e a política morre.
+## 5. Impact on the economy
 
-## 7. Impacto militar
+**Positive and structural.** Enchanting stops being infinite production and becomes a chain with a human bottleneck (§11): Soul Gems → enchanter with affinity → a piece with a signature and history. It creates a market, fame, theft targets and commissions.
 
-Guerreiro lendário por afinidade marcial é bom. Mas o combate do SkyMP é do cliente, e o servidor não arbitra golpe (ver `MODS_AND_GAMEMODE_CONTRACT.md`). Afinidade marcial só pode agir onde o servidor manda: fadiga, ferimento, tempo de recuperação, capacidade de comando. **Nunca em dano por golpe.**
+**Risk:** price hyperinflation for a single master's service. Mitigated by §3.4 (the apprentice produces the common).
 
-## 8. Impacto religioso
+**Hard requirement:** everything that generates value goes through `core/transaction-service`. No new gold or item path outside it — that is how `economy-service` got deleted.
 
-O melhor gerador de história da proposta: **o homem devoto que não tem afinidade divina.** Isso é drama puro, e a igreja como instituição ganha a pergunta "quem realmente foi tocado?".
+## 6. Political impact
 
-**Condição:** a igreja não pode ter um detector. Se o templo mede afinidade, acabou o mistério e acabou a fé — vira exame de sangue.
+High and desirable. If House A leans divine and House B martial, the dispute for offices gains a substrate. A Jarl with a hidden shadow affinity is an entire plot.
 
-## 9. Impacto social
+**Caution:** affinity can **never** be a requirement for public office. The instant it is, the political game becomes a table lookup — and politics dies.
 
-Cria a hierarquia informal que Heavy RP precisa: quem é procurado por quê. Cria também preconceito jogável (§9 da Constituição já pede isso para vampiros).
+## 7. Military impact
 
-**Risco real:** se afinidade se torna pública na prática — e vai se tornar, por reputação —, jogadores com "alma ruim" viram cidadãos de segunda **fora** do personagem. Isso é gestão de comunidade, não de código, e precisa estar nas regras antes do sistema existir.
+A legendary warrior through martial affinity is good. But SkyMP combat belongs to the client, and the server does not arbitrate blows (see `MODS_AND_GAMEMODE_CONTRACT.md`). Martial affinity can only act where the server is in charge: fatigue, injury, recovery time, command capacity. **Never on per-hit damage.**
 
-## 10. Impacto técnico
+## 8. Religious impact
 
-- **Tabela nova** (`character_soul`), 8 atributos + histórico de mutação. Barato.
-- **Toda alteração de alma é evento**, nunca escrita direta — a Constituição §13 exige event-driven, e aqui é o caso de uso perfeito.
-- **Corrupção manifestada** (pesadelo, voz, mudança física): mensagem e animação o servidor faz hoje; **mudança física exige plugin nosso** — FormIDs estáveis, sem script, com a lógica em Node (o padrão já documentado em `MODS_AND_GAMEMODE_CONTRACT.md` §5).
-- **A árvore é uma máquina de estados**, irmã de `core/character-state.js`. Módulo próprio, registrado no `module-registry`, atrás de flag.
-- ⚠️ **Nada disto pode virar polling.** Já temos três serviços a cada 2 s e uma chamada Papyrus custa 13–35 ms.
+The best story generator in the proposal: **the devout man who has no divine affinity.** That is pure drama, and the church as an institution gains the question "who was truly touched?".
 
-## 11. Impacto narrativo
+**Condition:** the church cannot have a detector. If the temple measures affinity, the mystery is over and so is faith — it becomes a blood test.
 
-É o ponto mais forte. Substitui progressão por biografia: dois vampiros, mesmo caminho, um vira Lorde estável após anos de preparo e o outro enlouquece. Isso é a Constituição §4 sendo cumprida literalmente.
+## 9. Social impact
 
-## 12. Como gera histórias
+It creates the informal hierarchy Heavy RP needs: who is sought out for what. It also creates playable prejudice (§9 of the Constitution already asks for this for vampires).
 
-- O talentoso que **não quer** o dom — e é procurado por isso.
-- O devoto sem afinidade divina que constrói a igreja assim mesmo.
-- O mestre encantador cuja assinatura vale mais que a peça, e que é sequestrado por causa disso.
-- A Casa Nobre que descobre que o herdeiro não tem o sangue.
-- O primeiro vampiro do servidor, cujo nome todo mundo vai saber.
-- O necromante que ainda parece gente — e o que já não parece.
+**Real risk:** if affinity becomes public in practice — and it will, through reputation — players with a "bad soul" become second-class citizens **outside** the character. That is community management, not code, and it needs to be in the rules before the system exists.
 
-## 13. Como pode ser abusada
+## 10. Technical impact
 
-Coberto em §3.1, §4.1–4.4. A mais grave é o **grief por transformação**, e a segunda é a **acusação infalsificável de favorecimento**.
+- **A new table** (`character_soul`), 8 attributes + mutation history. Cheap.
+- **Every soul change is an event**, never a direct write — Constitution §13 requires event-driven, and this is the perfect use case.
+- **Manifested corruption** (nightmare, voice, physical change): the server does messages and animations today; **physical change requires our own plugin** — stable FormIDs, no script, with the logic in Node (the pattern already documented in `MODS_AND_GAMEMODE_CONTRACT.md` §5).
+- **The tree is a state machine**, a sibling of `core/character-state.js`. Its own module, registered in `module-registry`, behind a flag.
+- ⚠️ **None of this may become polling.** We already have three services running every 2 s and a Papyrus call costs 13–35 ms.
 
-## 14. Como balancear — as quatro condições
+## 11. Narrative impact
 
-### 14.1 A alma vem da ficha, não do dado
-Semente determinística derivada da aplicação de whitelist aprovada — que **já coleta `motivations`, `weaknesses` e `social_ties`** (migration v5, existe hoje). Mesma ficha, mesma alma.
+It is the strongest point. It replaces progression with biography: two vampires, same path, one becomes a stable Lord after years of preparation and the other goes mad. That is Constitution §4 being fulfilled literally.
 
-Três ganhos de uma vez: acaba o reroll-farming; a ficha passa a **valer mecanicamente**, o que melhora a qualidade das aplicações; e a staff, que já revisa conceito, passa a revisar destino sem precisar de ferramenta nova.
+## 12. How it generates stories
 
-### 14.2 Nenhum evento único decide um destino
-A mordida não mata nem transforma: ela **infecta**, e infecção é o primeiro nó da árvore. O que vem depois é escolha, tempo, ritual e risco — com pontos de saída (cura é possível, cara e humilhante). Sem consentimento e sem processo, uma transformação não se completa.
+- The gifted one who **does not want** the gift — and is hunted for it.
+- The devout without divine affinity who builds the church anyway.
+- The master enchanter whose signature is worth more than the piece, and who gets kidnapped because of it.
+- The Noble House that discovers the heir does not have the blood.
+- The server's first vampire, whose name everyone will know.
+- The necromancer who still looks human — and the one who no longer does.
 
-### 14.3 Toda rolagem é auditável
-Entradas, resultado e semente em `audit_logs`. Oculto para o jogador, reproduzível pela staff. Sem isso, o sistema é indefensável no primeiro conflito de comunidade.
+## 13. How it can be abused
 
-### 14.4 🔑 Nenhuma alma é estritamente melhor — a condição que resolve tudo
-Esta é a contribuição principal do conselho, e resolve na raiz o problema que você levantou ("nasce melhor não é divertido").
+Covered in §3.1, §4.1–4.4. The most serious is **grief through transformation**, and the second is **the unfalsifiable accusation of favoritism**.
 
-Se afinidade alta só dá vantagem, existe alma boa e alma ruim, e nascer é loteria. **Então afinidade alta tem que cobrar** — que é literalmente a Constituição §7:
+## 14. How to balance — the four conditions
 
-| Afinidade alta | Ganho | Preço |
+### 14.1 The soul comes from the sheet, not from the dice
+A deterministic seed derived from the approved whitelist application — which **already collects `motivations`, `weaknesses` and `social_ties`** (migration v5, exists today). Same sheet, same soul.
+
+Three gains at once: reroll-farming ends; the sheet starts to **matter mechanically**, which improves the quality of applications; and staff, who already review concepts, start reviewing destinies without needing a new tool.
+
+### 14.2 No single event decides a destiny
+The bite neither kills nor transforms: it **infects**, and infection is the first node of the tree. What comes after is choice, time, ritual and risk — with exit points (a cure is possible, expensive and humiliating). Without consent and without a process, a transformation does not complete.
+
+### 14.3 Every roll is auditable
+Inputs, result and seed in `audit_logs`. Hidden from the player, reproducible by staff. Without this, the system is indefensible in the first community conflict.
+
+### 14.4 🔑 No soul is strictly better — the condition that solves everything
+This is the council's main contribution, and it solves at the root the problem you raised ("being born better is not fun").
+
+If high affinity only gives an advantage, there are good souls and bad souls, and birth is a lottery. **So high affinity has to charge a price** — which is literally Constitution §7:
+
+| High affinity | Gain | Price |
 |---|---|---|
-| **Arcana** | aprende barato, lança limpo | as coisas antigas notam quem brilha: mais exposição a corrupção e a atenção indesejada |
-| **Divina** | proteção, cura, autoridade religiosa | obrigação — quebrar voto tem consequência mecânica, não só social |
-| **Sombria** | poder proibido acessível | caçado; instituições reagem; o corpo cobra |
-| **Bestial** | força, instinto, resistência | controle é mais difícil; a fera responde antes de você |
-| **Vontade alta** | resiste, sustenta ritual | teimosia mecânica: mais difícil ser curado, convencido, salvo |
-| **Estabilidade alta** | não enlouquece | menos sensível ao sobrenatural — não vê o que os frágeis veem |
+| **Arcane** | learns cheaply, casts cleanly | ancient things notice who shines: more exposure to corruption and unwanted attention |
+| **Divine** | protection, healing, religious authority | obligation — breaking a vow has a mechanical consequence, not just a social one |
+| **Shadow** | forbidden power within reach | hunted; institutions react; the body pays |
+| **Bestial** | strength, instinct, endurance | control is harder; the beast responds before you do |
+| **High Will** | resists, sustains rituals | mechanical stubbornness: harder to be healed, convinced, saved |
+| **High Stability** | does not go mad | less sensitive to the supernatural — does not see what the fragile see |
 
-Com isso, **não existe rolagem boa.** Existe rolagem *diferente*, cada uma com um jeito próprio de dar errado. E o jogador que descobrir a própria alma descobre um problema, não um prêmio — que é exatamente o tom Heavy RP.
+With this, **there is no good roll.** There is a *different* roll, each with its own way of going wrong. And the player who discovers their own soul discovers a problem, not a prize — which is exactly the Heavy RP tone.
 
-## 15. Como integra ao resto do mundo
+## 15. How it integrates with the rest of the world
 
-| Sistema existente | Ligação |
+| Existing system | Link |
 |---|---|
-| Whitelist (`characters`, v5) | **É a fonte da semente** (§14.1) |
-| `core/character-state.js` | A árvore é uma máquina de estados irmã |
-| `core/action-policy.js` | Corrupção e transformação restringem ação pelo caminho que já existe |
-| `identity-service` | Vampiro descoberto = identidade revelada; conecta ao disfarce |
-| `governance-service` | Necromancia e vampirismo são **crimes tipificáveis** — a caçada vira processo, não linchamento |
-| `death-service` | Permadeath é o gatilho de sucessão de Casa Nobre |
-| `core/transaction-service` | Todo valor gerado por encantamento passa por aqui |
-| Chancelaria Real | A igreja, a caçada e a Casa Nobre são instituições — o julgamento do vampiro é processo com prova |
+| Whitelist (`characters`, v5) | **It is the source of the seed** (§14.1) |
+| `core/character-state.js` | The tree is a sibling state machine |
+| `core/action-policy.js` | Corruption and transformation restrict actions through the path that already exists |
+| `identity-service` | A discovered vampire = a revealed identity; connects to disguise |
+| `governance-service` | Necromancy and vampirism are **classifiable crimes** — the hunt becomes a process, not a lynching |
+| `death-service` | Permadeath is the succession trigger for a Noble House |
+| `core/transaction-service` | All value generated by enchanting goes through here |
+| Royal Chancery | The church, the hunt and the Noble House are institutions — the vampire's trial is a process with evidence |
 
 ---
 
-# Parte II — A solução: como isso vira jogo bom
+# Part II — The solution: how this becomes good gameplay
 
-A Parte I diz o que não pode. Esta parte diz **o que fazemos**, e o critério é um só: um jogador que entra hoje precisa se divertir hoje.
+Part I says what cannot be. This part says **what we do**, and the criterion is a single one: a player who joins today needs to have fun today.
 
-## II.0 Os quatro assassinos de diversão
+## II.0 The four fun killers
 
-Todo sistema de alma oculta morre de uma destas quatro coisas. O desenho abaixo existe para matar as quatro.
+Every hidden-soul system dies of one of these four things. The design below exists to kill all four.
 
-| Assassino | Como aparece | Como matamos |
+| Killer | How it shows up | How we kill it |
 |---|---|---|
-| **A porta fechada** | "você não pode fazer isso" | O dado **nunca** diz não. Diz *como* dá certo. §II.2 |
-| **A espera** | "volte em dois anos" | Prazo medido em **sessões**, não em meses. §II.4 |
-| **O silêncio** | "nada acontece, tente de novo" | Todo resultado produz ficção. §II.2 |
-| **O invisível** | "não sei se isso está funcionando" | Sinais diegéticos desde a primeira sessão. §II.1 |
+| **The closed door** | "you can't do that" | The dice **never** say no. They say *how* it works out. §II.2 |
+| **The wait** | "come back in two years" | Deadlines measured in **sessions**, not months. §II.4 |
+| **The silence** | "nothing happens, try again" | Every result produces fiction. §II.2 |
+| **The invisible** | "I don't know if this is working" | Diegetic signs from the first session. §II.1 |
 
-## II.1 A alma não tem números. Tem sinais.
+## II.1 The soul has no numbers. It has signs.
 
-Por dentro são 8 valores. **O jogador nunca interage com valor nenhum** — ele interage com *sinais*, que chegam como acontecimento:
+Inside there are 8 values. **The player never interacts with any value** — they interact with *signs*, which arrive as happenings:
 
-> *As chamas te obedecem rápido demais.*
-> *Cães rosnam quando você passa, e você não sabe por quê.*
-> *Você não sonha. Nunca sonhou.*
-> *O sacerdote te olha demais e não diz nada.*
+> *The flames obey you too quickly.*
+> *Dogs growl when you pass, and you don't know why.*
+> *You don't dream. You never have.*
+> *The priest stares at you too long and says nothing.*
 
-**Todo personagem recebe o primeiro sinal na primeira sessão.** Não é poder — é identidade. O jogador sai da primeira sessão com algo verdadeiro sobre o personagem que ninguém escreveu na ficha, e que **já dá para interpretar imediatamente**.
+**Every character receives the first sign in the first session.** It is not power — it is identity. The player leaves the first session with something true about the character that nobody wrote on the sheet, and that **can already be roleplayed immediately**.
 
-Isso resolve o problema mais mortal de servidor de RP, que não é balanceamento: é a primeira hora ser vazia.
+That solves the deadliest problem of an RP server, which is not balance: it is an empty first hour.
 
-E resolve o "indistinguível de bug" (§4.2 da Parte I) pelo lado certo — o jogador sempre recebe algo que lê como intencional, porque é.
+And it solves "indistinguishable from a bug" (§4.2 of Part I) from the right side — the player always receives something that reads as intentional, because it is.
 
-## II.2 O dado nunca diz não. Diz qual história você ganhou.
+## II.2 The dice never say no. They say which story you got.
 
-**Regra de ouro do sistema:** toda tentagem ligada à alma produz um destes quatro resultados. **Os quatro dão certo.**
+**The system's golden rule:** every soul-related attempt produces one of these four results. **All four succeed.**
 
-| Resultado | O que acontece | Quem tira mais |
+| Result | What happens | Who gets it most |
 |---|---|---|
-| **Limpo** | Funciona, sem custo extra | afinidade alta |
-| **Caro** | Funciona, mas consome mais — componente, tempo, exaustão | meio-termo |
-| **Complicado** | Funciona **e mais alguma coisa acontece** — um efeito colateral que é gancho de cena | afinidade baixa |
-| **Marcado** | Funciona e **deixa uma marca permanente** no personagem | afinidade baixa, tentativa grande demais |
+| **Clean** | Works, with no extra cost | high affinity |
+| **Costly** | Works, but consumes more — component, time, exhaustion | middle ground |
+| **Complicated** | Works **and something else happens** — a side effect that is a scene hook | low affinity |
+| **Marked** | Works and **leaves a permanent mark** on the character | low affinity, an attempt that is too big |
 
-Nunca existe "falhou, tente de novo". Existe "funcionou, e agora tem isto".
+There is never "failed, try again". There is "it worked, and now you have this".
 
-**Exemplo.** Dois personagens encantam a mesma lâmina.
+**Example.** Two characters enchant the same blade.
 
-- *João (Arcana alta)* → **Limpo.** Lâmina encantada, bonita, funciona. Fim.
-- *Pedro (Arcana baixa)* → **Marcado.** A lâmina funciona — e ficou fria demais, e a mão que a forjou não esquenta mais. Pedro agora tem uma cicatriz que outros personagens **veem**, uma lâmina com nome, e uma história.
+- *João (high Arcane)* → **Clean.** Blade enchanted, beautiful, works. The end.
+- *Pedro (low Arcane)* → **Marked.** The blade works — and it came out too cold, and the hand that forged it no longer warms up. Pedro now has a scar that other characters **see**, a blade with a name, and a story.
 
-Quem se divertiu mais? Essa é a pergunta que reorganiza o sistema inteiro.
+Who had more fun? That is the question that reorganizes the entire system.
 
-## II.3 A estrada difícil produz o personagem melhor — e o sistema torna isso legível
+## II.3 The hard road produces the better character — and the system makes that legible
 
-Este é o giro que faz "tirar baixo" deixar de ser castigo.
+This is the twist that stops "rolling low" from being a punishment.
 
-> **Talento é mais rápido. Teimosia é mais marcante.**
+> **Talent is faster. Stubbornness is more memorable.**
 
-O mago talentoso é elegante e eficiente. O mago que chegou lá **sem ter o dom** é coberto de marcas, tem uma reputação, e todo mundo no servidor sabe o preço que ele pagou. As duas fantasias são desejáveis — e a segunda gera mais história, que é o §4 da Constituição.
+The talented mage is elegant and efficient. The mage who got there **without the gift** is covered in marks, has a reputation, and everyone on the server knows the price they paid. Both fantasies are desirable — and the second generates more story, which is Constitution §4.
 
-**As marcas são a progressão.** Não há nível. Há o que ficou em você:
+**The marks are the progression.** There is no level. There is what stayed with you:
 
-- Marca **visível** — outros personagens podem ver, e isso conversa com `identity-service` (esconder marca é motivo real para capuz).
-- Marca **sentida** — só você sabe, até alguém perceber.
-- Marca **conhecida** — entrou na reputação; um sacerdote experiente reconhece o que te aconteceu.
+- A **visible** mark — other characters can see it, and that talks to `identity-service` (hiding a mark is a real reason for a hood).
+- A **felt** mark — only you know, until someone notices.
+- A **known** mark — it entered your reputation; an experienced priest recognizes what happened to you.
 
-Uma pessoa com muitas marcas é obviamente alguém que foi longe. Isso é status **narrativo**, não numérico — e não pode ser farmado, porque cada marca custou uma cena.
+A person with many marks is obviously someone who went far. That is **narrative** status, not numeric — and it cannot be farmed, because each mark cost a scene.
 
-## II.4 Prazos em sessões, não em meses
+## II.4 Deadlines in sessions, not months
 
-| Marco | Quando | Depende de afinidade? |
+| Milestone | When | Depends on affinity? |
 |---|---|---|
-| Primeiro sinal | sessão 1 | não |
-| Primeira capacidade real | até ~5 sessões | **não** |
-| Competência reconhecida | ~1 mês de jogo | pouco |
-| Maestria | meses | **sim**, mais social que solitário |
+| First sign | session 1 | no |
+| First real capability | within ~5 sessions | **no** |
+| Recognized competence | ~1 month of play | a little |
+| Mastery | months | **yes**, more social than solitary |
 
-**Ninguém espera para começar a jogar.** A afinidade muda o topo da curva e o *sabor* do caminho, nunca a entrada.
+**Nobody waits to start playing.** Affinity changes the top of the curve and the *flavor* of the path, never the entry.
 
-## II.5 A afinidade empurra você para outras pessoas
+## II.5 Affinity pushes you toward other people
 
-Aprender sozinho é onde a afinidade pesa mais. **Aprender com um mestre achata a diferença.**
+Learning alone is where affinity weighs the most. **Learning with a master flattens the difference.**
 
-Isso é deliberado e é o melhor efeito colateral do sistema: quem tirou baixo tem um **motivo mecânico para procurar gente** — e procurar gente é o loop central de Heavy RP. O sistema converte estatística oculta em vida social.
+This is deliberate and it is the system's best side effect: whoever rolled low has a **mechanical reason to seek people out** — and seeking people out is the central loop of Heavy RP. The system converts a hidden statistic into social life.
 
-E cria papéis que se sustentam sozinhos: quem ensina vira importante sem precisar de cargo da staff.
+And it creates self-sustaining roles: whoever teaches becomes important without needing a staff role.
 
-## II.6 A mordida, refeita — três caminhos em vez de um dado
+## II.6 The bite, redone — three paths instead of one die
 
-Substitui os 70% de morte:
+Replaces the 70% death:
 
-**Mordida = infecção. Sempre sobrevivível. Sempre uma escolha.**
+**Bite = infection. Always survivable. Always a choice.**
 
-Abre uma janela (dias de jogo) em que o personagem sente a mudança e o jogador decide:
+It opens a window (in-game days) in which the character feels the change and the player decides:
 
-1. **Buscar cura** — cara, humilhante, exige terceiros. Cura de verdade, com preço.
-2. **Esconder** — jogável e tenso: sede, sintomas, gente notando.
-3. **Aceitar** — entra na árvore.
+1. **Seek a cure** — expensive, humiliating, requires other people. A real cure, with a price.
+2. **Hide it** — playable and tense: thirst, symptoms, people noticing.
+3. **Accept it** — enters the tree.
 
-Três ramos jogáveis de um evento, contra zero ramos de "você morreu".
+Three playable branches from one event, against zero branches of "you died".
 
-**E a raridade que você queria continua existindo — mas no lugar certo.** O "1% transformação perfeita" não é rolado na mordida: é **conquistado** pelo que o personagem fez durante a infecção. Quem se preparou, buscou mestre, conseguiu o ritual e resistiu chega estável. Quem só deixou acontecer vira o monstro caçado.
+**And the rarity you wanted still exists — but in the right place.** The "1% perfect transformation" is not rolled on the bite: it is **earned** by what the character did during the infection. Whoever prepared, sought a master, obtained the ritual and resisted arrives stable. Whoever just let it happen becomes the hunted monster.
 
-Raridade merecida vale mais que raridade sorteada — e ninguém perde um personagem de meses por causa de um número.
+Earned rarity is worth more than drawn rarity — and nobody loses a months-old character because of a number.
 
-## II.7 Descobrir a própria alma é conteúdo
+## II.7 Discovering your own soul is content
 
-O jogador nunca vê número. Mas o **personagem** pode descobrir sua inclinação, em ficção: um mestre que avalia, um ritual, um vidente, um sonho depois de algo grande.
+The player never sees a number. But the **character** can discover their inclination, in fiction: a master who evaluates, a ritual, a seer, a dream after something big.
 
-Isso transforma "informação oculta" em **destino de viagem**. E dá função a personagens que não lutam nem governam: quem lê almas é uma profissão.
+That turns "hidden information" into a **travel destination**. And it gives a function to characters who neither fight nor govern: reading souls is a profession.
 
-## II.8 Nada disto exige staff
+## II.8 None of this requires staff
 
-Sinais, resultados, marcas e progressão na árvore são calculados pelo servidor a partir de eventos que já existem (`audit_logs`, transações, estado de personagem). A staff arbitra conflito — não opera o sistema.
+Signs, results, marks and tree progression are computed by the server from events that already exist (`audit_logs`, transactions, character state). Staff arbitrate conflict — they do not operate the system.
 
-É o teste da Constituição §5, no Anexo A.2: *se a staff sumir por uma semana, o mundo continua produzindo eventos?* Aqui, continua.
+It is the Constitution §5 test, in Annex A.2: *if staff disappear for a week, does the world keep producing events?* Here, it does.
 
 ---
 
-# Parte III — Especificação final
+# Part III — Final specification
 
-Esta parte fecha o desenho. As decisões abaixo foram tomadas pelo conselho por necessidade técnica ou de jogabilidade e **alteram a proposta original** — cada alteração diz o porquê.
+This part closes the design. The decisions below were made by the council out of technical or gameplay necessity and **change the original proposal** — each change says why.
 
-## III.1 Sete valores, não oito
+## III.1 Seven values, not eight
 
-A proposta original tinha oito. **Cortamos um e derivamos outro**, porque botão a mais não é profundidade — é impossibilidade de balancear e de comunicar.
+The original proposal had eight. **We cut one and derived another**, because an extra knob is not depth — it is the impossibility of balancing and communicating.
 
-**Quatro afinidades** — qual caminho é barato:
+**Four affinities** — which path is cheap:
 
-| | Domínio | Árvore |
+| | Domain | Tree |
 |---|---|---|
-| **Arcana** | magia estruturada, encantamento, alteração | Alteração → Ritual → Arquimago |
-| **Divina** | bênção, cura, autoridade sagrada | Bênçãos → Milagres → Santo |
-| **Sombria** | necromancia, vampirismo, pacto | Vampirismo → Necromancia → Lorde Vampiro |
-| **Bestial** | licantropia, instinto, vínculo natural | Licantropia → Totens → Alfa → Lobo Ancestral |
+| **Arcane** | structured magic, enchanting, alteration | Alteration → Ritual → Archmage |
+| **Divine** | blessing, healing, sacred authority | Blessings → Miracles → Saint |
+| **Shadow** | necromancy, vampirism, pact | Vampirism → Necromancy → Vampire Lord |
+| **Bestial** | lycanthropy, instinct, natural bond | Lycanthropy → Totems → Alpha → Ancestral Wolf |
 
-**Três traços** — como você aguenta o custo:
+**Three traits** — how you bear the cost:
 
-| | O que faz |
+| | What it does |
 |---|---|
-| **Vontade** | resiste a ser mudado: por corrupção, por outro, por persuasão |
-| **Sensibilidade** | percebe o sobrenatural — vê, ouve, sente o que não está lá para os outros |
-| **Estabilidade** | mantém a integridade sob tensão |
+| **Will** | resists being changed: by corruption, by others, by persuasion |
+| **Sensitivity** | perceives the supernatural — sees, hears, feels what is not there for others |
+| **Stability** | keeps integrity under strain |
 
-**Cortado: "Resistência à Corrupção".** Sobrepunha-se a Vontade e Estabilidade. Vira **valor derivado** — `resistência = f(Vontade, Estabilidade)` — sem ocupar espaço próprio. Menos knobs, mesma expressividade.
+**Cut: "Corruption Resistance".** It overlapped with Will and Stability. It becomes a **derived value** — `resistance = f(Will, Stability)` — without taking up its own space. Fewer knobs, same expressiveness.
 
-**A tensão desenhada de propósito:** Sensibilidade alta + Estabilidade baixa é o vidente que está se desfazendo. Estabilidade alta + Sensibilidade baixa é quem nunca enlouquece e nunca vê nada. Nenhum dos dois é melhor.
+**The tension designed on purpose:** high Sensitivity + low Stability is the seer who is coming apart. High Stability + low Sensitivity is the one who never goes mad and never sees anything. Neither is better.
 
-## III.2 Orçamento fixo — a garantia mecânica de que nenhuma alma é melhor
+## III.2 Fixed budget — the mechanical guarantee that no soul is better
 
-A condição §14.4 não pode depender de boa vontade de quem escreve conteúdo. Ela vira **restrição do gerador**:
+Condition §14.4 cannot depend on the goodwill of whoever writes content. It becomes a **generator constraint**:
 
-- As quatro afinidades dividem um **orçamento constante**.
-- Os três traços dividem **outro orçamento constante**.
+- The four affinities share a **constant budget**.
+- The three traits share **another constant budget**.
 
-Consequência: Arcana alta **obriga** algo mais a ser baixo. Não existe alma completa, não existe alma vazia, e "rolar bem" deixa de significar coisa alguma.
+Consequence: high Arcane **forces** something else to be low. There is no complete soul, no empty soul, and "rolling well" stops meaning anything.
 
-**Bandas em vez de números.** Internamente 0–100; a resolução usa cinco bandas, e a distribuição concentra no meio:
+**Bands instead of numbers.** Internally 0–100; resolution uses five bands, and the distribution concentrates in the middle:
 
-`Surdo · Fraco · Comum · Forte · Raro`
+`Deaf · Weak · Common · Strong · Rare`
 
-Ninguém é nada. Quase ninguém é tudo.
+Nobody is nothing. Almost nobody is everything.
 
-## III.3 A semente vem da ficha
+## III.3 The seed comes from the sheet
 
 ```
 semente = HMAC(SEGREDO_SERVIDOR, character_id ‖ normalizar(motivations, weaknesses, social_ties))
 ```
 
-Os três campos **já existem** (migration v5). Mesma ficha aprovada → mesma alma, sempre. Isso mata o reroll-farming e faz a aplicação de whitelist valer mecanicamente.
+The three fields **already exist** (migration v5). Same approved sheet → same soul, always. That kills reroll-farming and makes the whitelist application matter mechanically.
 
-⚠️ **`SEGREDO_SERVIDOR` nunca sai do servidor.** Sem ele, qualquer um calcula a alma de qualquer personagem a partir da ficha pública — e o sistema inteiro deixa de ser oculto.
+⚠️ **`SEGREDO_SERVIDOR` never leaves the server.** Without it, anyone can compute any character's soul from the public sheet — and the entire system stops being hidden.
 
-## III.4 Resolução — como sai Limpo, Caro, Complicado ou Marcado
+## III.4 Resolution — how Clean, Costly, Complicated or Marked comes out
 
 ```
 peso = banda(afinidade_relevante)
-     + circunstância      // mestre presente, componente certo, lugar consagrado, preparo
-     − dificuldade        // do ato tentado
-     − pressão            // ver III.5
+     + circunstância      // master present, right component, consecrated place, preparation
+     − dificuldade        // of the attempted act
+     − pressão            // see III.5
 ```
 
-O `peso` desloca a distribuição entre os quatro resultados. **Nenhum valor de `peso` produz falha** — pesos muito baixos concentram em Complicado e Marcado, que continuam sendo sucesso com história.
+The `peso` (weight) shifts the distribution among the four results. **No `peso` value produces failure** — very low weights concentrate on Complicated and Marked, which are still successes with a story.
 
-**Rolagem determinística e auditável:**
+**Deterministic and auditable roll:**
 
 ```
 resultado = f(semente_da_alma, id_do_evento, tentativa_n)
 ```
 
-Grava em `audit_logs` (`soul:resolve`) as entradas, o `peso`, o resultado e a semente do evento. Oculto para o jogador; **reproduzível pela staff**. É a condição §14.3, e sem ela o sistema é indefensável no primeiro conflito de comunidade.
+Writes to `audit_logs` (`soul:resolve`) the inputs, the `peso`, the result and the event seed. Hidden from the player; **reproducible by staff**. It is condition §14.3, and without it the system is indefensible in the first community conflict.
 
-## III.5 Pressão — o anti-spam que também é ficção
+## III.5 Pressure — the anti-spam that is also fiction
 
-Sem isto, o exploit é óbvio: tentar cem vezes até sair Limpo.
+Without this, the exploit is obvious: try a hundred times until Clean comes out.
 
-Cada tentativa do mesmo ato numa janela **acumula pressão**, que empurra a distribuição para Complicado e Marcado. Insistir não converge para o sucesso limpo — **converge para marcas**.
+Each attempt at the same act within a window **accumulates pressure**, which pushes the distribution toward Complicated and Marked. Insisting does not converge on a clean success — **it converges on marks**.
 
-É honesto com a ficção: quem força a mesma coisa muitas vezes acaba pagando por isso. E é anti-exploit sem precisar dizer "não".
+It is honest with the fiction: whoever forces the same thing many times ends up paying for it. And it is anti-exploit without needing to say "no".
 
-## III.6 Marcas
+## III.6 Marks
 
 ```sql
 character_marks (
   id, character_id,
   kind,                     -- 'fisica' | 'espiritual' | 'social'
   visibility,               -- 'visivel' | 'sentida' | 'conhecida'
-  descriptor,               -- chave do texto; nunca texto livre do jogador
-  origin_event_id,          -- rastro até o audit_log que a gerou
+  descriptor,               -- text key; never free text from the player
+  origin_event_id,          -- trail back to the audit_log that generated it
   created_at
 )
 ```
 
-- **`visivel`** — outros veem. Conversa com `identity-service`: esconder marca é motivo real para capuz.
-- **`sentida`** — só o portador sabe, até alguém perceber.
-- **`conhecida`** — entrou na reputação; quem entende do assunto reconhece.
+- **`visivel`** (visible) — others see it. Talks to `identity-service`: hiding a mark is a real reason for a hood.
+- **`sentida`** (felt) — only the bearer knows, until someone notices.
+- **`conhecida`** (known) — it entered the reputation; whoever understands the subject recognizes it.
 
-**Marca nunca é removida.** No máximo é *coberta* — o que também é jogável, e caro.
+**A mark is never removed.** At most it is *covered* — which is also playable, and expensive.
 
-## III.7 Sinais
+## III.7 Signs
 
 ```sql
 character_signs (id, character_id, sign_key, revealed_at, source)
 ```
 
-O primeiro é revelado no **primeiro spawn**, não por tempo de jogo — é o que garante que a primeira sessão não seja vazia. Os seguintes chegam por evento: algo que o personagem fez, viu ou sofreu.
+The first is revealed at the **first spawn**, not by playtime — that is what guarantees the first session is not empty. The following ones arrive through events: something the character did, saw or suffered.
 
-Entrega pelo canal que **já existe**: property `panelData` + `core/panel-refresh-bus.js`. Nenhuma infraestrutura nova.
+Delivered through the channel that **already exists**: the `panelData` property + `core/panel-refresh-bus.js`. No new infrastructure.
 
-## III.8 A árvore é máquina de estados, irmã de `character-state`
+## III.8 The tree is a state machine, a sibling of `character-state`
 
 ```sql
 character_paths (
   id, character_id,
   tree,                     -- 'arcana' | 'divina' | 'sombria' | 'bestial'
-  node,                     -- nó atual
-  entered_at, consented_at, -- consentimento explícito onde é irreversível
+  node,                     -- current node
+  entered_at, consented_at, -- explicit consent where it is irreversible
   metadata
 )
 ```
 
-**Separada de `core/character-state.js` de propósito.** Aquele trata estado imediato de gameplay (`NORMAL`/`DOWNED`/`IMPRISONED`), com ciclo de vida de segundos. Este é trajetória de meses. Misturar os dois acoplaria coisas com tempos de vida incompatíveis — a §13 da Constituição.
+**Separate from `core/character-state.js` on purpose.** That one handles immediate gameplay state (`NORMAL`/`DOWNED`/`IMPRISONED`), with a lifecycle of seconds. This one is a trajectory of months. Mixing the two would couple things with incompatible lifetimes — Constitution §13.
 
-**`consented_at` é a implementação da condição §14.2:** nó irreversível não avança sem consentimento registrado. É também a resposta ao A.3 do Anexo (aviso antes do irreversível).
+**`consented_at` is the implementation of condition §14.2:** an irreversible node does not advance without recorded consent. It is also the answer to Annex A.3 (warning before the irreversible).
 
-## III.9 Contrato de eventos
+## III.9 Event contract
 
-Tudo event-driven, **nada de polling** — já temos três serviços a 2 s e uma chamada Papyrus custa 13–35 ms.
+Everything event-driven, **no polling** — we already have three services at 2 s and a Papyrus call costs 13–35 ms.
 
-| Evento emitido | Quem consome |
+| Event emitted | Who consumes it |
 |---|---|
-| `soul.resolved` | marcas, painel, auditoria |
-| `soul.mark.created` | `identity-service` (se visível), painel |
-| `soul.sign.revealed` | painel |
-| `soul.path.advanced` | governança (crime tipificável), painel |
-| `soul.infection.started` | painel, e abre a janela de escolha |
+| `soul.resolved` | marks, panel, audit |
+| `soul.mark.created` | `identity-service` (if visible), panel |
+| `soul.sign.revealed` | panel |
+| `soul.path.advanced` | governance (classifiable crime), panel |
+| `soul.infection.started` | panel, and opens the choice window |
 
-O `governance-service` escuta `soul.path.advanced` para tipificar necromancia e vampirismo como **crime** — o que transforma caçada em processo, e não em linchamento.
+`governance-service` listens to `soul.path.advanced` to classify necromancy and vampirism as **crimes** — which turns a hunt into a process, not a lynching.
 
-## III.10 O que o servidor não consegue fazer, e a consequência
+## III.10 What the server cannot do, and the consequence
 
-Limite real do SkyMP, registrado antes que alguém desenhe em cima:
+A real SkyMP limit, recorded before someone designs on top of it:
 
-| Manifestação | Viável hoje? |
+| Manifestation | Viable today? |
 |---|---|
-| Mensagem, sonho, voz, aviso | ✅ direto |
-| Animação, efeito sonoro | ✅ Papyrus |
-| Bloquear ação (corrupção, transformação) | ✅ `core/action-policy.js` |
-| **Mudança física visível** | ❌ **exige plugin nosso** — `.esm` sem script, com FormIDs que controlamos, lógica em Node (padrão do `MODS_AND_GAMEMODE_CONTRACT.md` §5) |
+| Message, dream, voice, warning | ✅ directly |
+| Animation, sound effect | ✅ Papyrus |
+| Blocking an action (corruption, transformation) | ✅ `core/action-policy.js` |
+| **Visible physical change** | ❌ **requires our own plugin** — a scriptless `.esm`, with FormIDs we control, logic in Node (the `MODS_AND_GAMEMODE_CONTRACT.md` §5 pattern) |
 
-Enquanto o plugin não existir, marca física é **descrita**, não renderizada. Funciona — Heavy RP vive de descrição — mas é uma limitação a assumir, não a esconder.
+Until the plugin exists, a physical mark is **described**, not rendered. It works — Heavy RP lives on description — but it is a limitation to accept, not to hide.
 
-## III.11 Módulo e flag
+## III.11 Module and flag
 
-`soul-service.js`, registrado no `core/module-registry.js`, `enabledBy: 'ENABLE_SOUL_SERVICE'`, fase `lab`, desligado por padrão. Dependências: nenhuma no v1 (a integração com governança entra depois, por evento).
+`soul-service.js`, registered in `core/module-registry.js`, `enabledBy: 'ENABLE_SOUL_SERVICE'`, phase `lab`, off by default. Dependencies: none in v1 (the governance integration comes later, via events).
 
-## III.12 Testes obrigatórios antes de ligar
+## III.12 Mandatory tests before turning it on
 
-Seguindo o `CONTRIBUTING.md` §6 — verificar o **argumento e o efeito**, nunca só o retorno:
+Following `CONTRIBUTING.md` §6 — verify the **argument and the effect**, never just the return value:
 
-1. **Orçamento fixo é respeitado** em 10 000 almas geradas: nenhuma soma foge do orçamento.
-2. **Distribuição concentra no meio**: `Comum` é a banda mais frequente; `Raro` é raro de verdade.
-3. **Determinismo**: mesma ficha → mesma alma, entre execuções e entre processos.
-4. **A resolução nunca falha**: em 10 000 resoluções com o pior `peso` possível, zero resultados fora dos quatro.
-5. **Pressão empurra para marca**, nunca para Limpo — o teste do exploit de spam.
-6. **Nó irreversível recusa avançar sem `consented_at`.**
-7. **A semente não vaza**: nenhum payload de `panelData` contém número de afinidade. Este é o teste que protege o sistema inteiro; escrever primeiro.
-8. **Marca visível respeita o firewall de identidade**: quem não conhece o portador não recebe descritor que revele nome civil.
+1. **The fixed budget is respected** across 10,000 generated souls: no sum escapes the budget.
+2. **The distribution concentrates in the middle**: `Common` is the most frequent band; `Rare` is truly rare.
+3. **Determinism**: same sheet → same soul, across runs and across processes.
+4. **Resolution never fails**: across 10,000 resolutions with the worst possible `peso`, zero results outside the four.
+5. **Pressure pushes toward marks**, never toward Clean — the spam exploit test.
+6. **An irreversible node refuses to advance without `consented_at`.**
+7. **The seed does not leak**: no `panelData` payload contains an affinity number. This is the test that protects the entire system; write it first.
+8. **A visible mark respects the identity firewall**: whoever does not know the bearer does not receive a descriptor that reveals their civil name.
 
-## III.13 Verificação — o domínio existe e os números fecham
+## III.13 Verification — the domain exists and the numbers add up
 
-A camada de domínio (`skymp/gamemode/core/soul.js`) **já está implementada e testada**, com 28 testes. Ela é função pura: não abre banco, não toca `mp`, não tem efeito colateral. Por isso não depende da Fase 0 — o que depende é o *serviço*, que fala com o mundo.
+The domain layer (`skymp/gamemode/core/soul.js`) **is already implemented and tested**, with 28 tests. It is a pure function: it opens no database, does not touch `mp`, has no side effects. That is why it does not depend on Phase 0 — what depends on it is the *service*, which talks to the world.
 
-**Distribuição real** (20 000 almas, 80 000 afinidades):
+**Actual distribution** (20,000 souls, 80,000 affinities):
 
-| Banda | Frequência |
+| Band | Frequency |
 |---|---|
-| surdo | 0,8 % |
-| fraco | 14,3 % |
-| **comum** | **68,6 %** |
-| forte | 15,1 % |
-| raro | 1,2 % |
+| deaf | 0.8 % |
+| weak | 14.3 % |
+| **common** | **68.6 %** |
+| strong | 15.1 % |
+| rare | 1.2 % |
 
-Quase todo mundo é comum em quase tudo — que é o que faz `raro` significar alguma coisa. Um personagem tem ~5 % de chance de ter *alguma* afinidade rara.
+Almost everyone is common in almost everything — which is what makes `rare` mean something. A character has a ~5 % chance of having *some* rare affinity.
 
-### O número que valida o desenho
+### The number that validates the design
 
-A pergunta que decide se o sistema é justo: **preparo compensa nascimento?**
+The question that decides whether the system is fair: **does preparation make up for birth?**
 
-| Situação | limpo | caro | complicado | marcado |
+| Situation | clean | costly | complicated | marked |
 |---|---|---|---|---|
-| `surdo`, sozinho, ato difícil | 4 % | 27 % | 39 % | 30 % |
-| **`surdo` com mestre + componente + lugar** | **25 %** | **40 %** | **25 %** | **10 %** |
-| **`raro`, sozinho, ato difícil** | **25 %** | **40 %** | **25 %** | **10 %** |
-| `raro` com mestre + componente + lugar | 76 % | 12 % | 10 % | 2 % |
+| `deaf`, alone, hard act | 4 % | 27 % | 39 % | 30 % |
+| **`deaf` with master + component + place** | **25 %** | **40 %** | **25 %** | **10 %** |
+| **`rare`, alone, hard act** | **25 %** | **40 %** | **25 %** | **10 %** |
+| `rare` with master + component + place | 76 % | 12 % | 10 % | 2 % |
 
-**As duas linhas do meio são idênticas.** Quem nasceu sem dom nenhum, com um mestre e a preparação certa, chega exatamente onde o talentoso chega sozinho.
+**The two middle rows are identical.** Whoever was born with no gift at all, with a master and the right preparation, arrives exactly where the talented arrive alone.
 
-Isso é a §II.5 provada em número, e não em promessa: a afinidade não fecha porta — ela decide **de quanta gente você vai precisar**. O talento continua valendo (o talentoso que também se prepara chega a 76 %), mas o caminho do sem-dom passa por outras pessoas, que é o loop central de Heavy RP.
+That is §II.5 proven in numbers, not in promises: affinity does not close a door — it decides **how many people you will need**. Talent still matters (the talented who also prepare reach 76 %), but the giftless path goes through other people, which is the central loop of Heavy RP.
 
-## III.14 Fora do v1, deliberadamente
+## III.14 Out of v1, deliberately
 
-- **Linhagem nobre hereditária** — depende da árvore provada e toca sucessão, que hoje é staff-autorada.
-- **Afinidade marcial** — o combate é do cliente; o servidor não arbitra golpe. Entra quando houver um caminho confiável, não antes.
-- **Detector institucional de alma** — a igreja **não** pode ter exame de sangue espiritual. Mataria o mistério e a fé de uma vez.
+- **Hereditary noble lineage** — depends on the tree being proven and touches succession, which today is staff-authored.
+- **Martial affinity** — combat belongs to the client; the server does not arbitrate blows. It comes in when there is a reliable path, not before.
+- **Institutional soul detector** — the church **cannot** have a spiritual blood test. It would kill the mystery and the faith at once.
 
 ---
 
-## Proposta de implementação — em que ordem, e não agora
+## Implementation proposal — in what order, and not now
 
-**Pré-requisito absoluto: Fase 0** (teste in-game). O projeto ainda não rodou uma sessão. Construir um sistema de alma sobre um gamemode não validado é construir no escuro.
+**Absolute prerequisite: Phase 0** (in-game test). The project has not yet run a session. Building a soul system on top of an unvalidated gamemode is building in the dark.
 
-Depois disso, a ordem que o conselho recomenda — cada etapa entrega história sozinha, nenhuma depende da seguinte para valer a pena:
+After that, the order the council recommends — each stage delivers story on its own, none depends on the next to be worthwhile:
 
-1. **`character_soul` + semente pela ficha + o primeiro sinal.** A alma existe, é auditável, e já entrega o sinal da sessão 1 (§II.1) — que não depende de nenhuma mecânica pesada e sozinho já melhora a primeira hora de jogo. Nenhum efeito mecânico ainda: dá pra validar distribuição e leitura antes de qualquer consequência.
-2. **Os quatro resultados (§II.2) em UMA coisa só — encantamento.** Limpo/Caro/Complicado/Marcado, com as primeiras marcas. Escopo pequeno, economia mensurável, primeira profissão de verdade — e valida o mecanismo central do sistema inteiro num lugar onde errar é barato.
-3. **Corrupção**, ligada a necromancia. Aqui entra a manifestação narrativa (§10) e o plugin próprio.
-4. **Árvore de Transformação**, começando por licantropia — mais simples que vampirismo, sem a política de clã.
-5. **Vampirismo**, por último, porque é o que mais toca política, religião e grief.
-6. **Linhagem nobre**, depois que a árvore provou funcionar.
+1. **`character_soul` + seed from the sheet + the first sign.** The soul exists, is auditable, and already delivers the session-1 sign (§II.1) — which depends on no heavy mechanic and on its own already improves the first hour of play. No mechanical effect yet: you can validate distribution and readability before any consequence.
+2. **The four results (§II.2) in ONE thing only — enchanting.** Clean/Costly/Complicated/Marked, with the first marks. Small scope, measurable economy, the first real profession — and it validates the central mechanism of the entire system in a place where mistakes are cheap.
+3. **Corruption**, tied to necromancy. This is where narrative manifestation (§10) and our own plugin come in.
+4. **Transformation Tree**, starting with lycanthropy — simpler than vampirism, without clan politics.
+5. **Vampirism**, last, because it is what touches politics, religion and grief the most.
+6. **Noble lineage**, after the tree has proven it works.
 
-**Nunca:** liberar a etapa 5 antes de a 14.2 (consentimento e processo) estar implementada e testada.
+**Never:** release stage 5 before 14.2 (consent and process) is implemented and tested.
