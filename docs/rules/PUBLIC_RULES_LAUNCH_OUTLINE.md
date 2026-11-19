@@ -1,436 +1,436 @@
-# Esboco - Regras Publicas Necessarias Antes do Lancamento
+# Outline - Public Rules Required Before Launch
 
-## 1. Documentos Base
+## 1. Base Documents
 
-Antes do lancamento publico, estes documentos precisam existir, estar revisados e estar acessiveis para jogadores e staff:
+Before the public launch, these documents must exist, be reviewed and be accessible to players and staff:
 
-- Regras publicas: `docs/rules/HEAVY_RP_RULES.md`.
-- Modelo de aplicacao de personagem: `docs/rules/CHARACTER_APPLICATION_TEMPLATE.md`.
-- Rubrica de whitelist da staff: `docs/staff/WHITELIST_RUBRIC.md`.
-- Estudo de referencias tecnicas: `docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
-- Checklist de setup SkyMP: `docs/technical/SKYMP_SERVER_SETUP.md`.
-- Schema de server-options: `docs/technical/SERVER_OPTIONS_SCHEMA.md`.
-- Politica de licenca e nao afiliacao: `docs/technical/LICENSE_AND_AFFILIATION_POLICY.md`.
-- Decisao tecnica sobre NPCs: `docs/technical/NPC_POLICY_DECISION.md`.
+- Public rules: `docs/rules/HEAVY_RP_RULES.md`.
+- Character application template: `docs/rules/CHARACTER_APPLICATION_TEMPLATE.md`.
+- Staff whitelist rubric: `docs/staff/WHITELIST_RUBRIC.md`.
+- Technical reference study: `docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
+- SkyMP setup checklist: `docs/technical/SKYMP_SERVER_SETUP.md`.
+- server-options schema: `docs/technical/SERVER_OPTIONS_SCHEMA.md`.
+- License and non-affiliation policy: `docs/technical/LICENSE_AND_AFFILIATION_POLICY.md`.
+- Technical decision on NPCs: `docs/technical/NPC_POLICY_DECISION.md`.
 
-## 2. Politica de Nomes
+## 2. Name Policy
 
-### Regra Base
+### Base Rule
 
-Todo personagem deve ter nome e sobrenome coerentes com a ambientacao de Skyrim e com a propria raca/origem.
+Every character must have a first and last name consistent with the Skyrim setting and with their own race/origin.
 
-### Permitido
+### Allowed
 
-- Nomes inspirados em Elder Scrolls.
-- Sobrenomes culturais plausiveis.
-- Apelidos usados em RP, desde que o nome oficial seja valido.
+- Names inspired by Elder Scrolls.
+- Plausible cultural surnames.
+- Nicknames used in RP, as long as the official name is valid.
 
-### Proibido
+### Forbidden
 
-- Nomes de memes.
-- Nomes modernos fora de contexto.
-- Nomes ofensivos.
-- Nomes de celebridades.
-- Nomes de personagens canonicos importantes.
-- Nomes que tentem imitar staff ou cargos oficiais.
+- Meme names.
+- Out-of-context modern names.
+- Offensive names.
+- Celebrity names.
+- Names of important canonical characters.
+- Names that try to imitate staff or official roles.
 
-### Aplicacao
+### Enforcement
 
-Nomes inadequados podem ser recusados na whitelist ou alterados pela staff antes do primeiro spawn.
+Inappropriate names may be refused at whitelist or changed by staff before the first spawn.
 
-## 3. Politica de Historia de Personagem
+## 3. Character Backstory Policy
 
-### Regra Base
+### Base Rule
 
-Todo personagem precisa ter historia plausivel, objetivo, fraqueza e motivo para estar em Skyrim.
+Every character needs a plausible backstory, a goal, a weakness and a reason to be in Skyrim.
 
-### Requisitos Minimos
+### Minimum Requirements
 
-- Origem.
-- Motivacao.
-- Falha ou limitacao.
-- Relacao com lei, violencia e autoridade.
-- Tipo de cena que o jogador pretende criar.
+- Origin.
+- Motivation.
+- Flaw or limitation.
+- Relationship with law, violence and authority.
+- Type of scene the player intends to create.
 
-### Conceitos Restritos
+### Restricted Concepts
 
-Exigem aprovacao da staff:
+Require staff approval:
 
-- Nobreza.
-- Vampiro.
-- Lobisomem.
-- Ligacao com Daedra.
-- Mago poderoso.
-- Assassino profissional.
-- Lider de faccao.
-- Personagem com grande influencia politica.
+- Nobility.
+- Vampire.
+- Werewolf.
+- Connection to Daedra.
+- Powerful mage.
+- Professional assassin.
+- Faction leader.
+- Character with great political influence.
 
-### Proibido no Lancamento
+### Forbidden at Launch
 
 - Dragonborn.
-- Heroi lendario.
-- Campeao Daedrico.
-- Lider maximo de faccao canonica.
-- Personagem sem fraquezas.
-- Personagem feito apenas para combate.
+- Legendary hero.
+- Daedric champion.
+- Supreme leader of a canonical faction.
+- Character with no weaknesses.
+- Character made only for combat.
 
-## 4. Padroes de Heavy RP
+## 4. Heavy RP Standards
 
-### Regra Base
+### Base Rule
 
-O servidor exige interpretacao seria, consequencias persistentes e separacao entre jogador e personagem.
+The server requires serious roleplay, persistent consequences and separation between player and character.
 
-### Esperado
+### Expected
 
-- Permanecer in-character durante cenas.
-- Criar conflitos com contexto.
-- Aceitar perdas razoaveis.
-- Respeitar o tempo de resposta de outros jogadores.
-- Priorizar historia sobre vantagem mecanica.
+- Stay in character during scenes.
+- Create conflicts with context.
+- Accept reasonable losses.
+- Respect other players' response time.
+- Prioritize story over mechanical advantage.
 
-### Nao Esperado
+### Not Expected
 
-- Jogar como se fosse PvP livre.
-- Transformar toda cena em piada.
-- Forcar vitoria.
-- Evitar consequencias por OOC.
+- Playing as if it were free-for-all PvP.
+- Turning every scene into a joke.
+- Forcing victory.
+- Avoiding consequences through OOC.
 
 ## 5. Fail RP
 
-Fail RP e qualquer comportamento que quebra a seriedade ou logica do mundo.
+Fail RP is any behavior that breaks the seriousness or logic of the world.
 
-### Exemplos
+### Examples
 
-- Pular ou correr sem sentido durante cenas serias.
-- Agir sem medo diante de ameaca real.
-- Usar linguagem moderna in-character.
-- Ignorar ferimentos.
-- Tratar guardas, nobres ou criminosos perigosos como piada sem contexto.
+- Jumping or running pointlessly during serious scenes.
+- Acting fearless in the face of a real threat.
+- Using modern language in character.
+- Ignoring injuries.
+- Treating guards, nobles or dangerous criminals as a joke without context.
 
-### Consequencias
+### Consequences
 
-Aviso, anulacao de cena, punicao no personagem ou remocao da whitelist, conforme gravidade.
+Warning, scene voided, character punishment or removal from the whitelist, depending on severity.
 
 ## 6. Metagaming
 
-Metagaming e usar informacao que seu personagem nao obteve em RP.
+Metagaming is using information your character did not obtain in RP.
 
-### Exemplos
+### Examples
 
-- Usar Discord para localizar alguem.
-- Agir com base em stream ou clipe.
-- Saber que alguem e criminoso por informacao OOC.
-- Usar informacao de staff em cena.
+- Using Discord to locate someone.
+- Acting on a stream or clip.
+- Knowing someone is a criminal from OOC information.
+- Using staff information in a scene.
 
-### Regra
+### Rule
 
-Informacao OOC nunca pode virar acao IC sem ponte de RP valida.
+OOC information can never become an IC action without a valid RP bridge.
 
 ## 7. Powergaming
 
-Powergaming e forcar resultados ou interpretar um personagem sem limites plausiveis.
+Powergaming is forcing outcomes or playing a character without plausible limits.
 
-### Exemplos
+### Examples
 
-- Declarar que acertou, matou ou amarrou alguem sem chance de resposta.
-- Escapar de prisao ou amarras sem metodo plausivel.
-- Ignorar dor, medo, cansaco ou dano.
-- Forcar consequencia permanente em outro personagem sem regra/consentimento/staff.
+- Declaring that you hit, killed or tied someone up without a chance to respond.
+- Escaping prison or restraints without a plausible method.
+- Ignoring pain, fear, fatigue or damage.
+- Forcing a permanent consequence on another character without a rule/consent/staff.
 
 ## 8. Random Deathmatch
 
-Random deathmatch e violencia sem motivo de RP suficiente.
+Random deathmatch is violence without sufficient RP reason.
 
-### Proibido
+### Forbidden
 
-- Matar por loot.
-- Atacar por tedio.
-- Emboscar novatos sem construcao.
-- Usar conflito pequeno como desculpa automatica para morte.
+- Killing for loot.
+- Attacking out of boredom.
+- Ambushing newcomers without build-up.
+- Using a small conflict as an automatic excuse for death.
 
-### Regra
+### Rule
 
-Violencia precisa de contexto, escalada e risco narrativo.
+Violence needs context, escalation and narrative risk.
 
-## 9. Bait de Combate
+## 9. Combat Baiting
 
-Bait de combate e provocar outro jogador para forcar uma luta injusta ou gerar punicao contra ele.
+Combat baiting is provoking another player to force an unfair fight or get them punished.
 
-### Exemplos
+### Examples
 
-- Insultar repetidamente alguem para tentar justificar PvP.
-- Se colocar na frente de golpes ou guardas para criar denuncia.
-- Provocar autoridade sem medo apenas para gerar conflito.
+- Repeatedly insulting someone to try to justify PvP.
+- Stepping in front of blows or guards to create a report.
+- Provoking authority fearlessly just to generate conflict.
 
-### Regra
+### Rule
 
-Conflito precisa ser interpretado com intencao narrativa, nao como armadilha mecanica.
+Conflict must be roleplayed with narrative intent, not as a mechanical trap.
 
-## 10. Escalada Irreal
+## 10. Unrealistic Escalation
 
-Escalada irreal e transformar situacoes pequenas em consequencias extremas sem proporcionalidade.
+Unrealistic escalation is turning small situations into extreme consequences without proportionality.
 
-### Exemplos
+### Examples
 
-- Matar por insulto leve.
-- Torturar por divida pequena.
-- Declarar guerra por discussao simples.
-- Prender alguem por horas sem motivo forte.
+- Killing over a light insult.
+- Torturing over a small debt.
+- Declaring war over a simple argument.
+- Holding someone for hours without a strong reason.
 
-### Regra
+### Rule
 
-A resposta deve combinar com o contexto, poder envolvido, cultura local, testemunhas e risco.
+The response must match the context, the power involved, the local culture, the witnesses and the risk.
 
-## 11. Bugs, Exploits e Duplicacao
+## 11. Bugs, Exploits and Duplication
 
-### Proibido
+### Forbidden
 
-- Explorar bugs.
-- Duplicar itens.
-- Manipular ouro.
-- Usar dessync para vantagem.
-- Forcar crash para evitar consequencia.
-- Guardar item obtido por erro.
+- Exploiting bugs.
+- Duplicating items.
+- Manipulating gold.
+- Using desync for advantage.
+- Forcing a crash to avoid consequences.
+- Keeping an item obtained by mistake.
 
-### Obrigatorio
+### Mandatory
 
-Todo bug exploravel deve ser reportado. Itens, ouro ou vantagens obtidas por bug podem ser removidos.
+Every exploitable bug must be reported. Items, gold or advantages obtained through a bug may be removed.
 
-## 12. Assedio e Conduta OOC
+## 12. Harassment and OOC Conduct
 
-### Proibido
+### Forbidden
 
-- Assedio.
-- Ameacas.
-- Discriminacao.
-- Perseguicao OOC.
+- Harassment.
+- Threats.
+- Discrimination.
+- OOC stalking.
 - Doxxing.
-- Conteudo sexual nao consentido.
-- Pressao contra jogador ou staff fora do processo correto.
+- Non-consensual sexual content.
+- Pressuring a player or staff outside the proper process.
 
-### Regra
+### Rule
 
-Conflito IC nao justifica abuso OOC.
+IC conflict does not justify OOC abuse.
 
-## 13. Voz e Chat
+## 13. Voice and Chat
 
-### Canais
+### Channels
 
-- IC local.
-- Sussurro.
-- Grito.
+- Local IC.
+- Whisper.
+- Shout.
 - OOC.
 - Staff.
 - Reports.
 
-### Regras
+### Rules
 
-- Chat IC deve respeitar distancia e celula.
-- OOC deve ser usado com moderacao.
-- Discussao de regra deve ir para report ou suporte.
-- Staff pode silenciar, limpar ou revisar chat quando necessario.
+- IC chat must respect distance and cell.
+- OOC must be used sparingly.
+- Rule discussions must go to reports or support.
+- Staff may mute, clear or review chat when necessary.
 
-### Voz
+### Voice
 
-Se voz for ativada, ela deve seguir as mesmas regras de IC/OOC, metagaming e assedio.
+If voice is enabled, it must follow the same IC/OOC, metagaming and harassment rules.
 
-## 14. Morte
+## 14. Death
 
-### Regra Base
+### Base Rule
 
-Morte nao e casual em Heavy RP.
+Death is not casual in Heavy RP.
 
-### Estados Possiveis
+### Possible States
 
-- Ferido.
-- Inconsciente.
-- Capturado.
-- Morto temporariamente.
-- Morto permanentemente, apenas sob regra aprovada.
+- Injured.
+- Unconscious.
+- Captured.
+- Temporarily dead.
+- Permanently dead, only under an approved rule.
 
-### Permanente
+### Permanent
 
-Morte permanente exige politica especifica, revisao da staff ou consentimento conforme o tipo de cena.
+Permanent death requires a specific policy, staff review or consent depending on the type of scene.
 
-## 15. Ferimentos
+## 15. Injuries
 
-Ferimentos devem afetar o comportamento do personagem.
+Injuries must affect the character's behavior.
 
-### Exemplos
+### Examples
 
-- Ferida grave limita corrida e combate.
-- Captura pode gerar trauma, divida ou reputacao.
-- Cura precisa de cena, tempo ou profissional quando aplicavel.
+- A serious wound limits running and combat.
+- Capture can create trauma, debt or reputation.
+- Healing requires a scene, time or a professional where applicable.
 
-### Proibido
+### Forbidden
 
-- Voltar imediatamente ao combate apos derrota.
-- Ignorar dano grave.
-- Usar cura mecanica para apagar consequencia de RP sem contexto.
+- Returning to combat immediately after a defeat.
+- Ignoring serious damage.
+- Using mechanical healing to erase an RP consequence without context.
 
-## 16. Nova Vida e Memoria
+## 16. New Life and Memory
 
-### Regra Base
+### Base Rule
 
-O personagem lembra dos fatos ate ficar inconsciente ou claramente incapacitado.
+The character remembers the facts until becoming unconscious or clearly incapacitated.
 
-### Proibido
+### Forbidden
 
 - Revenge killing.
-- Voltar ao local da morte para continuar conflito.
-- Usar informacao vista apos inconsciencia.
-- Fingir esquecimento seletivo para escapar de consequencia.
+- Returning to the place of death to continue the conflict.
+- Using information seen after becoming unconscious.
+- Faking selective forgetfulness to escape consequences.
 
-### Observacao
+### Note
 
-A regra final de memoria deve ser confirmada antes da beta publica.
+The final memory rule must be confirmed before the public beta.
 
-## 17. Inicio de Combate
+## 17. Starting Combat
 
-Combate exige motivo plausivel, escalada e risco.
+Combat requires a plausible reason, escalation and risk.
 
-### Antes de Iniciar
+### Before Starting
 
-Considere:
+Consider:
 
-- Seu personagem tem motivo real?
-- O local permite esse risco?
-- Ha testemunhas?
-- A resposta e proporcional?
-- Existe alternativa de RP?
+- Does your character have a real reason?
+- Does the location allow this risk?
+- Are there witnesses?
+- Is the response proportional?
+- Is there an RP alternative?
 
-### Proibido
+### Forbidden
 
-- Abrir combate sem fala, gesto, ameaca ou contexto.
-- Usar mecanica de jogo para surpreender sem chance narrativa.
-- Forcar combate contra jogador que claramente esta em cena administrativa.
+- Starting combat without speech, gesture, threat or context.
+- Using game mechanics to surprise someone without a narrative chance.
+- Forcing combat on a player who is clearly in an administrative scene.
 
-## 18. Refem, Tortura e Consequencias Permanentes
+## 18. Hostages, Torture and Permanent Consequences
 
-### Regra Base
+### Base Rule
 
-Cenas sensiveis exigem cuidado, proporcionalidade e intervencao da staff quando houver risco alto.
+Sensitive scenes require care, proportionality and staff intervention when the risk is high.
 
-### Proibido
+### Forbidden
 
-- Violencia sexual.
-- Tortura grafica excessiva.
-- Humilhacao extrema sem politica e aprovacao.
-- Mutilacao permanente sem processo aprovado.
-- Escravidao ou prisao prolongada sem regra especifica.
+- Sexual violence.
+- Excessive graphic torture.
+- Extreme humiliation without a policy and approval.
+- Permanent mutilation without an approved process.
+- Slavery or prolonged imprisonment without a specific rule.
 
-### Obrigatorio
+### Mandatory
 
-Staff pode interromper, redirecionar ou anular cenas que ultrapassem limites do servidor.
+Staff may interrupt, redirect or void scenes that exceed the server's limits.
 
 ## 19. Crime
 
-Crime deve criar historia, nao destruir experiencia.
+Crime must create story, not destroy the experience.
 
-### Permitido
+### Allowed
 
-- Roubo com contexto.
-- Contrabando.
-- Corrupcao.
-- Ameacas com consequencia.
-- Fugas e investigacoes.
+- Robbery with context.
+- Smuggling.
+- Corruption.
+- Threats with consequences.
+- Escapes and investigations.
 
-### Proibido
+### Forbidden
 
-- Roubar/matar por farm.
-- Usar crime para impedir novatos de jogar.
-- Assaltar repetidamente o mesmo alvo sem historia.
-- Ignorar risco de guardas, testemunhas e reputacao.
+- Robbing/killing to farm.
+- Using crime to keep newcomers from playing.
+- Repeatedly mugging the same target without a story.
+- Ignoring the risk of guards, witnesses and reputation.
 
-### Guardas e Lei
+### Guards and Law
 
-Guardas tambem devem respeitar RP. Autoridade nao permite abuso, prisao sem contexto ou encerramento forcado de toda cena.
+Guards must also respect RP. Authority does not allow abuse, imprisonment without context or forced shutdown of every scene.
 
-## 20. Recurso Contra Decisao da Staff
+## 20. Appealing a Staff Decision
 
-### Como Recorrer
+### How to Appeal
 
-O jogador deve enviar:
+The player must send:
 
-- Nome do personagem.
+- Character name.
 - Discord ID.
-- Data e horario.
-- Staff envolvida.
-- Resumo do ocorrido.
-- Motivo do recurso.
-- Evidencias.
+- Date and time.
+- Staff involved.
+- Summary of what happened.
+- Reason for the appeal.
+- Evidence.
 
-### Regras
+### Rules
 
-- Decisao em cena deve ser respeitada na hora.
-- Recurso acontece depois, pelo canal correto.
-- Assediar staff ou jogadores durante recurso pode aumentar punicao.
+- An in-scene decision must be respected at the time.
+- The appeal happens afterwards, through the proper channel.
+- Harassing staff or players during an appeal may increase the punishment.
 
-## 21. Cliente, Mods e Integridade
+## 21. Client, Mods and Integrity
 
-### Obrigatorio
+### Mandatory
 
-- Usar cliente aprovado.
-- Usar modlist aprovada.
-- Manter versao correta.
-- Aceitar verificacao de integridade quando implementada.
+- Use the approved client.
+- Use the approved modlist.
+- Keep the correct version.
+- Accept integrity checks when implemented.
 
-### Proibido
+### Forbidden
 
-- Cheat.
-- Mod de gameplay nao aprovado.
-- Alteracao de arquivos para vantagem.
-- Automacao.
-- Bypass de launcher.
-- Manipulacao de UI, combate, movimento, inventario ou economia.
+- Cheats.
+- Unapproved gameplay mods.
+- Altering files for advantage.
+- Automation.
+- Bypassing the launcher.
+- Manipulating UI, combat, movement, inventory or the economy.
 
-## 22. Politica de Banimento
+## 22. Ban Policy
 
-### Punicoes Possiveis
+### Possible Punishments
 
-- Aviso verbal.
-- Aviso registrado.
-- Anulacao de cena.
-- Remocao de item/ouro.
-- Punicao de personagem.
-- Suspensao temporaria.
-- Remocao da whitelist.
-- Banimento permanente.
+- Verbal warning.
+- Recorded warning.
+- Scene voided.
+- Item/gold removal.
+- Character punishment.
+- Temporary suspension.
+- Removal from the whitelist.
+- Permanent ban.
 
-### Criterios
+### Criteria
 
-A staff considera:
+Staff consider:
 
-- Gravidade.
-- Intencao.
-- Impacto.
-- Historico.
-- Cooperacao.
-- Risco para a comunidade.
+- Severity.
+- Intent.
+- Impact.
+- History.
+- Cooperation.
+- Risk to the community.
 
-### Ban Permanente
+### Permanent Ban
 
-Pode ser aplicado por:
+May be applied for:
 
-- Cheat.
-- Evasao de ban.
-- Assedio grave.
-- Ameaca real.
-- Discriminacao grave.
-- Exploit intencional de alto impacto.
-- Tentativa de derrubar ou comprometer o servidor.
+- Cheating.
+- Ban evasion.
+- Serious harassment.
+- Real threats.
+- Serious discrimination.
+- Intentional high-impact exploits.
+- Attempting to take down or compromise the server.
 
-## 23. Checklist Antes do Lancamento
+## 23. Pre-Launch Checklist
 
-- Regras publicas revisadas.
-- Whitelist revisada.
-- Politica de nomes revisada.
-- Politica de historia revisada.
-- Staff treinada na rubrica.
-- Processo de recurso publicado.
-- Politica de banimento publicada.
-- Politica de cliente/mods publicada.
-- Aviso de nao afiliacao publicado.
-- Regras de morte e memoria fechadas.
-- Decisao de NPCs publicada ou documentada para staff.
-- Regras tecnicas de producao validadas.
+- Public rules reviewed.
+- Whitelist reviewed.
+- Name policy reviewed.
+- Backstory policy reviewed.
+- Staff trained on the rubric.
+- Appeal process published.
+- Ban policy published.
+- Client/mod policy published.
+- Non-affiliation notice published.
+- Death and memory rules finalized.
+- NPC decision published or documented for staff.
+- Production technical rules validated.
