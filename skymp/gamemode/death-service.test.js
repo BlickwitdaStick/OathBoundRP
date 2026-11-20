@@ -8,7 +8,7 @@
  */
 
 const assert = require('assert');
-const { describe, it, beforeEach, after } = require('node:test');
+const { describe, it, beforeEach, afterEach, after } = require('node:test');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock do banco de dados (compartilhado por death-service e core/transaction-service,
@@ -592,5 +592,76 @@ describe('death-service — autoria da morte (mp.onDeath)', () => {
     await deathService._handlePlayerDowned(VICTIM_ACTOR_ID, KILLER_ACTOR_ID);
     await deathService.bleedOut(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID);
     assert.strictEqual(deathService._killers.has(VICTIM_CHARACTER_ID), false);
+  });
+});
+
+/**
+ * Polling de rede de segurança contra o SkyMP real (build d85f18d8), visto no
+ * log do servidor em 19/11/2026: `Actor.GetActorValue` não existe (o VM devolve
+ * null) e `_wasDead` nunca foi registrada com makeProperty (mp.get/set lançam).
+ */
+describe('death-service — pollPlayersOnce', () => {
+  const { isKnownPapyrusFunction } = require('./core/skymp-adapter/papyrus-catalog');
+  let papyrusResults;
+  let chamadas;
+  const original = {};
+
+  beforeEach(() => {
+    commands.registerActiveCharacter(VICTIM_ACTOR_ID, { id: VICTIM_CHARACTER_ID, first_name: 'Vitima', last_name: 'Um' }, 1, 1);
+    characterState.set(VICTIM_CHARACTER_ID, STATES.NORMAL, {});
+    deathService._downedPlayers.clear();
+    deathService._wasDead.clear();
+    deathService._lastHealth.clear();
+    chamadas = [];
+    papyrusResults = {};
+    Object.assign(original, { get: mp.get, set: mp.set, call: mp.callPapyrusFunction, byProfile: mp.getActorsByProfileId });
+    mp.getActorsByProfileId = (pId) => (pId === 1 ? [VICTIM_ACTOR_ID] : []);
+    mp.callPapyrusFunction = (type, cls, fn) => {
+      chamadas.push({ type, cls, fn });
+      return Object.hasOwn(papyrusResults, fn) ? papyrusResults[fn] : null;
+    };
+    // Como o servidor real: property não registrada lança.
+    mp.get = (id, prop) => { if (prop === '_wasDead') throw new Error("Property '_wasDead' doesn't exist"); return original.get(id, prop); };
+    mp.set = (id, prop, v) => { if (prop === '_wasDead') throw new Error("Property '_wasDead' doesn't exist"); return original.set(id, prop, v); };
+  });
+
+  afterEach(() => {
+    mp.get = original.get;
+    mp.set = original.set;
+    mp.callPapyrusFunction = original.call;
+    if (original.byProfile) mp.getActorsByProfileId = original.byProfile; else delete mp.getActorsByProfileId;
+  });
+
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  it('só chama funções Papyrus que este build implementa', () => {
+    deathService.pollPlayersOnce();
+    assert.ok(chamadas.length > 0);
+    for (const c of chamadas) {
+      assert.ok(isKnownPapyrusFunction(c.type, c.cls, c.fn), `${c.cls}.${c.fn} não existe no SkyMP d85f18d8`);
+    }
+  });
+
+  it('leitura nula (função ausente) nunca derruba ninguém e não lança', async () => {
+    assert.doesNotThrow(() => deathService.pollPlayersOnce());
+    await flush();
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
+  });
+
+  it('IsDead true derruba uma vez; leituras seguintes não repetem', async () => {
+    papyrusResults = { IsDead: true, GetActorValuePercentage: 0 };
+    deathService.pollPlayersOnce();
+    await flush();
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.DOWNED);
+    assert.strictEqual(deathService._wasDead.get(VICTIM_ACTOR_ID), true);
+    deathService.pollPlayersOnce();
+    await flush();
+    assert.strictEqual(deathService._downedPlayers.size, 1);
+  });
+
+  it('vida vira percentual 0..100 para a heurística de dano', () => {
+    papyrusResults = { IsDead: false, GetActorValuePercentage: 0.84 };
+    deathService.pollPlayersOnce();
+    assert.strictEqual(deathService._lastHealth.get(VICTIM_ACTOR_ID), 84);
   });
 });

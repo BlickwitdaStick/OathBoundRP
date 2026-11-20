@@ -48,6 +48,7 @@ const whitelist     = require(path.join(gamemodeDir, 'whitelist'));
 const commands      = require(path.join(gamemodeDir, 'commands'));
 const moduleRegistry = require(path.join(gamemodeDir, 'core', 'module-registry'));
 const uiEventRouter  = require(path.join(gamemodeDir, 'core', 'ui-event-router'));
+const browserModalQueue = require(path.join(gamemodeDir, 'core', 'browser-modal'));
 const interactionRegistry = require(path.join(gamemodeDir, 'core', 'interaction-registry'));
 const { createTargetResolvers } = require(path.join(gamemodeDir, 'core', 'interaction-targets'));
 const { createInteractionService } = require(path.join(gamemodeDir, 'core', 'interaction-service'));
@@ -133,7 +134,7 @@ const uiEventRateLimiter = createUiEventRateLimiter({
 function sendModal(actorId, type, data) {
   if (typeof mp === 'undefined') return;
   try {
-    mp.set(actorId, 'browserModal', { type, data, sentAt: Date.now() });
+    browserModalQueue.pushModal(actorId, type, data);
   } catch (err) {
     console.error('[ui] Falha ao enviar modal:', err.message);
   }
@@ -484,8 +485,13 @@ moduleRegistry.register({
   commands: [],
   initialize: async () => {
     playerShortcutsService.initPlayerShortcutsService();
+    // Aba Controls do painel: keybinds:get / keybinds:set / keybinds:reset.
+    uiEventRouter.register('keybinds', playerShortcutsService.handleUiEvent);
+    uiEventRouter.register('chat', playerShortcutsService.handleChatUiEvent);
   },
   shutdown: async () => {
+    uiEventRouter.unregister('keybinds');
+    uiEventRouter.unregister('chat');
     playerShortcutsService.shutdownPlayerShortcutsService();
   }
 });
@@ -749,24 +755,23 @@ if (typeof mp !== "undefined") {
   mp.makeProperty('browserVisible', {
     isVisibleByOwner: true,
     isVisibleByNeighbors: false,
-    updateOwner: 'ctx.sp.browser.setVisible(ctx.value);',
+    // Só na MUDANÇA de valor: o cliente roda updateOwner a cada frame, e
+    // reaplicar todo frame atropelava o foco/visibilidade que o próprio
+    // cliente controla (F2 abre e foca localmente, fechar devolve o foco).
+    updateOwner: 'if (ctx.state.lastBrowserVisible !== ctx.value) { ctx.state.lastBrowserVisible = ctx.value; ctx.sp.browser.setVisible(ctx.value); }',
     updateNeighbor: ''
   });
   mp.makeProperty('browserFocused', {
     isVisibleByOwner: true,
     isVisibleByNeighbors: false,
-    updateOwner: 'ctx.sp.browser.setFocused(ctx.value);',
+    updateOwner: 'if (ctx.state.lastBrowserFocused !== ctx.value) { ctx.state.lastBrowserFocused = ctx.value; ctx.sp.browser.setFocused(ctx.value); }',
     updateNeighbor: ''
   });
   mp.makeProperty('browserModal', {
     isVisibleByOwner: true,
     isVisibleByNeighbors: false,
-    updateOwner: `
-      if (ctx.value && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
-        const payload = JSON.stringify(ctx.value);
-        ctx.sp.browser.executeJavaScript('window.handleServerModal && window.handleServerModal(' + payload + ')');
-      }
-    `,
+    // Fila com ids crescentes + dedupe por sentAt: ver core/browser-modal.js.
+    updateOwner: browserModalQueue.UPDATE_OWNER_SNIPPET,
     updateNeighbor: ''
   });
   // Canal dedicado ao painel do jogador (não interfere no browserModal acima,
@@ -774,8 +779,12 @@ if (typeof mp !== "undefined") {
   mp.makeProperty('panelData', {
     isVisibleByOwner: true,
     isVisibleByNeighbors: false,
+    // Só repassa valores NOVOS (sentAt): reenviar o mesmo valor reabria o
+    // painel logo depois de o jogador fechá-lo (handlePanelData abre a casca).
     updateOwner: `
-      if (ctx.value && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+      ctx.state.panelDataSentAt = ctx.state.panelDataSentAt || null;
+      if (ctx.value && ctx.value.sentAt !== ctx.state.panelDataSentAt && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+        ctx.state.panelDataSentAt = ctx.value.sentAt;
         const payload = JSON.stringify(ctx.value);
         ctx.sp.browser.executeJavaScript('window.handlePanelData && window.handlePanelData(' + payload + ')');
       }
@@ -789,17 +798,14 @@ if (typeof mp !== "undefined") {
   mp.makeProperty('voipTicket', {
     isVisibleByOwner: true,
     isVisibleByNeighbors: false,
-    // O relay do ticket pra CEF (linhas do `if`) roda toda vez que a
-    // property muda; o registro das teclas de voz (`VOICE_CONTROL_KEYS_
-    // SNIPPET`) só roda uma vez, guarda em `ctx.state` — ver o cabeçalho
-    // dele em voip-service.js pro porquê de morar aqui e não em property
-    // própria.
+    // O relay do ticket pra CEF roda toda vez que a property muda. As teclas
+    // de voz (push-to-talk, ciclar modo, mutar) saíram daqui em 19/11/2026:
+    // agora são keybinds por conta em core/player-shortcuts-service.js.
     updateOwner: `
       if (ctx.value && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
         const payload = JSON.stringify(ctx.value);
         ctx.sp.browser.executeJavaScript('window.handleVoipTicket && window.handleVoipTicket(' + payload + ')');
       }
-      ${voipService.VOICE_CONTROL_KEYS_SNIPPET}
     `,
     updateNeighbor: ''
   });

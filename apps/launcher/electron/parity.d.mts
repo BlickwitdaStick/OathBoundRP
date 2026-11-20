@@ -61,4 +61,6 @@ export function analyzeCreationClub(params: {
   cccEntries: string[] | null | undefined;
   localPlugins: string[] | null | undefined;
   serverLoadOrder: string[] | null | undefined;
+  /** plugins.txt entries: CC enabled there counts as loaded (no Skyrim.ccc needed). */
+  enabledPlugins?: string[] | null;
 }): { ok: boolean; problems: string[]; effective: string[] };

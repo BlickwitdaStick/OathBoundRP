@@ -160,3 +160,91 @@ test('recusa raiz JSON que não seja objeto', () => {
     }), 'INVALID_EXISTING_SHAPE');
   } finally { cleanup(f.gamePath); }
 });
+
+// ── Sessão remota do AuthService (menu principal) ───────────────────────────
+//
+// O skymp5-client distribuído NÃO lê `gameData.session` do settings: a única
+// fonte de sessão remota é `Data/Platform/PluginsNoLoad/auth-data-no-load.js`,
+// lido por `AuthService.readAuthDataFromDisk()` como
+// `JSON.parse(getPluginSourceCode(...).slice(2))`. Este helper reproduz essa
+// leitura literalmente para provar que o arquivo gravado é aceito pelo cliente.
+function readLikeSkympClient(authDataPath) {
+  const data = fs.readFileSync(authDataPath, 'utf8');
+  if (!data) return null;
+  return JSON.parse(data.slice(2)) || null;
+}
+
+function authDataPathOf(gamePath) {
+  return path.join(gamePath, 'Data', 'Platform', 'PluginsNoLoad', 'auth-data-no-load.js');
+}
+
+test('semeia a sessão remota que o AuthService lê no menu principal, substituindo //null', () => {
+  const f = fixture();
+  try {
+    const authDataPath = authDataPathOf(f.gamePath);
+    fs.mkdirSync(path.dirname(authDataPath), { recursive: true });
+    fs.writeFileSync(authDataPath, '//null');
+
+    const result = prepareConnectionSettings({
+      gamePath: f.gamePath,
+      ticket: 'opaque-ticket',
+      serverIp: '127.0.0.1',
+      serverPort: 7777,
+      discordId: '12345',
+      displayName: '  Ysolda  '
+    });
+
+    assert.equal(result.authDataPath, authDataPath);
+    const raw = fs.readFileSync(authDataPath, 'utf8');
+    assert.ok(raw.startsWith('//{'), 'formato idêntico ao writeAuthDataToDisk do cliente');
+    assert.notEqual(raw.charCodeAt(0), 0xfeff, 'sem BOM: slice(2) quebraria o JSON');
+
+    const authData = readLikeSkympClient(authDataPath);
+    assert.equal(authData.session, 'opaque-ticket', 'sessão crua, igual a gameData.session no servidor');
+    assert.equal(authData.discordUsername, 'Ysolda');
+    for (const forbidden of ['profileId', 'token', 'launcherTicket']) {
+      assert.equal(Object.hasOwn(authData, forbidden), false, `${forbidden} nunca vai para o cliente`);
+    }
+    // Nada de temporários esquecidos na pasta que o SkyrimPlatform varre.
+    assert.deepEqual(fs.readdirSync(path.dirname(authDataPath)), ['auth-data-no-load.js']);
+  } finally { cleanup(f.gamePath); }
+});
+
+test('cria PluginsNoLoad quando ausente e usa rótulo padrão sem nome de exibição', () => {
+  const f = fixture();
+  try {
+    prepareConnectionSettings({
+      gamePath: f.gamePath, ticket: 'ticket', serverIp: 'localhost', serverPort: 7777
+    });
+    const authData = readLikeSkympClient(authDataPathOf(f.gamePath));
+    assert.equal(authData.session, 'ticket');
+    assert.equal(typeof authData.discordUsername, 'string');
+    assert.ok(authData.discordUsername.length > 0, 'o widget nunca mostra "id: undefined"');
+  } finally { cleanup(f.gamePath); }
+});
+
+test('ticket vazio não toca a sessão remota anterior', () => {
+  const f = fixture();
+  try {
+    const authDataPath = authDataPathOf(f.gamePath);
+    fs.mkdirSync(path.dirname(authDataPath), { recursive: true });
+    fs.writeFileSync(authDataPath, '//null');
+    expectCode(() => prepareConnectionSettings({
+      gamePath: f.gamePath, ticket: '', serverIp: '127.0.0.1', serverPort: 7777
+    }), 'EMPTY_TICKET');
+    assert.equal(fs.readFileSync(authDataPath, 'utf8'), '//null');
+  } finally { cleanup(f.gamePath); }
+});
+
+test('nenhum temporário fica para trás em Plugins (prefixo de um único ponto)', () => {
+  const f = fixture();
+  try {
+    prepareConnectionSettings({
+      gamePath: f.gamePath, ticket: 'ticket', serverIp: 'localhost', serverPort: 7777
+    });
+    assert.deepEqual(
+      fs.readdirSync(f.directory).sort(),
+      ['skymp5-client-settings.txt', 'skymp_config.json']
+    );
+  } finally { cleanup(f.gamePath); }
+});

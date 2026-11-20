@@ -1273,3 +1273,4 @@ describe('voip-service — exposição do ticket de debug', () => {
     assert.ok(voip._pendingTickets.has(voip._ticketKey(DEBUG_ACTOR, 'sender')));
   });
 });
+

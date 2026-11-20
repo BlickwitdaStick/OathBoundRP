@@ -330,7 +330,8 @@ app.get('/api/dashboard', requireStaff, async (req, res) => {
       pending:     pending[0].c,
       auditToday:  auditToday[0].c,
       prisoners:   prisoners[0].c,
-      factions:    factions[0].c
+      factions:    factions[0].c,
+      gameServer:  currentGameServerStatus()
     });
   } catch (err) { console.error('[/api/dashboard]', err); res.status(500).json({ error: 'Erro interno do servidor' }); }
 });
@@ -704,6 +705,41 @@ app.get('/api/crashes', requireStaff, async (req, res) => {
 // O `master` padrão do SkyMP é `https://gateway.skymp.net`. Apontar para o
 // nosso painel é só trocar a string em `server-settings.json` — e faz sentido,
 // porque o painel já é quem autentica o Discord e aprova a whitelist.
+// Heartbeat do servidor de jogo. O MasterClient do skymp5-server faz
+// `POST {master}/api/servers/{masterKey}` com `{ name, maxPlayers, online }` a
+// cada 5 s quando `offlineMode: false`. Sem esta rota o console do servidor
+// imprimia "Error updating info on master server: ... status code 404" a cada
+// ciclo. Só guardamos o último estado em memória (exibido no dashboard staff);
+// nada aqui afeta login ou sessão.
+let gameServerStatus = null;
+const GAME_SERVER_STATUS_STALE_MS = 30 * 1000;
+
+app.post('/api/servers/:masterKey', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!MASTER_KEY || !safeEquals(req.params.masterKey, MASTER_KEY)) {
+    return res.status(404).json({ error: 'Unknown server' });
+  }
+  if (isRateLimited(`master-heartbeat:${ip}`, 60, 60 * 1000)) {
+    runtimeMetrics.recordRejection('rate_limit_master_heartbeat');
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const toCount = (v) => (Number.isInteger(v) && v >= 0 && v <= 100000 ? v : null);
+  gameServerStatus = {
+    name: typeof body.name === 'string' ? body.name.slice(0, 120) : null,
+    maxPlayers: toCount(body.maxPlayers),
+    online: toCount(body.online),
+    updatedAt: new Date().toISOString()
+  };
+  return res.json({ ok: true });
+});
+
+function currentGameServerStatus() {
+  if (!gameServerStatus) return null;
+  const ageMs = Date.now() - Date.parse(gameServerStatus.updatedAt);
+  return { ...gameServerStatus, stale: ageMs > GAME_SERVER_STATUS_STALE_MS };
+}
+
 app.get('/api/servers/:masterKey/sessions/:session', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
 

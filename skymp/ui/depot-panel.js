@@ -1,16 +1,17 @@
 /**
  * depot-panel.js
  *
- * Tarefa 10 (UI-Depot-Bridge): renderiza o painel do Depósito Regional e
- * manda depósito/saque de volta pro servidor pelo MESMO pipeline que o menu
- * de interação já usa (`interaction:execute`, `core/interaction-service.js`).
- * Este arquivo não fala com o banco nem decide nada — só desenha o que o
- * servidor mandou em `depot:open`/`depot:update` (`core/depot-service.js`,
- * `sendModal`) e traduz clique em botão pra `sendUiEvent`.
+ * Task 10 (UI-Depot-Bridge): renders the Regional Depot panel and sends
+ * deposits/withdrawals back to the server through the SAME pipeline already
+ * used by the interaction menu (`interaction:execute`, `core/interaction-service.js`).
+ * This file does not communicate with the database or make any decisions —
+ * it only displays what the server sends through `depot:open`/`depot:update`
+ * (`core/depot-service.js`, `sendModal`) and translates button clicks into
+ * `sendUiEvent` calls.
  *
- * `sendUiEvent` e `normalizePayload` são globais definidos no <script>
- * principal de `index.html` (função `function`, não `const`, então viram
- * propriedade de `window`) — este arquivo carrega DEPOIS dele.
+ * `sendUiEvent` and `normalizePayload` are globals defined in the main
+ * `index.html` <script> (`function`, not `const`, so they become properties
+ * of `window`) — this file loads AFTER it.
  */
 
 (function () {
@@ -28,10 +29,10 @@
   }
 
   /**
-   * Nenhum precedente de som nativo existe no projeto ainda (nenhum outro
-   * arquivo da CEF chama isto) — guardado do mesmo jeito que `sendUiEvent`
-   * guarda `window.skyrimPlatform`, pra nao quebrar se o framework de audio
-   * não expuser o método.
+   * There is no precedent for native sound in the project yet (no other CEF
+   * file calls this) — guarded in the same way that `sendUiEvent` guards
+   * `window.skyrimPlatform`, so it won't break if the audio framework does
+   * not expose this method.
    */
   function playInventorySound() {
     try {
@@ -39,7 +40,7 @@
         window.skyrimPlatform.playSound('ITMPotionUp');
       }
     } catch (err) {
-      // silencioso de propósito: som é decoração, nunca pode travar a UI
+      // Intentionally silent: sound is decorative and must never block the UI.
     }
   }
 
@@ -79,7 +80,7 @@
     if (!items || items.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'dp-empty';
-      empty.textContent = 'Vazio.';
+      empty.textContent = 'Empty.';
       container.appendChild(empty);
       return;
     }
@@ -91,10 +92,11 @@
   function requestMove(action, baseId, count) {
     if (!state.targetId) return;
     playInventorySound();
-    // `requestId` não é usado aqui: `depot.deposit`/`depot.withdraw` não são
-    // `idempotent` no registro (`core/depot-service.js`), então
-    // `interaction-service.js` não exige um. Duplo clique em rede lenta é um
-    // risco aceito — o mesmo que qualquer outra ação não-idempotente do menu.
+    // `requestId` is not used here: `depot.deposit`/`depot.withdraw` are not
+    // marked as `idempotent` in the registry (`core/depot-service.js`), so
+    // `interaction-service.js` does not require one. Double-clicks on a slow
+    // network are an accepted risk — the same as with any other non-idempotent
+    // action in the menu.
     sendUiEvent('interaction:execute', {
       action,
       targetId: state.targetId,
@@ -108,7 +110,7 @@
     state.capacity = data.capacity != null ? data.capacity : state.capacity;
 
     $('dp-hold-name').textContent = state.holdId ? String(state.holdId) : '—';
-    $('dp-gold').textContent = (data.gold != null ? data.gold : 0) + ' ouro';
+    $('dp-gold').textContent = (data.gold != null ? data.gold : 0) + ' gold';
 
     const depotTotal = (data.contents || []).reduce((sum, it) => sum + it.count, 0);
     $('dp-capacity-value').textContent = depotTotal + ' / ' + state.capacity;
@@ -118,10 +120,10 @@
     fill.classList.toggle('full', pct >= 100);
     fill.classList.toggle('warn', pct >= 85 && pct < 100);
 
-    renderList('dp-carried-list', data.carried, 'Depositar', (item) => {
+    renderList('dp-carried-list', data.carried, 'Deposit', (item) => {
       requestMove('depot.deposit', item.baseId, 1);
     });
-    renderList('dp-depot-list', data.contents, 'Retirar', (item) => {
+    renderList('dp-depot-list', data.contents, 'Withdraw', (item) => {
       requestMove('depot.withdraw', item.baseId, 1);
     });
   }
@@ -135,9 +137,9 @@
   }
 
   function update(data) {
-    // Só redesenha se o painel já estiver de pé — um `depot:update` chegando
-    // depois que o jogador fechou (saque/depósito lento) não deve reabrir a
-    // tela sozinho na cara dele.
+    // Only redraw if the panel is already open — a `depot:update` arriving
+    // after the player has closed it (due to a slow deposit/withdrawal) must
+    // not reopen the screen in front of them.
     if (!state.open) return;
     render(normalizePayload(data));
   }

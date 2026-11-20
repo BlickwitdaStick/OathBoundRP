@@ -350,7 +350,7 @@ export function parseCccTxt(content) {
  * @param {string[]} params.serverLoadOrder   ordem canônica do servidor
  * @returns {{ok: boolean, problems: string[], effective: string[]}}
  */
-export function analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder }) {
+export function analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder, enabledPlugins }) {
   const problems = [];
 
   if (!Array.isArray(serverLoadOrder) || serverLoadOrder.length === 0) {
@@ -367,8 +367,11 @@ export function analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder 
   // Listado no .ccc *e* presente no disco. Entrada sem arquivo não carrega e
   // não desloca nada — tratá-la como problema seria falso positivo em toda
   // instalação que não comprou tudo.
-  const effective = (cccEntries || [])
-    .filter(nome => presentes.has(String(nome).toLowerCase()));
+  // Listed in Skyrim.ccc OR enabled in plugins.txt (the OATHBOUND launcher
+  // enables the CC masters a mod needs there; the install has no Skyrim.ccc).
+  const viaPluginsTxt = (enabledPlugins || []).filter(n => /^cc[a-z0-9]/i.test(String(n)));
+  const effective = [...new Set([...(cccEntries || []), ...viaPluginsTxt].map(String))]
+    .filter(nome => presentes.has(nome.toLowerCase()));
 
   for (const cc of effective) {
     if (!naOrdem.has(String(cc).toLowerCase())) {

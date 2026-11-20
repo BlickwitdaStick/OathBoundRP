@@ -1,76 +1,113 @@
+
 /**
  * crafting-service.js
- * Sistema de Crafting Modular (Fase Beta).
+ * Modular Crafting System (Beta Phase).
  *
- * Funciona 100% server-side:
- * - O cliente envia a intenção pela interação `[E]` de uma estação cadastrada.
- * - O servidor consome os ingredientes e entrega o resultado numa transação só.
+ * Runs 100% server-side:
+ * - The client sends an interaction request using [E] at a registered station.
+ * - The server consumes the ingredients and delivers the result in a single transaction.
  *
- * ⚠️ **O que este cabeçalho afirmava e não era verdade.** Até 13/08/2026 esta
- * lista dizia *"o servidor valida ingredientes, station proximity e perks"*.
- * Ingrediente sim, pelo `FOR UPDATE`. **Proximidade de estação: nunca** — o
- * `craftItem` sequer carregava a estação, então `/craft` funcionava do outro
- * lado do mapa. **Perk: nunca** — `requires_perk` é lido em `listRecipes` e
- * nunca comparado com nada.
+ * WARNING: What this header used to claim, but which was not true.
+ * Until 13/08/2026, this list said "the server validates ingredients,
+ * station proximity, and perks."
  *
- * Desde a migration v28, a entrada do jogador passa exclusivamente pelo
- * Interaction Framework: o servidor resolve o FormDesc em
- * `crafting_stations`, valida a distância física e deriva o `station_type`.
- * `requires_perk` continua deliberadamente sem uso; profissão/rank é o gate
- * adotado. Ver `docs/gameplay/CRAFTING_SYSTEM.md`.
+ * Ingredients: yes, through `FOR UPDATE`.
+ * Station proximity: never — `craftItem` did not even load the station,
+ * so `/craft` worked from anywhere on the map.
+ * Perks: never — `requires_perk` was read in `listRecipes` but never
+ * compared against anything.
  *
- * Registrado em `core/module-registry.js` como módulo `crafting` (fase `lab`,
- * `ENABLE_CRAFTING_SERVICE`, nasce desligado). A migração abaixo era de
- * segurança interna e ficou separada da decisão de reativar de propósito — a
- * mistura das duas é o erro que a Fase 2 do QA_REPORT existe pra não repetir.
- * Ver docs/technical/PARKED_SERVICES_DECISION.md §7.2 para o histórico.
+ * Since migration v28, player crafting exclusively goes through the
+ * Interaction Framework: the server resolves the FormDesc in
+ * `crafting_stations`, validates the physical distance, and derives
+ * the `station_type`.
  *
- * ─── Gate de profissão (20/08/2026) ─────────────────────────────────────────
+ * `requires_perk` deliberately remains unused; profession/rank is the
+ * adopted access requirement. See `docs/gameplay/CRAFTING_SYSTEM.md`.
  *
- * `crafting_recipes.required_profession`/`required_rank`
- * (migration-v23-crafting-profession-gate.sql) são checados dentro de
- * `craftItem()`, no mesmo desenho que `resource_nodes.required_profession` já
- * usa contra `profession-service.js`. NULL continua liberado pra qualquer
- * personagem — nenhuma receita hoje tem o campo preenchido, então isto não
- * muda comportamento sozinho; é a staff que passa a poder amarrar uma receita
- * a `blacksmith`, `smelter`, `tanner`, `enchanter` ou `cook` via `/addrecipe`.
- * `requires_perk` continua sem uso — não é este o campo que este gate lê.
+ * Registered in `core/module-registry.js` as the `crafting` module
+ * (phase `lab`, `ENABLE_CRAFTING_SERVICE`, disabled by default).
  *
- * ─── Assinatura do Artesão (22/08/2026) ─────────────────────────────────────
+ * The migration below was an internal security improvement and was
+ * deliberately kept separate from the decision to reactivate the module.
+ * Mixing these two decisions is precisely the mistake that Phase 2 of
+ * the QA_REPORT is intended to prevent repeating.
  *
- * Ver docs/design/MAKERS_MARK.md. Artesão com rank >=
- * `crafting.signatureMinRank` pode gravar uma dedicatória em
- * `crafted_item_signatures` (migration-v24) ao craftar uma receita presa a
- * profissão. **Não é a mesma transação do `inventory.exchange`** — decisão
- * deliberada, não descuido: `exchange()` (core/inventory.js) não expõe gancho
- * de escrita externa, e estender esse arquivo (usado por trade/depot/
- * market-stall/crafting) só a favor desta feature seria risco desproporcional
- * ao ganho. A assinatura é metadado de flavor — não move ouro nem item — então
- * uma falha isolada no `INSERT` fica só no log, sem exploit e sem perda de
- * patrimônio, ao contrário do que valeria para uma transferência de item de
- * verdade (ver `recordCraftSignature` abaixo).
+ * See `docs/technical/PARKED_SERVICES_DECISION.md` §7.2 for the history.
  *
- * ─── Por que este arquivo mudou ──────────────────────────────────────────────
+ * ─── Profession Gate (20/08/2026) ─────────────────────────────────────────
  *
- * O `craftItem` anunciava `// 4. Consome ingredientes (transação segura: tudo
- * ou nada)` e não era nenhuma das duas coisas. Era um laço de
- * `inventoryService.removeItem()` independentes seguido de um `giveItem()`, e
- * cada uma dessas funções **abre a própria transação** no transaction-service.
- * Uma receita de três ingredientes eram quatro transações separadas: se a
- * segunda falhasse, a primeira já tinha commitado, o jogador perdia o
- * ingrediente e não recebia nada.
+ * `crafting_recipes.required_profession` / `required_rank`
+ * (migration-v23-crafting-profession-gate.sql) are checked inside
+ * `craftItem()`, following the same design that `resource_nodes.required_profession`
+ * already uses with `profession-service.js`.
  *
- * É `economy-service.transfer` (`removeGold` seguido de `addGold`, sem
- * transação) com outro substantivo — o mesmo defeito que motivou apagar aquele
- * arquivo, transposto de ouro para item.
+ * NULL means unrestricted access for any character — no recipe currently
+ * has this field populated, so this change does not alter behavior by itself.
  *
- * A Fase 3 (07/08/2026) juntou tudo numa transação pelas primitivas `tx.*`. Em
- * 13/08/2026 o mesmo fluxo passou a ser **uma chamada** de
- * `core/inventory.exchange`, com duas pernas: o consumo (personagem →
- * `system:consume`) e a entrega (`system:craft` → personagem). O ganho sobre a
- * versão anterior não é atomicidade — aquela já estava certa — e sim que o
- * outro lado de cada movimento passa a ter nome no razão, e que a chave de
- * idempotência deixou de ser inútil (ver o passo 4 do `craftItem`).
+ * Staff can now restrict a recipe to `blacksmith`, `smelter`, `tanner`,
+ * `enchanter`, or `cook` through `/addrecipe`.
+ *
+ * `requires_perk` remains unused — it is not the field this gate checks.
+ *
+ * ─── Maker's Mark (22/08/2026) ─────────────────────────────────────────────
+ *
+ * See `docs/design/MAKERS_MARK.md`.
+ *
+ * A crafter with a rank >= `crafting.signatureMinRank` can record a
+ * dedication in `crafted_item_signatures` (migration-v24) when crafting
+ * a recipe restricted to a profession.
+ *
+ * This is NOT part of the same transaction as `inventory.exchange`.
+ *
+ * This is a deliberate decision, not an oversight: `exchange()`
+ * (`core/inventory.js`) does not expose a hook for external writes,
+ * and extending that file (used by trade/depot/market-stall/crafting)
+ * solely for this feature would introduce disproportionate risk
+ * for the benefit gained.
+ *
+ * The signature is flavor metadata — it does not move gold or items —
+ * so an isolated failure during the `INSERT` only generates a log entry.
+ * There is no exploit or loss of assets, unlike what would happen with
+ * an actual item transfer.
+ *
+ * See `recordCraftSignature` below.
+ *
+ * ─── Why This File Changed ─────────────────────────────────────────────────
+ *
+ * `craftItem` used to announce:
+ * `// 4. Consume ingredients (safe transaction: all or nothing)`
+ *
+ * But it was neither safe nor all-or-nothing.
+ *
+ * It used a loop of independent `inventoryService.removeItem()` calls,
+ * followed by `giveItem()`, and each of these functions opened its own
+ * transaction through the transaction-service.
+ *
+ * A recipe with three ingredients therefore involved four separate
+ * transactions. If the second operation failed, the first had already
+ * committed, meaning the player lost the ingredient without receiving
+ * anything.
+ *
+ * This was essentially `economy-service.transfer` (`removeGold` followed
+ * by `addGold`, without a transaction), with a different noun — the same
+ * defect that motivated deleting that file, now repeated with items instead
+ * of gold.
+ *
+ * Phase 3 (07/08/2026) combined everything into a single transaction
+ * using the `tx.*` primitives.
+ *
+ * On 13/08/2026, the same flow was moved to a single call to
+ * `core/inventory.exchange`, with two legs:
+ * ingredient consumption (character → `system:consume`) and
+ * result delivery (`system:craft` → character).
+ *
+ * The improvement over the previous version is not atomicity — that
+ * version was already correct.
+ *
+ * The improvement is that the other side of each movement now has a
+ * named entry in the ledger, and the idempotency key is no longer useless
+ * (see step 4 of `craftItem`).
  */
 
 const crypto = require('crypto');
@@ -88,10 +125,13 @@ function uuid() {
 }
 
 /**
- * Grava a Assinatura do Artesão (docs/design/MAKERS_MARK.md). Chamada DEPOIS
- * do `inventory.exchange` já ter commitado — não é a mesma transação (ver o
- * cabeçalho deste arquivo). Uma falha aqui não desfaz o craft: o jogador já
- * recebeu o item, só não fica registrado quem assinou.
+ * Records the Maker's Mark (docs/design/MAKERS_MARK.md).
+ *
+ * Called AFTER `inventory.exchange` has already committed — it is not
+ * part of the same transaction (see this file's header).
+ *
+ * A failure here does not undo the craft: the player has already received
+ * the item; only the record of who signed it will be missing.
  */
 async function recordCraftSignature({ baseId, recipeId, makerCharacterId, ownerCharacterId, signatureText }) {
   try {
@@ -102,11 +142,11 @@ async function recordCraftSignature({ baseId, recipeId, makerCharacterId, ownerC
       [uuid(), baseId, recipeId, makerCharacterId, ownerCharacterId, signatureText]
     );
   } catch (err) {
-    console.error(`[crafting] falha ao gravar assinatura (recipe=${recipeId} maker=${makerCharacterId}):`, err.message);
+    console.error(`[crafting] Failed to record signature (recipe=${recipeId} maker=${makerCharacterId}):`, err.message);
   }
 }
 
-// Tipos de estação aceitos em `crafting_stations` (objetos reais do Skyrim).
+// Accepted station types in `crafting_stations` (actual Skyrim objects).
 const STATION_TYPES = ['forge', 'cooking_pot', 'tanning_rack', 'alchemy_lab', 'enchanting_table'];
 
 async function resolveStation(formId) {
@@ -155,45 +195,45 @@ function registerInteractions() {
   interactionRegistry.register({
     ...common,
     id: 'crafting.recipes',
-    label: 'Ver receitas',
+    label: 'View Recipes',
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     execute: async (ctx) => {
       const stationType = await resolveStation(ctx.target.formId);
-      if (!stationType) return { message: 'Estação indisponível.' };
+      if (!stationType) return { message: 'Station unavailable.' };
       const recipes = await listRecipes(ctx.actorId, stationType);
-      return { message: recipes.length > 0 ? `${recipes.length} receita(s) disponível(is).` : 'Nenhuma receita disponível.' };
+      return { message: recipes.length > 0 ? `${recipes.length} available recipe(s).` : 'No recipes available.' };
     }
   });
 
   interactionRegistry.register({
     ...common,
     id: 'crafting.craft',
-    label: 'Criar item',
+    label: 'Craft Item',
     audit: interactionRegistry.AUDIT_LEVELS.ECONOMY,
     idempotent: true,
     schema: {
-      recipeId: { type: 'int', label: 'Receita', min: 1 },
-      signatureText: { type: 'string', label: 'Dedicatória', max: 64, required: false }
+      recipeId: { type: 'int', label: 'Recipe', min: 1 },
+      signatureText: { type: 'string', label: 'Dedication', max: 64, required: false }
     },
     execute: async (ctx) => {
       const stationType = await resolveStation(ctx.target.formId);
-      if (!stationType) return { message: 'Estação indisponível.' };
+      if (!stationType) return { message: 'Station unavailable.' };
       const ok = await craftItem(ctx.actorId, ctx.characterId, ctx.data.recipeId, {
         stationType,
         signatureText: ctx.data.signatureText,
         requestId: ctx.requestId
       });
-      return { message: ok ? 'Item criado.' : 'Não foi possível criar o item.' };
+      return { message: ok ? 'Item crafted.' : 'Unable to craft the item.' };
     }
   });
 }
 
 /**
- * Lista as receitas disponíveis para um tipo de estação.
+ * Lists the recipes available for a station type.
  */
 async function listRecipes(actorId, stationType) {
   if (!STATION_TYPES.includes(stationType)) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Tipo de estação inválido.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Invalid station type.']);
     return [];
   }
 
@@ -203,7 +243,7 @@ async function listRecipes(actorId, stationType) {
   );
 
   if (recipes.length === 0) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Nenhuma receita disponível em ${stationType}.`]);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`No recipes available at ${stationType}.`]);
     return [];
   }
 
@@ -213,50 +253,50 @@ async function listRecipes(actorId, stationType) {
 }
 
 /**
- * Executa um craft. A chamada de jogador vem da interação física; chamadas
- * internas/testes ainda podem fornecer opts diretamente.
+ * Executes a craft. Player calls come from physical station interactions;
+ * internal/test calls can still provide options directly.
  *
  * @param {number} actorId
  * @param {number} characterId
  * @param {number|string} recipeId
  * @param {object} [opts]
- * @param {string} [opts.stationType]    estação resolvida pelo servidor
- * @param {string} [opts.requestId]      chave de idempotência vinda de quem pediu
- * @param {string} [opts.signatureText]  dedicatória para a Assinatura do Artesão
- *   (docs/design/MAKERS_MARK.md); só é gravada se a receita tiver
- *   `required_profession` e o rank do personagem alcançar
- *   `crafting.signatureMinRank`. Silenciosamente ignorada, sem falhar o
- *   craft, quando o rank não alcança.
+ * @param {string} [opts.stationType]    station type resolved from the physical target
+ * @param {string} [opts.requestId]      idempotency key supplied by the requester
+ * @param {string} [opts.signatureText]  dedication for the Maker's Mark
+ *   (docs/design/MAKERS_MARK.md); only recorded if the recipe has a
+ *   `required_profession` and the character's rank meets
+ *   `crafting.signatureMinRank`. Silently ignored, without failing the craft,
+ *   when the rank is insufficient.
  */
 async function craftItem(actorId, characterId, recipeId, opts = {}) {
-  // 1. Carrega a receita
+  // 1. Load the recipe
   const recipeRows = await db.query('SELECT * FROM crafting_recipes WHERE id = ?', [recipeId]);
   if (recipeRows.length === 0) {
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Receita não encontrada.']);
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Recipe not found.']);
     return false;
   }
   const recipe = recipeRows[0];
 
-  // 2. A estação resolvida no alvo físico precisa ser a da receita. A distância
-  // é revalidada pelo Interaction Framework antes de `execute`; esta segunda
-  // checagem impede usar uma receita de forge num tanning_rack válido.
+  // 2. The station resolved from the physical target must match the recipe.
+  // Distance is revalidated by the Interaction Framework before `execute`;
+  // this second check prevents using a forge recipe at a valid tanning rack.
   if (opts.stationType && opts.stationType !== recipe.station_type) {
     if (typeof mp !== 'undefined') {
       mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-        `Esta receita e feita em: ${recipe.station_type}.`
+        `This recipe must be made at: ${recipe.station_type}.`
       ]);
     }
     return false;
   }
 
-  // 2.5. Gate de profissão/rank — checado de verdade, ao contrário de
-  // `requires_perk` (ver o cabeçalho deste arquivo). NULL = receita livre.
+  // 2.5. Profession/rank gate — actually enforced, unlike `requires_perk`
+  // (see this file's header). NULL = unrestricted access.
   if (recipe.required_profession) {
     const tem = await professionService.hasProfession(characterId, recipe.required_profession);
     if (!tem) {
       if (typeof mp !== 'undefined') {
         mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-          `Você precisa ser ${recipe.required_profession} para fazer isso.`
+          `You must be a ${recipe.required_profession} to do this.`
         ]);
       }
       return false;
@@ -266,7 +306,7 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
       if (!estado || estado.rank < recipe.required_rank) {
         if (typeof mp !== 'undefined') {
           mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-            `Seu rank de ${recipe.required_profession} ainda não é suficiente para esta receita.`
+            `Your ${recipe.required_profession} rank is not high enough for this recipe.`
           ]);
         }
         return false;
@@ -274,37 +314,45 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
     }
   }
 
-  // 3. Carrega os ingredientes
+  // 3. Load the ingredients
   const ingredients = await db.query('SELECT base_id, count FROM crafting_ingredients WHERE recipe_id = ?', [recipeId]);
   if (ingredients.length === 0) {
-    // Receita sem ingrediente cadastrado criaria item do nada. `addRecipe` e
-    // `addIngredient` sao dois comandos separados, entao a janela entre os dois
-    // existe de verdade — e um craft nela seria duplicacao de item pela staff.
-    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Receita incompleta: nenhum ingrediente cadastrado.']);
+    // A recipe without registered ingredients would create an item out of
+    // nothing. `addRecipe` and `addIngredient` are separate commands, so
+    // this window of opportunity is real — crafting during that window
+    // would allow staff to accidentally create duplicate items.
+    if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Incomplete recipe: no ingredients registered.']);
     return false;
   }
 
-  // 4. A chave de idempotencia.
+  // 4. The idempotency key.
   //
-  // Ela continha `Date.now()`, e por isso nunca deduplicou nada: dois `/craft`
-  // seguidos produziam duas chaves diferentes, o `UNIQUE` nao era violado e o
-  // craft acontecia duas vezes — enquanto o comentario ali afirmava o
-  // contrario (auditoria §5). Uma chave de idempotencia vem de QUEM PEDE, ou
-  // de um estado estavel. Nunca do relogio de quem executa.
+  // It previously contained `Date.now()`, which meant it never deduplicated
+  // anything: two consecutive `/craft` requests produced two different keys,
+  // the `UNIQUE` constraint was not violated, and the craft happened twice —
+  // despite the comment claiming otherwise (audit §5).
+  //
+  // An idempotency key must come from THE REQUESTER, or from stable state.
+  // Never from the clock of the process executing the request.
   const requestId = opts.requestId || inventory.newRequestId(`craft.${characterId}.${recipeId}`);
 
-  // 5. Consome ingredientes e entrega o resultado — UMA transacao, duas pernas.
+  // 5. Consume ingredients and deliver the result — ONE transaction.
   //
-  // A checagem de estoque nao precisa de passo proprio: o `applyStackDelta` le
-  // com `FOR UPDATE` e lanca se faltar, o que e estritamente melhor que o
-  // `hasItem` que existia antes. Aquele lia fora da transacao, entao entre a
-  // checagem e o consumo o item podia ter saido por outro caminho (venda em
-  // barraca, /removeitem da staff) e o craft consumia o que nao existia mais.
+  // A separate inventory check is unnecessary: `applyStackDelta` reads
+  // using `FOR UPDATE` and throws if there are insufficient items.
+  // This is strictly better than the previous `hasItem` check, which read
+  // outside the transaction. Between the check and consumption, an item
+  // could have been removed through another path (market-stall sale,
+  // staff `/removeitem`), and the craft would attempt to consume something
+  // that no longer existed.
   //
-  // As duas pernas nomeiam a contraparte `system`: o ingrediente vai para o
-  // nada e o resultado vem do nada. E o que faz a soma dos deltas do razao
-  // fechar em zero por `transfer_id`, e o que torna respondivel a pergunta
-  // "de onde saiu este item?" que a auditoria §2 nao conseguia responder.
+  // Both legs name their `system` counterpart: the ingredient goes into
+  // nothing, and the result comes from nothing.
+  //
+  // This ensures that the sum of the ledger deltas closes to zero by
+  // `transfer_id`, and makes it possible to answer the audit question:
+  // "Where did this item come from?" — a question that could not be
+  // answered under audit §2.
   const resultado = await inventory.exchange({
     legs: [
       {
@@ -324,31 +372,32 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
   });
 
   if (!resultado.ok) {
-    console.error(`[crafting] Craft falhou (char=${characterId} recipe=${recipeId}): ${resultado.code} ${resultado.reason}`);
+    console.error(`[crafting] Craft failed (char=${characterId} recipe=${recipeId}): ${resultado.code} ${resultado.reason}`);
     if (typeof mp !== 'undefined') {
-      mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Craft cancelado: ${resultado.reason}`]);
+      mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Craft cancelled: ${resultado.reason}`]);
     }
     return false;
   }
 
   if (resultado.duplicate) {
-    // Reenvio do mesmo pedido. Nao craftou de novo, e dizer "voce criou" seria
-    // mentir sobre um item que o jogador ja tem.
+    // A retry of the same request. It did not craft the item again, so
+    // saying "you crafted it" would be misleading about an item the
+    // player already has.
     if (typeof mp !== 'undefined') {
-      mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Este craft ja havia sido concluido.']);
+      mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['This craft had already been completed.']);
     }
     return true;
   }
 
   if (typeof mp !== 'undefined') {
     mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-      `✓ Você criou: ${recipe.name} (x${recipe.result_count}).`
+      `✓ You crafted: ${recipe.name} (x${recipe.result_count}).`
     ]);
   }
 
-  // XP só quando a receita tem profissão dona — craft livre não progride
-  // profissão nenhuma, pelo mesmo motivo que `mining-service` só concede XP
-  // de `miner`.
+  // XP is awarded only when the recipe has an associated profession.
+  // Free crafting does not advance any profession, for the same reason
+  // `mining-service` only awards XP to `miner`.
   if (recipe.required_profession) {
     const xpPorCraft = serverOptions.get('crafting.xpPerCraft');
     if (xpPorCraft > 0) {
@@ -361,9 +410,12 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
     }
   }
 
-  // Assinatura do Artesão — ver o cabeçalho deste arquivo e
-  // docs/design/MAKERS_MARK.md. Só faz sentido para receita com dono
-  // (sem `required_profession` não há profissão pra checar rank contra).
+  // Maker's Mark — see this file's header and
+  // docs/design/MAKERS_MARK.md.
+  //
+  // This only makes sense for recipes with an associated profession
+  // (without `required_profession`, there is no profession whose rank
+  // can be checked).
   if (recipe.required_profession && opts.signatureText) {
     const estado = await professionService.getProfessionState(characterId, recipe.required_profession);
     const minRank = serverOptions.get('crafting.signatureMinRank');
@@ -377,26 +429,27 @@ async function craftItem(actorId, characterId, recipeId, opts = {}) {
         signatureText: texto || null
       });
       if (typeof mp !== 'undefined') {
-        mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['✓ Trabalho assinado.']);
+        mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['✓ Work signed.']);
       }
     } else if (typeof mp !== 'undefined') {
       mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-        `Seu rank de ${recipe.required_profession} ainda não permite assinar este trabalho.`
+        `Your ${recipe.required_profession} rank is not high enough to sign this work.`
       ]);
     }
   }
 
-  commands.broadcastProximityMessage(actorId, `* Trabalha com habilidade na estação.`, 500);
-  console.log(`[crafting] Char ${characterId} crafted recipe ${recipeId}: ${recipe.name}`);
+  commands.broadcastProximityMessage(actorId, `* Works skillfully at the station.`, 500);
+  console.log(`[crafting] Character ${characterId} crafted recipe ${recipeId}: ${recipe.name}`);
   return true;
 }
 
 /**
- * Staff: Adiciona uma nova receita ao banco.
+ * Staff: Adds a new recipe.
  * /addrecipe [station] [resultBaseId] [resultCount] [name]
  *
- * `requiredProfession`/`requiredRank` são opcionais — receita sem eles fica
- * livre para qualquer personagem, o mesmo default de `resource_nodes`.
+ * `requiredProfession` / `requiredRank` are optional — recipes without
+ * these fields are available to any character, following the same default
+ * behavior as `resource_nodes`.
  */
 async function addRecipe(actorId, stationType, resultBaseId, resultCount, name, requiredProfession = null, requiredRank = null) {
   const adminService = require('./admin-service');
@@ -411,14 +464,14 @@ async function addRecipe(actorId, stationType, resultBaseId, resultCount, name, 
   const recipeId = res.insertId;
 
   if (typeof mp !== 'undefined') {
-    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Receita criada com ID ${recipeId}: ${name}`]);
+    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Recipe created with ID ${recipeId}: ${name}`]);
   }
   console.log(`[crafting] Recipe ${recipeId} added by actor ${actorId.toString(16)}: ${name}`);
   return recipeId;
 }
 
 /**
- * Staff: Adiciona um ingrediente a uma receita.
+ * Staff: Adds an ingredient to a recipe.
  * /addingredient [recipeId] [baseId] [count]
  */
 async function addIngredient(actorId, recipeId, baseId, count) {
@@ -430,22 +483,24 @@ async function addIngredient(actorId, recipeId, baseId, count) {
     [recipeId, baseId, count]
   );
   if (typeof mp !== 'undefined') {
-    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Ingrediente 0x${baseId.toString(16)} x${count} adicionado à receita ${recipeId}.`]);
+    mp.callPapyrusFunction('global', 'Debug', 'notification', null, [`Ingredient 0x${baseId.toString(16)} x${count} added to recipe ${recipeId}.`]);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Assinaturas para a Revista Institucional — mesmo padrão de
-// `crime-service.getStolenInstancesHeldBy`: resolve o nome do artesão aqui,
-// nunca devolve um characterId cru pra UI formatar.
+// Signatures for the Institutional Journal — follows the same pattern as
+// `crime-service.getStolenInstancesHeldBy`: resolve the crafter's name here,
+// never return a raw characterId for the UI to format.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Assinaturas de itens que `characterId` recebeu ao craftar, com o nome do
- * artesão já resolvido. Ver a ressalva no cabeçalho deste arquivo e em
- * `migration-v24-crafted-item-signatures.sql`: `owner_character_id` não é
- * atualizado em troca/venda, então isto reflete quem RECEBEU no craft, não
- * necessariamente quem tem o item agora.
+ * Returns signatures for items received by `characterId` through crafting,
+ * with the crafter's name already resolved.
+ *
+ * See the caveat in this file's header and in
+ * `migration-v24-crafted-item-signatures.sql`:
+ * `owner_character_id` is not updated during trades/sales, so this reflects
+ * who RECEIVED the item when it was crafted, not necessarily who owns it now.
  *
  * @param {number} characterId
  * @returns {Promise<Array<{baseId:number, signatureText:string|null, makerName:string}>>}
@@ -471,16 +526,17 @@ async function getSignaturesHeldBy(characterId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comandos administrativos. Crafting do jogador só passa pela interação em
-// estação física; os antigos `/craft` e `/receitas` contornavam proximidade.
+// Administrative commands. Player crafting only goes through physical
+// station interactions; the old `/craft` and `/receitas` commands bypassed
+// proximity validation.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function commandDefs() {
   return [
     {
       name: '/addrecipe',
-      description: '[Staff] Cria uma receita (opcionalmente presa a uma profissão/rank)',
-      usage: '/addrecipe <estacao> <resultBaseId> <resultCount> <nome> [profissao] [rank]',
+      description: '[Staff] Creates a recipe (optionally restricted to a profession/rank)',
+      usage: '/addrecipe <station> <resultBaseId> <resultCount> <name> [profession] [rank]',
       handler: async (actorId, args) => {
         const partes = String(args || '').trim().split(/\s+/);
         const [stationType, resultBaseIdRaw, resultCountRaw, ...resto] = partes;
@@ -489,14 +545,14 @@ function commandDefs() {
         if (!STATION_TYPES.includes(stationType) || !Number.isSafeInteger(resultBaseId) || !Number.isSafeInteger(resultCount) || resto.length === 0) {
           if (typeof mp !== 'undefined') {
             mp.callPapyrusFunction('global', 'Debug', 'notification', null, [
-              'Uso: /addrecipe <estacao> <resultBaseId hex> <resultCount> <nome> [profissao] [rank]'
+              'Usage: /addrecipe <station> <resultBaseId hex> <resultCount> <name> [profession] [rank]'
             ]);
           }
           return;
         }
-        // O nome pode ter espaço; profissão/rank, se vierem, são as duas
-        // últimas palavras — heurística aceitável porque nome de receita não
-        // termina com um rank numérico isolado.
+        // The name may contain spaces; profession/rank, if provided, are
+        // the final two words — an acceptable heuristic because a recipe
+        // name does not end with an isolated numeric rank.
         let name = resto.join(' ');
         let requiredProfession = null;
         let requiredRank = null;
@@ -513,7 +569,7 @@ function commandDefs() {
     },
     {
       name: '/addingredient',
-      description: '[Staff] Adiciona um ingrediente a uma receita',
+      description: '[Staff] Adds an ingredient to a recipe',
       usage: '/addingredient <recipeId> <baseId hex> <count>',
       handler: async (actorId, args) => {
         const [recipeIdRaw, baseIdRaw, countRaw] = String(args || '').trim().split(/\s+/);
@@ -521,7 +577,7 @@ function commandDefs() {
         const baseId = Number.parseInt(baseIdRaw, 16);
         const count = Number.parseInt(countRaw, 10);
         if (!Number.isSafeInteger(recipeId) || !Number.isSafeInteger(baseId) || !Number.isSafeInteger(count)) {
-          if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Uso: /addingredient <recipeId> <baseId hex> <count>']);
+          if (typeof mp !== 'undefined') mp.callPapyrusFunction('global', 'Debug', 'notification', null, ['Usage: /addingredient <recipeId> <baseId hex> <count>']);
           return;
         }
         await addIngredient(actorId, recipeId, baseId, count);

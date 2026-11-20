@@ -73,11 +73,14 @@ function readVitals(actorId) {
   if (typeof mp === 'undefined') return { health: 0, magicka: 0, stamina: 0 };
   try {
     const self = actorRef(actorId);
-    return {
-      health: mp.callPapyrusFunction('method', 'Actor', 'getActorValue', self, ['Health']),
-      magicka: mp.callPapyrusFunction('method', 'Actor', 'getActorValue', self, ['Magicka']),
-      stamina: mp.callPapyrusFunction('method', 'Actor', 'getActorValue', self, ['Stamina'])
+    // `Actor.GetActorValue` NÃO existe neste SkyMP (core/skymp-adapter/
+    // papyrus-catalog.js) e devolvia null. GetActorValuePercentage existe e
+    // devolve 0..1 — exatamente a escala 0..100 que as barras do painel usam.
+    const pct = (av) => {
+      const v = mp.callPapyrusFunction('method', 'Actor', 'GetActorValuePercentage', self, [av]);
+      return typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(0, Math.min(1, v)) * 100) : 0;
     };
+    return { health: pct('Health'), magicka: pct('Magicka'), stamina: pct('Stamina') };
   } catch (err) {
     console.error('[player-panel] Falha ao ler vitals:', err.message);
     return { health: 0, magicka: 0, stamina: 0 };
@@ -120,7 +123,7 @@ async function buildSocialSnapshot(actorId) {
       source: k.source,
       at: k.updated_at
     })),
-    hint: 'Use o menu de interação (clique direito) em outro jogador para negociar, se apresentar ou entrar em grupo.'
+    hint: 'Use the interaction menu on another player to trade, introduce yourself or form a group.'
   };
 }
 
@@ -200,12 +203,48 @@ async function renameKnownPerson(actorId, targetCharacterId, alias) {
 // Envio para a UI
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * actorId -> { [channel]: data } — every section last sent to that player.
+ *
+ * Until 19/11/2026 each section was its own `mp.set(actorId, 'panelData',
+ * { channel, data })`. `pushAllSections` fires six of those back to back, and a
+ * SkyMP property only replicates its LATEST value, so the client typically saw
+ * one section (often not Status: "No data received from the server yet" in
+ * game). Now the property always carries every section, and a later set can
+ * only add to what the client gets, never erase it.
+ */
+const _panelChannels = new Map();
+
+/**
+ * Plain-JSON copy of a section. Property values travel as JSON: a BigInt
+ * would throw and fail the WHOLE panelData set (every section rides in one
+ * value), Dates and other objects must become plain data. A section that
+ * still cannot be serialized is dropped and named in the log.
+ * @returns {{ok:true, value:any}|{ok:false, error:string}}
+ */
+function toPlainJson(data) {
+  try {
+    const json = JSON.stringify(data, (_k, v) => (typeof v === 'bigint' ? Number(v) : v));
+    return { ok: true, value: json === undefined ? null : JSON.parse(json) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
 function sendPanelData(actorId, channel, data) {
   if (typeof mp === 'undefined') return;
+  const plain = toPlainJson(data);
+  if (!plain.ok) {
+    console.error(`[player-panel] Section '${channel}' for 0x${actorId.toString(16)} is not serializable, skipped: ${plain.error}`);
+    return;
+  }
+  const channels = _panelChannels.get(actorId) || {};
+  channels[channel] = plain.value;
+  _panelChannels.set(actorId, channels);
   try {
-    mp.set(actorId, 'panelData', { channel, data, sentAt: Date.now() });
+    mp.set(actorId, 'panelData', { channels: { ...channels }, sentAt: Date.now() });
   } catch (err) {
-    console.error('[player-panel] Falha ao enviar panelData:', err.message);
+    console.error(`[player-panel] Failed to send panelData (sections: ${Object.keys(channels).join(', ')}):`, err.message);
   }
 }
 
@@ -253,14 +292,18 @@ async function pushSoul(actorId) {
 }
 
 async function pushAllSections(actorId) {
-  await Promise.all([
-    pushStatus(actorId),
-    pushGovernance(actorId),
-    pushEconomy(actorId),
-    pushSocial(actorId),
-    pushProfessions(actorId),
-    pushSoul(actorId)
-  ]);
+  // allSettled: one failing section (a module query throwing) must not hide
+  // the others, and each failure is named in the log.
+  const sections = [
+    ['status', pushStatus], ['governance', pushGovernance], ['economy', pushEconomy],
+    ['social', pushSocial], ['professions', pushProfessions], ['soul', pushSoul]
+  ];
+  const results = await Promise.allSettled(sections.map(([, push]) => push(actorId)));
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.error(`[player-panel] Section '${sections[i][0]}' failed for 0x${actorId.toString(16)}:`, r.reason && r.reason.message);
+    }
+  });
 }
 
 const PUSH_BY_CHANNEL = {
@@ -353,7 +396,13 @@ function openPanel(actorId) {
   // A UI abre no Status; sem registrar isso, o primeiro tick pularia o painel
   // de quem acabou de abrir e a vida ficaria congelada ate a primeira troca.
   _activeTab.set(actorId, ABA_INICIAL);
-  pushAllSections(actorId).catch(err => console.error('[player-panel] Falha ao abrir painel:', err.message));
+  console.log(`[player-panel] open requested by 0x${actorId.toString(16)}`);
+  pushAllSections(actorId)
+    .then(() => {
+      const sent = Object.keys(_panelChannels.get(actorId) || {});
+      console.log(`[player-panel] sent to 0x${actorId.toString(16)}: ${sent.length ? sent.join(', ') : 'NOTHING (no active character?)'}`);
+    })
+    .catch(err => console.error('[player-panel] Failed to open panel:', err.message));
 }
 
 /**
@@ -364,6 +413,23 @@ function cleanup(actorId) {
   _openPanelActors.delete(actorId);
   _lastStatusJson.delete(actorId);
   _activeTab.delete(actorId);
+  _panelChannels.delete(actorId);
+}
+
+/**
+ * Closing the panel must hand keyboard/mouse back to the game. `openPanel`
+ * sets `browserFocused = true`, whose client snippet re-applies its value on
+ * every update — nothing ever set it back, so after the first open the CEF
+ * kept focus: game keys (F2 included, see player-shortcuts-service.js) were
+ * ignored and the panel "sometimes" would not reopen.
+ */
+function closePanel(actorId) {
+  cleanup(actorId);
+  if (typeof mp !== 'undefined') {
+    try { mp.set(actorId, 'browserFocused', false); } catch (err) {
+      console.error('[player-panel] Failed to release browser focus:', err.message);
+    }
+  }
 }
 
 /**
@@ -406,7 +472,7 @@ async function handleUiEvent(actorId, uiEvent) {
       openPanel(actorId);
       return true;
     case 'panel:close':
-      cleanup(actorId);
+      closePanel(actorId);
       return true;
     case 'panel:refresh:status':
       await pushStatus(actorId);
@@ -429,12 +495,12 @@ async function handleUiEvent(actorId, uiEvent) {
     case 'panel:social:rename': {
       const payload = validateRenamePayload(uiEvent.data);
       if (!payload.ok) {
-        commands.sendNotification(actorId, 'Dados de apelido invalidos.');
+        commands.sendNotification(actorId, 'Invalid nickname.');
         return true;
       }
       const renamed = await renameKnownPerson(actorId, payload.targetCharacterId, payload.alias);
       if (renamed) await pushSocial(actorId);
-      else commands.sendNotification(actorId, 'Nao foi possivel alterar esse apelido.');
+      else commands.sendNotification(actorId, 'Could not change that nickname.');
       return true;
     }
     default:
@@ -446,8 +512,8 @@ function commandDefs() {
   return [
     {
       name: ['/painel', '/panel'],
-      description: 'Abre o painel do jogador (status, governança, economia, social)',
-      usage: '/painel',
+      description: 'Opens the player panel (status, law, belongings, social)',
+      usage: '/panel',
       handler: (actorId) => openPanel(actorId)
     }
   ];
@@ -475,7 +541,9 @@ module.exports = {
   shutdownPlayerPanelService,
   handleUiEvent,
   openPanel,
+  closePanel,
   cleanup,
+  sendPanelData,
   buildStatusSnapshot,
   buildSocialSnapshot,
   buildProfessionsSnapshot,

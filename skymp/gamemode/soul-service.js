@@ -1,40 +1,56 @@
+
 /**
- * soul-service.js — Afinidade da Alma, camada de serviço
+ * soul-service.js — Soul Affinity, service layer
  *
- * Desenho fechado: `docs/design/SOUL_AFFINITY.md`. Este arquivo **implementa**
- * aquele documento; não reabre nenhuma decisão dele.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * A divisão com core/soul.js
- * ─────────────────────────────────────────────────────────────────────────────
- * `core/soul.js` é o domínio: gerador com orçamento fixo, bandas, semente e
- * resolução em quatro resultados. Função pura — não abre banco, não toca `mp`,
- * não sabe que existe um jogo, e tem 28 testes por isso.
- *
- * Este arquivo é tudo que fala com o mundo: persiste a alma, revela sinais,
- * grava marcas, avança a árvore, audita rolagem e alimenta o painel. Ele nunca
- * decide um resultado — só pergunta ao domínio e cuida das consequências.
+ * Finalized design: `docs/design/SOUL_AFFINITY.md`.
+ * This file IMPLEMENTS that document; it does not reopen any of its decisions.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * As três regras que este arquivo precisa preservar
+ * The division of responsibilities with core/soul.js
  * ─────────────────────────────────────────────────────────────────────────────
- * 1. **O jogador nunca vê número** (§II.1). Não existe caminho daqui até a UI
- *    que carregue valor de afinidade, banda ou semente. `buildPanelPayload` é o
- *    único produtor de payload, e há teste varrendo o objeto inteiro atrás de
- *    qualquer um dos sete valores.
- * 2. **O dado nunca diz não** (§II.2). `resolveAttempt` não tem retorno que
- *    signifique falha — devolve qual das quatro histórias saiu.
- * 3. **Toda rolagem é auditável** (§14.3). Cada resolução grava `soul:resolve`
- *    com entradas, peso e resultado. Sem isso a acusação de favorecimento é
- *    infalsificável, e é assim que servidor de RP morre.
+ *
+ * `core/soul.js` is the domain layer: a generator with a fixed budget,
+ * bands, a seed, and resolution into four possible outcomes.
+ *
+ * It is a pure function — it does not open a database, interact with `mp`,
+ * know that a game exists, or depend on anything outside its own domain.
+ * This is why it has 28 tests.
+ *
+ * This file handles everything that interacts with the outside world:
+ * it persists the soul, reveals signs, records marks, advances the
+ * transformation tree, audits rolls, and feeds the panel.
+ *
+ * It never decides an outcome — it only asks the domain layer and
+ * handles the consequences.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * ⚠️ Ainda não rodou com jogador conectado
+ * The three rules this file must preserve
  * ─────────────────────────────────────────────────────────────────────────────
- * Igual a `hit-events`, `espm` e `safe-zones`: **confirmado por teste
- * automatizado, não confirmado em sessão real.** O que só o cliente prova —
- * o sinal chegando na tela, a marca sendo lida por outro jogador — está na
- * Etapa 9.4 do `docs/technical/FASE_0_ROTEIRO.md`, e não foi executado.
+ *
+ * 1. **The player never sees numbers** (§II.1).
+ *    There must be no path from this file to the UI that carries an affinity
+ *    value, band, or seed. `buildPanelPayload` is the only payload producer,
+ *    and a test scans the entire object for any of the seven values.
+ *
+ * 2. **The roll never says no** (§II.2).
+ *    `resolveAttempt` has no return value that represents failure — it
+ *    returns which of the four possible stories occurred.
+ *
+ * 3. **Every roll is auditable** (§14.3).
+ *    Every resolution records `soul:resolve` with its inputs, weight,
+ *    and outcome. Without this, accusations of favoritism cannot be
+ *    disproved, and that is how roleplay servers die.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WARNING: Has not yet been run with a connected player
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Just like `hit-events`, `espm`, and `safe-zones`:
+ * **confirmed by automated testing, not confirmed in a real session.**
+ *
+ * What only the client can prove — the sign appearing on the screen and
+ * another player being able to read a mark — is covered by Step 9.4 of
+ * `docs/technical/FASE_0_ROTEIRO.md`, which has not been executed.
  */
 
 const db = require('./database');
@@ -47,64 +63,76 @@ const { EventEmitter } = require('events');
 const MODULE = 'soul';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Catálogo de sinais (§II.1, III.7)
+// Sign Catalog (§II.1, III.7)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * O jogador recebe *sinais*, não valores. Cada chave abaixo é um acontecimento
- * que já dá pra interpretar na primeira sessão — identidade, não poder.
+ * The player receives *signs*, not values.
  *
- * O texto mora aqui e a chave vai pro banco. É a mesma regra do `descriptor`
- * das marcas, e existe por dois motivos: texto do jogador nunca entra num campo
- * que outro jogador lê, e reescrever uma frase não exige migration.
+ * Each key below represents an event that can already be interpreted
+ * during the first session — identity, not power.
  *
- * Duas frases por atributo — uma para banda alta, uma para banda baixa. Nenhuma
- * delas diz se é bom: `surdo` em Sensibilidade ("Você não sonha. Nunca sonhou.")
- * é tão jogável quanto `raro`, que é a §14.4 aparecendo na superfície.
+ * The text lives here, while the key is stored in the database.
+ * This follows the same rule as the mark `descriptor`, for two reasons:
+ *
+ * 1. A player's text never enters a field that another player can read.
+ * 2. Rewriting a sentence does not require a database migration.
+ *
+ * Two sentences exist for each attribute — one for a high band and
+ * one for a low band.
+ *
+ * Neither sentence says whether the attribute is good or bad.
+ * Being "deaf" to Sensitivity ("You don't dream. You never have.")
+ * is just as playable as being "rare", which is §14.4 appearing on the surface.
  */
 const SIGN_CATALOG = Object.freeze({
-  arcana_alta:          'As chamas te obedecem rápido demais.',
-  arcana_baixa:         'A magia te ignora como se você não estivesse ali.',
-  divina_alta:          'O sacerdote te olha demais e não diz nada.',
-  divina_baixa:         'Você já entrou em três templos e nenhum deles pareceu notar.',
-  sombria_alta:         'As velas se apagam do lado onde você senta.',
-  sombria_baixa:        'Os mortos não têm nada a te dizer, e isso é um alívio.',
-  bestial_alta:         'Cães rosnam quando você passa, e você não sabe por quê.',
-  bestial_baixa:        'Nenhum animal te teme. Nenhum te procura.',
-  vontade_alta:         'Você já disse não a algo que ninguém mais conseguiu recusar.',
-  vontade_baixa:        'É mais fácil concordar. Sempre foi.',
-  sensibilidade_alta:   'Você ouve conversas em cômodos vazios.',
-  sensibilidade_baixa:  'Você não sonha. Nunca sonhou.',
-  estabilidade_alta:    'O que abala os outros passa por você como vento.',
-  estabilidade_baixa:   'Há dias em que o seu nome soa errado na sua própria boca.'
+  arcana_alta:          'Flames obey you a little too quickly.',
+  arcana_baixa:         'Magic ignores you as though you were not there.',
+  divina_alta:          'The priest watches you too closely and says nothing.',
+  divina_baixa:         'You have entered three temples, and none of them seemed to notice.',
+  sombria_alta:         'Candles go out on whichever side you sit.',
+  sombria_baixa:        'The dead have nothing to tell you, and that is a relief.',
+  bestial_alta:         'Dogs growl when you pass, and you do not know why.',
+  bestial_baixa:        'No animal fears you. None seeks you out.',
+  vontade_alta:         'You have said no to something that nobody else could refuse.',
+  vontade_baixa:        'It is easier to agree. It always has been.',
+  sensibilidade_alta:   'You hear conversations in empty rooms.',
+  sensibilidade_baixa:  'You do not dream. You never have.',
+  estabilidade_alta:    'What shakes others passes through you like the wind.',
+  estabilidade_baixa:   'Some days, your own name sounds wrong in your mouth.'
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Catálogo de marcas (§II.3, III.6)
+// Mark Catalog (§II.3, III.6)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * **As marcas são a progressão.** Não há nível; há o que ficou em você.
+ * **Marks are progression.** There are no levels; there is only what
+ * has been left behind in you.
  *
- * `visivel` conversa com o `identity-service`: esconder marca é motivo real
- * para capuz. `sentida` só o portador sabe, até alguém perceber. `conhecida`
- * entrou na reputação.
+ * `visivel` (visible) works with `identity-service`: hiding a visible mark
+ * is a legitimate reason to wear a hood.
  *
- * Uma pessoa com muitas marcas é obviamente alguém que foi longe — status
- * narrativo, não numérico, e não farmável, porque cada marca custou uma cena.
+ * `sentida` (felt) is known only to its bearer until someone notices it.
+ *
+ * `conhecida` (known) has become part of the character's reputation.
+ *
+ * A person with many marks is clearly someone who has gone far —
+ * narrative status, not numerical status, and not something that can
+ * be farmed, because every mark required a scene.
  */
 const MARK_CATALOG = Object.freeze({
-  mao_fria:        { kind: 'fisica',     visibility: 'visivel',   text: 'A mão que forjou aquilo não esquenta mais.' },
-  olhos_pálidos:   { kind: 'fisica',     visibility: 'visivel',   text: 'A cor saiu dos seus olhos e não voltou.' },
-  voz_dupla:       { kind: 'fisica',     visibility: 'visivel',   text: 'Às vezes a sua voz sai com outra por baixo.' },
-  sono_partido:    { kind: 'espiritual', visibility: 'sentida',   text: 'Você acorda três vezes por noite, sempre na mesma hora.' },
-  peso_no_peito:   { kind: 'espiritual', visibility: 'sentida',   text: 'Há algo apoiado no seu peito que não estava ali antes.' },
-  nome_lembrado:   { kind: 'espiritual', visibility: 'sentida',   text: 'Alguém que você não conhece repete o seu nome, longe.' },
-  fama_de_risco:   { kind: 'social',     visibility: 'conhecida', text: 'Quem entende do assunto sabe o que você tentou.' },
-  divida_de_favor: { kind: 'social',     visibility: 'conhecida', text: 'Alguém pagou parte do preço por você, e não esqueceu.' }
+  mao_fria:        { kind: 'fisica',     visibility: 'visivel',   text: 'The hand that forged that no longer grows warm.' },
+  olhos_pálidos:   { kind: 'fisica',     visibility: 'visivel',   text: 'The color left your eyes and never returned.' },
+  voz_dupla:       { kind: 'fisica',     visibility: 'visivel',   text: 'Sometimes another voice speaks beneath your own.' },
+  sono_partido:    { kind: 'espiritual', visibility: 'sentida',   text: 'You wake three times every night, always at the same time.' },
+  peso_no_peito:   { kind: 'espiritual', visibility: 'sentida',   text: 'Something rests on your chest that was not there before.' },
+  nome_lembrado:   { kind: 'espiritual', visibility: 'sentida',   text: 'Someone you do not know repeats your name from far away.' },
+  fama_de_risco:   { kind: 'social',     visibility: 'conhecida', text: 'Those who understand the matter know what you attempted.' },
+  divida_de_favor: { kind: 'social',     visibility: 'conhecida', text: 'Someone paid part of the price for you, and has not forgotten.' }
 });
 
-/** Marcas candidatas por afinidade — a escolha final é determinística. */
+/** Candidate marks for each affinity — the final choice is deterministic. */
 const MARKS_BY_AFFINITY = Object.freeze({
   arcana:  ['mao_fria', 'sono_partido', 'fama_de_risco'],
   divina:  ['peso_no_peito', 'divida_de_favor', 'nome_lembrado'],
@@ -113,17 +141,23 @@ const MARKS_BY_AFFINITY = Object.freeze({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Árvore de Transformação (§III.1, III.8)
+// Transformation Tree (§III.1, III.8)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Uma árvore por afinidade, exatamente as do §III.1.
+ * One tree for each affinity, exactly as specified in §III.1.
  *
- * `irreversible: true` é o que obriga `consented_at` (§14.2). O primeiro nó de
- * toda árvore é sempre reversível de propósito: é a infecção do §II.6, que
- * **nunca resolve nada sozinha** — abre uma janela em que o jogador escolhe
- * entre buscar cura, esconder ou aceitar. É a alternativa ao VETO da mordida
- * com 70% de morte, e o motivo de a mordida não poder ser um nó irreversível.
+ * `irreversible: true` is what makes `consented_at` mandatory (§14.2).
+ *
+ * The first node in every tree is deliberately reversible:
+ * it is the infection described in §II.6, which **never resolves anything
+ * on its own**.
+ *
+ * It opens a window in which the player can choose to seek a cure,
+ * hide the condition, or accept it.
+ *
+ * This is the alternative to the bite's VETO with a 70% death chance,
+ * and the reason the bite cannot be an irreversible node.
  */
 const TREES = Object.freeze({
   arcana: [
@@ -152,24 +186,31 @@ const TREES = Object.freeze({
 });
 
 /**
- * Nós que a governança tipifica como crime. `soul.path.advanced` é emitido para
- * quem quiser escutar; o `governance-service` ligará nisso quando o crime for
- * desenhado (§III.9). Aqui é só o dado, não a consequência — tipificar é
- * decisão da governança, não desta camada.
+ * Nodes that governance classifies as crimes.
+ *
+ * `soul.path.advanced` is emitted for anyone who wants to listen.
+ * `governance-service` will connect to this event when the crime system
+ * is designed (§III.9).
+ *
+ * Here, it is only data, not a consequence — classifying something as
+ * a crime is a governance decision, not the responsibility of this layer.
  */
 const CRIMINAL_NODES = Object.freeze(['vampirismo', 'necromancia', 'lorde_vampiro']);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Estado em memória
+// In-Memory State
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** characterId -> { seed, values } — evita reler a alma a cada resolução. */
+/** characterId -> { seed, values } — avoids reloading the soul for every resolution. */
 const _soulCache = new Map();
 
 /**
- * Barramento próprio, pequeno e nomeado — o padrão do `panel-refresh-bus`, e
- * não um canal genérico no `module-registry` (aquela generalização foi avaliada
- * e adiada de propósito; ver o cabeçalho de `core/module-registry.js`).
+ * A small, dedicated, explicitly named event bus — following the pattern
+ * used by `panel-refresh-bus`, rather than creating a generic channel in
+ * `module-registry`.
+ *
+ * That generalization was evaluated and deliberately postponed.
+ * See the header of `core/module-registry.js`.
  */
 const _emitter = new EventEmitter();
 _emitter.setMaxListeners(20);
@@ -177,29 +218,36 @@ _emitter.setMaxListeners(20);
 let _secret = null;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ciclo de vida
+// Lifecycle
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * O segredo do servidor vem do ambiente e é lido no boot, não no require.
+ * The server secret comes from the environment and is read during boot,
+ * not during `require`.
  *
- * **Sem ele o módulo não sobe.** Falhar alto aqui é deliberado: derivar alma com
- * um segredo vazio produziria almas que qualquer pessoa recalcula a partir da
- * ficha, que é pública no painel — e o estrago seria silencioso e permanente,
- * porque a alma é congelada no primeiro spawn. É a mesma lição do `.env` que
- * ninguém carregava: o modo de falha precisa apontar pro lado seguro.
+ * **Without it, the module does not start.**
+ *
+ * Failing loudly here is deliberate: deriving a soul using an empty secret
+ * would produce souls that anyone could recalculate from the character sheet,
+ * which is publicly visible in the panel.
+ *
+ * This is the same lesson as the `.env` file that nobody was loading:
+ * the failure mode must point toward the safe option.
+ *
+ * The damage would be silent and permanent because the soul is frozen
+ * at the character's first spawn.
  */
 async function initSoulService() {
   _secret = process.env.SOUL_SECRET || null;
   if (!_secret) {
     throw new Error(
-      '[soul] SOUL_SECRET ausente. A alma vem de HMAC(segredo, ficha) — sem segredo, ' +
-      'qualquer pessoa calcula a alma de qualquer personagem a partir da ficha publica. ' +
-      'Defina SOUL_SECRET no skymp/gamemode/.env antes de ligar ENABLE_SOUL_SERVICE.'
+      '[soul] SOUL_SECRET is missing. The soul is derived using HMAC(secret, character sheet) — without a secret, ' +
+      'anyone can calculate any character\'s soul from their public character sheet. ' +
+      'Set SOUL_SECRET in skymp/gamemode/.env before enabling ENABLE_SOUL_SERVICE.'
     );
   }
   _soulCache.clear();
-  console.log('[soul] Servico da Afinidade da Alma iniciado.');
+  console.log('[soul] Soul Affinity service started.');
 }
 
 function shutdownSoulService() {
@@ -209,29 +257,37 @@ function shutdownSoulService() {
 }
 
 /**
- * Esquece a alma em cache na desconexão.
+ * Clears a character's cached soul upon disconnection.
  *
- * Chaveado por characterId (não por actorId), então não sofre do reaproveitamento
- * de slot que atingiu o `staffCache` e o `_lastHealth`. Ainda assim precisa sair:
- * cache que só cresce é vazamento, e a alma não muda entre sessões — reler no
- * próximo login custa uma query e evita servir dado obsoleto se a staff mexer
- * na ficha.
+ * The cache is keyed by characterId, not actorId, so it does not suffer
+ * from the slot-reuse problem that affected `staffCache` and `_lastHealth`.
+ *
+ * It still needs to be cleared: a cache that only grows is a memory leak.
+ *
+ * The soul does not change between sessions, so reloading it on the next
+ * login costs one database query and prevents stale data from being served
+ * if staff modifies the character sheet.
  */
 function cleanup(characterId) {
   _soulCache.delete(characterId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A alma
+// The Soul
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Garante que o personagem tenha alma, derivando-a da ficha aprovada.
+ * Ensures that the character has a soul, deriving it from the approved
+ * character sheet.
  *
- * Idempotente e **congelante**: uma vez gravada, a alma nunca é rederivada. Se
- * a staff editar a ficha depois — o painel permite —, rederivar trocaria a alma
- * de alguém que já jogou meses com ela, sem aviso. Persistir no primeiro spawn
- * é o único comportamento compatível com "as marcas são a progressão".
+ * Idempotent and **immutable**: once saved, the soul is never derived again.
+ *
+ * If staff edits the character sheet afterward — which the panel allows —
+ * deriving the soul again would change the soul of someone who may have
+ * played with it for months, without warning.
+ *
+ * Persisting it at the first spawn is the only behavior compatible with
+ * the principle that "marks are progression."
  *
  * @param {number} characterId
  * @returns {Promise<{seed: string, values: Object}|null>}
@@ -263,7 +319,7 @@ async function ensureSoul(characterId) {
     [characterId]
   );
   if (fichas.length === 0) {
-    console.error(`[soul] Personagem ${characterId} nao existe — alma nao derivada.`);
+    console.error(`[soul] Character ${characterId} does not exist — soul was not derived.`);
     return null;
   }
   const ficha = fichas[0];
@@ -275,9 +331,11 @@ async function ensureSoul(characterId) {
   });
   const values = soul.generateSoul(seed);
 
-  // `INSERT IGNORE`: dois spawns concorrentes do mesmo personagem chegariam aqui
-  // juntos, e a segunda gravacao nao pode sobrescrever a primeira. A chave
-  // primaria e o character_id, entao o banco resolve.
+  // `INSERT IGNORE`: two concurrent spawns of the same character could
+  // arrive here at the same time. The second write must not overwrite
+  // the first.
+  //
+  // The primary key is character_id, so the database handles this.
   await db.query(
     `INSERT IGNORE INTO character_soul
        (character_id, soul_seed, arcana, divina, sombria, bestial, vontade, sensibilidade, estabilidade)
@@ -288,22 +346,24 @@ async function ensureSoul(characterId) {
 
   const registro = { seed, values };
   _soulCache.set(characterId, registro);
-  console.log(`[soul] Alma derivada para char ${characterId}.`);
+  console.log(`[soul] Soul derived for character ${characterId}.`);
   return registro;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sinais
+// Signs
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Escolhe o sinal mais característico da alma.
+ * Chooses the soul's most characteristic sign.
  *
- * "Mais característico" é o atributo cuja banda está **mais longe de `comum`** —
- * o que o personagem tem de mais diferente do resto do mundo, que é o que vale
- * a pena interpretar. Empate é resolvido pela ordem fixa dos atributos, não por
- * sorteio: dois personagens com a mesma alma precisam receber o mesmo sinal,
- * senão o sinal deixa de ser reproduzível e cai fora da §14.3.
+ * "Most characteristic" means the attribute whose band is **farthest
+ * from `comum` (common)** — what makes the character most different
+ * from the rest of the world, and therefore what is worth interpreting.
+ *
+ * Ties are resolved using the fixed attribute order, not a random roll.
+ * Two characters with the same soul must receive the same sign; otherwise,
+ * the sign would no longer be reproducible and would violate §14.3.
  */
 function _chooseSign(values) {
   const COMUM = soul.BANDS.indexOf('comum');
@@ -325,17 +385,21 @@ function _chooseSign(values) {
 }
 
 /**
- * Revela um sinal e o entrega ao jogador.
+ * Reveals a sign and delivers it to the player.
  *
- * **Todo personagem recebe o primeiro sinal na primeira sessão** (§II.1). Não é
- * poder: é identidade. Resolve o problema mais mortal de servidor de RP, que
- * não é balanceamento — é a primeira hora ser vazia.
+ * **Every character receives their first sign during their first session**
+ * (§II.1).
  *
- * @returns {Promise<string|null>} a chave revelada, ou null se já a tinha
+ * This is not power: it is identity.
+ *
+ * It solves the most dangerous problem for a roleplay server, which is
+ * not balance — it is having an empty first hour.
+ *
+ * @returns {Promise<string|null>} the revealed key, or null if the character already had it
  */
 async function revealSign(characterId, signKey, source = 'first_spawn') {
   if (!SIGN_CATALOG[signKey]) {
-    console.error(`[soul] Sinal desconhecido '${signKey}' — nada revelado.`);
+    console.error(`[soul] Unknown sign '${signKey}' — nothing revealed.`);
     return null;
   }
 
@@ -357,13 +421,15 @@ async function revealSign(characterId, signKey, source = 'first_spawn') {
   }
 
   _emitter.emit('soul.sign.revealed', { characterId, signKey, source });
-  console.log(`[soul] Sinal '${signKey}' revelado para char ${characterId} (${source}).`);
+  console.log(`[soul] Sign '${signKey}' revealed for character ${characterId} (${source}).`);
   return signKey;
 }
 
 /**
- * Ponto de entrada do primeiro spawn: garante alma e entrega o primeiro sinal.
- * Idempotente — chamar de novo não revela um segundo sinal.
+ * Entry point for the first spawn: ensures the soul exists and delivers
+ * the first sign.
+ *
+ * Idempotent — calling this again does not reveal a second sign.
  */
 async function onFirstSpawn(characterId) {
   const registro = await ensureSoul(characterId);
@@ -372,17 +438,21 @@ async function onFirstSpawn(characterId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Marcas
+// Marks
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Grava uma marca. Marca **nunca é removida** — no máximo coberta, o que também
- * é jogável e caro. Por isso não existe `removeMark`.
+ * Records a mark.
+ *
+ * A mark is **never removed** — at most, it can be covered up, which is
+ * also playable and costly.
+ *
+ * For this reason, there is no `removeMark`.
  */
 async function createMark(characterId, descriptor, originEventId = null) {
   const catalogo = MARK_CATALOG[descriptor];
   if (!catalogo) {
-    console.error(`[soul] Marca desconhecida '${descriptor}' — nada gravado.`);
+    console.error(`[soul] Unknown mark '${descriptor}' — nothing recorded.`);
     return null;
   }
 
@@ -398,21 +468,28 @@ async function createMark(characterId, descriptor, originEventId = null) {
   }
 
   _emitter.emit('soul.mark.created', { characterId, descriptor, ...catalogo });
-  console.log(`[soul] Marca '${descriptor}' gravada em char ${characterId} (evento ${originEventId || 'sem origem'}).`);
+  console.log(`[soul] Mark '${descriptor}' recorded for character ${characterId} (event ${originEventId || 'no origin'}).`);
   return descriptor;
 }
 
 /**
- * Marcas que um observador consegue perceber num alvo.
+ * Marks that an observer can perceive on a target.
  *
- * ⚠️ **Firewall de identidade** (§III.12, teste 8). Só marcas `visivel` saem
- * daqui, e o nome de quem as carrega passa pelo `identity-service` — quem não
- * conhece o portador lê `Desconhecido`. Sem isso a marca viraria um vazamento
- * de nome civil por um caminho que o `identity-service` não controla, que é
- * exatamente o defeito que fez o `disguise-service` ser apagado.
+ * WARNING: **Identity Firewall** (§III.12, test 8).
  *
- * Os descritores são chaves de catálogo e nunca contêm nome de ninguém — o que
- * torna o vazamento impossível por construção, não por revisão.
+ * Only marks with `visivel` (visible) are returned from here, and the
+ * bearer's name is processed through `identity-service`.
+ *
+ * Anyone who does not know the bearer sees `Unknown`.
+ *
+ * Without this, a mark could leak a character's real name through a path
+ * that `identity-service` does not control.
+ *
+ * This is exactly the defect that caused `disguise-service` to be deleted.
+ *
+ * Descriptors are catalog keys and never contain anyone's name.
+ * This makes the leak impossible by design, rather than relying on
+ * code review to catch it.
  */
 async function describeVisibleMarks(observerCharacterId, targetCharacterId) {
   const linhas = await db.query(
@@ -435,35 +512,41 @@ async function describeVisibleMarks(observerCharacterId, targetCharacterId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Resolução
+// Resolution
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Janela da pressão (§III.5). Insistir não converge pro limpo: converge pra marca. */
+/** Pressure window (§III.5). Repeated attempts do not converge toward a clean result; they converge toward a mark. */
 const PRESSURE_WINDOW_MINUTES = 60;
 
 /**
- * Resolve uma tentativa ligada à alma e cuida das consequências.
+ * Resolves an attempt connected to the soul and handles its consequences.
  *
- * **Nunca devolve falha.** Devolve qual das quatro histórias saiu — limpo, caro,
- * complicado ou marcado —, e todas as quatro dão certo. É a §II.2, e é o que
- * separa este sistema de uma porta fechada.
+ * **It never returns failure.**
+ *
+ * It returns which of the four possible stories occurred:
+ * clean, costly, complicated, or marked — and all four are successful.
+ *
+ * This is §II.2, and it is what separates this system from a locked door.
  *
  * @param {object} p
  * @param {number} p.characterId
- * @param {string} p.affinity      qual afinidade governa o ato
- * @param {string} p.eventId       identifica o ato; entra na rolagem e no audit
- * @param {number} [p.circumstance] mestre presente, componente certo, lugar consagrado
- * @param {number} [p.difficulty]   dificuldade do ato
+ * @param {string} p.affinity      which affinity governs the action
+ * @param {string} p.eventId       identifies the action; used in the roll and audit
+ * @param {number} [p.circumstance] master present, correct component, consecrated location
+ * @param {number} [p.difficulty]   difficulty of the action
  * @returns {Promise<{outcome: string, mark: string|null}|null>}
  */
 async function resolveAttempt({ characterId, affinity, eventId, circumstance = 0, difficulty = 0 }) {
   const registro = await ensureSoul(characterId);
   if (!registro) return null;
 
-  // Pressão sai do próprio audit: quantas vezes este personagem tentou este
-  // mesmo ato na última hora. Ler do log em vez de manter contador em memória é
-  // deliberado — contador em memória zera no restart, e "reinicie o servidor
-  // pra limpar a pressão" seria um exploit criado pela implementação.
+  // Pressure is derived from the audit log itself: how many times this
+  // character attempted this same action during the last hour.
+  //
+  // Reading from the log instead of maintaining an in-memory counter is
+  // deliberate. An in-memory counter resets when the server restarts,
+  // and "restart the server to clear pressure" would be an exploit
+  // created by the implementation.
   const tentativas = await db.query(
     `SELECT COUNT(*) AS n FROM audit_logs
      WHERE action = 'soul:resolve'
@@ -485,17 +568,22 @@ async function resolveAttempt({ characterId, affinity, eventId, circumstance = 0
     pressure
   });
 
-  // ── Auditoria (§14.3) ──────────────────────────────────────────────────────
+  // ── Audit (§14.3) ──────────────────────────────────────────────────────────
   //
-  // A semente NAO entra aqui, e a escolha e de seguranca, nao de economia de
-  // espaco: `GET /api/audit` do painel web devolve `details` inteiro pra
-  // qualquer staff no navegador. Gravar a semente ali a tiraria do servidor —
-  // e com ela mais o codigo publico deste repositorio, qualquer pessoa
-  // reproduz TODAS as rolagens futuras daquele personagem, nao so a contestada.
+  // The seed is NOT stored here, and this is a security decision, not a
+  // space-saving measure.
   //
-  // A reproducao continua possivel e e o que a §14.3 exige: a semente esta em
-  // `character_soul`, acessivel a quem tem o banco, e a impressao digital
-  // abaixo prova qual alma foi usada sem revelar a alma.
+  // The panel's `GET /api/audit` endpoint returns the entire `details` object
+  // to any staff member in the browser.
+  //
+  // Storing the seed there would expose it outside the server — and with
+  // the public code in this repository, anyone could reproduce ALL future
+  // rolls for that character, not just the one being challenged.
+  //
+  // Reproduction is still possible, as required by §14.3:
+  // the seed is in `character_soul`, accessible to anyone with database
+  // access, and the fingerprint below proves which soul was used without
+  // revealing the soul itself.
   const character = await db.query('SELECT account_id FROM characters WHERE id = ?', [characterId]);
   await db.query(
     'INSERT INTO audit_logs (action, actor_account_id, target_account_id, details) VALUES (?, ?, ?, ?)',
@@ -505,7 +593,7 @@ async function resolveAttempt({ characterId, affinity, eventId, circumstance = 0
         characterId,
         eventId,
         outcome: resultado.outcome,
-        peso: resultado.peso,
+        weight: resultado.weight,
         roll: resultado.roll,
         inputs: resultado.inputs,
         seedRef: registro.seed.slice(0, 8),
@@ -514,12 +602,14 @@ async function resolveAttempt({ characterId, affinity, eventId, circumstance = 0
     ]
   );
 
-  // ── Consequência ───────────────────────────────────────────────────────────
+  // ── Consequence ────────────────────────────────────────────────────────────
   let mark = null;
   if (resultado.outcome === 'marcado') {
-    // A marca é escolhida deterministicamente pela própria rolagem: a mesma
-    // alma tentando o mesmo ato na mesma tentativa recebe a mesma marca, senão
-    // o resultado deixa de ser reproduzível pela staff.
+    // The mark is selected deterministically by the roll itself:
+    // the same soul attempting the same action on the same attempt
+    // receives the same mark.
+    //
+    // Otherwise, the result would no longer be reproducible by staff.
     const candidatas = MARKS_BY_AFFINITY[affinity];
     const escolhida = candidatas[Math.floor(resultado.roll * candidatas.length) % candidatas.length];
     mark = await createMark(characterId, escolhida, eventId);
@@ -534,10 +624,10 @@ async function resolveAttempt({ characterId, affinity, eventId, circumstance = 0
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Árvore de Transformação
+// Transformation Tree
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Estado atual do personagem numa árvore, ou null se nunca entrou nela. */
+/** The character's current state in a tree, or null if they have never entered it. */
 async function getPath(characterId, tree) {
   const linhas = await db.query(
     'SELECT tree, node, entered_at, consented_at FROM character_paths WHERE character_id = ? AND tree = ?',
@@ -547,26 +637,30 @@ async function getPath(characterId, tree) {
 }
 
 /**
- * Avança o personagem um nó na árvore.
+ * Advances the character by one node in the tree.
  *
- * **Nó irreversível recusa avançar sem consentimento** (§14.2, e o teste 6 dos
- * obrigatórios). É a implementação da alternativa ao VETO da mordida com 70% de
- * morte: nenhum evento único decide um destino, e alterar permanentemente a
- * alma de outro personagem sem consentimento é a versão sobrenatural do RDM.
+ * **An irreversible node refuses to advance without consent** (§14.2,
+ * and required test 6).
  *
- * O primeiro nó de cada árvore é sempre reversível — é a infecção, que abre a
- * janela de escolha (buscar cura / esconder / aceitar) em vez de resolver nada.
+ * This implements the alternative to the bite's VETO with a 70% death
+ * chance: no single event determines a character's fate, and permanently
+ * changing another character's soul without consent is the supernatural
+ * equivalent of RDM.
+ *
+ * The first node in every tree is always reversible.
+ * It represents the infection, which opens a window of choice
+ * (seek a cure / hide it / accept it) rather than resolving anything.
  *
  * @param {object} p
  * @param {number}  p.characterId
  * @param {string}  p.tree
- * @param {boolean} [p.consent] consentimento explícito do jogador
+ * @param {boolean} [p.consent] explicit player consent
  * @returns {Promise<{node: string, blocked?: string}|null>}
  */
 async function advancePath({ characterId, tree, consent = false }) {
   const trilha = TREES[tree];
   if (!trilha) {
-    console.error(`[soul] Arvore desconhecida '${tree}'.`);
+    console.error(`[soul] Unknown tree '${tree}'.`);
     return null;
   }
 
@@ -577,14 +671,16 @@ async function advancePath({ characterId, tree, consent = false }) {
   if (!proximo) return { node: atual ? atual.node : trilha[0].node, blocked: 'fim_da_arvore' };
 
   if (proximo.irreversible && !consent) {
-    // Recusa silenciosa seria pior que não ter a regra: o jogador precisa saber
-    // que existe uma porta e que ela cobra uma decisão explícita. É o A.3 do
-    // Anexo — aviso antes do irreversível.
+    // A silent refusal would be worse than having no rule at all:
+    // the player needs to know that a door exists and that opening it
+    // requires an explicit decision.
+    //
+    // This is A.3 of the Appendix — a warning before an irreversible action.
     const actorId = commands.getActiveActorByCharacterId(characterId);
     if (actorId) {
-      commands.sendNotification(actorId, 'Este passo não tem volta. Ele só acontece se você disser que sim.');
+      commands.sendNotification(actorId, 'This step cannot be undone. It will only happen if you explicitly agree.');
     }
-    console.log(`[soul] char ${characterId} barrado em '${proximo.node}' (${tree}): sem consentimento.`);
+    console.log(`[soul] Character ${characterId} blocked at '${proximo.node}' (${tree}): consent not provided.`);
     return { node: atual ? atual.node : null, blocked: 'consentimento_ausente' };
   }
 
@@ -601,9 +697,10 @@ async function advancePath({ characterId, tree, consent = false }) {
   _emitter.emit('soul.path.advanced', {
     characterId, tree, node: proximo.node,
     irreversible: proximo.irreversible,
-    // A governança tipifica necromancia e vampirismo como crime — o que
-    // transforma caçada em processo, e não em linchamento (§III.9). Aqui só sai
-    // o dado; tipificar é decisão dela.
+    // Governance classifies necromancy and vampirism as crimes —
+    // turning a hunt into a legal process rather than a lynching (§III.9).
+    //
+    // This layer only emits the data; classification is its decision.
     criminal: CRIMINAL_NODES.includes(proximo.node)
   });
 
@@ -614,24 +711,31 @@ async function advancePath({ characterId, tree, consent = false }) {
   const actorId = commands.getActiveActorByCharacterId(characterId);
   if (actorId) panelRefreshBus.requestRefresh(actorId, 'social');
 
-  console.log(`[soul] char ${characterId} avancou para '${proximo.node}' em ${tree}.`);
+  console.log(`[soul] Character ${characterId} advanced to '${proximo.node}' in ${tree}.`);
   return { node: proximo.node };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Painel
+// Panel
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Payload da aba Social.
+ * Payload for the Social tab.
  *
- * ⚠️ **Este é o teste que protege o sistema inteiro** (§III.12, item 7, "escrever
- * primeiro"). Nada aqui pode carregar valor de afinidade, banda ou semente. O
- * jogador recebe frases — sinais que já leu, marcas que carrega, onde está em
- * cada árvore. Números são do servidor; ficção é do jogador.
+ * WARNING: **This is the test that protects the entire system**
+ * (§III.12, item 7, "write first").
  *
- * Se alguém adicionar um campo com número, o teste varre o objeto inteiro e
- * reprova. Não depende de revisão de código lembrar da regra.
+ * Nothing here may contain an affinity value, band, or seed.
+ *
+ * The player receives sentences — signs they have already read, marks
+ * they carry, and their current position in each transformation tree.
+ *
+ * Numbers belong to the server; the fiction belongs to the player.
+ *
+ * If someone adds a numerical field, the test scans the entire object
+ * and fails.
+ *
+ * The rule does not depend on code review remembering to enforce it.
  */
 async function buildPanelPayload(characterId) {
   const [sinais, marcas, trilhas] = await Promise.all([
@@ -650,7 +754,7 @@ async function buildPanelPayload(characterId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Eventos e comandos
+// Events and Commands
 // ─────────────────────────────────────────────────────────────────────────────
 
 function onSoulEvent(evento, handler) { _emitter.on(evento, handler); }
@@ -660,23 +764,24 @@ function commandDefs() {
   return [
     {
       name: ['/alma', '/soul'],
-      description: 'Mostra o que o seu personagem sabe sobre a propria alma — sinais, marcas e caminho',
+      description: 'Shows what your character knows about their own soul — signs, marks, and path',
       usage: '/alma',
       handler: (actorId) => {
         const character = commands.getActiveCharacterData(actorId);
         if (!character) return;
         buildPanelPayload(character.characterId)
           .then(payload => {
-            // O comando serve pra quem não abriu o painel. Mesmo conteúdo, mesma
-            // regra: frases, nunca número.
+            // This command is for players who have not opened the panel.
+            // It provides the same content and follows the same rule:
+            // sentences, never numbers.
             if (payload.sinais.length === 0 && payload.marcas.length === 0) {
-              commands.sendNotification(actorId, 'Ainda não há nada que você saiba sobre si mesmo.');
+              commands.sendNotification(actorId, 'You do not know anything about yourself yet.');
               return;
             }
             for (const frase of payload.sinais) commands.sendNotification(actorId, frase);
             for (const marca of payload.marcas) commands.sendNotification(actorId, marca.texto);
           })
-          .catch(err => console.error('[soul] Falha ao montar /alma:', err.message));
+          .catch(err => console.error('[soul] Failed to build /soul:', err.message));
       }
     }
   ];
@@ -701,8 +806,8 @@ module.exports = {
   SIGN_CATALOG,
   MARK_CATALOG,
   TREES,
-  // Exposto só pra teste: a escolha do sinal é determinística e precisa ser
-  // exercitável sem banco.
+  // Exposed only for testing: sign selection is deterministic and must
+  // be testable without a database.
   _chooseSign,
   _soulCache
 };

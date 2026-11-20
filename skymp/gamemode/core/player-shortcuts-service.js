@@ -1,115 +1,304 @@
 /**
  * core/player-shortcuts-service.js
  *
- * Tecla `F2` pra abrir o `/painel` sem digitar — mesmo objetivo do prompt
- * `[E]` (Tarefa 11), aplicado a uma ação que já existe (`panel:open`, ver
- * `player-panel-service.js`) e não depende de alvo nenhum.
+ * Rebindable player keybinds (19/11/2026). Started as "F2 opens /painel";
+ * now the single place where key presses become client actions:
  *
- * ─── Por que um módulo próprio, e não dentro de `interaction-prompt` ───────
+ *   panel.open        F2   asks the server to open the player panel
+ *   voice.pushToTalk  V    hold to transmit voice (released = muted)
+ *   voice.cycleMode   F11  whisper → normal → shout
+ *   voice.toggleMute  —    unbound by default
  *
- * `interaction-prompt-service.js` já prova o padrão "registra `keyPress`
- * uma vez, via guarda em `ctx.state`" — mas está atrás de
- * `ENABLE_INTERACTION_PROMPT`. Amarrar `F2` a essa flag faria abrir o
- * painel depender de um lab que não tem nada a ver com ele. Este módulo
- * reusa o MESMO padrão (tick de presença + guarda em `ctx.state`), com sua
- * própria flag.
+ * Each account's choices live in `account_keybinds` (migration v30, see
+ * core/keybinds.js). The server sends the resolved map to the owner through
+ * the `playerShortcuts` property; the client snippet below registers ONE
+ * `buttonEvent` listener and dispatches to the CEF handlers in index.html.
+ * The Controls tab of the panel (ui/player-panel.js) edits them through the
+ * `keybinds:*` UI events handled here.
  *
- * ─── Por que ainda existe um tick, se o alvo nunca muda ────────────────────
+ * Before this, F2 and the voice keys each registered their own listener on
+ * `ctx.sp.on('keyPress', ...)` — an event SkyrimPlatform does not have
+ * (Data/Platform/Modules/skyrimPlatform.ts only declares 'buttonEvent'), so
+ * none of them ever fired in game.
  *
- * Ao contrário do prompt `[E]` (cujo payload muda a cada 2s conforme o
- * jogador anda), aqui o "payload" é sempre o mesmo — só existe pra dar ao
- * cliente UM `mp.set` que dispare o `updateOwner` e registre o listener de
- * tecla. `commands.listActiveActorIds()` garante que todo personagem ativo
- * recebe esse envio uma vez; o diffing (`_ultimoEnvio`, mesmo mecanismo do
- * prompt `[E]`) garante que não é reenviado a cada tick depois disso.
- *
- * ⚠️ NÃo VALIDADO EM JOGO — mesma ressalva de toda a família de labs deste
- * projeto. `ctx.sp.on('keyPress', ...)` é o mesmo mecanismo do `[E]`
- * (nunca confirmado contra um servidor SkyMP real); o scan code de `F2`
- * (`60`, 0x3C) é uma leitura de tabela DirectInput, não um teste.
+ * ⚠️ Not yet validated in game: verified against the SkyrimPlatform type
+ * declarations and with the snippet executed against a fake `ctx.sp`.
  */
 
 'use strict';
 
 const commands = require('../commands');
+const keybinds = require('./keybinds');
 
-/** Property por onde o "sinal de pronto" chega ao cliente. */
+/** Property through which bindings reach the owner's client. */
 const PROPERTY = 'playerShortcuts';
 
-/** F2 = scan code DirectInput 60 (0x3C). Ver ressalva no cabeçalho. */
-const SCAN_CODE_F2 = 60;
+/** `InputDeviceType.Keyboard` in Data/Platform/Modules/skyrimPlatform.ts. */
+const KEYBOARD_DEVICE = 0;
+
+/** Kept for compatibility with callers/tests that referenced the F2 code. */
+const SCAN_CODE_F2 = keybinds.defaultBindings()['panel.open'];
+
+/** Embedded in the client snippet so keys work before the server's copy arrives. */
+const DEFAULT_BINDINGS = keybinds.defaultBindings();
 
 /**
- * Roda no cliente, dentro do Skyrim Platform. Só tem uma responsabilidade:
- * registrar (uma vez, guarda em `ctx.state`, mesmo padrão de
- * `interaction-prompt-service.js`) o listener de `F2` que pede ao servidor
- * pra abrir o painel — via o MESMO caminho que qualquer clique de UI já usa
- * (`window.skyrimPlatform.sendMessage`, ver `core/ui-event-gateway.js`),
- * não um caminho novo.
+ * Runs on the client (SkyrimPlatform `updateOwner`, executed repeatedly).
+ *  - When the property value changes (new `sentAt`), stores the bindings in
+ *    `ctx.state` and mirrors them to the CEF (`window.handleKeybindsUpdate`)
+ *    so the Controls tab shows the server's truth.
+ *  - Registers a single `buttonEvent` listener, once.
+ *  - Ignores key presses while the CEF has focus (the player is typing in
+ *    chat or using the panel), except the push-to-talk RELEASE, which always
+ *    goes through so voice can never get stuck open.
  */
 const SNIPPET_DO_CLIENTE = `
-  ctx.state.playerShortcuts = ctx.state.playerShortcuts || { registrouTecla: false };
-  var psc = ctx.state.playerShortcuts;
+  ctx.state.oathboundKeybinds = ctx.state.oathboundKeybinds || { registered: false, sentAt: null, bindings: null, pttDown: false, pttCode: null };
+  var kb = ctx.state.oathboundKeybinds;
 
-  if (!psc.registrouTecla && ctx.sp && typeof ctx.sp.on === 'function') {
-    psc.registrouTecla = true;
-    ctx.sp.on('keyPress', function (key) {
-      if (key !== ${SCAN_CODE_F2}) return; // F2
-      if (!ctx.sp.browser || !ctx.sp.browser.executeJavaScript) return;
-      ctx.sp.browser.executeJavaScript('window.handlePlayerShortcutKey && window.handlePlayerShortcutKey("panel:open")');
+  if (ctx.value && ctx.value.bindings && ctx.value.sentAt !== kb.sentAt) {
+    kb.sentAt = ctx.value.sentAt;
+    kb.bindings = ctx.value.bindings;
+    if (ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+      ctx.sp.browser.executeJavaScript('window.handleKeybindsUpdate && window.handleKeybindsUpdate(' + JSON.stringify(kb.bindings) + ')');
+    }
+  }
+
+  if (!kb.registered && ctx.sp && typeof ctx.sp.on === 'function') {
+    kb.registered = true;
+
+    // Closing the panel hands the mouse/keyboard back to the game right here
+    // on the client, without waiting for the server to flip browserFocused.
+    ctx.sp.on('browserMessage', function (e) {
+      var m = e && e.arguments && e.arguments[0];
+      if (m && typeof m === 'object' && (m.type === 'panel:close' || m.type === 'chat:close') && ctx.sp.browser && ctx.sp.browser.setFocused) {
+        ctx.sp.browser.setFocused(false);
+      }
+    });
+
+    ctx.sp.on('buttonEvent', function (e) {
+      if (!e || e.device !== ${KEYBOARD_DEVICE}) return;
+      var br = ctx.sp.browser;
+      if (!br || !br.executeJavaScript) return;
+
+      if (e.isUp && kb.pttDown && e.code === kb.pttCode) {
+        kb.pttDown = false;
+        br.executeJavaScript('window.handleVoicePushToTalk && window.handleVoicePushToTalk(false)');
+        return;
+      }
+
+      // Defaults until the server's copy arrives: F2 must work from the first frame.
+      var b = kb.bindings || ${JSON.stringify(DEFAULT_BINDINGS)};
+      if (!e.isDown) return;
+      if (typeof br.isFocused === 'function' && br.isFocused()) return;
+
+      var code = e.code;
+      if (code === b['panel.open']) {
+        // Open and focus locally, instantly; the server only fills in data.
+        if (br.setVisible) br.setVisible(true);
+        if (br.setFocused) br.setFocused(true);
+        br.executeJavaScript('window.handlePlayerShortcutKey && window.handlePlayerShortcutKey("panel:open")');
+      } else if (code === b['voice.pushToTalk']) {
+        kb.pttDown = true;
+        kb.pttCode = code;
+        br.executeJavaScript('window.handleVoicePushToTalk && window.handleVoicePushToTalk(true)');
+      } else if (code === b['voice.cycleMode']) {
+        br.executeJavaScript('window.handleVoiceCycleKey && window.handleVoiceCycleKey()');
+      } else if (code === b['voice.toggleMute']) {
+        br.executeJavaScript('window.handleVoiceMuteKey && window.handleVoiceMuteKey()');
+      } else if (code === b['chat.open']) {
+        // Chat box: focus the browser so the player can type; Enter/Esc in the
+        // box closes it and the browserMessage listener above unfocuses.
+        if (br.setVisible) br.setVisible(true);
+        if (br.setFocused) br.setFocused(true);
+        br.executeJavaScript('window.openChat && window.openChat()');
+      }
     });
   }
 `;
 
-/** Mesmo intervalo do prompt `[E]` e da nametag — não é tempo crítico aqui. */
+/** Same cadence as the [E] prompt and nametags — not time-critical. */
 const INTERVALO_DO_TICK_MS = 2000;
 
 let _timer = null;
+let _db = null;
 
-/** actorId -> já recebeu o sinal de pronto (evita reenviar a cada tick). */
-const _jaEnviado = new Set();
+/** actorId -> JSON of the bindings last sent (diffing, avoids resending). */
+const _ultimoEnvio = new Map();
+
+/** accountId -> resolved bindings (avoids a DB read per tick). */
+const _cachePorConta = new Map();
+
+/** actorIds whose load is in flight (avoids parallel duplicate reads). */
+const _carregando = new Set();
+
+function getDb() {
+  if (!_db) _db = require('../database');
+  return _db;
+}
+
+/** Test seam: inject a `{ query }` double. */
+function _setDatabase(db) {
+  _db = db;
+}
+
+function accountIdOf(actorId) {
+  const data = typeof commands.getActiveCharacterData === 'function'
+    ? commands.getActiveCharacterData(actorId)
+    : null;
+  return data && Number.isInteger(data.accountId) ? data.accountId : null;
+}
+
+async function bindingsFor(actorId) {
+  const accountId = accountIdOf(actorId);
+  if (accountId === null) return keybinds.defaultBindings();
+  if (_cachePorConta.has(accountId)) return _cachePorConta.get(accountId);
+  let bindings;
+  try {
+    bindings = await keybinds.loadAccountBindings(getDb(), accountId);
+  } catch (err) {
+    console.error(`[player-shortcuts] Could not load keybinds for account ${accountId}:`, err.message);
+    bindings = keybinds.defaultBindings();
+  }
+  _cachePorConta.set(accountId, bindings);
+  return bindings;
+}
+
+function sendBindings(actorId, bindings, { force = false } = {}) {
+  const json = JSON.stringify(bindings);
+  if (!force && _ultimoEnvio.get(actorId) === json) return;
+  _ultimoEnvio.set(actorId, json);
+  try {
+    mp.set(actorId, PROPERTY, { sentAt: Date.now(), bindings });
+  } catch (err) {
+    console.error(`[player-shortcuts] Failed to send keybinds to 0x${actorId.toString(16)}:`, err.message);
+  }
+}
 
 async function tick() {
   if (typeof mp === 'undefined') return;
 
   const presentes = new Set(commands.listActiveActorIds());
-  for (const actorId of _jaEnviado) {
-    if (!presentes.has(actorId)) _jaEnviado.delete(actorId);
+  for (const actorId of _ultimoEnvio.keys()) {
+    if (!presentes.has(actorId)) _ultimoEnvio.delete(actorId);
   }
 
   for (const actorId of presentes) {
-    if (_jaEnviado.has(actorId)) continue;
-    _jaEnviado.add(actorId);
+    if (_ultimoEnvio.has(actorId) || _carregando.has(actorId)) continue;
+    _carregando.add(actorId);
     try {
-      mp.set(actorId, PROPERTY, { sentAt: Date.now() });
-    } catch (err) {
-      console.error(`[player-shortcuts] Falha ao enviar sinal para 0x${actorId.toString(16)}:`, err.message);
+      sendBindings(actorId, await bindingsFor(actorId));
+    } finally {
+      _carregando.delete(actorId);
     }
+  }
+}
+
+function notify(actorId, message) {
+  if (typeof commands.sendNotification === 'function') commands.sendNotification(actorId, message);
+}
+
+/**
+ * UI events from the Controls tab:
+ *   keybinds:get                     → resend current bindings
+ *   keybinds:set { bindings }        → validate, persist, resend
+ *   keybinds:reset                   → back to defaults, persist, resend
+ */
+async function handleUiEvent(actorId, uiEvent) {
+  if (!uiEvent || typeof uiEvent.type !== 'string') return false;
+  const accountId = accountIdOf(actorId);
+
+  switch (uiEvent.type) {
+    case 'keybinds:get':
+      sendBindings(actorId, await bindingsFor(actorId), { force: true });
+      return true;
+
+    case 'keybinds:set': {
+      if (accountId === null) { notify(actorId, 'Keybinds: no active character.'); return true; }
+      let validated;
+      try {
+        validated = keybinds.validateBindings(uiEvent.data && uiEvent.data.bindings);
+      } catch (err) {
+        if (!(err instanceof keybinds.KeybindValidationError)) throw err;
+        notify(actorId, `Keybinds not saved: ${err.message}`);
+        sendBindings(actorId, await bindingsFor(actorId), { force: true });
+        return true;
+      }
+      try {
+        await keybinds.saveAccountBindings(getDb(), accountId, validated);
+      } catch (err) {
+        console.error(`[player-shortcuts] Failed to save keybinds for account ${accountId}:`, err.message);
+        notify(actorId, 'Keybinds not saved: server error.');
+        sendBindings(actorId, await bindingsFor(actorId), { force: true });
+        return true;
+      }
+      _cachePorConta.set(accountId, validated);
+      sendBindings(actorId, validated, { force: true });
+      notify(actorId, 'Keybinds saved.');
+      return true;
+    }
+
+    case 'keybinds:reset': {
+      if (accountId === null) { notify(actorId, 'Keybinds: no active character.'); return true; }
+      let defaults;
+      try {
+        defaults = await keybinds.resetAccountBindings(getDb(), accountId);
+      } catch (err) {
+        console.error(`[player-shortcuts] Failed to reset keybinds for account ${accountId}:`, err.message);
+        notify(actorId, 'Keybinds not reset: server error.');
+        return true;
+      }
+      _cachePorConta.set(accountId, defaults);
+      sendBindings(actorId, defaults, { force: true });
+      notify(actorId, 'Keybinds reset to defaults.');
+      return true;
+    }
+
+    default:
+      return false;
   }
 }
 
 function initPlayerShortcutsService() {
   if (_timer) return;
   _timer = setInterval(() => {
-    tick().catch((err) => console.error('[player-shortcuts] Falha no tick:', err.message));
+    tick().catch((err) => console.error('[player-shortcuts] Tick failed:', err.message));
   }, INTERVALO_DO_TICK_MS);
   if (typeof _timer.unref === 'function') _timer.unref();
-  console.log('[player-shortcuts] F2 abre o /painel. NAO validado em jogo — ver cabecalho do arquivo.');
+  console.log('[player-shortcuts] Rebindable keys active (F2 panel, V push-to-talk, F11 voice mode by default). Not yet validated in game.');
 }
 
 function shutdownPlayerShortcutsService() {
   if (_timer) clearInterval(_timer);
   _timer = null;
-  _jaEnviado.clear();
+  _ultimoEnvio.clear();
+  _cachePorConta.clear();
+  _carregando.clear();
+}
+
+/**
+ * `chat:open` / `chat:close` UI events exist for the CLIENT (the snippet above
+ * releases focus on chat:close). Every browser message is also forwarded to the
+ * server by the UI-event gateway, so this claims the prefix to keep the router
+ * from logging them as unhandled. Typed lines arrive separately as
+ * `cef::chat:send` (ui-event-gateway → commands.handleChatInput).
+ */
+async function handleChatUiEvent(_actorId, uiEvent) {
+  return Boolean(uiEvent && (uiEvent.type === 'chat:open' || uiEvent.type === 'chat:close'));
 }
 
 module.exports = {
   PROPERTY,
+  handleChatUiEvent,
   SNIPPET_DO_CLIENTE,
   SCAN_CODE_F2,
+  KEYBOARD_DEVICE,
   INTERVALO_DO_TICK_MS,
   tick,
+  handleUiEvent,
   initPlayerShortcutsService,
   shutdownPlayerShortcutsService,
-  _jaEnviado
+  _ultimoEnvio,
+  _cachePorConta,
+  _setDatabase
 };

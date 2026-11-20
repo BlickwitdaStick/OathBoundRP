@@ -90,6 +90,14 @@ const DAMAGE_SPIKE_THRESHOLD = 25; // heurística: pontos de vida perdidos num �
 const _downedPlayers = new Map();
 // actorId -> última leitura de Health (pra detectar picos de dano)
 const _lastHealth = new Map();
+
+/**
+ * actorId -> já detectamos a queda deste ator no polling. Era
+ * `mp.get/set(actorId, '_wasDead')`, uma property que nunca foi registrada com
+ * `mp.makeProperty` — o SkyMP lança "Property '_wasDead' doesn't exist" e o
+ * laço inteiro morria a cada 2s. Estado do servidor, não precisa ir ao cliente.
+ */
+const _wasDead = new Map();
 // characterId -> quem o derrubou, capturado por `mp.onDeath` no instante da
 // queda. Precisa sobreviver até o bleed-out, que acontece minutos depois.
 const _killers = new Map();
@@ -236,30 +244,51 @@ function initDeathService() {
   // docs/technical/SKYMP_UPSTREAM_REFERENCE.md 2.5.
   setInterval(() => {
     try {
-      // Para cada profileId de player 1..50
-      for (let pId = 1; pId <= 50; pId++) {
-        const actors = mp.getActorsByProfileId(pId);
-        if (!actors || actors.length === 0) continue;
-
-        for (const actorId of actors) {
-          const health = mp.callPapyrusFunction('method', 'Actor', 'getActorValue', actorRef(actorId), ['Health']);
-          const currentlyDead = (health <= 0);
-          const wasDead = mp.get(actorId, '_wasDead') || false;
-
-          if (currentlyDead && !wasDead) {
-            handlePlayerDowned(actorId).catch(err => console.error('[death-service] Falha ao processar queda:', err.message));
-            mp.set(actorId, '_wasDead', true);
-          } else if (!currentlyDead && wasDead) {
-            mp.set(actorId, '_wasDead', false);
-          }
-
-          checkDamageSpike(actorId, health);
-        }
-      }
+      pollPlayersOnce();
     } catch (err) {
       console.error('[death-service] Error polling health:', err.message);
     }
   }, 2000);
+}
+
+/**
+ * Uma passada do polling de rede de segurança (ver comentário no init):
+ * detecta queda por `Actor.IsDead` e alimenta a heurística de dano.
+ * Exportada para teste.
+ */
+function pollPlayersOnce() {
+  // Para cada profileId de player 1..50
+  for (let pId = 1; pId <= 50; pId++) {
+    const actors = mp.getActorsByProfileId(pId);
+    if (!actors || actors.length === 0) continue;
+
+    for (const actorId of actors) {
+      // 19/11/2026: `Actor.GetActorValue` NÃO existe neste SkyMP
+      // (core/skymp-adapter/papyrus-catalog.js) — devolvia null a cada
+      // 2s, e `null <= 0` era "morto". Usamos só o que o catálogo lista:
+      // IsDead para a queda (e só `true` explícito decide) e
+      // GetActorValuePercentage (0..1) para a heurística de dano.
+      const self = actorRef(actorId);
+      const isDead = mp.callPapyrusFunction('method', 'Actor', 'IsDead', self, []);
+      const healthPct = mp.callPapyrusFunction('method', 'Actor', 'GetActorValuePercentage', self, ['Health']);
+
+      if (typeof isDead === 'boolean') {
+        const wasDead = _wasDead.get(actorId) === true;
+        if (isDead && !wasDead) {
+          handlePlayerDowned(actorId).catch(err => console.error('[death-service] Falha ao processar queda:', err.message));
+          _wasDead.set(actorId, true);
+        } else if (!isDead && wasDead) {
+          _wasDead.set(actorId, false);
+        }
+      }
+
+      // Escala 0..100 (pontos percentuais da vida máxima): é nessa unidade
+      // que DAMAGE_SPIKE_THRESHOLD é lido.
+      if (typeof healthPct === 'number' && Number.isFinite(healthPct)) {
+        checkDamageSpike(actorId, Math.round(healthPct * 100));
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,9 +367,11 @@ async function rescueTarget(rescuerActorId, targetActorId) {
 
   characterState.set(target.characterId, STATES.NORMAL, {});
   if (typeof mp !== 'undefined') {
-    mp.callPapyrusFunction('method', 'Actor', 'Resurrect', actorRef(targetActorId), []);
+    // `Actor.Resurrect` NÃO existe neste SkyMP (papyrus-catalog.js); o caminho
+    // upstream é a property nativa `isDead` (docs/research/SKYMP_INTEGRATION_AUDIT.md §7).
+    mp.set(targetActorId, 'isDead', false);
     mp.callPapyrusFunction('method', 'Actor', 'SetActorValue', actorRef(targetActorId), ['Health', STABILIZE_HEALTH]);
-    mp.set(targetActorId, '_wasDead', false);
+    _wasDead.set(targetActorId, false);
   }
 
   commands.sendNotification(rescuerActorId, 'Voce estabilizou o ferido.');
@@ -468,7 +499,8 @@ async function executeRespawn(actorId, characterId, penalty = 0) {
   if (typeof mp === 'undefined') return;
 
   try {
-    mp.callPapyrusFunction('method', 'Actor', 'Resurrect', actorRef(actorId), []);
+    // Ver nota em handleRescue: `isDead`, não `Actor.Resurrect` (inexistente).
+    mp.set(actorId, 'isDead', false);
 
     // ⚠️ As tres chaves e os tres tipos sao exigencia do addon nativo, nao
     // convencao nossa. **[DOC]** `LocationalDataBinding::Set` (§8.4) le
@@ -489,7 +521,7 @@ async function executeRespawn(actorId, characterId, penalty = 0) {
       pos: RESPAWN_POS,
       rot: [0, 0, 0]
     });
-    mp.set(actorId, '_wasDead', false);
+    _wasDead.set(actorId, false);
 
     characterState.set(characterId, STATES.NORMAL, {});
     console.log(`[death-service] Respawn complete for actor ${actorId.toString(16)}.`);
@@ -670,6 +702,7 @@ function checkDamageSpike(actorId, health) {
  */
 function cleanup(actorId) {
   _lastHealth.delete(actorId);
+  _wasDead.delete(actorId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -736,5 +769,7 @@ module.exports = {
   RESPAWN_CELL_FALLBACK,
   _downedPlayers,
   _lastHealth,
+  _wasDead,
+  pollPlayersOnce,
   _killers
 };

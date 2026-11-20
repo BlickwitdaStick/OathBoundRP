@@ -13,6 +13,26 @@ export interface LaunchGameResult {
   error?: string;
 }
 
+export interface ServerModsCheck {
+  ok: boolean;
+  error?: string;
+  version?: string;
+  plugins?: string[];
+  totalFiles?: number;
+  missing?: Array<{ path: string; size: number }>;
+  /** Base-game plugins (Creation Club) the server needs and the player lacks. */
+  missingBase?: string[];
+  bytesNeeded?: number;
+}
+
+export interface ServerModsProgress {
+  file: string;
+  index: number;
+  count: number;
+  bytesDone: number;
+  bytesTotal: number;
+}
+
 export interface ElectronAPI {
   windowMinimize: () => void;
   windowClose: () => void;
@@ -33,6 +53,10 @@ export interface ElectronAPI {
   pollQueue: () => Promise<any>;
   getLocalPlugins: (folderPath: string) => Promise<any>;
   verifyMods: (folderPath: string) => Promise<{ success: boolean; error?: string; loadOrder?: string[] }>;
+  checkServerMods: (folderPath: string) => Promise<ServerModsCheck>;
+  installServerMods: (folderPath: string) => Promise<{ ok: boolean; installed?: string[]; pluginsChanged?: boolean; code?: string; error?: string }>;
+  enableServerPlugins: (folderPath: string) => Promise<{ ok: boolean; changed?: boolean; error?: string }>;
+  onServerModsProgress: (callback: (value: ServerModsProgress) => void) => void;
   analyzePlugins: (folderPath: string, serverLoadOrder?: string[]) => Promise<{ ok: boolean; problems: string[]; plugins: any[] }>;
   syncLoadorder: (folderPath: string, serverLoadOrder: string[]) => Promise<boolean>;
   isGameRunning: () => Promise<boolean>;

@@ -1,309 +1,509 @@
 /* ============================================================================
  * player-panel.css
- * Identidade visual emprestada do próprio Prisma UI (prismaui.dev): preto puro,
- * glass card com glow violeta, tipografia geométrica (Geist Sans / fallback
- * system-ui), pílulas, hairlines com brilho, marca d'água rúnica ambiente.
- * Nada de parchment/wax — é "next-gen dev tool", não cancelaria medieval.
+ * OATHBOUND look (19/11/2026): dark glass with warm gold accents, matching the
+ * launcher and the main-menu authorization widget. Centered card with a
+ * vertical tab rail so every section fits (the old 400px right-edge card
+ * clipped its seven tabs).
  * ==========================================================================*/
 
 #player-panel {
-  --pp-black: #000000;
-  --pp-panel: rgba(9, 9, 12, 0.82);
-  --pp-panel-2: rgba(255, 255, 255, 0.035);
-  --pp-text: #f5f5f8;
-  --pp-text-dim: rgba(245, 245, 248, 0.52);
-  --pp-text-faint: rgba(245, 245, 248, 0.28);
-  --pp-border: rgba(255, 255, 255, 0.09);
-  --pp-accent: #8b7cf6;
-  --pp-accent-bright: #b3a8ff;
-  --pp-accent-dim: rgba(139, 124, 246, 0.14);
-  --pp-danger: #ff6b6b;
-  --pp-danger-dim: rgba(255, 107, 107, 0.14);
-  --pp-success: #34d399;
-  --pp-success-dim: rgba(52, 211, 153, 0.14);
-  --pp-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, system-ui, sans-serif;
+    --pp-black: #000000;
+    --pp-panel: rgba(12, 10, 8, 0.9);
+    --pp-panel-2: rgba(255, 240, 210, 0.04);
+    --pp-text: #f2ead8;
+    --pp-text-dim: rgba(242, 234, 216, 0.6);
+    --pp-text-faint: rgba(242, 234, 216, 0.32);
+    --pp-border: rgba(217, 183, 110, 0.18);
+    --pp-accent: #d9b76e;
+    --pp-accent-bright: #ecd39a;
+    --pp-accent-dim: rgba(217, 183, 110, 0.14);
+    --pp-danger: #ff7b6b;
+    --pp-danger-dim: rgba(255, 123, 107, 0.14);
+    --pp-success: #8fd19e;
+    --pp-success-dim: rgba(143, 209, 158, 0.14);
+    --pp-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, system-ui, sans-serif;
+    --pp-display: 'Cinzel', 'Trajan Pro', Georgia, 'Times New Roman', serif;
 
-  position: fixed;
-  top: 50%;
-  right: 22px;
-  transform: translateY(-50%);
-  width: min(400px, calc(100vw - 44px));
-  max-height: calc(100vh - 72px);
-  display: none;
-  flex-direction: column;
-  background:
-    radial-gradient(ellipse 140% 90% at 100% -10%, rgba(139, 124, 246, 0.16), transparent 60%),
-    var(--pp-panel);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid var(--pp-border);
-  border-radius: 18px;
-  box-shadow:
-    0 0 0 1px rgba(139, 124, 246, 0.08),
-    0 24px 70px rgba(0, 0, 0, 0.65),
-    0 0 60px rgba(139, 124, 246, 0.06);
-  color: var(--pp-text);
-  font-family: var(--pp-font);
-  z-index: 200;
-  overflow: hidden;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(780px, calc(100vw - 48px));
+    height: min(560px, calc(100vh - 96px));
+    display: none;
+    flex-direction: column;
+    background:
+        radial-gradient(ellipse 120% 80% at 0% 0%, rgba(217, 183, 110, 0.10), transparent 55%),
+        var(--pp-panel);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--pp-border);
+    border-radius: 10px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 30px 80px rgba(0, 0, 0, 0.7);
+    color: var(--pp-text);
+    font-family: var(--pp-font);
+    z-index: 200;
+    overflow: hidden;
 }
-#player-panel.open { display: flex; }
 
-/* Marca d'água rúnica ambiente — eco do emblema fantasma do site do Prisma. */
-#player-panel::before {
-  content: 'ᛟ';
-  position: absolute;
-  top: -60px;
-  right: -30px;
-  font-size: 220px;
-  line-height: 1;
-  color: rgba(139, 124, 246, 0.05);
-  pointer-events: none;
-  animation: pp-drift 22s linear infinite;
+    #player-panel.open {
+        display: flex;
+        animation: pp-in 140ms ease-out;
+    }
+
+    /* Faint runic watermark behind the content. */
+    #player-panel::before {
+        content: 'ᛟ';
+        position: absolute;
+        bottom: -70px;
+        right: -20px;
+        font-size: 260px;
+        line-height: 1;
+        color: rgba(217, 183, 110, 0.04);
+        pointer-events: none;
+    }
+
+@keyframes pp-in {
+    from { opacity: 0; transform: translate(-50%, -48%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
 }
-@keyframes pp-drift {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  50% { transform: rotate(6deg) scale(1.04); }
-}
+
 @media (prefers-reduced-motion: reduce) {
-  #player-panel::before { animation: none; }
+    #player-panel.open { animation: none; }
 }
 
-/* ── Cabecalho ──────────────────────────────────────────────────────────── */
+/* ── Header ─────────────────────────────────────────────────────────────── */
 .pp-head {
-  position: relative;
-  padding: 18px 18px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--pp-border);
-  flex: none;
-}
-.pp-head-text { flex: 1; min-width: 0; }
-.pp-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.6px;
-  color: var(--pp-accent-bright);
-}
-.pp-title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-  color: var(--pp-text);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    position: relative;
+    padding: 18px 22px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid var(--pp-border);
+    flex: none;
 }
 
-/* Chip de status "ao vivo" — ponto pulsante + rotulo, no lugar de um selo/badge generico */
+.pp-head-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.pp-eyebrow {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--pp-accent);
+}
+
+.pp-title {
+    font-family: var(--pp-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    color: var(--pp-text);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .pp-status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px 5px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  background: var(--pp-success-dim);
-  color: var(--pp-success);
-  border: 1px solid rgba(52, 211, 153, 0.28);
-  white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px 5px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: var(--pp-success-dim);
+    color: var(--pp-success);
+    border: 1px solid rgba(143, 209, 158, 0.3);
+    white-space: nowrap;
 }
-.pp-status-chip.warn {
-  background: var(--pp-danger-dim);
-  color: var(--pp-danger);
-  border-color: rgba(255, 107, 107, 0.3);
-}
+
+    .pp-status-chip.warn {
+        background: var(--pp-danger-dim);
+        color: var(--pp-danger);
+        border-color: rgba(255, 123, 107, 0.32);
+    }
+
 .pp-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 8px currentColor;
-  animation: pp-pulse 1.8s ease-in-out infinite;
-}
-@keyframes pp-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pp-status-dot { animation: none; }
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
 }
 
 .pp-close {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 1px solid var(--pp-border);
-  background: var(--pp-panel-2);
-  color: var(--pp-text-dim);
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    border: 1px solid var(--pp-border);
+    background: var(--pp-panel-2);
+    color: var(--pp-text-dim);
+    cursor: pointer;
+    font-size: 17px;
+    line-height: 1;
 }
-.pp-close:hover { color: var(--pp-text); border-color: rgba(255,255,255,0.18); }
 
-/* ── Navegacao em pilulas (segmented control), como no site do Prisma ────── */
+    .pp-close:hover {
+        color: var(--pp-text);
+        border-color: var(--pp-accent);
+    }
+
+/* ── Layout: tab rail + content ─────────────────────────────────────────── */
+.pp-layout {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
 .pp-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 12px 14px 0;
-  flex: none;
+    flex: none;
+    width: 176px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 10px;
+    border-right: 1px solid var(--pp-border);
+    background: rgba(0, 0, 0, 0.18);
+    overflow-y: auto;
 }
+
 .pp-tab {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px 6px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--pp-text-dim);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.1px;
-  cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--pp-text-dim);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
 }
-.pp-tab .pp-rune { font-size: 13px; color: var(--pp-text-faint); }
-.pp-tab:hover { color: var(--pp-text); background: var(--pp-panel-2); }
-.pp-tab.active {
-  background: var(--pp-accent-dim);
-  border-color: rgba(139, 124, 246, 0.35);
-  color: var(--pp-accent-bright);
-}
-.pp-tab.active .pp-rune { color: var(--pp-accent-bright); }
+
+    .pp-tab .pp-rune {
+        width: 16px;
+        text-align: center;
+        font-size: 14px;
+        color: var(--pp-text-faint);
+    }
+
+    .pp-tab:hover {
+        color: var(--pp-text);
+        background: var(--pp-panel-2);
+    }
+
+    .pp-tab.active {
+        background: var(--pp-accent-dim);
+        border-color: rgba(217, 183, 110, 0.35);
+        color: var(--pp-accent-bright);
+    }
+
+        .pp-tab.active .pp-rune {
+            color: var(--pp-accent);
+        }
 
 .pp-body {
-  padding: 16px 18px 18px;
-  overflow-y: auto;
+    flex: 1;
+    min-width: 0;
+    padding: 18px 22px 20px;
+    overflow-y: auto;
 }
-.pp-section { display: none; }
-.pp-section.active { display: block; }
+
+.pp-section {
+    display: none;
+}
+
+    .pp-section.active {
+        display: block;
+    }
+
+.pp-foot {
+    flex: none;
+    padding: 8px 22px;
+    border-top: 1px solid var(--pp-border);
+    font-size: 11px;
+    color: var(--pp-text-faint);
+    text-align: right;
+}
+
+/* Narrow windows: the rail becomes a scrollable row above the content. */
+@media (max-width: 720px) {
+    #player-panel { height: calc(100vh - 48px); }
+    .pp-layout { flex-direction: column; }
+    .pp-tabs {
+        width: auto;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border-right: none;
+        border-bottom: 1px solid var(--pp-border);
+        padding: 8px 10px;
+    }
+    .pp-tab { flex: none; }
+}
+
 
 .pp-empty {
-  color: var(--pp-text-dim);
-  font-size: 12.5px;
-  padding: 14px 2px 4px;
+    color: var(--pp-text-dim);
+    font-size: 12.5px;
+    padding: 14px 2px 4px;
 }
 
 .pp-h {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--pp-text-faint);
-  margin: 18px 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--pp-text-faint);
+    margin: 18px 0 8px;
 }
-.pp-h:first-child { margin-top: 0; }
 
-/* ── Linhas de dado (lista limpa, nao "livro-razao") ──────────────────────── */
+    .pp-h:first-child {
+        margin-top: 0;
+    }
+
+/* ── Data rows (clean list, not a "ledger") ───────────────────────────────── */
 .pp-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--pp-border);
-  font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--pp-border);
+    font-size: 13px;
 }
-.pp-row:last-child { border-bottom: none; }
-.pp-row .label { color: var(--pp-text-dim); }
-.pp-row .sub { display: block; color: var(--pp-text-faint); font-size: 11px; margin-top: 1px; }
-.pp-row .value {
-  color: var(--pp-text);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.pp-row .value.accent { color: var(--pp-accent-bright); }
-.pp-row .value.warn { color: var(--pp-danger); }
 
-/* ── Medidores de vitalidade — barra fina com glow, nao gauge gravado ──────── */
-.pp-gauge { margin-bottom: 12px; }
+    .pp-row:last-child {
+        border-bottom: none;
+    }
+
+    .pp-row .label {
+        color: var(--pp-text-dim);
+    }
+
+    .pp-row .sub {
+        display: block;
+        color: var(--pp-text-faint);
+        font-size: 11px;
+        margin-top: 1px;
+    }
+
+    .pp-row .value {
+        color: var(--pp-text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+        .pp-row .value.accent {
+            color: var(--pp-accent-bright);
+        }
+
+        .pp-row .value.warn {
+            color: var(--pp-danger);
+        }
+
+/* ── Vitality meters — thin glowing bars, not engraved gauges ────────────── */
+.pp-gauge {
+    margin-bottom: 12px;
+}
+
 .pp-gauge-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--pp-text-dim);
-  margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--pp-text-dim);
+    margin-bottom: 5px;
 }
-.pp-gauge-label .value { font-weight: 600; color: var(--pp-text); font-variant-numeric: tabular-nums; }
-.pp-gauge-track {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-.pp-gauge-fill {
-  height: 100%;
-  border-radius: 999px;
-  transition: width 0.3s;
-}
-.pp-gauge-fill.health { background: linear-gradient(90deg, #ff6b6b, #ff9d9d); box-shadow: 0 0 10px rgba(255,107,107,0.5); }
-.pp-gauge-fill.magicka { background: linear-gradient(90deg, #6b9cff, #a8c4ff); box-shadow: 0 0 10px rgba(107,156,255,0.5); }
-.pp-gauge-fill.stamina { background: linear-gradient(90deg, #34d399, #86e8c3); box-shadow: 0 0 10px rgba(52,211,153,0.5); }
 
-/* ── Linha social editável (apelidar pessoa conhecida direto no painel) ────── */
+    .pp-gauge-label .value {
+        font-weight: 600;
+        color: var(--pp-text);
+        font-variant-numeric: tabular-nums;
+    }
+
+.pp-gauge-track {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.pp-gauge-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s;
+}
+
+    .pp-gauge-fill.health {
+        background: linear-gradient(90deg, #ff6b6b, #ff9d9d);
+        box-shadow: 0 0 10px rgba(255,107,107,0.5);
+    }
+
+    .pp-gauge-fill.magicka {
+        background: linear-gradient(90deg, #6b9cff, #a8c4ff);
+        box-shadow: 0 0 10px rgba(107,156,255,0.5);
+    }
+
+    .pp-gauge-fill.stamina {
+        background: linear-gradient(90deg, #34d399, #86e8c3);
+        box-shadow: 0 0 10px rgba(52,211,153,0.5);
+    }
+
+/* ── Editable social row (nickname a known person directly from the panel) ─ */
 .pp-row.social {
-  flex-wrap: wrap;
+    flex-wrap: wrap;
 }
+
 .pp-rename-btn {
-  flex: none;
-  padding: 3px 9px;
-  border-radius: 7px;
-  border: 1px solid var(--pp-border);
-  background: var(--pp-panel-2);
-  color: var(--pp-text-dim);
-  font-size: 10.5px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-left: 8px;
+    flex: none;
+    padding: 3px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--pp-border);
+    background: var(--pp-panel-2);
+    color: var(--pp-text-dim);
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: 8px;
 }
-.pp-rename-btn:hover { color: var(--pp-accent-bright); border-color: rgba(139, 124, 246, 0.35); }
+
+    .pp-rename-btn:hover {
+        color: var(--pp-accent-bright);
+        border-color: rgba(139, 124, 246, 0.35);
+    }
+
 .pp-rename-form {
-  display: none;
-  width: 100%;
-  gap: 6px;
-  margin-top: 8px;
+    display: none;
+    width: 100%;
+    gap: 6px;
+    margin-top: 8px;
 }
-.pp-rename-form.open { display: flex; }
+
+    .pp-rename-form.open {
+        display: flex;
+    }
+
 .pp-rename-input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 9px;
-  border-radius: 7px;
-  border: 1px solid var(--pp-border);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--pp-text);
-  font-size: 12px;
-  font-family: inherit;
+    flex: 1;
+    min-width: 0;
+    padding: 6px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--pp-border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--pp-text);
+    font-size: 12px;
+    font-family: inherit;
 }
-.pp-rename-input:focus { outline: none; border-color: var(--pp-accent); }
+
+    .pp-rename-input:focus {
+        outline: none;
+        border-color: var(--pp-accent);
+    }
+
 .pp-rename-save {
-  flex: none;
-  padding: 6px 12px;
-  border-radius: 7px;
-  border: 1px solid rgba(139, 124, 246, 0.35);
-  background: var(--pp-accent-dim);
-  color: var(--pp-accent-bright);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
+    flex: none;
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1px solid rgba(139, 124, 246, 0.35);
+    background: var(--pp-accent-dim);
+    color: var(--pp-accent-bright);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
 }
-.pp-rename-save:hover { background: rgba(139, 124, 246, 0.24); }
+
+    .pp-rename-save:hover {
+        background: rgba(139, 124, 246, 0.24);
+    }
 
 .pp-hint {
-  margin-top: 16px;
-  padding-top: 10px;
-  border-top: 1px solid var(--pp-border);
-  font-size: 11px;
-  color: var(--pp-text-faint);
-  line-height: 1.5;
+    margin-top: 16px;
+    padding-top: 10px;
+    border-top: 1px solid var(--pp-border);
+    font-size: 11px;
+    color: var(--pp-text-faint);
+    line-height: 1.5;
+}
+
+/* ── Controls tab (rebindable keys, ui/keybinds.js) ───────────────────────── */
+.pp-keybind .pp-keybind-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pp-keycap {
+    min-width: 72px;
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--pp-text);
+    background: var(--pp-panel-2);
+    border: 1px solid var(--pp-border);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.pp-keycap:hover { border-color: var(--pp-accent); }
+.pp-keybind.capturing .pp-keycap {
+    color: var(--pp-accent-bright);
+    background: var(--pp-accent-dim);
+    border-color: var(--pp-accent);
+}
+.pp-kb-clear {
+    width: 22px;
+    height: 22px;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--pp-text-dim);
+    background: transparent;
+    border: 1px solid var(--pp-border);
+    border-radius: 50%;
+    cursor: pointer;
+}
+.pp-kb-clear:hover { color: var(--pp-danger); border-color: var(--pp-danger); }
+.pp-kb-message { color: var(--pp-accent-bright); }
+.pp-kb-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 8px;
+}
+.pp-kb-btn {
+    padding: 7px 14px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--pp-text);
+    background: var(--pp-panel-2);
+    border: 1px solid var(--pp-border);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.pp-kb-btn:hover:not(:disabled) { border-color: var(--pp-accent); }
+.pp-kb-btn.primary:not(:disabled) {
+    color: #0b0b10;
+    background: var(--pp-accent);
+    border-color: var(--pp-accent);
+}
+.pp-kb-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Server did not answer (panel opened locally, no data in time). */
+.pp-empty.pp-error {
+    color: var(--pp-danger);
+    line-height: 1.5;
+}
+.pp-empty.pp-error code {
+    color: var(--pp-text);
+    font-size: 11.5px;
 }

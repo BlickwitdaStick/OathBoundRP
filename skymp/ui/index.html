@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SkyMP Heavy RP - UI</title>
+  <title>OATHBOUND RP - UI</title>
   <link rel="stylesheet" href="player-panel.css">
   <link rel="stylesheet" href="depot-panel.css">
   <link rel="stylesheet" href="interaction-prompt.css">
@@ -435,6 +435,33 @@
     }
     .chat-line.fade { opacity: 0; }
 
+    /* Chat input sits where the log's bottom edge was; the log moves up while
+       typing so recent lines stay readable above the box. */
+    .chat-input-wrap {
+      position: fixed;
+      left: 24px;
+      bottom: 24px;
+      width: min(480px, calc(100vw - 48px));
+      display: none;
+      z-index: 270;
+    }
+    .chat-input-wrap.open { display: block; }
+    .chat-input {
+      width: 100%;
+      padding: 9px 12px;
+      font: inherit;
+      font-size: 14px;
+      color: #f5f1e8;
+      background: rgba(10, 10, 13, 0.92);
+      border: 1px solid rgba(217, 183, 110, 0.75);
+      border-radius: 7px;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(217, 183, 110, 0.15);
+    }
+    .chat-input::placeholder { color: rgba(245, 241, 232, 0.45); }
+    body.chat-typing .chat-log { bottom: 70px; }
+    body.chat-typing .chat-line.fade { opacity: 1; }
+
     @media (max-width: 720px) {
       .interaction-shell {
         grid-template-columns: 1fr;
@@ -446,6 +473,67 @@
         max-height: 38vh;
       }
     }
+
+    /* === SkyMP authorization widgets (auth-widgets.js) ===
+       Main-menu login form drawn by the stock skymp5-client AuthService. */
+    #oathbound-auth-widgets { display: none; }
+    #oathbound-auth-widgets.oa-visible {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 8vw;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    #oathbound-auth-widgets .oa-form {
+      pointer-events: auto;
+      min-width: 320px;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 22px 26px;
+      background: rgba(12, 10, 8, 0.86);
+      border: 1px solid rgba(200, 170, 110, 0.55);
+      border-radius: 6px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    }
+    #oathbound-auth-widgets .oa-caption {
+      font-size: 20px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e6cf9c;
+      border-bottom: 1px solid rgba(200, 170, 110, 0.35);
+      padding-bottom: 8px;
+      margin-bottom: 4px;
+    }
+    #oathbound-auth-widgets .oa-text,
+    #oathbound-auth-widgets .oa-icon {
+      font-size: 15px;
+      color: #f2ead8;
+      white-space: pre-line;
+    }
+    #oathbound-auth-widgets .oa-button {
+      font: inherit;
+      font-size: 15px;
+      padding: 9px 14px;
+      color: #f2ead8;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(200, 170, 110, 0.45);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #oathbound-auth-widgets .oa-button:hover { background: rgba(200, 170, 110, 0.18); }
+    #oathbound-auth-widgets .oa-button-primary {
+      font-size: 17px;
+      color: #1a140c;
+      background: #d9b76e;
+      border-color: #d9b76e;
+    }
+    #oathbound-auth-widgets .oa-button-primary:hover { background: #e8c886; }
+    #oathbound-auth-widgets .oa-margin { margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -468,17 +556,17 @@
 
 <!-- Trade Overlay -->
 <div id="trade-overlay">
-  <div class="trade-title">⚖ Comércio Seguro</div>
+  <div class="trade-title">⚖ Secure Trade</div>
   <p style="text-align:center; color:#aaa; font-size:14px;">
-    Interface de troca em desenvolvimento — ainda não mostra os itens da
-    sessão, só os três controles.<br>
+    Trade window in development — it does not show the session items yet,
+    only the three controls.<br>
     <code>/tradeadd &lt;baseId&gt; &lt;qtd&gt;</code> continua sendo o
     único jeito de ofertar item.
   </p>
   <div style="text-align:center">
-    <button class="trade-btn" onclick="acceptTrade()">Aceitar</button>
-    <button class="trade-btn" onclick="confirmTrade()">Confirmar</button>
-    <button class="trade-btn" onclick="closeTrade()">Cancelar</button>
+    <button class="trade-btn" onclick="acceptTrade()">Accept</button>
+    <button class="trade-btn" onclick="confirmTrade()">Confirm</button>
+    <button class="trade-btn" onclick="closeTrade()">Cancel</button>
   </div>
 </div>
 
@@ -498,40 +586,45 @@
     <div class="interaction-panel">
       <div class="interaction-head">
         <div>
-          <div class="interaction-title">Interagir</div>
+          <div class="interaction-title">Interact</div>
           <div class="interaction-target" id="interaction-target">Sem alvo</div>
         </div>
-        <button class="interaction-close" onclick="closeInteractionMenu()" aria-label="Fechar">×</button>
+        <button class="interaction-close" onclick="closeInteractionMenu()" aria-label="Close">×</button>
       </div>
       <div class="interaction-body" id="interaction-actions"></div>
     </div>
 
     <div class="interaction-detail">
-      <div id="interaction-detail-empty" class="detail-empty">Selecione uma acao para continuar.</div>
+      <div id="interaction-detail-empty" class="detail-empty">Select an action to continue.</div>
       <form id="interaction-action-form" class="detail-form" onsubmit="submitInteractionAction(event)">
         <h3 id="detail-title">Acao</h3>
         <p id="detail-description"></p>
         <div class="form-grid" id="detail-fields"></div>
         <div class="detail-footer">
-          <button type="button" class="detail-btn" onclick="clearInteractionDetail()">Cancelar</button>
-          <button type="submit" class="detail-btn primary">Confirmar</button>
+          <button type="button" class="detail-btn" onclick="clearInteractionDetail()">Cancel</button>
+          <button type="submit" class="detail-btn primary">Confirm</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 <div id="chat-log" class="chat-log" aria-live="polite"></div>
+<!-- Chat input: opened by the "Open chat" key (Enter by default, see core/player-shortcuts-service.js). -->
+<form id="chat-input-wrap" class="chat-input-wrap" autocomplete="off" aria-hidden="true">
+  <input id="chat-input" class="chat-input" type="text" maxlength="400"
+         placeholder="Say something… (/ for commands, Esc to cancel)" aria-label="Chat message">
+</form>
 
 <!-- Painel do Depósito Regional (Tarefa 10: UI-Depot-Bridge) -->
 <div id="depot-panel" aria-hidden="true">
   <div class="dp-shell">
     <div class="dp-head">
       <div class="dp-head-text">
-        <div class="dp-eyebrow">Depósito Regional</div>
+        <div class="dp-eyebrow">Regional Depot</div>
         <div class="dp-title" id="dp-hold-name">—</div>
       </div>
-      <div class="dp-gold" id="dp-gold" title="Ouro do personagem (nao guardado aqui)">0 ouro</div>
-      <button type="button" class="dp-close" id="dp-close" aria-label="Fechar">×</button>
+      <div class="dp-gold" id="dp-gold" title="Character gold (not stored here)">0 gold</div>
+      <button type="button" class="dp-close" id="dp-close" aria-label="Close">×</button>
     </div>
 
     <div class="dp-capacity">
@@ -546,67 +639,75 @@
 
     <div class="dp-columns">
       <div class="dp-column">
-        <div class="dp-column-title">Seu inventário</div>
+        <div class="dp-column-title">Your inventory</div>
         <div class="dp-list" id="dp-carried-list"><div class="dp-empty">Vazio.</div></div>
       </div>
       <div class="dp-column">
-        <div class="dp-column-title">Depósito</div>
+        <div class="dp-column-title">Depot</div>
         <div class="dp-list" id="dp-depot-list"><div class="dp-empty">Vazio.</div></div>
       </div>
     </div>
 
-    <div class="dp-hint">Fica só neste terminal — o que voce guarda em Whiterun nao aparece em Solitude.</div>
+    <div class="dp-hint">Stored at this depot only — what you leave in Whiterun is not available in Solitude.</div>
   </div>
 </div>
 
 <!-- Prompt de interação [E] (Tarefa 11: Interaction Hub) -->
 <div id="interaction-prompt" aria-hidden="true">
   <span class="ip-key">E</span>
-  <span class="ip-label" id="interaction-prompt-label">Interagir</span>
+  <span class="ip-label" id="interaction-prompt-label">Interact</span>
 </div>
 
-<!-- Painel do Jogador -->
-<div id="player-panel" aria-hidden="true">
+<!-- Player panel (F2 by default; see ui/player-panel.js) -->
+<div id="player-panel" aria-hidden="true" role="dialog" aria-labelledby="pp-char-name">
   <div class="pp-head">
     <div class="pp-head-text">
-      <div class="pp-eyebrow">Painel do Jogador</div>
+      <div class="pp-eyebrow">OATHBOUND · Character</div>
       <div class="pp-title" id="pp-char-name">—</div>
     </div>
     <div class="pp-status-chip" id="pp-status-chip">
-      <span class="pp-status-dot"></span><span id="pp-status-text">Em ordem</span>
+      <span class="pp-status-dot"></span><span id="pp-status-text">In order</span>
     </div>
-    <button id="pp-close" class="pp-close" aria-label="Fechar">×</button>
+    <button id="pp-close" class="pp-close" aria-label="Close">×</button>
   </div>
-  <div class="pp-tabs">
-    <button type="button" class="pp-tab active" data-tab="status">
-      <span class="pp-rune">ᛊ</span>Status
-    </button>
-    <button type="button" class="pp-tab" data-tab="governance">
-      <span class="pp-rune">ᛟ</span>Lei
-    </button>
-    <button type="button" class="pp-tab" data-tab="economy">
-      <span class="pp-rune">ᚠ</span>Bens
-    </button>
-    <button type="button" class="pp-tab" data-tab="social">
-      <span class="pp-rune">ᛗ</span>Social
-    </button>
-    <button type="button" class="pp-tab" data-tab="professions">
-      <span class="pp-rune">ᚲ</span>Ofícios
-    </button>
-    <button type="button" class="pp-tab" data-tab="soul">
-      <span class="pp-rune">ᛉ</span>Alma
-    </button>
+  <div class="pp-layout">
+    <nav class="pp-tabs" aria-label="Panel sections">
+      <button type="button" class="pp-tab active" data-tab="status">
+        <span class="pp-rune" aria-hidden="true">ᛊ</span><span class="pp-tab-label">Status</span>
+      </button>
+      <button type="button" class="pp-tab" data-tab="governance">
+        <span class="pp-rune" aria-hidden="true">ᛟ</span><span class="pp-tab-label">Law</span>
+      </button>
+      <button type="button" class="pp-tab" data-tab="economy">
+        <span class="pp-rune" aria-hidden="true">ᚠ</span><span class="pp-tab-label">Belongings</span>
+      </button>
+      <button type="button" class="pp-tab" data-tab="social">
+        <span class="pp-rune" aria-hidden="true">ᛗ</span><span class="pp-tab-label">Social</span>
+      </button>
+      <button type="button" class="pp-tab" data-tab="professions">
+        <span class="pp-rune" aria-hidden="true">ᚲ</span><span class="pp-tab-label">Professions</span>
+      </button>
+      <button type="button" class="pp-tab" data-tab="soul">
+        <span class="pp-rune" aria-hidden="true">ᛉ</span><span class="pp-tab-label">Soul</span>
+      </button>
+      <button type="button" class="pp-tab" data-tab="controls">
+        <span class="pp-rune" aria-hidden="true">ᚱ</span><span class="pp-tab-label">Controls</span>
+      </button>
+    </nav>
+    <div class="pp-body">
+      <div id="pp-section-status" class="pp-section active"></div>
+      <div id="pp-section-governance" class="pp-section"></div>
+      <div id="pp-section-economy" class="pp-section"></div>
+      <div id="pp-section-social" class="pp-section"></div>
+      <div id="pp-section-professions" class="pp-section"></div>
+      <div id="pp-section-soul" class="pp-section"></div>
+      <div id="pp-section-controls" class="pp-section"></div>
+    </div>
   </div>
-  <div class="pp-body">
-    <div id="pp-section-status" class="pp-section active"></div>
-    <div id="pp-section-governance" class="pp-section"></div>
-    <div id="pp-section-economy" class="pp-section"></div>
-    <div id="pp-section-social" class="pp-section"></div>
-    <div id="pp-section-professions" class="pp-section"></div>
-    <div id="pp-section-soul" class="pp-section"></div>
-  </div>
+  <div class="pp-foot"><span id="pp-foot-hint">Esc to close</span></div>
 </div>
 
+<script src="auth-widgets.js"></script>
 <script>
   // ── Mock mp para testes fora do SkyMP ─────────────────────────────────────
   //
@@ -673,19 +774,26 @@
   // `gameData.session` estar certo. `authAttemptEvent` continua sendo mandado
   // depois, sem confirmação de que o modo online (`offlineMode: false`, o
   // nosso) precisa dele -- mantido por precaução, não custa nada mandar.
-  if (!RODANDO_FORA_DO_JOGO) {
-    let jaTentouAuth = false;
-    const tentativas = setInterval(() => {
-      if (jaTentouAuth) { clearInterval(tentativas); return; }
-      if (window.skyrimPlatform && typeof window.skyrimPlatform.sendMessage === 'function') {
-        jaTentouAuth = true;
-        clearInterval(tentativas);
-        window.skyrimPlatform.sendMessage('front-loaded');
-        window.skyrimPlatform.sendMessage('authAttemptEvent');
-      }
-    }, 200);
-    // Não fica tentando pra sempre se o bridge nunca aparecer.
-    setTimeout(() => clearInterval(tentativas), 30000);
+  //
+  // 19/11/2026 — correção do fluxo de autenticação no menu principal:
+  //  1. `window.skyrimPlatform.widgets` é instalado (auth-widgets.js) ANTES de
+  //     `front-loaded`. O AuthService responde a `front-loaded` desenhando o
+  //     formulário de autorização via `widgets.set(...)`; sem `widgets` o
+  //     formulário nunca aparecia (TypeError dentro do executeJavaScript).
+  //  2. `authAttemptEvent` NÃO é mais enviado automaticamente. Ele é o clique
+  //     do botão "Play" do formulário: com a sessão remota já semeada pelo
+  //     launcher em PluginsNoLoad/auth-data-no-load.js, mandá-lo aqui conectaria
+  //     sozinho logo no carregamento do jogo, pulando a tela de autenticação.
+  //  3. `front-loaded` é REPETIDO até o cliente responder com widgets.set().
+  //     Teste em jogo de 19/11: o log mostrou "Received authNeeded event" mas
+  //     nunca "Received browserWindowLoaded event" — o CEF carrega esta página
+  //     no boot, antes de o skymp5-client assinar `browserMessage`, e o envio
+  //     único (com teto de 30 s) se perdia. Ver startFrontLoadedHandshake.
+  if (!RODANDO_FORA_DO_JOGO && window.OathboundAuthWidgets) {
+    window.OathboundAuthWidgets.startFrontLoadedHandshake({
+      getPlatform: () => window.skyrimPlatform,
+      doc: document
+    });
   }
 
   // ── Estado Local ──────────────────────────────────────────────────────────
@@ -813,27 +921,29 @@
       await handleSignal(msg);
     };
 
-    state.ws.onerror = () => { if (!state.voiceFatal) setStatus('error', 'VOZ INDISPONÍVEL'); };
+    state.ws.onerror = () => { if (!state.voiceFatal) setStatus('error', 'VOICE UNAVAILABLE'); };
 
     // 'VOZ DESCONECTADA' descreve a consequência, não a causa. Quando a
     // sinalização é fechada *por nós* depois de um motivo terminal já exibido
     // (mic bloqueado pelo CEF, ticket recusado), o close chega no tick seguinte
     // e apagava a mensagem específica — o jogador acabava lendo "desconectada",
     // que parece instabilidade de servidor, exatamente o diagnóstico errado.
-    state.ws.onclose = () => { if (!state.voiceFatal) setStatus('error', 'VOZ DESCONECTADA'); };
+    state.ws.onclose = () => { if (!state.voiceFatal) setStatus('error', 'VOICE DISCONNECTED'); };
   }
 
   async function handleSignal(msg) {
     switch (msg.type) {
       case 'auth_ok':
-        setStatus('ok', 'VOZ ATIVA');
+        setStatus('ok', 'VOICE ON');
+        // Push-to-talk: começa mudo até o jogador segurar a tecla.
+        applyPushToTalkIdleState();
         updateVoiceModeIndicator();
         await initMicrophone();
         break;
 
       case 'auth_failed':
         state.voiceFatal = true;
-        setStatus('error', 'FALHA NA VOZ — tente /voz de novo');
+        setStatus('error', 'VOICE FAILED — try /voz again');
         if (state.ws) state.ws.close();
         break;
 
@@ -1002,7 +1112,7 @@
       if (!state.opusUnsupportedWarned) {
         state.opusUnsupportedWarned = true;
         console.error('[voip] audio_frame Opus recebido mas este runtime não tem WebCodecs (AudioDecoder). Áudio Opus será perdido; rode o helper com --pcm.');
-        setStatus('warn', 'VOZ — CODEC NÃO SUPORTADO');
+        setStatus('warn', 'VOICE — CODEC NOT SUPPORTED');
       }
       return null;
     }
@@ -1090,7 +1200,7 @@
     if (!state.relayHeard) {
       state.relayHeard = true;
       setStatus(state.voiceFatal ? 'warn' : 'ok',
-        state.voiceFatal ? 'OUVINDO — SEM MICROFONE' : 'VOZ ATIVA');
+        state.voiceFatal ? 'LISTENING — NO MICROPHONE' : 'VOICE ON');
     }
   }
 
@@ -1133,23 +1243,23 @@
         // (caminho descartado) e VOICE_NATIVE_HELPER.md (o caminho atual).
         //
         // Não adianta reconectar: capturar por aqui não vai voltar a funcionar.
-        setStatus('error', 'VOZ INDISPONÍVEL NESTE CLIENT — use o Discord');
+        setStatus('error', 'VOICE UNAVAILABLE IN THIS CLIENT — use Discord');
         showInteractionToast(
-          'Voz no jogo indisponível: este client do SkyMP não libera o microfone. ' +
-          'É uma limitação conhecida do client — não é problema do seu microfone nem do servidor, ' +
-          'e tentar /voz de novo dá no mesmo. Use um canal de voz do Discord: peça /voz-criar à staff.'
+          'In-game voice is unavailable: this SkyMP client does not allow microphone access. ' +
+          'It is a known client limitation — not a problem with your microphone or the server, ' +
+          'and running /voz again will not help. Use a Discord voice channel: ask staff for /voz-criar.'
         );
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        setStatus('error', 'NENHUM MICROFONE ENCONTRADO');
+        setStatus('error', 'NO MICROPHONE FOUND');
         showInteractionToast(
-          'Nenhum microfone encontrado pelo client. Confira o dispositivo no Windows e rode /voz de novo. ' +
-          'Se preferir não depender disso, o canal de voz do Discord funciona agora (/voz-criar com a staff).'
+          'The client found no microphone. Check the device in Windows and run /voz again. ' +
+          'If you would rather not depend on this, the Discord voice channel works now (ask staff for /voz-criar).'
         );
       } else {
         setStatus('error', 'SEM MICROFONE');
         showInteractionToast(
-          `Não foi possível abrir o microfone (${err.name || 'erro desconhecido'}). ` +
-          'A voz no jogo fica desligada nesta sessão — o canal de voz do Discord segue disponível (/voz-criar com a staff).'
+          `Could not open the microphone (${err.name || 'unknown error'}). ` +
+          'In-game voice stays off for this session — the Discord voice channel is still available (ask staff for /voz-criar).'
         );
       }
 
@@ -1277,7 +1387,7 @@
   // Persistente enquanto a voz está conectada (decisão de acessibilidade,
   // ver VOICE_MODE_KEY_AUDIT.md §13) — não é um toast que some sozinho.
   const VOICE_MODE_ORDER = ['whisper', 'normal', 'shout'];
-  const VOICE_MODE_LABELS = { whisper: 'Sussurro', normal: 'Normal', shout: 'Grito' };
+  const VOICE_MODE_LABELS = { whisper: 'Whisper', normal: 'Normal', shout: 'Shout' };
 
   function updateVoiceModeIndicator() {
     const el = document.getElementById('voice-mode-indicator');
@@ -1294,17 +1404,21 @@
     }
 
     const label = VOICE_MODE_LABELS[state.voiceMode] || state.voiceMode;
-    text.textContent = state.muted ? `Mudo (${label})` : label;
+    text.textContent = state.muted
+      ? (state.pushToTalkHeld === false && pushToTalkBound() ? `Push to talk (${label})` : `Muted (${label})`)
+      : label;
     el.className = 'visible' +
       (state.muted ? ' muted' : ` mode-${state.voiceMode}`);
   }
 
   // ── Controles Expostos para o Gamemode ────────────────────────────────────
-  function toggleMute() {
-    state.muted = !state.muted;
+  function setMuted(muted) {
+    state.muted = muted === true;
     if (state.localStream) {
       state.localStream.getAudioTracks().forEach(t => t.enabled = !state.muted);
     }
+    // O servidor aplica o mute por ator (voip-service.js case 'mute'): vale
+    // também para o voice-helper nativo, não só para este navegador.
     sendSignal({ type: 'mute', muted: state.muted });
     if (typeof mp !== 'undefined' && mp && typeof mp.trigger === 'function') {
       mp.trigger('cef::voip:mute_changed', { muted: state.muted });
@@ -1312,13 +1426,54 @@
     updateVoiceModeIndicator();
   }
 
+  function toggleMute() {
+    setMuted(!state.muted);
+  }
+
+  // ── Push-to-talk (keybind `voice.pushToTalk`, V por padrão) ──────────────
+  // Com uma tecla de push-to-talk configurada, a voz fica MUDA por padrão e
+  // só transmite enquanto a tecla está pressionada. Sem tecla (o jogador
+  // removeu na aba Controls), volta ao modo aberto controlado pelo mute.
+  state.pushToTalkHeld = false;
+
+  function pushToTalkBound() {
+    const binds = typeof window.getKeybinds === 'function' ? window.getKeybinds() : null;
+    return Boolean(binds && binds['voice.pushToTalk'] !== null && binds['voice.pushToTalk'] !== undefined);
+  }
+
+  function voiceConnected() {
+    return Boolean(state.ws && state.ws.readyState === WebSocket.OPEN);
+  }
+
+  // Estado em repouso: mudo se houver push-to-talk e a tecla não estiver
+  // pressionada. Chamado quando a voz conecta e quando os keybinds mudam.
+  function applyPushToTalkIdleState() {
+    if (!voiceConnected()) return;
+    if (pushToTalkBound() && !state.pushToTalkHeld && !state.muted) setMuted(true);
+  }
+
+  window.handleVoicePushToTalk = function (pressed) {
+    state.pushToTalkHeld = pressed === true;
+    if (!voiceConnected() || !pushToTalkBound()) return;
+    setMuted(!state.pushToTalkHeld);
+  };
+
+  document.addEventListener('oathbound:keybinds', () => {
+    const bound = pushToTalkBound();
+    if (bound) {
+      applyPushToTalkIdleState();
+    } else if (state.pushToTalkHeld) {
+      state.pushToTalkHeld = false;
+    }
+  });
+
   function setVoiceMode(mode) {
     state.voiceMode = mode;
     sendSignal({ type: 'voice_mode', mode });
     updateVoiceModeIndicator();
   }
 
-  // Tab (ver voip-service.js VOICE_CONTROL_KEYS_SNIPPET): cicla pro próximo
+  // Keybind `voice.cycleMode` (F11 por padrão, ver core/player-shortcuts-service.js): cicla pro próximo
   // modo da lista, voltando ao início depois do grito. A decisão de "qual é
   // o próximo" mora aqui, não no sandbox do Skyrim Platform — ele só sabe
   // que uma tecla foi apertada, não em que modo o jogador está agora.
@@ -1329,7 +1484,7 @@
     setVoiceMode(proximo);
   };
 
-  // M (ver voip-service.js VOICE_CONTROL_KEYS_SNIPPET): muta/desmuta.
+  // Keybind `voice.toggleMute` (sem tecla por padrão): muta/desmuta.
   window.handleVoiceMuteKey = function () {
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
     toggleMute();
@@ -1363,8 +1518,8 @@
 
     const acceptBtn = document.getElementById('choice-modal-accept');
     const denyBtn = document.getElementById('choice-modal-deny');
-    acceptBtn.textContent = data.acceptLabel || 'Aceitar';
-    denyBtn.textContent = data.denyLabel || 'Recusar';
+    acceptBtn.textContent = data.acceptLabel || 'Accept';
+    denyBtn.textContent = data.denyLabel || 'Decline';
 
     // Clonar+substituir em vez de reusar o botão troca o listener antigo por
     // um novo — sem isso, um segundo pedido de revista chegando antes do
@@ -1503,7 +1658,7 @@
       vazio.className = 'interaction-section-title';
       // Diferente de "carregando": o servidor respondeu e nao ha nada a fazer
       // com este alvo daqui. Silencio faria parecer que o menu quebrou.
-      vazio.textContent = 'Nenhuma acao disponivel com este alvo.';
+      vazio.textContent = 'No actions available for this target.';
       root.appendChild(vazio);
       return;
     }
@@ -1559,8 +1714,8 @@
     document.getElementById('detail-title').textContent = item.label || action;
     document.getElementById('detail-description').textContent =
       (item.fields && item.fields.length > 0)
-        ? 'Preencha os campos e confirme. O servidor valida tudo de novo antes de executar.'
-        : 'Confirme para executar. O servidor valida tudo de novo antes de executar.';
+        ? 'Fill in the fields and confirm. The server re-checks everything before acting.'
+        : 'Confirm to proceed. The server re-checks everything before acting.';
 
     const fields = document.getElementById('detail-fields');
     fields.innerHTML = '';
@@ -1636,13 +1791,13 @@
     event.preventDefault();
     const action = state.interaction.selectedAction;
     if (!action || !state.interaction.targetActorId) {
-      showInteractionToast('Selecione uma acao valida.');
+      showInteractionToast('Select a valid action.');
       return;
     }
 
     const item = findInteractionAction(action);
     if (!item) {
-      showInteractionToast('Acao indisponivel. Abra o menu de novo.');
+      showInteractionToast('Action unavailable. Open the menu again.');
       return;
     }
 
@@ -1670,8 +1825,25 @@
   window.openInteractionMenu = openInteractionMenu;
   window.updateInteractionActions = updateInteractionActions;
   window.closeInteractionMenu = closeInteractionMenu;
+  // Server → page messages arrive as a queue (core/browser-modal.js): the last
+  // N messages, each with an increasing id. Only ids not seen yet are handled,
+  // so a re-delivered value never repeats a chat line and two messages sent in
+  // the same tick both arrive.
+  let lastServerModalId = 0;
   window.handleServerModal = (payload) => {
-    const message = normalizePayload(payload);
+    const value = normalizePayload(payload);
+    if (Array.isArray(value.messages)) {
+      for (const m of value.messages) {
+        if (!m || typeof m.id !== 'number' || m.id <= lastServerModalId) continue;
+        lastServerModalId = m.id;
+        handleOneServerModal(m);
+      }
+      return;
+    }
+    handleOneServerModal(value); // older single-message format
+  };
+
+  function handleOneServerModal(message) {
     if (message.type === 'interaction:actions') {
       updateInteractionActions(message.data);
     }
@@ -1679,7 +1851,7 @@
       openInteractionMenu(message.data);
     }
     if (message.type === 'governance:toast' || message.type === 'toast') {
-      showInteractionToast(message.data && message.data.message ? message.data.message : 'Atualizado.');
+      showInteractionToast(message.data && message.data.message ? message.data.message : 'Updated.');
     }
     if (message.type === 'choice') {
       showChoiceModal(message.data);
@@ -1733,8 +1905,117 @@
   // servidor pelo MESMO caminho que qualquer clique de UI já usa —
   // `sendUiEvent`, não um atalho novo. `panel:open` já é tratado por
   // `player-panel-service.js` (o mesmo canal do comando `/painel`).
+  // ── Chat input ─────────────────────────────────────────────────────────────
+  // Opened by the "Open chat" keybind (Enter by default): the game-side key
+  // handler focuses the browser and calls window.openChat(). Enter sends the
+  // line through the existing `cef::chat:send` path (speech, /me, commands —
+  // commands.handleChatInput on the server); Esc or an empty Enter cancels.
+  // Closing sends `chat:close`, which the game-side handler uses to give the
+  // keyboard and mouse back to the game.
+  const chatState = { open: false, openedAt: 0, history: [], historyIndex: -1 };
+  const CHAT_HISTORY_MAX = 20;
+  // The Enter that opened the box can reach the page right after focus moves.
+  const CHAT_OPEN_GUARD_MS = 250;
+
+  function chatEls() {
+    return { wrap: document.getElementById('chat-input-wrap'), input: document.getElementById('chat-input') };
+  }
+
+  window.openChat = function (prefill) {
+    const { wrap, input } = chatEls();
+    if (!wrap || !input) return;
+    chatState.open = true;
+    chatState.openedAt = Date.now();
+    chatState.historyIndex = -1;
+    wrap.classList.add('open');
+    wrap.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('chat-typing');
+    input.value = typeof prefill === 'string' ? prefill : '';
+    setTimeout(() => input.focus(), 0);
+  };
+
+  function closeChat() {
+    const { wrap, input } = chatEls();
+    if (!wrap || !input || !chatState.open) return;
+    chatState.open = false;
+    wrap.classList.remove('open');
+    wrap.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('chat-typing');
+    input.value = '';
+    input.blur();
+    sendUiEvent('chat:close', {});
+  }
+
+  function submitChat() {
+    const { input } = chatEls();
+    if (!input) return;
+    if (Date.now() - chatState.openedAt < CHAT_OPEN_GUARD_MS && input.value === '') return;
+    const text = input.value.trim();
+    if (text) {
+      sendUiEvent('cef::chat:send', text);
+      chatState.history.push(text);
+      while (chatState.history.length > CHAT_HISTORY_MAX) chatState.history.shift();
+    }
+    closeChat();
+  }
+
+  window.isChatOpen = () => chatState.open;
+
+  (function wireChatInput() {
+    const { wrap, input } = chatEls();
+    if (!wrap || !input) return;
+    wrap.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitChat();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        // Stop here: Esc must not also close the panel/menus behind the chat.
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeChat();
+        return;
+      }
+      if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        const h = chatState.history;
+        if (h.length === 0) return;
+        event.preventDefault();
+        if (event.key === 'ArrowUp') {
+          chatState.historyIndex = chatState.historyIndex < 0 ? h.length - 1 : Math.max(0, chatState.historyIndex - 1);
+        } else {
+          chatState.historyIndex = chatState.historyIndex < 0 ? -1 : chatState.historyIndex + 1;
+          if (chatState.historyIndex >= h.length) chatState.historyIndex = -1;
+        }
+        input.value = chatState.historyIndex < 0 ? '' : h[chatState.historyIndex];
+      }
+    });
+    // Clicking away (e.g. into the panel) closes an empty box.
+    input.addEventListener('blur', () => {
+      setTimeout(() => { if (chatState.open && input.value.trim() === '' && document.activeElement !== input) closeChat(); }, 0);
+    });
+  })();
+
+  // While the page already has focus (panel open), the chat key opens chat
+  // from here — the game-side handler ignores keys while the browser is focused.
+  window.addEventListener('keydown', (event) => {
+    if (chatState.open || event.defaultPrevented) return;
+    const t = event.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const binds = typeof window.getKeybinds === 'function' ? window.getKeybinds() : null;
+    const chatCode = binds ? binds['chat.open'] : 28;
+    if (chatCode === null || chatCode === undefined || !window.OathboundKeybinds) return;
+    if (window.OathboundKeybinds.scanCodeFromDomCode(event.code) === chatCode) {
+      event.preventDefault();
+      window.openChat();
+    }
+  });
+
+  // Game key (F2 by default, rebindable): open the panel shell right away and
+  // ask the server for data — never wait for the server to show something.
   window.handlePlayerShortcutKey = (action) => {
-    if (action === 'panel:open') sendUiEvent('panel:open', {});
+    if (action !== 'panel:open') return;
+    if (typeof window.openPlayerPanel === 'function') window.openPlayerPanel();
+    else sendUiEvent('panel:open', {});
   };
 
   // Nametag (POC). Chamada pelo snippet de cliente do nametag-service, até
@@ -1796,6 +2077,7 @@
     }
   });
 </script>
+<script src="keybinds.js"></script>
 <script src="player-panel.js"></script>
 <script src="depot-panel.js"></script>
 <script src="interaction-prompt.js"></script>

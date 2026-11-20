@@ -61,6 +61,12 @@ try {
     Get-Content -LiteralPath $err -ErrorAction SilentlyContinue
   } else {
     node dist_back/skymp5-server.js
+    # Start-AllServices opens this script in its own window, which used to
+    # close the instant the server died — taking the error message with it.
+    # Keep it open so the reason can be read.
+    Write-Host ""
+    Write-Host "SkyMP server stopped (exit code $LASTEXITCODE). If this was unexpected, the error is above." -ForegroundColor Red
+    Read-Host "Press Enter to close this window"
   }
 } finally {
   Pop-Location

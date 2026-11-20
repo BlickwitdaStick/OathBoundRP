@@ -1,10 +1,11 @@
 /**
- * Prompt visual do Interaction Framework.
+ * Interaction Framework visual prompt.
  *
- * Esta camada apenas desenha o rótulo que o servidor aprovou. O E é tratado
- * pelo event source de mira exata; ele relê o crosshair e pede uma inspeção ao
- * servidor. Depois da validação, `browserModal` abre o menu existente. A CEF
- * nunca reutiliza o alvo visual como autoridade.
+ * This layer only displays the label approved by the server. The E key is
+ * handled by the exact-target event source; it re-reads the crosshair and
+ * requests an inspection from the server. After validation, `browserModal`
+ * opens the existing menu. The CEF never reuses the visual target as an
+ * authority.
  */
 
 (function () {
@@ -21,7 +22,7 @@
       return;
     }
 
-    document.getElementById('interaction-prompt-label').textContent = data.label || 'Interagir';
+    document.getElementById('interaction-prompt-label').textContent = data.label || 'Interact';
     root.classList.add('visible');
     root.setAttribute('aria-hidden', 'false');
   }

@@ -1,81 +1,81 @@
-# Servidor SkyMP Heavy RP Publico - Plano de Desenvolvimento
+# SkyMP Heavy RP Public Server – Development Plan
 
-> **Status: histórico — visão estratégica original de 11/08/2026.** A baseline de 547 testes descrita originalmente neste plano preserva o estado daquele momento e não representa o projeto atual. O estado operacional e o backlog vigentes foram superados pelo [PRODUCTION_READINESS_ACTION_PLAN.md](docs/roadmap/PRODUCTION_READINESS_ACTION_PLAN.md): snapshot de 24/08 com **1.457 testes de produto**, incluindo **1.233 do gamemode**, migrations até **v28**, **76 tabelas**, zero ocorrências em `check-write-guards --all`, typechecks do launcher e do gamemode limpos e **14/14 checks de sistema**. A decisão de promoção permanece **NO-GO**, conforme [PRODUCTION_BLOCKERS_2026-08-24.md](docs/operations/PRODUCTION_BLOCKERS_2026-08-24.md). O conteúdo abaixo não foi apagado nem reescrito porque documenta a estratégia e o sequenciamento originais.
+> **Status: Historical — Original strategic vision from 08/11/2026.** The baseline of 547 tests originally described in this plan preserves the state of the project at that time and does not represent the current project. The current operational state and backlog have been superseded by [PRODUCTION_READINESS_ACTION_PLAN.md](docs/roadmap/PRODUCTION_READINESS_ACTION_PLAN.md): the August 24 snapshot includes **1,457 product tests**, including **1,233 gamemode tests**, migrations through **v28**, **76 tables**, zero occurrences from `check-write-guards --all`, clean launcher and gamemode typechecks, and **14/14 system checks**. The promotion decision remains **NO-GO**, as documented in [PRODUCTION_BLOCKERS_2026-08-24.md](docs/operations/PRODUCTION_BLOCKERS_2026-08-24.md). The content below has not been deleted or rewritten because it documents the original strategy and development sequence.
 
-## 1. Visao
+## 1. Vision
 
-Criar um servidor publico de Skyrim Heavy RP usando SkyMP, com whitelist rigida, personagens persistentes, economia controlada, ferramentas de staff e modlist estavel gerenciada por launcher ou instalador guiado.
+Create a public Skyrim Heavy RP server using SkyMP, with strict whitelist access, persistent characters, a controlled economy, staff tools, and a stable modlist managed through a launcher or guided installer.
 
-O projeto deve ser tratado como um servico vivo e como um mundo narrativo moderado. O objetivo nao e apenas rodar o SkyMP, mas operar um ambiente serio de roleplay com regras, moderacao, persistencia, disciplina de deploy e suporte aos jogadores.
+The project must be treated as a living service and a moderated narrative world. The goal is not simply to run SkyMP, but to operate a serious roleplay environment with rules, moderation, persistence, deployment discipline, and player support.
 
-## 2. Escopo do Produto
+## 2. Product Scope
 
-### Experiencia Alvo
+### Target Experience
 
-- Servidor publico Heavy RP ambientado em Skyrim.
-- Acesso apenas por whitelist rigida.
-- Progressao persistente de personagem.
-- Nomes, historias, faccoes, profissoes, leis e economia coerentes com a lore.
-- Eventos supervisionados pela staff.
-- Modlist controlada e compatibilidade de cliente.
-- Logs fortes e trilha de auditoria administrativa.
+- Public Heavy RP server set in Skyrim.
+- Access restricted through a strict whitelist.
+- Persistent character progression.
+- Names, histories, factions, professions, laws, and economy consistent with the lore.
+- Staff-supervised events.
+- Controlled modlist and client compatibility.
+- Comprehensive logs and administrative audit trails.
 
-### Principios de Heavy RP
+### Heavy RP Principles
 
-- Acoes do personagem precisam ter motivacoes plausiveis dentro do mundo.
-- Conhecimento do jogador e conhecimento do personagem sao coisas separadas.
-- Consequencias devem persistir.
-- A staff deve proteger a integridade da historia antes da conveniencia.
-- Economia e progressao de poder devem ser lentas o suficiente para preservar o RP.
-- Combate deve nascer de historia, nao de deathmatch casual.
-- Comunicacao publica deve reforcar imersao, regras e padrao da comunidade.
+- Character actions must have plausible motivations within the world.
+- Player knowledge and character knowledge are separate things.
+- Consequences must persist.
+- Staff must protect the integrity of the story before convenience.
+- The economy and power progression must be slow enough to preserve roleplay.
+- Combat must arise from storytelling, not casual deathmatch.
+- Public communication must reinforce immersion, rules, and community standards.
 
-### Meta Inicial de Capacidade
+### Initial Capacity Targets
 
-- Alfa fechada: 5-10 jogadores.
-- Beta fechada: 20-40 jogadores.
-- Beta publica: 50-100 jogadores.
-- Fase de escala: 100+ jogadores apenas depois de dados reais de estabilidade.
+- Closed Alpha: 5–10 players.
+- Closed Beta: 20–40 players.
+- Public Beta: 50–100 players.
+- Scaling Phase: 100+ players only after obtaining real stability data.
 
-## 3. Stack Tecnica
+## 3. Technical Stack
 
-### Base
+### Foundation
 
-- Servidor SkyMP.
-- Versao fixa do Skyrim Special Edition / Anniversary Edition.
-- TypeScript para sistemas de gameplay quando suportado por SkyMP/SkyrimPlatform.
-- Windows Server para hospedagem inicial.
+- SkyMP Server.
+- Fixed Skyrim Special Edition / Anniversary Edition version.
+- TypeScript for gameplay systems where supported by SkyMP/SkyrimPlatform.
+- Windows Server for initial hosting.
 
-### Persistencia
+### Persistence
 
-- Persistencia nativa SkyMP para mundo/jogadores: avaliar `file`, `zip`, `mongodb` e `migration`.
-- MongoDB recomendado para estado nativo SkyMP em servidor publico, se os testes confirmarem compatibilidade com a build usada.
-- MariaDB / MySQL recomendado para plataforma RP: whitelist, contas, personagens aprovados, staff, logs externos, economia RP, painel web e sistema VIP/Loja.
-- Redis opcional para filas, cache de sessao, rate limit e estado temporario.
-- Backups automaticos diarios.
-- Controle de schema por arquivos `.sql` e migrations.
+- Native SkyMP world/player persistence: evaluate `file`, `zip`, `mongodb`, and `migration`.
+- MongoDB recommended for native SkyMP state on a public server, provided testing confirms compatibility with the build being used.
+- MariaDB / MySQL recommended for the RP platform: whitelist, accounts, approved characters, staff, external logs, RP economy, web panel, and VIP/Store system.
+- Redis optional for queues, session caching, rate limiting, and temporary state.
+- Automatic daily backups.
+- Schema management through `.sql` files and migrations.
 
-### Plataforma Web
+### Web Platform
 
-- Aplicacao web para whitelist, regras, perfis de personagem, painel da staff, recursos de banimento e status do servidor.
-- Stack recomendada:
-  - Backend: Node.js/NestJS ou Fastify.
-  - Frontend: Next.js ou React.
-  - Autenticacao: Discord OAuth.
-  - Banco: MariaDB / MySQL.
+- Web application for whitelist applications, rules, character profiles, staff panel, ban appeals, and server status.
+- Recommended stack:
+  - Backend: Node.js/NestJS or Fastify.
+  - Frontend: Next.js or React.
+  - Authentication: Discord OAuth.
+  - Database: MariaDB / MySQL.
 
-### Operacao
+### Operations
 
-- Repositorio Git.
-- Servidor de staging antes da producao.
-- Logs estruturados.
-- Relatorio de erros.
-- Monitoramento de uptime.
-- Verificacao automatica de backups.
+- Git repository.
+- Staging server before production.
+- Structured logs.
+- Error reporting.
+- Uptime monitoring.
+- Automated backup verification.
 
-## 4. Estrutura do Repositorio
+## 4. Repository Structure
 
-Layout recomendado para monorepo:
+Recommended monorepo layout:
 
 ```text
 skymp-rp/
@@ -108,376 +108,376 @@ skymp-rp/
     monitoring/
 ```
 
-## 5. Fases de Desenvolvimento
+## 5. Development Phases
 
-## Fase 0 - Pesquisa e Viabilidade
+## Phase 0 – Research and Feasibility
 
-### Objetivo
+### Objective
 
-Confirmar build atual do SkyMP, requisitos do cliente, limites de hospedagem e superficie de scripting antes de investir em sistemas grandes.
+Confirm the current SkyMP build, client requirements, hosting limitations, and scripting capabilities before investing in large systems.
 
-### Tarefas
+### Tasks
 
-- Baixar e rodar uma build atual do servidor SkyMP.
-- Confirmar a versao suportada do Skyrim.
-- Confirmar o caminho de instalacao do cliente.
-- Confirmar portas usadas: porta principal UDP, porta da UI, dev server e DevTools.
-- Confirmar `dataDir`, `loadOrder`, `archives`, `gamemodePath`, `startPoints` e `databaseDriver`.
-- Testar driver nativo `file`; avaliar `mongodb` para producao.
-- Testar conexao com dois jogadores.
-- Testar transicao de celulas, combate, sincronizacao de movimento, coleta de item, inventario, morte, respawn e interacao basica.
-- Identificar o que pode ser scriptado de forma confiavel.
-- Documentar crashes e casos de dessync.
-- Comparar comportamento com as referencias Red House e SkyMP atual.
-- Criar/seguir checklist tecnico em `docs/technical/SKYMP_SERVER_SETUP.md`.
-- Registrar decisoes de `server-options` em `docs/technical/SERVER_OPTIONS_SCHEMA.md`.
+- Download and run a current SkyMP server build.
+- Confirm the supported Skyrim version.
+- Confirm the client installation path.
+- Confirm the ports being used: main UDP port, UI port, development server, and DevTools.
+- Confirm `dataDir`, `loadOrder`, `archives`, `gamemodePath`, `startPoints`, and `databaseDriver`.
+- Test the native `file` driver; evaluate `mongodb` for production.
+- Test connections with two players.
+- Test cell transitions, combat, movement synchronization, item collection, inventory, death, respawn, and basic interactions.
+- Identify what can be scripted reliably.
+- Document crashes and desynchronization cases.
+- Compare behavior against the Red House reference and current SkyMP.
+- Create/follow the technical checklist in `docs/technical/SKYMP_SERVER_SETUP.md`.
+- Record `server-options` decisions in `docs/technical/SERVER_OPTIONS_SCHEMA.md`.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Servidor roda localmente.
-- Pelo menos dois clientes conectam.
-- Limitacoes conhecidas documentadas.
-- Decisao tomada sobre versao do Skyrim e modlist base.
-- Decisao tomada sobre driver de persistencia nativo do SkyMP.
-- Decisao tomada sobre portas e firewall de staging.
+- Server runs locally.
+- At least two clients can connect.
+- Known limitations are documented.
+- A decision has been made regarding the Skyrim version and base modlist.
+- A decision has been made regarding the native SkyMP persistence driver.
+- A decision has been made regarding staging ports and firewall configuration.
 
-## Fase 0.5 - Laboratorio Red House
+## Phase 0.5 – Red House Laboratory
 
-### Objetivo
+### Objective
 
-Usar o Red House Public apenas como referencia tecnica controlada, para entender fluxo de servidor, chat, UI, spawn, server-options e comandos sem transformar a build antiga em base de producao.
+Use Red House Public strictly as a controlled technical reference to understand server flow, chat, UI, spawning, server-options, and commands without turning its old build into the production foundation.
 
-### Tarefas
+### Tasks
 
-- Estudar estrutura Red House: `client`, `front`, `server`, `server-build`, `modules`, `compiler` e `docs`.
-- Comparar `server-settings.example.json` com o SkyMP atual.
-- Extrair ideias de chat por proximidade/celula.
-- Extrair ideias de spawn por profile id, mas adaptar para personagem aprovado.
-- Extrair ideias de `server-options`, mas remover admin por senha e comandos perigosos.
-- Documentar riscos encontrados.
+- Study the Red House structure: `client`, `front`, `server`, `server-build`, `modules`, `compiler`, and `docs`.
+- Compare `server-settings.example.json` with current SkyMP.
+- Extract ideas for proximity/cell-based chat.
+- Extract ideas for spawning by profile ID, but adapt them for approved characters.
+- Extract ideas from `server-options`, but remove password-based admin access and dangerous commands.
+- Document discovered risks.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Nenhum codigo Red House vira dependencia de producao sem revisao.
-- Aprendizados uteis estao documentados em `docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
-- Decisoes aplicaveis foram migradas para documentos proprios do projeto.
-- Riscos inseguros foram explicitamente bloqueados no plano.
+- No Red House code becomes a production dependency without review.
+- Useful findings are documented in `docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
+- Applicable decisions have been transferred into the project's own documentation.
+- Unsafe risks have been explicitly blocked in the plan.
 
-## Fase 1 - Prototipo Tecnico Privado
+## Phase 1 – Private Technical Prototype
 
-### Objetivo
+### Objective
 
-Criar uma sandbox RP controlada com prova de conceito de persistencia.
+Create a controlled RP sandbox with a persistence proof of concept.
 
-### Sistemas
+### Systems
 
-- Identidade de conta.
-- Criacao de personagem.
-- Spawn de personagem.
-- Persistencia de posicao.
-- Persistencia basica de inventario, se for tecnicamente viavel.
-- Admin basico com permissoes por cargo: teleporte, kick e ban.
-- Logs do servidor.
+- Account identity.
+- Character creation.
+- Character spawning.
+- Position persistence.
+- Basic inventory persistence, if technically feasible.
+- Basic administration with role-based permissions: teleport, kick, and ban.
+- Server logs.
 
-### Tarefas
+### Tasks
 
-- Criar schema do banco para contas e personagens.
-- Vincular identidade do jogador a Discord e Steam quando possivel.
-- Implementar primeiro registro de personagem.
-- Salvar/carregar estado do personagem.
-- Adicionar configuracao basica do servidor.
-- Criar primeiro conjunto de comandos da staff.
-- Exigir motivo obrigatorio e audit log para comandos da staff.
-- Escrever runbook de operacao.
+- Create the database schema for accounts and characters.
+- Link player identities to Discord and Steam where possible.
+- Implement the initial character registration process.
+- Save/load character state.
+- Add basic server configuration.
+- Create the first set of staff commands.
+- Require mandatory reasons and audit logs for staff commands.
+- Write an operations runbook.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- 5 testers conseguem entrar repetidamente.
-- Personagens persistem entre reinicios.
-- Staff consegue remover jogadores problematicos.
-- Logs identificam acoes de jogadores e da staff.
-- Nenhum comando destrutivo funciona sem permissao e log.
+- Five testers can repeatedly join.
+- Characters persist between restarts.
+- Staff can remove problematic players.
+- Logs identify player and staff actions.
+- No destructive command works without permission and logging.
 
-## Fase 2 - Whitelist e Controle de Comunidade
+## Phase 2 – Whitelist and Community Control
 
-### Objetivo
+### Objective
 
-Impedir acesso aleatorio e estabelecer disciplina de servidor publico antes de sistemas complexos de RP.
+Prevent random access and establish public server discipline before introducing complex RP systems.
 
-### Sistemas
+### Systems
 
-- Login via Discord OAuth.
-- Formulario de whitelist.
-- Fluxo de revisao pela staff.
-- Status de aprovado, negado, banido e recurso.
-- Sincronizacao de cargo no Discord.
-- Aceite das regras.
+- Discord OAuth login.
+- Whitelist application form.
+- Staff review workflow.
+- Approved, denied, banned, and appealed statuses.
+- Discord role synchronization.
+- Acceptance of server rules.
 
-### Tarefas
+### Tasks
 
-- Construir fluxo web de whitelist.
-- Adicionar painel da staff para revisar aplicacoes.
-- Criar integracao com bot do Discord.
-- Adicionar log de auditoria para decisoes da staff.
-- Adicionar checagem server-side de whitelist antes de permitir entrada.
-- Controlar spawn por personagem aprovado, nao apenas por profile id.
-- Publicar regras e politica de nomes.
+- Build the web whitelist workflow.
+- Add a staff panel for reviewing applications.
+- Create Discord bot integration.
+- Add audit logs for staff decisions.
+- Add server-side whitelist verification before allowing entry.
+- Control spawning by approved character, not just profile ID.
+- Publish rules and naming policies.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Apenas jogadores aprovados conseguem entrar.
-- Apenas personagens aprovados conseguem spawnar.
-- Staff consegue aprovar/rejeitar aplicacoes.
-- Todas as decisoes sao registradas.
-- Jogadores aceitam as regras antes do acesso.
+- Only approved players can join.
+- Only approved characters can spawn.
+- Staff can approve/reject applications.
+- All decisions are recorded.
+- Players accept the rules before gaining access.
 
-## Fase 3 - Core de Roleplay
+## Phase 3 – Roleplay Core
 
-### Objetivo
+### Objective
 
-Fazer o servidor parecer um mundo de roleplay, nao apenas uma sandbox sincronizada de Skyrim.
+Make the server feel like a roleplay world, not simply a synchronized Skyrim sandbox.
 
-### Sistemas
+### Systems
 
-- Nomes de personagem.
-- Historias de personagem.
-- Chat local.
-- Chat OOC.
-- Chat da staff.
+- Character names.
+- Character histories.
+- Local chat.
+- OOC chat.
+- Staff chat.
 - Emotes.
-- Descricao de personagem.
-- Regras de morte e respawn.
-- Regras de ferimento e recuperacao.
-- Regras de consentimento/escalada para consequencias graves.
+- Character descriptions.
+- Death and respawn rules.
+- Injury and recovery rules.
+- Consent/escalation rules for serious consequences.
 - Reports.
-- Fluxo basico de prisao/punicao.
+- Basic imprisonment/punishment workflow.
 
-### Tarefas
+### Tasks
 
-- Implementar canais de chat IC local, sussurro, grito, OOC, staff e reports.
-- Adicionar regras de proximidade/visibilidade local.
-- Criar comandos `/me`, `/do`, `/ooc`, `/report` e comandos da staff.
-- Adicionar campos de biografia e revisao da staff.
-- Adicionar fila de reports.
-- Adicionar tratamento de morte.
-- Adicionar estado de ferimento, se for tecnicamente viavel.
-- Criar cela administrativa ou area de contencao.
-- Adicionar logs de moderacao.
+- Implement local IC, whisper, shout, OOC, staff, and report chat channels.
+- Add proximity/visibility rules.
+- Create `/me`, `/do`, `/ooc`, `/report`, and staff commands.
+- Add biography fields and staff review.
+- Add a report queue.
+- Add death handling.
+- Add injury states, if technically feasible.
+- Create an administrative jail or containment area.
+- Add moderation logs.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Jogadores conseguem fazer RP sem depender de Discord voz/texto.
-- Staff consegue lidar com reports in-game.
-- Morte e punicoes sao aplicaveis.
-- Identidade e historia do personagem sao revisaveis pela staff.
-- Chat e registrado para moderacao.
-- Chat IC usa distancia e celula como filtros minimos.
+- Players can roleplay without depending on Discord voice/text.
+- Staff can handle in-game reports.
+- Death and punishments can be enforced.
+- Character identity and history can be reviewed by staff.
+- Chat is recorded for moderation.
+- IC chat uses distance and cell as minimum filters.
 
-## Fase 4 - MVP de Economia
+## Phase 4 – Economy MVP
 
-### Objetivo
+### Objective
 
-Introduzir fluxo controlado de dinheiro e profissoes basicas sem criar inflacao ou exploits.
+Introduce controlled money circulation and basic professions without creating inflation or exploits.
 
-### Sistemas
+### Systems
 
-- Moeda persistente.
-- Pagamentos de trabalho.
-- Lojas.
-- Precificacao de itens.
-- Salario/payday.
-- Logs de transacao.
+- Persistent currency.
+- Job payments.
+- Shops.
+- Item pricing.
+- Salaries/payday.
+- Transaction logs.
 
-### Profissoes Iniciais
+### Initial Professions
 
-- Guarda.
-- Cacador.
-- Minerador.
-- Ferreiro.
-- Alquimista.
-- Mercador.
-- Curandeiro.
-- Caminho ladino/criminoso apenas se houver staff suficiente.
+- Guard.
+- Hunter.
+- Miner.
+- Blacksmith.
+- Alchemist.
+- Merchant.
+- Healer.
+- Rogue/criminal path only if sufficient staff is available.
 
-### Tarefas
+### Tasks
 
-- Criar ledger de dinheiro.
-- Implementar modelo basico de carteira/banco.
-- Criar configuracao de lojas.
-- Implementar validacao server-side de recompensas.
-- Adicionar logs de transacao.
-- Adicionar ferramentas admin para correcao da economia.
+- Create a money ledger.
+- Implement a basic wallet/bank model.
+- Create shop configuration.
+- Implement server-side reward validation.
+- Add transaction logs.
+- Add admin tools for economy corrections.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Dinheiro nao pode ser criado pelo cliente.
-- Toda transacao e registrada.
-- Staff consegue auditar jogadores suspeitos.
-- Economia pode ser resetada ou ajustada durante a beta.
+- Money cannot be created by the client.
+- Every transaction is recorded.
+- Staff can audit suspicious players.
+- The economy can be reset or adjusted during the beta.
 
-## Fase 5 - Faccoes e Lei
+## Phase 5 – Factions and Law
 
-### Objetivo
+### Objective
 
-Adicionar grupos estruturados e regras de conflito para RP sustentado.
+Add structured groups and conflict rules to support sustained roleplay.
 
-### Sistemas
+### Systems
 
-- Faccoes.
-- Cargos.
-- Permissoes.
-- Sistema de guarda/lei.
-- Registros criminais.
-- Mandados.
-- Sentencas de prisao.
-- Bau de faccao, se viavel.
+- Factions.
+- Ranks.
+- Permissions.
+- Guard/law enforcement system.
+- Criminal records.
+- Warrants.
+- Prison sentences.
+- Faction storage, if feasible.
 
-### Faccoes Iniciais
+### Initial Factions
 
-- Guarda de Whiterun.
-- Estudiosos/magos ligados ao Colegio.
-- Mercenarios estilo Companions.
-- Guilda de mercadores.
-- Curandeiros/templo.
-- Grupo criminoso entra depois, nao no lancamento.
+- Whiterun Guard.
+- Scholars/mages associated with the College.
+- Companions-style mercenaries.
+- Merchants' Guild.
+- Healers/temple.
+- Criminal group introduced later, not at launch.
 
-### Tarefas
+### Tasks
 
-- Adicionar tabelas de membros de faccao.
-- Adicionar permissoes por cargo.
-- Criar atribuicao de faccao controlada pela staff.
-- Criar comandos de faccao.
-- Adicionar registros criminais e fluxo de mandados.
-- Adicionar timers de soltura da prisao.
+- Add faction membership tables.
+- Add rank-based permissions.
+- Create staff-controlled faction assignments.
+- Create faction commands.
+- Add criminal records and warrant workflows.
+- Add prison release timers.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Faccoes podem ser gerenciadas sem editar banco manualmente.
-- Gameplay de guarda tem regras aplicaveis.
-- Crime e punicao sao registrados.
-- Staff consegue resolver abuso com evidencia.
+- Factions can be managed without manually editing the database.
+- Guard gameplay has enforceable rules.
+- Crime and punishment are recorded.
+- Staff can resolve abuse using evidence.
 
-## Fase 6 - Propriedades e Posse no Mundo
+## Phase 6 – Properties and World Ownership
 
-### Objetivo
+### Objective
 
-Criar investimento de longo prazo para jogadores sem desestabilizar o mundo.
+Create long-term investments for players without destabilizing the world.
 
-### Sistemas
+### Systems
 
-- Casas.
-- Aluguel/propriedade.
-- Chaves/acesso.
-- Armazenamento.
-- Pontos comerciais.
-- Taxa ou manutencao opcional.
+- Houses.
+- Rentals/ownership.
+- Keys/access.
+- Storage.
+- Commercial locations.
+- Optional fees or maintenance.
 
-### Tarefas
+### Tasks
 
-- Definir registro de propriedades.
-- Criar registros de dono.
-- Adicionar permissoes de acesso.
-- Adicionar comandos da staff para atribuir propriedade.
-- Adicionar licencas comerciais.
-- Adicionar logs de acesso a armazenamento.
+- Define property records.
+- Create ownership records.
+- Add access permissions.
+- Add staff commands for assigning properties.
+- Add business licenses.
+- Add storage access logs.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Staff consegue atribuir/revogar propriedade.
-- Acesso do jogador persiste.
-- Armazenamento nao duplica itens.
-- Regras publicas explicam perda de propriedade e inatividade.
+- Staff can assign/revoke properties.
+- Player access persists.
+- Storage does not duplicate items.
+- Public rules explain property loss and inactivity.
 
-## Fase 7 - Launcher e Controle de Modlist
+## Phase 7 – Launcher and Modlist Control
 
-### Objetivo
+### Objective
 
-Reduzir suporte fazendo a instalacao do cliente ser previsivel.
+Reduce support requirements by making client installation predictable.
 
-### Sistemas
+### Systems
 
-- Launcher ou instalador.
-- Manifesto de modlist.
-- Checagem de versao.
-- Checagem de integridade de arquivos.
-- Fluxo de atualizacao.
-- Noticias/changelog.
-- Bloqueio de cliente incompativel antes de login/spawn.
-- Politica de licenca e nao afiliacao publicada.
+- Launcher or installer.
+- Modlist manifest.
+- Version checking.
+- File integrity checking.
+- Update workflow.
+- News/changelog.
+- Incompatible client blocking before login/spawn.
+- Published licensing and non-affiliation policy.
 
-### Tarefas
+### Tasks
 
-- Definir politica legal de redistribuicao de mods.
-- Seguir `docs/technical/LICENSE_AND_AFFILIATION_POLICY.md`.
-- Usar apenas mods com permissao ou exigir download pelo jogador quando necessario.
-- Criar formato de manifesto.
-- Construir prototipo de launcher.
-- Adicionar verificacao de instalacao/atualizacao.
-- Adicionar checagem de compatibilidade com o servidor.
+- Define the legal policy for mod redistribution.
+- Follow `docs/technical/LICENSE_AND_AFFILIATION_POLICY.md`.
+- Use only mods with permission, or require players to download them themselves when necessary.
+- Create a manifest format.
+- Build a launcher prototype.
+- Add installation/update verification.
+- Add compatibility checks against the server.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- Jogador novo instala sem cacar arquivos manualmente.
-- Servidor rejeita builds incompativeis.
-- Staff consegue publicar atualizacoes de modlist.
-- Permissoes dos mods estao documentadas.
-- Aviso de nao afiliacao publicado no site/launcher/Discord quando aplicavel.
+- New players can install without manually hunting for files.
+- The server rejects incompatible builds.
+- Staff can publish modlist updates.
+- Mod permissions are documented.
+- A non-affiliation notice is published on the website/launcher/Discord where applicable.
 
-## Fase 8 - Beta Publica
+## Phase 8 – Public Beta
 
-### Objetivo
+### Objective
 
-Abrir para um publico controlado com boa observabilidade e plano de rollback.
+Open the server to a controlled audience with good observability and a rollback plan.
 
-### Requisitos
+### Requirements
 
-- Whitelist ativa.
-- Regras publicadas.
-- Staff treinada.
-- Backups automatizados.
-- Relatorio de crashes ativo.
-- Canais de suporte no Discord ativos.
-- Lista de exploits conhecidos documentada.
-- Politica de reset da economia publicada.
-- `offlineMode`, hot reload e DevTools desativados em producao.
-- Portas de producao revisadas e documentadas.
+- Active whitelist.
+- Published rules.
+- Trained staff.
+- Automated backups.
+- Active crash reporting.
+- Active Discord support channels.
+- Documented list of known exploits.
+- Published economy reset policy.
+- `offlineMode`, hot reload, and DevTools disabled in production.
+- Production ports reviewed and documented.
 
-### Criterios de Pronto
+### Completion Criteria
 
-- 50-100 jogadores aprovados conseguem jogar em janelas agendadas.
-- Staff consegue lidar com reports.
-- Problemas criticos sao triados em ate 24 horas.
-- Estado do servidor pode ser restaurado por backup.
+- 50–100 approved players can play during scheduled sessions.
+- Staff can handle reports.
+- Critical issues are triaged within 24 hours.
+- Server state can be restored from backup.
 
-## Fase 9 - Operacao Ao Vivo
+## Phase 9 – Live Operations
 
-### Objetivo
+### Objective
 
-Rodar o projeto de forma sustentavel.
+Run the project sustainably.
 
-### Trabalho Semanal
+### Weekly Work
 
-- Revisar bugs.
-- Revisar logs da economia.
-- Revisar logs de moderacao.
-- Corrigir scripts.
-- Publicar changelog.
-- Fazer reuniao da staff.
-- Revisar qualidade da whitelist.
-- Testar restauracao de backup.
+- Review bugs.
+- Review economy logs.
+- Review moderation logs.
+- Fix scripts.
+- Publish changelogs.
+- Hold staff meetings.
+- Review whitelist quality.
+- Test backup restoration.
 
-### Trabalho Mensal
+### Monthly Work
 
-- Balancear economia.
-- Auditar acoes da staff.
-- Revisar saude das faccoes.
-- Revisar retencao de jogadores.
-- Atualizar roadmap.
-- Fazer teste de estresse.
+- Balance the economy.
+- Audit staff actions.
+- Review faction health.
+- Review player retention.
+- Update the roadmap.
+- Conduct stress tests.
 
-## 6. Modelo Inicial de Banco
+## 6. Initial Database Model
 
-### Tabelas Principais
+### Main Tables
 
 - `accounts`
 - `discord_identities`
@@ -501,311 +501,311 @@ Rodar o projeto de forma sustentavel.
 - `modlist_versions`
 - `client_integrity_checks`
 
-### Regras Importantes
+### Important Rules
 
-- Mudancas de moeda devem usar transacoes em estilo ledger.
-- Acoes da staff devem gerar audit logs.
-- Registros de banimento devem ser separados do status de whitelist.
-- Delecao de personagem deve ser soft-delete por padrao.
-- Escritas de inventario devem ser idempotentes quando possivel.
-- Estado nativo SkyMP e estado da plataforma RP devem ter backups separados.
-- Comandos da staff devem guardar cargo, alvo, motivo, ambiente e resultado.
+- Currency changes must use ledger-style transactions.
+- Staff actions must generate audit logs.
+- Ban records must be separate from whitelist status.
+- Character deletion should be a soft delete by default.
+- Inventory writes should be idempotent whenever possible.
+- Native SkyMP state and RP platform state must have separate backups.
+- Staff commands must record role, target, reason, environment, and result.
 
-## 7. Cargos da Staff
+## 7. Staff Roles
 
-### Dono
+### Owner
 
-- Autoridade final.
-- Acesso a infraestrutura.
-- Controle financeiro.
-- Aprovacao de rollback emergencial.
+- Final authority.
+- Infrastructure access.
+- Financial control.
+- Approval of emergency rollbacks.
 
-### Desenvolvedor Lider
+### Lead Developer
 
-- Scripts SkyMP.
-- Plataforma web.
-- Migrations do banco.
-- Processo de release.
+- SkyMP scripts.
+- Web platform.
+- Database migrations.
+- Release process.
 
-### Administrador do Servidor
+### Server Administrator
 
-- Gestao da staff.
-- Aplicacao de regras.
-- Recursos de banimento.
-- Aprovacao de eventos.
+- Staff management.
+- Rule enforcement.
+- Ban appeals.
+- Event approval.
 
-### Moderador
+### Moderator
 
 - Reports.
-- Aplicacao de regras no chat.
-- Disputas entre jogadores.
-- Punicoes basicas.
+- Chat rule enforcement.
+- Player disputes.
+- Basic punishments.
 
 ### Helper
 
 - Onboarding.
-- Suporte de instalacao.
-- Suporte de whitelist.
-- Sem permissoes destrutivas.
+- Installation support.
+- Whitelist support.
+- No destructive permissions.
 
-## 8. Regras Publicas Necessarias Antes do Lancamento
+## 8. Public Rules Required Before Launch
 
-- Documento de regras publicas: `docs/rules/HEAVY_RP_RULES.md`.
-- Esboco consolidado de regras publicas: `docs/rules/PUBLIC_RULES_LAUNCH_OUTLINE.md`.
-- Evidencias dos testes da Fase 0: `docs/roadmap/PHASE_0_TEST_LOG.md`.
-- Modelo de aplicacao de personagem: `docs/rules/CHARACTER_APPLICATION_TEMPLATE.md`.
-- Rubrica de whitelist da staff: `docs/staff/WHITELIST_RUBRIC.md`.
-- Estudo de referencias tecnicas: `docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
-- Checklist de setup SkyMP: `docs/technical/SKYMP_SERVER_SETUP.md`.
-- Schema de server-options: `docs/technical/SERVER_OPTIONS_SCHEMA.md`.
-- Politica de licenca e nao afiliacao: `docs/technical/LICENSE_AND_AFFILIATION_POLICY.md`.
-- Decisao tecnica sobre NPCs: `docs/technical/NPC_POLICY_DECISION.md`.
-- Politica de nomes.
-- Politica de historia de personagem.
-- Padroes de Heavy RP.
-- Proibicao de fail RP.
-- Proibicao de metagaming.
-- Proibicao de powergaming.
-- Proibicao de random deathmatch.
-- Proibicao de bait de combate.
-- Proibicao de escalada irreal.
-- Proibicao de explorar bugs.
-- Proibicao de duplicar itens.
-- Proibicao de assedio.
-- Regras de voz/chat.
-- Regras de morte.
-- Regras de ferimento.
-- Regras de nova vida/memoria.
-- Regras de inicio de combate.
-- Regras de refem, tortura e consequencias permanentes.
-- Regras de crime.
-- Processo de recurso contra decisao da staff.
-- Politica de adulteracao de mod/cliente.
-- Politica de banimento.
+- Public rules document: `docs/rules/HEAVY_RP_RULES.md`.
+- Consolidated public rules outline: `docs/rules/PUBLIC_RULES_LAUNCH_OUTLINE.md`.
+- Phase 0 test evidence: `docs/roadmap/PHASE_0_TEST_LOG.md`.
+- Character application template: `docs/rules/CHARACTER_APPLICATION_TEMPLATE.md`.
+- Staff whitelist rubric: `docs/staff/WHITELIST_RUBRIC.md`.
+- Technical reference study: `docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
+- SkyMP setup checklist: `docs/technical/SKYMP_SERVER_SETUP.md`.
+- Server-options schema: `docs/technical/SERVER_OPTIONS_SCHEMA.md`.
+- Licensing and non-affiliation policy: `docs/technical/LICENSE_AND_AFFILIATION_POLICY.md`.
+- Technical NPC policy decision: `docs/technical/NPC_POLICY_DECISION.md`.
+- Naming policy.
+- Character history policy.
+- Heavy RP standards.
+- Prohibition of fail RP.
+- Prohibition of metagaming.
+- Prohibition of powergaming.
+- Prohibition of random deathmatch.
+- Prohibition of combat baiting.
+- Prohibition of unrealistic escalation.
+- Prohibition of exploiting bugs.
+- Prohibition of item duplication.
+- Prohibition of harassment.
+- Voice/chat rules.
+- Death rules.
+- Injury rules.
+- New life/memory rules.
+- Combat initiation rules.
+- Hostage, torture, and permanent consequence rules.
+- Crime rules.
+- Appeals process for staff decisions.
+- Mod/client tampering policy.
+- Ban policy.
 
-## 8.1 Regras de Design Heavy RP
+## 8.1 Heavy RP Design Rules
 
-### Padrao da Whitelist
+### Whitelist Standards
 
-- A whitelist deve testar maturidade de RP, nao apenas memorizacao de regras.
-- Aplicacoes devem exigir conceito do personagem, motivacoes, fraquezas e lacos sociais.
-- Candidatos devem explicar metagaming, powergaming, fail RP e escalada.
-- Staff deve rejeitar personagens fortes demais, vagos demais ou criados apenas para combate.
+- The whitelist must test RP maturity, not just memorization of rules.
+- Applications must require a character concept, motivations, weaknesses, and social connections.
+- Candidates must explain metagaming, powergaming, fail RP, and escalation.
+- Staff must reject characters that are too powerful, too vague, or created solely for combat.
 
-### Padroes de Personagem
+### Character Standards
 
-- Personagens precisam de nomes, historias, objetivos, falhas e limites plausiveis.
-- Nobres, magos poderosos, assassinos, vampiros, lobisomens, ligados a Daedra e lideres de faccao exigem aprovacao da staff.
-- Personagens nao devem comecar como herois lendarios.
-- Progressao deve acontecer em jogo, nao no texto da aplicacao.
+- Characters need plausible names, histories, goals, flaws, and limitations.
+- Nobles, powerful mages, assassins, vampires, werewolves, Daedra-affiliated characters, and faction leaders require staff approval.
+- Characters must not start as legendary heroes.
+- Progression must happen in-game, not in the application text.
 
-### Morte e Consequencias
+### Death and Consequences
 
-- Morte nao deve ser casual.
-- Morte permanente deve exigir regras rigidas, revisao da staff ou consentimento do jogador, dependendo do caso.
-- Ferimento, captura, prisao, dano de reputacao, divida e exilio devem ser usados antes de deletar personagem.
-- Regras de respawn devem impedir revenge killing e abuso de memoria.
+- Death must not be casual.
+- Permanent death must require strict rules, staff review, or player consent, depending on the situation.
+- Injury, capture, imprisonment, reputation damage, debt, and exile should be used before deleting a character.
+- Respawn rules must prevent revenge killing and memory abuse.
 
-### Padroes de Economia
+### Economy Standards
 
-- Economia deve sustentar cenas de RP, nao loops de farm.
-- Trabalhos devem criar interacao entre jogadores.
-- Itens valiosos devem exigir historia, crafting, acesso por faccao ou evento aprovado.
-- Geracao rapida de dinheiro deve ser tratada como bug de design.
+- The economy must support RP scenes, not farming loops.
+- Jobs should create interaction between players.
+- Valuable items must require history, crafting, faction access, or an approved event.
+- Rapid money generation must be treated as a design bug.
 
-### Padroes da Staff
+### Staff Standards
 
-- Staff deve ser treinada em aplicacao de Heavy RP.
-- Personagens da staff devem seguir regras de conflito de interesse.
-- Comandos da staff devem ser logados.
-- Punicoes graves devem ter evidencia e notas de revisao.
-- Staff de evento deve criar situacoes, nao forcar resultados.
+- Staff must be trained in Heavy RP enforcement.
+- Staff characters must follow conflict-of-interest rules.
+- Staff commands must be logged.
+- Serious punishments must have evidence and review notes.
+- Event staff must create situations, not force outcomes.
 
-## 9. Riscos de Seguranca e Abuso
+## 9. Security and Abuse Risks
 
-### Alto Risco
+### High Risk
 
-- Spawn de item pelo cliente.
-- Manipulacao de moeda.
-- Duplicacao por crash ou dessync.
-- Arquivos de mod nao autorizados.
-- Abuso de staff.
-- Admin por senha simples.
-- Comandos destrutivos sem auditoria.
-- `offlineMode` ativo em producao.
-- Hot reload ativo em producao.
-- Corrupcao do banco.
-- Problemas legais com redistribuicao de mods.
+- Client-side item spawning.
+- Currency manipulation.
+- Duplication caused by crashes or desynchronization.
+- Unauthorized mod files.
+- Staff abuse.
+- Simple-password administrator access.
+- Destructive commands without auditing.
+- `offlineMode` enabled in production.
+- Hot reload enabled in production.
+- Database corruption.
+- Legal problems involving mod redistribution.
 
-### Mitigacoes
+### Mitigations
 
-- Economia autoritativa no servidor.
-- Logs em ledger.
-- Checagem de integridade de arquivos.
-- Trilha de auditoria da staff.
-- Permissoes limitadas para staff.
-- Autenticacao por identidade externa e cargo, nao por senha compartilhada.
-- Bloqueio de comandos destrutivos fora de staging/eventos autorizados.
-- Backups frequentes.
-- Ambiente de staging.
-- Rastreamento explicito de permissao dos mods.
-- Conformidade com licencas GPL/AGPL do SkyMP e licencas dos mods.
+- Server-authoritative economy.
+- Ledger-based logs.
+- File integrity checks.
+- Staff audit trails.
+- Limited staff permissions.
+- Authentication through external identity and roles, not shared passwords.
+- Blocking destructive commands outside staging/authorized events.
+- Frequent backups.
+- Staging environment.
+- Explicit tracking of mod permissions.
+- Compliance with SkyMP GPL/AGPL licenses and individual mod licenses.
 
-## 10. Processo de Release
+## 10. Release Process
 
-### Ambientes
+### Environments
 
-- Desenvolvimento local.
-- Servidor de staging.
-- Servidor de producao.
+- Local development.
+- Staging server.
+- Production server.
 
-### Passos de Release
+### Release Steps
 
-1. Fazer merge do codigo na branch de release.
-2. Rodar migrations no staging.
-3. Fazer smoke test com staff.
-4. Empacotar mudancas de cliente/servidor.
-5. Publicar changelog.
-6. Fazer backup da producao.
-7. Fazer deploy em producao.
-8. Monitorar logs por pelo menos 60 minutos.
+1. Merge code into the release branch.
+2. Run migrations in staging.
+3. Perform a staff smoke test.
+4. Package client/server changes.
+5. Publish the changelog.
+6. Back up production.
+7. Deploy to production.
+8. Monitor logs for at least 60 minutes.
 
-## 11. Roadmap dos Primeiros 30 Dias
+## 11. First 30-Day Roadmap
 
-### Semana 1
+### Week 1
 
-- Rodar servidor SkyMP localmente.
-- Validar conexao com dois jogadores.
-- Documentar setup do cliente.
-- Escolher versao do Skyrim.
-- Criar estrutura do repositorio.
-- Criar checklist de portas, `dataDir`, masters do Skyrim e scripts.
-- Decidir driver inicial de persistencia SkyMP.
-- Executar laboratorio Red House apenas como referencia.
+- Run the SkyMP server locally.
+- Validate connections with two players.
+- Document client setup.
+- Choose the Skyrim version.
+- Create the repository structure.
+- Create a checklist for ports, `dataDir`, Skyrim masters, and scripts.
+- Decide on the initial SkyMP persistence driver.
+- Run the Red House laboratory strictly as a reference.
 
-### Semana 2
+### Week 2
 
-- Adicionar banco de dados.
-- Implementar prova de conceito de conta/personagem.
-- Adicionar comandos basicos da staff.
-- Adicionar auditoria de comandos da staff.
-- Iniciar documento de regras.
+- Add the database.
+- Implement the account/character proof of concept.
+- Add basic staff commands.
+- Add staff command auditing.
+- Begin the rules document.
 
-### Semana 3
+### Week 3
 
-- Construir MVP web de whitelist.
-- Adicionar Discord OAuth.
-- Adicionar fluxo de revisao pela staff.
-- Adicionar enforcement de whitelist no servidor.
+- Build the whitelist web MVP.
+- Add Discord OAuth.
+- Add the staff review workflow.
+- Add whitelist enforcement on the server.
 
-### Semana 4
+### Week 4
 
-- Adicionar chat local/OOC/staff.
-- Adicionar chat por proximidade/celula.
-- Adicionar reports.
-- Adicionar logs de moderacao.
-- Rodar teste fechado com 5-10 jogadores.
+- Add local/OOC/staff chat.
+- Add proximity/cell-based chat.
+- Add reports.
+- Add moderation logs.
+- Run a closed test with 5–10 players.
 
-## 12. Backlog do MVP
+## 12. MVP Backlog
 
-### Obrigatorio
+### Required
 
-- Servidor inicia de forma confiavel.
-- Guia de instalacao do cliente.
+- Server starts reliably.
+- Client installation guide.
 - Whitelist.
-- Identidade persistente de personagem.
-- Comandos da staff.
-- Chat local.
-- Chat por proximidade/celula.
+- Persistent character identity.
+- Staff commands.
+- Local chat.
+- Proximity/cell-based chat.
 - Reports.
 - Logs.
 - Backups.
-- Regras.
-- Rubrica de whitelist Heavy RP.
-- Revisao de historia de personagem.
+- Rules.
+- Heavy RP whitelist rubric.
+- Character history review.
 
-### Deve Ter
+### Should Have
 
-- MVP de economia.
-- MVP de profissoes.
-- MVP de faccoes.
-- Sincronizacao de cargos no Discord.
-- Prototipo de launcher.
-- Server-options proprio validado por ambiente.
-- Politica de licenca e nao afiliacao.
-- Decisao tecnica inicial sobre NPCs.
+- Economy MVP.
+- Professions MVP.
+- Factions MVP.
+- Discord role synchronization.
+- Launcher prototype.
+- Custom server-options validated by environment.
+- Licensing and non-affiliation policy.
+- Initial technical NPC decision.
 
-### Pode Ter
+### Could Have
 
-- Propriedades.
-- Negocios.
-- Dashboard de eventos.
-- Perfis publicos de personagem.
-- Status publico do servidor.
+- Properties.
+- Businesses.
+- Event dashboard.
+- Public character profiles.
+- Public server status.
 
-### Fora do MVP
+### Outside the MVP
 
-- Modpack enorme.
-- Economia criminosa complexa.
-- Governos controlados por jogadores.
-- Guerras em larga escala.
-- Launcher completo com auto-patch.
-- Monetizacao agressiva (o sistema basico de VIP/Loja foi antecipado para o MVP).
+- Huge modpack.
+- Complex criminal economy.
+- Player-controlled governments.
+- Large-scale wars.
+- Complete launcher with auto-patching.
+- Aggressive monetization (the basic VIP/Store system was brought forward into the MVP).
 
-## 13. Decisoes-Chave
+## 13. Key Decisions
 
-- Idioma do servidor: portugues, ingles ou bilingue.
-- Nivel de rigidez com lore.
-- Nivel de rigidez Heavy RP.
-- Se historias de personagem exigem aprovacao antes do primeiro login.
-- Meta de jogadores para primeira beta publica.
-- **Voice chat não é obrigatório — fechado em 07/08/2026.** A voz nativa por proximidade (`/voz`, `voip-service.js`) é **opcional, fase `lab`, Pós-Alfa**: não é pré-requisito de lançamento e nada no caminho crítico depende dela. A voz da Alfa e da Beta fechada são os **canais de voz temporários do Discord** (`apps/bot-discord/voiceChannels.js`, `/voz-criar` e `/voz-fechar`) — que já funcionam.
-  - **Por quê:** o patch de client que libera o microfone no CEF nunca foi compilado nem validado, e foi submetido três vezes ao upstream do SkyMP sem nunca ser mergeado — as três PRs foram auto-fechadas pelo próprio autor, sem review de mantenedor, o que é rejeição por abandono e não decisão técnica. Reconstruí-lo exigiria fork e manutenção contínua de um client C++, custo que não se paga antes da Fase 0 nem da Alfa. Ver [`VOICE_CLIENT_PATCH.md`](docs/technical/VOICE_CLIENT_PATCH.md) e o "Não fazer" do [`QA_REPORT_2026-08.md`](docs/technical/QA_REPORT_2026-08.md).
-  - **Isto pode ser revisitado.** Se o upstream mergear um patch equivalente, ou se alguém validar a compilação num ambiente Windows/Visual Studio/vcpkg, o lado servidor já está pronto: `voip-service.js` tem sinalização WebRTC, ticket de uso único e volume por distância, tudo coberto por teste. Voltar atrás é destravar uma peça que já existe, não reescrever.
-- Se morte permanente existe no lancamento.
-- Se launcher e obrigatorio antes da beta publica.
-- Quais mods sao permitidos e legalmente redistribuiveis.
-- Se NPCs permanecem, sao reduzidos ou substituidos por papeis de jogadores.
-- Decisao inicial recomendada: vanilla spawn seletivo para MVP.
-- Se a economia sera resetada depois da beta.
-- Se o estado SkyMP usara `file` no MVP e `mongodb` em producao.
-- Como cumprir publicacao de codigo/alteracoes exigida pelas licencas do SkyMP.
+- Server language: Portuguese, English, or bilingual.
+- Level of strictness regarding lore.
+- Level of Heavy RP strictness.
+- Whether character histories require approval before the first login.
+- Player target for the first public beta.
+- **Voice chat is not mandatory — finalized on 08/07/2026.** Native proximity voice (`/voz`, `voip-service.js`) is **optional, in the `lab` phase, Post-Alpha**: it is not a launch prerequisite, and nothing in the critical path depends on it. Voice for Alpha and Closed Beta will use **temporary Discord voice channels** (`apps/bot-discord/voiceChannels.js`, `/voz-criar`, and `/voz-fechar`) — which already work.
+  - **Why:** The client patch that enables microphone access in CEF has never been compiled or validated, and it was submitted to SkyMP upstream three times without ever being merged. All three PRs were automatically closed by their author, without maintainer review, which constitutes abandonment rather than a technical decision. Rebuilding it would require a fork and continuous maintenance of a C++ client, a cost that is not justified before Phase 0 or Alpha. See [`VOICE_CLIENT_PATCH.md`](docs/technical/VOICE_CLIENT_PATCH.md) and the "Do Not Do" section of [`QA_REPORT_2026-08.md`](docs/technical/QA_REPORT_2026-08.md).
+  - **This can be revisited.** If upstream merges an equivalent patch, or someone validates the compilation in a Windows/Visual Studio/vcpkg environment, the server side is already ready: `voip-service.js` has WebRTC signaling, single-use tickets, and distance-based volume, all covered by tests. Reversing this decision would mean unlocking an existing component, not rewriting it.
+- Whether permanent death exists at launch.
+- Whether the launcher is mandatory before the public beta.
+- Which mods are permitted and legally redistributable.
+- Whether NPCs remain, are reduced, or are replaced by player roles.
+- Initial recommended decision: selective vanilla spawning for the MVP.
+- Whether the economy will be reset after the beta.
+- Whether SkyMP state will use `file` for the MVP and `mongodb` in production.
+- How to comply with source-code publication/modification requirements imposed by SkyMP licenses.
 
-## 14. Próximo Passo Imediato
+## 14. Immediate Next Step
 
-> Reescrito em 07/08/2026. A versão anterior apontava para **Housing** ou "refinar combate/física" e foi escrita antes de `hit-events`, `espm`, `safe-zones`, `core/soul.js` e do primeiro boot real do servidor existirem. Housing continua PARKED por decisão registrada, e o combate é do cliente — o servidor não arbitra golpe.
+> Rewritten on 08/07/2026. The previous version pointed toward **Housing** or "refining combat/physics" and was written before `hit-events`, `espm`, `safe-zones`, `core/soul.js`, and the first actual server boot existed. Housing remains PARKED by recorded decision, and combat is client-side — the server does not arbitrate hits.
 
-**O próximo passo não é uma feature. É conectar um cliente.**
+**The next step is not a feature. It is connecting a client.**
 
-Nada deste projeto foi validado numa sessão real. O servidor subiu pela primeira vez em 06/08/2026 e o gamemode carregou, mas **ninguém entrou**. Os testes usam `mp` mockado, e mock aceita qualquer coisa — foi assim que 22 chamadas Papyrus com argumento errado passaram meses com a suíte verde.
+Nothing in this project has been validated in a real session. The server first started on 08/06/2026 and the gamemode loaded, but **nobody joined**. Tests use a mocked `mp`, and mocks accept anything — that is how 22 Papyrus calls with incorrect arguments passed months of green test suites.
 
-Hoje há **oito sistemas** com o mesmo aviso — *confirmado por teste automatizado, não confirmado em sessão real*. Eram quatro quando esta seção foi escrita em 07/08; a voz (fallback e nativa), a persistência de identidade e a nametag com `/revelaridentidade` entraram depois.
+There are currently **eight systems** carrying the same warning — *confirmed by automated testing, not confirmed in a real session*. There were four when this section was written on 08/07; voice (fallback and native), identity persistence, and the nametag with `/revelaridentidade` were added afterward.
 
-A lista está no índice único do [`docs/technical/FASE_0_ROTEIRO.md`](docs/technical/FASE_0_ROTEIRO.md), que a consolidou porque os mesmos sistemas estavam espalhados por três documentos. **Esta seção não repete a lista**: enquanto repetia, ela envelheceu em silêncio — que é exatamente o defeito que o índice existe para não ter.
+The list is in the single index in [`docs/technical/FASE_0_ROTEIRO.md`](docs/technical/FASE_0_ROTEIRO.md), which consolidated it because the same systems were scattered across three documents. **This section does not repeat the list**: while it was being repeated, it silently became outdated — exactly the problem that the index exists to prevent.
 
-O roteiro está pronto e **não executado**. Ele precisa de três pessoas, dois clientes e um servidor — nada que agente de código consiga fazer sozinho.
+The roadmap is ready and **has not been executed**. It requires three people, two clients, and one server — nothing a coding agent can do alone.
 
-**O que a Fase 0 desbloqueia**, e por isso ela vem antes de qualquer feature nova:
+**What Phase 0 unlocks**, and why it must come before any new feature:
 
-- apagar o `checkDamageSpike` do `death-service` (a heurística só sai quando o evento de hit provar que chega);
-- tirar o polling do `death-service`, se `mp.onDeath` disparar como esperado;
-- remover `/internal/session/resolve`, se o master API confirmar;
-- liberar a **etapa 2 da Afinidade da Alma** — os quatro resultados em encantamento, que é o primeiro lugar onde a alma vira consequência mecânica.
+- Remove `checkDamageSpike` from `death-service` (the heuristic can only be removed once the hit event is proven to arrive).
+- Remove polling from `death-service`, if `mp.onDeath` fires as expected.
+- Remove `/internal/session/resolve`, if the master API confirms it is no longer necessary.
+- Unlock **Stage 2 of Soul Affinity** — the four enchantment outcomes, which are the first point where the soul produces a mechanical consequence.
 
-**Depois da Fase 0**, e não antes, a ordem que o resto da documentação já sustenta:
+**After Phase 0**, and not before, the order already supported by the rest of the documentation is:
 
-1. **Etapa 2 do `soul-service`** (`docs/design/SOUL_AFFINITY.md`, "Proposta de implementação"). Escopo pequeno, economia mensurável, primeira profissão de verdade — e valida o mecanismo central do sistema num lugar onde errar é barato. Depende de tirar o `crafting-service` de PARKED, que já foi migrado pro `transaction-service` e está pronto para essa conversa.
-2. **Fase 1 — Identidade e Emotes**, que o `REFERENCE_STUDY_SKYMP_RED_HOUSE.md` já mapeou.
-3. **Housing / Propriedades**, se e quando a decisão de reativá-lo for tomada — `housing-service.js` está migrado e estacionado, e reativar é decisão de escopo, não de segurança (ver [`PARKED_SERVICES_DECISION.md`](docs/technical/PARKED_SERVICES_DECISION.md)).
+1. **Stage 2 of `soul-service`** (`docs/design/SOUL_AFFINITY.md`, "Implementation Proposal"). Small scope, measurable economy, first real profession — and it validates the system's central mechanic in an area where mistakes are inexpensive. This depends on removing `crafting-service` from PARKED, which has already been migrated to `transaction-service` and is ready for this discussion.
+2. **Phase 1 — Identity and Emotes**, already mapped out in `REFERENCE_STUDY_SKYMP_RED_HOUSE.md`.
+3. **Housing / Properties**, if and when the decision to reactivate it is made — `housing-service.js` has been migrated and parked, and reactivation is a scope decision, not a security decision (see [`PARKED_SERVICES_DECISION.md`](docs/technical/PARKED_SERVICES_DECISION.md)).
 
-O marco técnico atual continua sendo:
+The current technical milestone remains:
 
 ```text
-Marco 0.1 - Teste de Conexao SkyMP
-- Servidor rodando            [feito em 06/08/2026]
-- Dois clientes conectados    [PENDENTE — e o que trava todo o resto]
-- Versao documentada
-- Modlist base documentada
-- Notas de crash/dessync documentadas
-- Decisao: continuar, corrigir ou mudar abordagem
+Milestone 0.1 - SkyMP Connection Test
+- Server running                 [completed on 08/06/2026]
+- Two clients connected          [PENDING — this is what blocks everything else]
+- Version documented
+- Base modlist documented
+- Crash/desync notes documented
+- Decision: continue, fix, or change approach
 ```

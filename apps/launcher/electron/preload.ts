@@ -20,6 +20,13 @@ const api = {
   pollQueue: () => ipcRenderer.invoke('poll-queue'),
   getLocalPlugins: (folderPath: string) => ipcRenderer.invoke('get-local-plugins', folderPath),
   verifyMods: (folderPath: string) => ipcRenderer.invoke('verify-mods', folderPath),
+  checkServerMods: (folderPath: string) => ipcRenderer.invoke('check-server-mods', folderPath),
+  installServerMods: (folderPath: string) => ipcRenderer.invoke('install-server-mods', folderPath),
+  enableServerPlugins: (folderPath: string) => ipcRenderer.invoke('enable-server-plugins', folderPath),
+  onServerModsProgress: (callback: (value: any) => void) => {
+    ipcRenderer.removeAllListeners('server-mods-progress');
+    ipcRenderer.on('server-mods-progress', (_event, value) => callback(value));
+  },
   analyzePlugins: (folderPath: string, serverLoadOrder?: string[]) => ipcRenderer.invoke('analyze-plugins', folderPath, serverLoadOrder),
   syncLoadorder: (folderPath: string, serverLoadOrder: string[]) => ipcRenderer.invoke('sync-loadorder', folderPath, serverLoadOrder),
   isGameRunning: () => ipcRenderer.invoke('is-game-running'),

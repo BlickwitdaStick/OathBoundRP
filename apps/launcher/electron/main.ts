@@ -11,6 +11,13 @@ import { avaliarEspaco, ehDiscoCheio } from './disk.mjs';
 import { syncUiBundle } from './ui-integrity.mjs';
 import { syncVoiceHelper } from './voice-helper.mjs';
 import { prepararConfiguracaoConexao } from './connection-settings.mjs';
+import {
+  createHashCache,
+  enableServerPlugins,
+  installServerMods,
+  planServerModSync,
+  validateManifest
+} from './server-mods.mjs';
 import { iniciarProcessoJogo } from './game-process.mjs';
 import { iniciarVoiceHelper, killVoiceHelper } from './voice-process.mjs';
 import { createVoiceHandoffServer, VOICE_HANDOFF_PORT } from './voice-handoff.mjs';
@@ -50,7 +57,7 @@ function bundledUiDir() {
 }
 
 function ensureSkympUi(gamePath: string) {
-  if (!gamePath) return { ok: false, repaired: [], error: 'Caminho do jogo invalido.' };
+  if (!gamePath) return { ok: false, repaired: [], error: 'Invalid game path.' };
   return syncUiBundle({
     sourceDir: bundledUiDir(),
     targetDir: path.join(gamePath, 'Data', 'Platform', 'UI')
@@ -68,7 +75,7 @@ function bundledVoiceHelperPath() {
 }
 
 function ensureVoiceHelper(gamePath: string) {
-  if (!gamePath) return { ok: false, repaired: false, error: 'Caminho do jogo invalido.' };
+  if (!gamePath) return { ok: false, repaired: false, error: 'Invalid game path.' };
   // Fica em Data/Platform/, junto do resto do que a SkyrimPlatform usa.
   return syncVoiceHelper({
     sourcePath: bundledVoiceHelperPath(),
@@ -174,7 +181,7 @@ function createWindow() {
     height: 680,
     minWidth: 1024,
     minHeight: 640,
-    title: "Skyrim Heavy RP Launcher",
+    title: "OATHBOUND RP Launcher",
     icon: path.join(__dirname, '../public/logo.png'),
     resizable: true,
     frame: false,
@@ -248,7 +255,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  restoreSharedLoadOrderFiles();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -258,6 +268,8 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   if (voiceWatchdog) clearInterval(voiceWatchdog);
+  if (loadOrderRestoreWatchdog) clearInterval(loadOrderRestoreWatchdog);
+  restoreSharedLoadOrderFiles();
   killVoiceHelper();
   voiceHandoff?.close().catch(() => {});
 });
@@ -338,7 +350,7 @@ ipcMain.handle('select-game-path', async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    title: 'Selecione a pasta do Skyrim (onde está o SkyrimSE.exe)'
+    title: 'Select the Skyrim folder containing SkyrimSE.exe'
   });
   if (result.canceled) return null;
   return result.filePaths[0];
@@ -638,19 +650,19 @@ function checarEspacoParaBaixar(tmpPath: string, destinoPath: string, sizeBytes:
 function downloadToFile(url: string, destPath: string, onProgress?: (percent: number) => void, redirectsLeft = 5): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!url.startsWith('https:')) {
-      reject(new Error(`Download bloqueado: esquema de URL nao seguro (${url})`));
+      reject(new Error(`Download blocked: unsafe URL scheme (${url})`));
       return;
     }
     const req = https.get(url, { headers: { 'User-Agent': 'Skyrim-Heavy-RP-Launcher' } }, (res) => {
       if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
         res.resume();
         if (redirectsLeft <= 0) {
-          reject(new Error('Muitos redirecionamentos'));
+          reject(new Error('Too many redirects'));
           return;
         }
         const nextUrl = new URL(res.headers.location, url).toString();
         if (!nextUrl.startsWith('https:')) {
-          reject(new Error(`Download bloqueado: redirecionamento para esquema inseguro (${nextUrl})`));
+          reject(new Error(`Download blocked: redirect to unsafe URL scheme (${nextUrl})`));
           return;
         }
         downloadToFile(nextUrl, destPath, onProgress, redirectsLeft - 1).then(resolve, reject);
@@ -658,7 +670,7 @@ function downloadToFile(url: string, destPath: string, onProgress?: (percent: nu
       }
       if (res.statusCode !== 200) {
         res.resume();
-        reject(new Error(`HTTP ${res.statusCode} ao baixar arquivo`));
+        reject(new Error(`HTTP ${res.statusCode} while downloading file`));
         return;
       }
       const total = parseInt(String(res.headers['content-length'] || '0'), 10);
@@ -674,7 +686,7 @@ function downloadToFile(url: string, destPath: string, onProgress?: (percent: nu
       res.on('error', reject);
     });
     req.on('error', reject);
-    req.setTimeout(60000, () => req.destroy(new Error('Timeout no download')));
+    req.setTimeout(60000, () => req.destroy(new Error('Download timed out')));
   });
 }
 
@@ -716,7 +728,7 @@ function extractZip(zipPath: string, destDir: string): Promise<void> {
       let psErr = '';
       ps.stderr.on('data', data => psErr += data.toString());
       ps.on('error', reject);
-      ps.on('close', code => code === 0 ? resolve() : reject(new Error(psErr || `Expand-Archive saiu com codigo ${code}`)));
+      ps.on('close', code => code === 0 ? resolve() : reject(new Error(psErr || `Expand-Archive exited with code ${code}`)));
     });
     tar.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `tar saiu com codigo ${code}`)));
   });
@@ -946,7 +958,7 @@ ipcMain.handle('discord-login', async () => {
       height: 750,
       parent: mainWindow || undefined,
       modal: !!mainWindow,
-      title: 'Entrar com Discord',
+      title: 'Sign in with Discord',
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -1059,7 +1071,7 @@ function rememberQueueTicket(response: any) {
   return response;
 }
 
-// ─── Status do Servidor ───
+// ─── Server Status ───
 //
 // A tela inicial mostrava "Online" fixo no JSX, sem checagem nenhuma por
 // trás — um bolinha verde e um texto que nunca mudavam, independente do
@@ -1120,6 +1132,177 @@ ipcMain.handle('poll-queue', async () => {
 });
 
 // ─── Mod Manager ───
+// ─── OATHBOUND LOAD-ORDER ISOLATION ───
+
+function sharedPluginsTxtPath(): string {
+  const localAppData = process.env.LOCALAPPDATA ||
+    path.join(process.env.USERPROFILE || '', 'AppData', 'Local');
+
+  return path.join(localAppData, 'Skyrim Special Edition', 'plugins.txt');
+}
+
+function sharedLoadOrderTxtPath(): string {
+  const localAppData = process.env.LOCALAPPDATA ||
+    path.join(process.env.USERPROFILE || '', 'AppData', 'Local');
+
+  return path.join(localAppData, 'Skyrim Special Edition', 'loadorder.txt');
+}
+
+function oathboundPluginsTxtPath(gamePath: string): string {
+  return path.join(gamePath, 'OATHBOUND_plugins.txt');
+}
+
+function oathboundLoadOrderTxtPath(gamePath: string): string {
+  return path.join(gamePath, 'OATHBOUND_loadorder.txt');
+}
+
+function oathboundPluginsBackupPath(): string {
+  return path.join(app.getPath('userData'), 'plugins.txt.before-oathbound');
+}
+
+function oathboundPluginsMissingMarkerPath(): string {
+  return path.join(app.getPath('userData'), 'plugins.txt.before-oathbound.missing');
+}
+
+function oathboundLoadOrderBackupPath(): string {
+  return path.join(app.getPath('userData'), 'loadorder.txt.before-oathbound');
+}
+
+function oathboundLoadOrderMissingMarkerPath(): string {
+  return path.join(app.getPath('userData'), 'loadorder.txt.before-oathbound.missing');
+}
+
+function restoreSharedLoadOrderFiles(): void {
+  const restoreOne = (
+    shared: string,
+    backup: string,
+    missingMarker: string,
+    label: string
+  ): void => {
+    try {
+      if (fs.existsSync(backup)) {
+        const dir = path.dirname(shared);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+        fs.copyFileSync(backup, shared);
+        fs.unlinkSync(backup);
+
+        if (fs.existsSync(missingMarker)) {
+          fs.unlinkSync(missingMarker);
+        }
+
+        console.info(`[OATHBOUND] Restored original Skyrim ${label}.`);
+        return;
+      }
+
+      if (fs.existsSync(missingMarker)) {
+        if (fs.existsSync(shared)) fs.unlinkSync(shared);
+        fs.unlinkSync(missingMarker);
+
+        console.info(`[OATHBOUND] Restored original missing ${label} state.`);
+      }
+    } catch (e) {
+      console.error(`[OATHBOUND] Failed to restore shared Skyrim ${label}:`, e);
+    }
+  };
+
+  restoreOne(
+    sharedPluginsTxtPath(),
+    oathboundPluginsBackupPath(),
+    oathboundPluginsMissingMarkerPath(),
+    'plugins.txt'
+  );
+
+  restoreOne(
+    sharedLoadOrderTxtPath(),
+    oathboundLoadOrderBackupPath(),
+    oathboundLoadOrderMissingMarkerPath(),
+    'loadorder.txt'
+  );
+}
+
+function activateOathboundLoadOrder(gamePath: string): void {
+  restoreSharedLoadOrderFiles();
+
+  const sourcePlugins = oathboundPluginsTxtPath(gamePath);
+  const sourceLoadOrder = oathboundLoadOrderTxtPath(gamePath);
+
+  if (!fs.existsSync(sourcePlugins)) {
+    throw new Error(`OATHBOUND plugin list not found: ${sourcePlugins}`);
+  }
+
+  if (!fs.existsSync(sourceLoadOrder)) {
+    throw new Error(`OATHBOUND load order file not found: ${sourceLoadOrder}`);
+  }
+
+  const sharedPlugins = sharedPluginsTxtPath();
+  const sharedLoadOrder = sharedLoadOrderTxtPath();
+
+  const pluginsBackup = oathboundPluginsBackupPath();
+  const pluginsMissingMarker = oathboundPluginsMissingMarkerPath();
+  const loadOrderBackup = oathboundLoadOrderBackupPath();
+  const loadOrderMissingMarker = oathboundLoadOrderMissingMarkerPath();
+
+  const dir = path.dirname(sharedPlugins);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  // Preserve the original shared state of BOTH files.
+  if (fs.existsSync(sharedPlugins)) {
+    fs.copyFileSync(sharedPlugins, pluginsBackup);
+  } else {
+    fs.writeFileSync(pluginsMissingMarker, '');
+  }
+
+  if (fs.existsSync(sharedLoadOrder)) {
+    fs.copyFileSync(sharedLoadOrder, loadOrderBackup);
+  } else {
+    fs.writeFileSync(loadOrderMissingMarker, '');
+  }
+
+  // Activate OATHBOUND's isolated configuration.
+  fs.copyFileSync(sourcePlugins, sharedPlugins);
+  fs.copyFileSync(sourceLoadOrder, sharedLoadOrder);
+
+  console.info(
+    `[OATHBOUND] Activated isolated plugin list from ${sourcePlugins}`
+  );
+  console.info(
+    `[OATHBOUND] Activated isolated load order from ${sourceLoadOrder}`
+  );
+}
+let loadOrderRestoreWatchdog: NodeJS.Timeout | null = null;
+
+function armOathboundLoadOrderRestore(): void {
+  if (loadOrderRestoreWatchdog) {
+    clearInterval(loadOrderRestoreWatchdog);
+  }
+
+  let sawGameRunning = false;
+  let checks = 0;
+
+  loadOrderRestoreWatchdog = setInterval(async () => {
+    checks++;
+
+    const running = await isGameRunning();
+
+    if (running) {
+      sawGameRunning = true;
+      return;
+    }
+
+    if (!sawGameRunning && checks < 30) {
+      return;
+    }
+
+    clearInterval(loadOrderRestoreWatchdog!);
+    loadOrderRestoreWatchdog = null;
+
+    restoreSharedLoadOrderFiles();
+
+    console.info('[OATHBOUND] Skyrim closed; original load order restored.');
+  }, 2000);
+}
+
 function listDataPlugins(folderPath: string) {
   const dataPath = path.join(folderPath, 'Data');
   if (!fs.existsSync(dataPath)) return [];
@@ -1160,14 +1343,95 @@ ipcMain.handle('get-local-plugins', async (_event, folderPath) => {
   if (!folderPath) return { plugins: [], pluginsTxt: [] };
   try {
     const plugins = listDataPlugins(folderPath);
-    const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Local');
-    const pluginsTxtPath = path.join(localAppData, 'Skyrim Special Edition', 'plugins.txt');
+    const pluginsTxtPath = oathboundPluginsTxtPath(folderPath);
     const pluginsTxt = fs.existsSync(pluginsTxtPath)
       ? parsePluginsTxt(fs.readFileSync(pluginsTxtPath, 'utf8'))
       : [];
     return { plugins, pluginsTxt };
   } catch {
     return { plugins: [], pluginsTxt: [] };
+  }
+});
+
+// ─── Mods hospedados pelo servidor (SkyUI, RaceMenu...) ───
+// O game-api publica /client-mods/manifest.json (skymp/client-mods). Antes do
+// PLAY o renderer pergunta o que falta, mostra ao jogador e, com o ok dele,
+// baixa/verifica/instala. Ver electron/server-mods.mjs.
+
+function gameApiBaseUrl() {
+  const host = SERVER_IP.includes(':') ? `[${SERVER_IP}]` : SERVER_IP;
+  return `http://${host}:${API_PORT}`;
+}
+
+function serverModsHashCache() {
+  return createHashCache(path.join(app.getPath('userData'), 'server-mods-hash-cache.json'));
+}
+
+async function fetchServerModsManifest() {
+  const res = await fetch(`${gameApiBaseUrl()}/client-mods/manifest.json`, { signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} fetching the server mods list`);
+  return validateManifest(await res.json());
+}
+
+ipcMain.handle('check-server-mods', async (_event, gamePath) => {
+  if (!gamePath) return { ok: false, error: 'Invalid game path.' };
+  try {
+    const manifest = await fetchServerModsManifest();
+    const cache = serverModsHashCache();
+    const plan = await planServerModSync({ manifest, gamePath, hashCache: cache });
+    cache.save();
+    return {
+      ok: true,
+      version: manifest.version,
+      plugins: manifest.plugins,
+      totalFiles: manifest.files.length,
+      missing: plan.toDownload.map(f => ({ path: f.path, size: f.size })),
+      missingBase: plan.missingBase,
+      bytesNeeded: plan.totalBytes
+    };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+});
+
+ipcMain.handle('install-server-mods', async (_event, gamePath) => {
+  if (!gamePath) return { ok: false, error: 'Invalid game path.' };
+  if (await isGameRunning()) return { ok: false, error: 'Close Skyrim before installing server mods.' };
+  const send = (value: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('server-mods-progress', value);
+  };
+  try {
+    const manifest = await fetchServerModsManifest();
+    const cache = serverModsHashCache();
+    const plan = await planServerModSync({ manifest, gamePath, hashCache: cache });
+    const space = checarEspacoParaBaixar(path.join(gamePath, 'Data', '.space-check'), gamePath, plan.totalBytes);
+    if (!space.ok) return { ok: false, error: space.error };
+
+    const result = await installServerMods({
+      gamePath,
+      baseUrl: gameApiBaseUrl(),
+      toDownload: plan.toDownload,
+      onProgress: send
+    });
+    // Rehash what was just written so the next check is instant.
+    await planServerModSync({ manifest, gamePath, hashCache: cache });
+    cache.save();
+    const plugins = enableServerPlugins({ gamePath, plugins: manifest.plugins });
+    console.info(`[launcher] server mods: installed ${result.installed.length} file(s); plugin lists ${plugins.changed ? 'updated' : 'unchanged'}.`);
+    return { ok: true, installed: result.installed, pluginsChanged: plugins.changed };
+  } catch (e: any) {
+    console.error('[launcher] server mods install failed:', e);
+    return { ok: false, code: e?.code, error: e?.message || String(e) };
+  }
+});
+
+ipcMain.handle('enable-server-plugins', async (_event, gamePath) => {
+  if (!gamePath) return { ok: false, error: 'Invalid game path.' };
+  try {
+    const manifest = await fetchServerModsManifest();
+    return { ok: true, ...enableServerPlugins({ gamePath, plugins: manifest.plugins }) };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
   }
 });
 
@@ -1208,7 +1472,7 @@ ipcMain.handle('verify-mods', async (_event, folderPath) => {
 });
 
 ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) => {
-  if (!folderPath) return { ok: false, problems: ['Caminho do jogo invalido.'], plugins: [] };
+  if (!folderPath) return { ok: false, problems: ['Invalid game path.'], plugins: [] };
   try {
     const dataPath = path.join(folderPath, 'Data');
     if (!fs.existsSync(dataPath)) return { ok: false, problems: ['Pasta Data nao encontrada.'], plugins: [] };
@@ -1217,8 +1481,7 @@ ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) =>
     // Data/: um plugin no disco e desativado nao ocupa indice e nao desloca
     // FormID nenhum. Sem o arquivo, parity.mjs cai para os arquivos presentes,
     // que e a direcao segura.
-    const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Local');
-    const pluginsTxtPath = path.join(localAppData, 'Skyrim Special Edition', 'plugins.txt');
+    const pluginsTxtPath = oathboundPluginsTxtPath(folderPath);
     const enabledPlugins = fs.existsSync(pluginsTxtPath)
       ? parsePluginsTxt(fs.readFileSync(pluginsTxtPath, 'utf8')).filter(p => p.enabled).map(p => p.name)
       : undefined;
@@ -1244,7 +1507,7 @@ ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) =>
       ? parseCccTxt(fs.readFileSync(cccPath, 'utf8'))
       : [];
 
-    const cc = analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder });
+    const cc = analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder, enabledPlugins });
 
     return {
       ...resultado,
@@ -1257,34 +1520,10 @@ ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) =>
   }
 });
 
-ipcMain.handle('sync-loadorder', async (_event, folderPath, serverLoadOrder) => {
-  if (!folderPath || !Array.isArray(serverLoadOrder)) return false;
-  try {
-    const dataPath = path.join(folderPath, 'Data');
-    if (!fs.existsSync(dataPath)) return false;
-
-    const allFiles = fs.readdirSync(dataPath);
-    const diskPlugins = allFiles.filter(f => f.toLowerCase().endsWith('.esp') || f.toLowerCase().endsWith('.esl') || f.toLowerCase().endsWith('.esm'));
-
-    const resultLines = [
-      '# This file is managed by Skyrim Heavy RP Launcher.',
-      '# Do not modify manually.'
-    ];
-
-    for (const plugin of serverLoadOrder) {
-      const match = diskPlugins.find(p => p.toLowerCase() === plugin.toLowerCase());
-      if (match) resultLines.push('*' + match);
-    }
-
-    const localAppData = process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || '', 'AppData', 'Local');
-    const pluginsTxtDir = path.join(localAppData, 'Skyrim Special Edition');
-    if (!fs.existsSync(pluginsTxtDir)) fs.mkdirSync(pluginsTxtDir, { recursive: true });
-    
-    fs.writeFileSync(path.join(pluginsTxtDir, 'plugins.txt'), resultLines.join('\r\n') + '\r\n');
-    return true;
-  } catch {
-    return false;
-  }
+ipcMain.handle('sync-loadorder', async () => {
+  // Preserve the full local OATHBOUND plugin list.
+  // The server manifest may contain only a subset of the installed plugins.
+  return true;
 });
 
 ipcMain.handle('is-game-running', async () => isGameRunning());
@@ -1297,7 +1536,7 @@ ipcMain.handle('kill-game', async () => {
 ipcMain.handle('check-client-update', async (_event, gamePath) => {
   // Sem DIST_REPO, o operador optou por não distribuir via GitHub Releases
   // (dev local, fork em teste) — isso não é o mesmo caso que "configurei a
-  // distribuição e ela está fora do ar". Bloquear JOGAR aqui puniria quem
+  // distribuição e ela está fora do ar". Bloquear PLAY aqui puniria quem
   // nunca pediu esse gate, então este caso passa sem erro. Manifesto ausente
   // ou inválido COM DIST_REPO configurado continua falhando fechado abaixo:
   // aí sim alguém decidiu depender do gate e ele está quebrado.
@@ -1315,7 +1554,7 @@ ipcMain.handle('check-client-update', async (_event, gamePath) => {
 });
 
 ipcMain.handle('install-client-update', async (_event, gamePath) => {
-  if (!gamePath) return { success: false, error: 'Caminho do jogo invalido.' };
+  if (!gamePath) return { success: false, error: 'Invalid game path.' };
   if (await isGameRunning()) return { success: false, gameRunning: true, error: 'O jogo esta aberto. Feche antes de atualizar.' };
   if (!DIST_REPO) return { success: false, error: 'VITE_GITHUB_DIST_REPO nao configurado.' };
 
@@ -1380,7 +1619,7 @@ ipcMain.handle('check-mods-update', async (_event, gamePath) => {
 });
 
 ipcMain.handle('install-mods-update', async (_event, gamePath, force) => {
-  if (!gamePath) return { success: false, error: 'Caminho do jogo invalido.' };
+  if (!gamePath) return { success: false, error: 'Invalid game path.' };
   if (await isGameRunning()) return { success: false, gameRunning: true, error: 'O jogo esta aberto. Feche antes de atualizar mods.' };
   if (!DIST_REPO) return { success: false, error: 'VITE_GITHUB_DIST_REPO nao configurado.' };
 
@@ -1508,6 +1747,8 @@ ipcMain.handle('launch-game', async (_event, folderPath, ticket) => {
     if (!auth || !auth.discordId) {
       return { ok: false, code: 'NOT_AUTHENTICATED', error: 'Faca login novamente antes de iniciar o jogo.' };
     }
+    activateOathboundLoadOrder(folderPath);
+
 
     // AUTH-01 + CONNECT-P0: o arquivo realmente consumido pelo cliente recebe
     // a sessao opaca, nunca profileId. O writer tambem grava o destino direto
@@ -1519,19 +1760,26 @@ ipcMain.handle('launch-game', async (_event, folderPath, ticket) => {
       serverIp: SERVER_IP,
       serverPort: SERVER_PORT,
       discordId: auth.discordId,
+      // Só rótulo do widget de autorização no menu principal; a identidade
+      // continua sendo resolvida pelo master API a partir da sessão.
+      displayName: auth.globalName || auth.username || null,
     });
 
     await killGameProcesses();
     const processResult = await iniciarProcessoJogo(exePath, folderPath);
     console.info(`[launcher] Skyrim iniciado com pid=${processResult.pid}`);
 
+    armOathboundLoadOrderRestore();
+
     // Handoff de voz: liga o listener loopback pra quando o jogador rodar /voz.
-    // Nunca bloqueia o JOGAR — a voz e opcional.
+    // Nunca bloqueia o PLAY — a voz e opcional.
     armVoiceHandoff(folderPath).catch((e) =>
       console.warn('[launcher] nao foi possivel armar o handoff de voz:', e?.message));
 
     return { ok: true, pid: processResult.pid };
   } catch (e: any) {
+    restoreSharedLoadOrderFiles();
+
     const code = typeof e?.code === 'string' ? e.code : 'GAME_LAUNCH_FAILED';
     const message = typeof e?.message === 'string' && e.message
       ? e.message

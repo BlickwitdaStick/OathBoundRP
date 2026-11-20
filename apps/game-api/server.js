@@ -33,6 +33,7 @@ const { createRuntimeMetrics } = require('../shared/runtimeMetrics');
 
 const { createQueue } = require('./queue');
 const { createManifestLoader } = require('./modsManifest');
+const { createClientModsLoader, resolveServedFile } = require('./clientMods');
 
 const app = express();
 const runtimeMetrics = createRuntimeMetrics({ service: 'game-api' });
@@ -43,6 +44,9 @@ app.use(express.json({ limit: '64kb' }));
 const PORT = parseInt(process.env.GAME_API_PORT || '7758', 10);
 const HOST = process.env.GAME_API_BIND_HOST || '0.0.0.0';
 const MANIFEST_PATH = process.env.MODS_MANIFEST_PATH || path.join(__dirname, 'mods.json');
+const CLIENT_MODS_DIR = process.env.CLIENT_MODS_DIR || path.join(__dirname, '..', '..', 'skymp', 'client-mods');
+const CLIENT_MODS_MANIFEST_PATH = process.env.CLIENT_MODS_MANIFEST_PATH || path.join(__dirname, 'client-mods-manifest.json');
+const clientModsLoader = createClientModsLoader(CLIENT_MODS_MANIFEST_PATH);
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -199,6 +203,48 @@ app.get('/mods.json', (req, res) => {
     return res.status(503).json({ error: 'Manifesto de mods indisponivel no servidor.' });
   }
   res.json(result.manifest);
+});
+
+// ── Mods hospedados pelo servidor (skymp/client-mods) ───────────────────────
+//
+// O launcher baixa daqui tudo que o servidor exige (SkyUI, RaceMenu...) e
+// confere SHA-256 antes de instalar. Manifesto gerado por
+// scripts/sync-client-mods.js (roda no Start-AllServices). Só arquivos listados
+// no manifesto são servidos — ver clientMods.resolveServedFile.
+
+app.get('/client-mods/manifest.json', (req, res) => {
+  const result = clientModsLoader.load();
+  if (!result.ok) {
+    console.error(`[game-api] client-mods manifest invalido: ${result.reason} (${CLIENT_MODS_MANIFEST_PATH})`);
+    return res.status(503).json({ error: 'Client mods manifest unavailable.' });
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json(result.manifest);
+});
+
+app.get(/^\/client-mods\/files\/(.+)$/, (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  // Por arquivo, não por byte. Um pacote de texturas tem milhares de arquivos
+  // (SMIM + Skyland = ~4.000): o teto antigo de 300/min derrubava a primeira
+  // instalação legítima com 429. O launcher respeita Retry-After e tenta de novo.
+  if (isRateLimited(`client-mods:${ip}`, 6000, 60 * 1000)) {
+    res.set('Retry-After', '10');
+    runtimeMetrics.recordRejection('rate_limit_client_mods');
+    return res.status(429).json({ error: 'rate_limited' });
+  }
+  const result = clientModsLoader.load();
+  if (!result.ok) return res.status(503).json({ error: 'Client mods manifest unavailable.' });
+
+  let requested;
+  try { requested = decodeURIComponent(req.params[0]); } catch { return res.status(404).end(); }
+  const served = resolveServedFile(CLIENT_MODS_DIR, result.manifest, requested);
+  if (!served) return res.status(404).json({ error: 'Not found' });
+
+  res.set('Cache-Control', 'no-store');
+  res.set('X-Content-SHA256', served.entry.sha256);
+  res.sendFile(served.full, { dotfiles: 'deny' }, (err) => {
+    if (err && !res.headersSent) res.status(err.statusCode === 404 ? 404 : 500).end();
+  });
 });
 
 // ── Fila ────────────────────────────────────────────────────────────────────

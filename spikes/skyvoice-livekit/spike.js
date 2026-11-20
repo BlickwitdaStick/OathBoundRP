@@ -1,27 +1,26 @@
 #!/usr/bin/env node
 /**
- * SPIKE SkyVoice/LiveKit — prova de transporte, não implementação de voz.
+ * SPIKE SkyVoice/LiveKit — transport proof of concept, not a voice implementation.
  *
- * ## O que este programa prova, e o que ele não pode provar
+ * ## What this program proves, and what it cannot prove
  *
- * Ele sobe dois participantes contra um `livekit-server` **real**, publica um
- * sinal conhecido de um lado e mede o que sai do outro. Isso prova o caminho
- * `A → SFU → B` com tokens emitidos pelo nosso próprio código.
+ * It connects two participants to a **real** `livekit-server`, publishes a
+ * known signal from one side, and measures what comes out on the other. This
+ * proves the `A → SFU → B` path using tokens issued by our own code.
  *
- * Ele **não** prova que a voz sai inteligível, porque nenhum programa prova
- * isso: inteligibilidade é um julgamento humano, não uma medida. Ver
- * `VOICE_NATIVE_HELPER.md` §8.2 — a mesma limitação do caminho legado, pelo
- * mesmo motivo, e ela não desaparece por trocarmos de transporte.
+ * It does **not** prove that the voice is intelligible, because no program
+ * can prove that: intelligibility is a human judgment, not a measurement.
+ * See `VOICE_NATIVE_HELPER.md` §8.2 — the same limitation as the legacy path,
+ * for the same reason, and it does not go away by switching transports.
  *
- * Ele também **não** usa Skyrim, nem CEF, nem o `voice-helper`. Os dois
- * participantes são processos Node. O que está sob teste é o transporte e o
- * contrato de token — as duas coisas que precisavam de resposta antes de
- * escolher entre o Plano A (CEF) e o Plano B (nativo), e que são idênticas nos
- * dois planos.
+ * It also does **not** use Skyrim, CEF, or `voice-helper`. Both participants
+ * are Node processes. What is being tested is the transport and the token
+ * contract — the two things that needed answers before choosing between
+ * Plan A (CEF) and Plan B (native), and which are identical in both plans.
  *
- * ## Como rodar
+ * ## How to run
  *
- *   1. suba o livekit-server (ver README.md deste diretório)
+ *   1. Start livekit-server (see this directory's README.md)
  *   2. LIVEKIT_URL=ws://127.0.0.1:7880 \
  *      LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=... node spike.js
  */
@@ -35,9 +34,9 @@ const {
   TrackPublishOptions, TrackSource
 } = require('@livekit/rtc-node');
 
-// O token vem do MESMO módulo que o gamemode usa. Se o spike tivesse o próprio
-// emissor, ele provaria que *um* emissor funciona — e não é isso que precisa de
-// prova; é o nosso.
+// The token comes from the SAME module used by the gamemode. If the spike had
+// its own issuer, it would prove that *one* issuer works — but that is not
+// what needs to be proven; it is our own issuer.
 const lkToken = require(
   path.join(__dirname, '..', '..', 'skymp', 'gamemode', 'core', 'voice', 'livekit-token')
 );
@@ -50,27 +49,27 @@ const ROOM = process.env.LIVEKIT_ROOM || `skyvoice-spike-${Date.now()}`;
 const SAMPLE_RATE = 48000;
 const CHANNELS = 1;
 const FRAME_MS = 20;
-const SAMPLES_PER_FRAME = (SAMPLE_RATE / 1000) * FRAME_MS; // 960 — o mesmo do legado
+const SAMPLES_PER_FRAME = (SAMPLE_RATE / 1000) * FRAME_MS; // 960 — same as the legacy path
 const TONE_HZ = 440;
 const TONE_AMPLITUDE = 0.3;
 
 const results = [];
 function record(name, ok, detail) {
   results.push({ name, ok, detail });
-  const mark = ok === true ? 'PASS' : ok === false ? 'FALHOU' : 'N/D';
+  const mark = ok === true ? 'PASS' : ok === false ? 'FAIL' : 'N/A';
   console.log(`  [${mark}] ${name}${detail ? ` — ${detail}` : ''}`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * SÓ PARA O CONTROLE DA §6 — emite um token SEM `canPublishSources`.
+ * ONLY for the §6 control test — issues a token WITHOUT `canPublishSources`.
  *
- * Existe para provar que a recusa de câmera vem da permissão e não do
- * `VideoSource`. Deliberadamente **não** mora em
- * `core/voice/livekit-token.js`: um emissor permissivo em código de produção é
- * uma porta esperando alguém chamá-la por engano. Aqui ele é um instrumento de
- * medição, e o arquivo inteiro é um spike.
+ * It exists to prove that camera rejection comes from the permission and not
+ * from the `VideoSource`. It deliberately does **not** live in
+ * `core/voice/livekit-token.js`: a permissive issuer in production code is
+ * a door waiting for someone to call it by mistake. Here it is a measurement
+ * instrument, and this entire file is a spike.
  */
 function mintPermissiveTokenForControl(room) {
   const crypto = require('crypto');
@@ -87,7 +86,7 @@ function mintPermissiveTokenForControl(room) {
   return `${si}.${b64(crypto.createHmac('sha256', API_SECRET).update(si).digest())}`;
 }
 
-/** Tom de 440Hz em PCM s16 mono 48k — sinal conhecido, verificável por conta. */
+/** 440Hz tone in mono 48k PCM s16 — a known signal that can be verified mathematically. */
 function makeToneFrame(phaseStart) {
   const data = new Int16Array(SAMPLES_PER_FRAME);
   let phase = phaseStart;
@@ -99,7 +98,7 @@ function makeToneFrame(phaseStart) {
   return { frame: new AudioFrame(data, SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME), phase };
 }
 
-/** Energia RMS de um bloco de amostras s16, normalizada para 0..1. */
+/** RMS energy of an s16 sample block, normalized to 0..1. */
 function rms(samples) {
   if (!samples.length) return 0;
   let sum = 0;
@@ -111,8 +110,8 @@ function rms(samples) {
 }
 
 /**
- * Energia do sinal em `hz` por correlação (Goertzel simplificado).
- * Serve para separar "chegou o nosso tom" de "chegou algum ruído".
+ * Signal energy at `hz` by correlation (simplified Goertzel).
+ * This distinguishes "our tone arrived" from "some noise arrived".
  */
 function energyAt(samples, hz) {
   let re = 0, im = 0;
@@ -125,7 +124,7 @@ function energyAt(samples, hz) {
   return Math.sqrt(re * re + im * im) / samples.length;
 }
 
-/** Coletor de áudio recebido: acumula amostras e conta quadros. */
+/** Incoming audio collector: accumulates samples and counts frames. */
 function collectAudio(track, sink) {
   const stream = new AudioStream(track);
   (async () => {
@@ -138,18 +137,18 @@ function collectAudio(track, sink) {
           sink.samples.splice(0, sink.samples.length - SAMPLE_RATE * 5);
         }
       }
-    } catch { /* stream encerrado com a sala */ }
+    } catch { /* stream closed with the room */ }
   })();
   return stream;
 }
 
 async function main() {
   console.log('SPIKE SkyVoice/LiveKit');
-  console.log(`  servidor : ${URL}`);
-  console.log(`  sala     : ${ROOM}\n`);
+  console.log(`  server   : ${URL}`);
+  console.log(`  room     : ${ROOM}\n`);
 
   if (!API_KEY || !API_SECRET) {
-    console.error('LIVEKIT_API_KEY e LIVEKIT_API_SECRET são obrigatórios.');
+    console.error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET are required.');
     process.exit(2);
   }
 
@@ -161,30 +160,30 @@ async function main() {
 
   const tokenA = lkToken.mintAccessToken({
     apiKey: API_KEY, apiSecret: API_SECRET, room: ROOM,
-    identity: identityA, name: 'Cliente A'
+    identity: identityA, name: 'Client A'
   });
   const tokenB = lkToken.mintAccessToken({
     apiKey: API_KEY, apiSecret: API_SECRET, room: ROOM,
-    identity: identityB, name: 'Cliente B'
+    identity: identityB, name: 'Client B'
   });
 
-  // ── 1. Nenhum API secret no cliente ────────────────────────────────────────
-  console.log('1. Token e segredo');
+  // ── 1. No API secret in the client ─────────────────────────────────────────
+  console.log('1. Token and secret');
   record(
-    'nenhum API secret dentro do token',
+    'no API secret inside the token',
     !tokenA.includes(API_SECRET) && !tokenB.includes(API_SECRET),
-    'o cliente recebe a assinatura, nunca a chave que assina'
+    'the client receives the signature, never the key used to sign it'
   );
   const payloadA = lkToken.decodePayloadUnsafe(tokenA);
-  record('token preso a UMA sala', payloadA.video.room === ROOM, `room=${payloadA.video.room}`);
+  record('token restricted to ONE room', payloadA.video.room === ROOM, `room=${payloadA.video.room}`);
   record(
-    'token só permite publicar microfone',
+    'token only allows microphone publishing',
     JSON.stringify(payloadA.video.canPublishSources) === JSON.stringify(['microphone']),
-    'câmera negada na camada do token'
+    'camera denied at the token layer'
   );
 
-  // ── 2. Dois clientes, autenticação real ────────────────────────────────────
-  console.log('\n2. Conexão de dois clientes');
+  // ── 2. Two clients, real authentication ────────────────────────────────────
+  console.log('\n2. Connecting two clients');
   const roomA = new Room();
   const roomB = new Room();
 
@@ -196,7 +195,7 @@ async function main() {
   roomB.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
     trackSubscribedOnB = true;
     const actor = lkToken.actorIdFromIdentity(participant.identity);
-    console.log(`     B assinou faixa de ${participant.identity} (actorId=${actor})`);
+    console.log(`     B subscribed to track from ${participant.identity} (actorId=${actor})`);
     collectAudio(track, heardOnB);
   });
   roomB.on(RoomEvent.TrackMuted, () => { mutedSeenOnB = true; });
@@ -206,13 +205,13 @@ async function main() {
   roomB.on(RoomEvent.ConnectionQualityChanged, (q) => { qualitySeen = q; });
 
   await roomA.connect(URL, tokenA, { autoSubscribe: true, dynacast: false });
-  record('cliente A autenticado pelo livekit-server', true, `identity=${identityA}`);
+  record('client A authenticated by livekit-server', true, `identity=${identityA}`);
 
   await roomB.connect(URL, tokenB, { autoSubscribe: true, dynacast: false });
-  record('cliente B autenticado pelo livekit-server', true, `identity=${identityB}`);
+  record('client B authenticated by livekit-server', true, `identity=${identityB}`);
 
-  // ── 3. Token inválido é recusado ───────────────────────────────────────────
-  console.log('\n3. Token forjado');
+  // ── 3. Invalid token is rejected ───────────────────────────────────────────
+  console.log('\n3. Forged token');
   const forged = lkToken.mintAccessToken({
     apiKey: API_KEY, apiSecret: 'secret_errado_forjado', room: ROOM,
     identity: lkToken.participantIdentity(0xdeadbeef)
@@ -224,22 +223,22 @@ async function main() {
     await roomForged.disconnect();
   } catch (err) {
     forgedRejected = true;
-    record('token assinado com secret errado é recusado', true, String(err.message).slice(0, 60));
+    record('token signed with the wrong secret is rejected', true, String(err.message).slice(0, 60));
   }
-  if (!forgedRejected) record('token assinado com secret errado é recusado', false, 'ACEITOU — furo grave');
+  if (!forgedRejected) record('token signed with the wrong secret is rejected', false, 'ACCEPTED — serious security flaw');
 
-  // ── 4. Publicar áudio de A ─────────────────────────────────────────────────
-  console.log('\n4. Áudio A → SFU → B');
+  // ── 4. Publish audio from A ────────────────────────────────────────────────
+  console.log('\n4. Audio A → SFU → B');
   const source = new AudioSource(SAMPLE_RATE, CHANNELS);
   const track = LocalAudioTrack.createAudioTrack('mic-a', source);
   const opts = new TrackPublishOptions({ source: TrackSource.SOURCE_MICROPHONE });
   const publication = await roomA.localParticipant.publishTrack(track, opts);
-  record('A publicou faixa de microfone', Boolean(publication), `sid=${publication.sid}`);
+  record('A published a microphone track', Boolean(publication), `sid=${publication.sid}`);
 
-  // A bomba de quadros tem um interruptor de PTT separado do de encerramento.
-  // É a distinção que importa: soltar o PTT **para de capturar**, não desfaz a
-  // publicação — refazer a faixa a cada sílaba custaria uma renegociação com o
-  // SFU por aperto de tecla.
+  // The frame pump has a PTT switch separate from its shutdown switch.
+  // This distinction matters: releasing PTT **stops capture**; it does not
+  // undo the publication — recreating the track for every syllable would
+  // require renegotiating with the SFU every time a key is pressed.
   let phase = 0;
   let pushing = true;
   let pttDown = true;
@@ -250,9 +249,9 @@ async function main() {
       if (pttDown) {
         await source.captureFrame(t.frame);
       } else {
-        // Silêncio real no lugar do tom: o Opus com DTX para de transmitir
-        // sozinho quando a entrada é silêncio, que é exatamente o que um PTT
-        // solto deve produzir no fio.
+        // Real silence instead of the tone: Opus with DTX stops transmitting
+        // on its own when the input is silence, which is exactly what
+        // releasing PTT should produce on the wire.
         const quiet = new Int16Array(SAMPLES_PER_FRAME);
         await source.captureFrame(
           new AudioFrame(quiet, SAMPLE_RATE, CHANNELS, SAMPLES_PER_FRAME)
@@ -263,8 +262,8 @@ async function main() {
 
   await sleep(3000);
 
-  record('B assinou a faixa de A', trackSubscribedOnB);
-  record('B recebeu quadros de áudio', heardOnB.frames > 0, `${heardOnB.frames} quadros`);
+  record('B subscribed to A''s track', trackSubscribedOnB);
+  record('B received audio frames', heardOnB.frames > 0, `${heardOnB.frames} frames`);
 
   const heardSamples = heardOnB.samples.slice(-SAMPLE_RATE);
   const heardRms = rms(heardSamples);
@@ -273,32 +272,32 @@ async function main() {
   const ratio = e1000 > 0 ? e440 / e1000 : Infinity;
 
   record(
-    'o sinal recebido tem energia',
+    'the received signal has energy',
     heardRms > 0.01,
-    `RMS ${heardRms.toFixed(4)} (teórico ${(TONE_AMPLITUDE / Math.SQRT2).toFixed(4)} antes do Opus)`
+    `RMS ${heardRms.toFixed(4)} (theoretical ${(TONE_AMPLITUDE / Math.SQRT2).toFixed(4)} before Opus)`
   );
   record(
-    'a energia está em 440Hz, não espalhada',
+    'the energy is concentrated at 440Hz, not spread out',
     ratio > 10,
     `440Hz/1000Hz = ${ratio.toFixed(1)}x`
   );
 
-  // ── 5. PTT e mute ──────────────────────────────────────────────────────────
-  console.log('\n5. PTT e mute');
-  // Nota de SDK, registrada porque é fácil concluir errado: o `@livekit/rtc-node`
-  // expõe `publication.muted` apenas como leitura — não há `mute()`. Mutar pelo
-  // lado que publica é API do SDK **JS de navegador**
-  // (`localParticipant.setMicrophoneEnabled(false)`) e do servidor
-  // (`MutePublishedTrack`). Não é uma limitação do LiveKit; é da superfície
-  // deste SDK, e por isso o PTT aqui é provado pela primitiva que existe nos
-  // dois mundos: parar de capturar.
+  // ── 5. PTT and mute ────────────────────────────────────────────────────────
+  console.log('\n5. PTT and mute');
+  // SDK note, documented here because it is easy to draw the wrong conclusion:
+  // `@livekit/rtc-node` exposes `publication.muted` as read-only — there is no
+  // `mute()`. Muting from the publishing side is an API provided by the browser
+  // **JS SDK** (`localParticipant.setMicrophoneEnabled(false)`) and the server
+  // (`MutePublishedTrack`). This is not a LiveKit limitation; it is a limitation
+  // of this SDK's API surface, which is why PTT is proven here using the
+  // primitive available in both environments: stopping capture.
   pttDown = false;
   await sleep(1500);
   heardOnB.samples.length = 0;
   await sleep(1500);
   const pttUpRms = rms(heardOnB.samples.slice(-SAMPLE_RATE));
   record(
-    'PTT solto: o sinal em B vai a silêncio',
+    'PTT released: the signal at B falls to silence',
     pttUpRms < 0.01,
     `RMS ${pttUpRms.toFixed(5)}`
   );
@@ -306,33 +305,35 @@ async function main() {
   pttDown = true;
   await sleep(1500);
   const pttDownRms = rms(heardOnB.samples.slice(-SAMPLE_RATE / 2));
-  record('PTT apertado: o sinal volta', pttDownRms > 0.01, `RMS ${pttDownRms.toFixed(4)}`);
+  record('PTT pressed: the signal returns', pttDownRms > 0.01, `RMS ${pttDownRms.toFixed(4)}`);
 
-  // Mute duro = retirar a publicação. B deve deixar de ter faixa nenhuma, não
-  // apenas deixar de ouvir — é a diferença entre "não estou falando" e "não
-  // tenho microfone nesta cena".
+  // Hard mute = removing the publication. B should have no track at all,
+  // rather than simply not hearing anything — this is the difference between
+  // "I'm not speaking" and "I don't have a microphone in this scene".
   let unsubscribedOnB = false;
   roomB.on(RoomEvent.TrackUnsubscribed, () => { unsubscribedOnB = true; });
   await roomA.localParticipant.unpublishTrack(publication.sid);
   await sleep(1500);
-  record('mute duro (unpublish) remove a faixa em B', unsubscribedOnB);
+  record('hard mute (unpublish) removes the track on B', unsubscribedOnB);
   record(
-    'eventos de mute do SDK observados',
+    'SDK mute events observed',
     mutedSeenOnB || unmutedSeenOnB || unsubscribedOnB,
-    'rtc-node não emite TrackMuted sem mute do publicador'
+    'rtc-node does not emit TrackMuted without a publisher-side mute'
   );
 
-  // ── 6. Câmera bloqueada ────────────────────────────────────────────────────
-  console.log('\n6. Câmera');
-  // O token declara `canPublishSources: ['microphone']`. A prova é o servidor
-  // recusar, não a UI deixar de pedir — quem depende da boa vontade do cliente
-  // não tem restrição, tem convenção.
+  // ── 6. Camera blocked ──────────────────────────────────────────────────────
+  console.log('\n6. Camera');
+  // The token declares `canPublishSources: ['microphone']`. The proof is the
+  // server rejecting the publication, not the UI refraining from requesting
+  // it — relying on the client's goodwill is not a restriction; it is a
+  // convention.
   //
-  // ATENÇÃO ao formato da recusa: o LiveKit **não** devolve erro de permissão.
-  // Ele ignora a publicação e o cliente estoura por timeout (~10s). Um timeout
-  // sozinho é evidência ambígua — poderia ser o `VideoSource` sem quadros, e
-  // não a permissão. Por isso o controle abaixo é parte do teste, e não uma
-  // conferência que alguém fez uma vez e jogou fora.
+  // IMPORTANT: the format of the rejection matters. LiveKit does **not**
+  // return a permission error. It ignores the publication and the client
+  // eventually times out (~10s). A timeout alone is ambiguous evidence — it
+  // could be the `VideoSource` producing no frames, rather than a permission
+  // restriction. That is why the control test below is part of the test suite,
+  // not a check someone performed once and then discarded.
   const tryPublishCamera = async (label, token) => {
     const room = new Room();
     await room.connect(URL, token, { autoSubscribe: false, dynacast: false });
@@ -351,29 +352,30 @@ async function main() {
     }
   };
 
-  const restricted = await tryPublishCamera('restrito', lkToken.mintAccessToken({
+  const restricted = await tryPublishCamera('restricted', lkToken.mintAccessToken({
     apiKey: API_KEY, apiSecret: API_SECRET, room: ROOM,
     identity: lkToken.participantIdentity(0xff00ca01)
   }));
-  // Controle: token idêntico, exceto por não restringir `canPublishSources`.
-  // Se ESTE também falhasse, o teste de cima não estaria medindo permissão.
-  const control = await tryPublishCamera('controle', mintPermissiveTokenForControl(ROOM));
+  // Control: an otherwise identical token, except that it does not restrict
+  // `canPublishSources`. If THIS one also failed, the test above would not
+  // actually be measuring the permission.
+  const control = await tryPublishCamera('control', mintPermissiveTokenForControl(ROOM));
 
   record(
-    'token restrito não consegue publicar câmera',
+    'restricted token cannot publish a camera',
     restricted.published === false,
     `${restricted.detail} (${restricted.ms}ms)`
   );
   record(
-    'CONTROLE: o mesmo publish passa sem a restrição',
+    'CONTROL: the same publish succeeds without the restriction',
     control.published === true,
     control.published
-      ? `publicou em ${control.ms}ms — logo a recusa acima é da permissão`
-      : 'controle também falhou: o teste acima NÃO prova permissão'
+      ? `published in ${control.ms}ms — therefore the rejection above is due to the permission`
+      : 'control also failed: the test above does NOT prove permission enforcement'
   );
 
-  // ── 7. Reconexão ───────────────────────────────────────────────────────────
-  console.log('\n7. Reconexão');
+  // ── 7. Reconnection ────────────────────────────────────────────────────────
+  console.log('\n7. Reconnection');
   pushing = false;
   await pump.catch(() => {});
   await roomA.disconnect();
@@ -383,7 +385,7 @@ async function main() {
   const identityA2 = lkToken.participantIdentity(ACTOR_A);
   const tokenA2 = lkToken.mintAccessToken({
     apiKey: API_KEY, apiSecret: API_SECRET, room: ROOM,
-    identity: identityA2, name: 'Cliente A'
+    identity: identityA2, name: 'Client A'
   });
   await roomA2.connect(URL, tokenA2, { autoSubscribe: true, dynacast: false });
 
@@ -409,27 +411,27 @@ async function main() {
   await sleep(3000);
   const rejoinRms = rms(heardOnB.samples.slice(-SAMPLE_RATE));
   record(
-    'A volta com token novo e B volta a ouvir',
+    'A reconnects with a new token and B can hear it again',
     heardOnB.frames > framesBeforeRejoin && rejoinRms > 0.01,
-    `RMS ${rejoinRms.toFixed(4)}, +${heardOnB.frames - framesBeforeRejoin} quadros`
+    `RMS ${rejoinRms.toFixed(4)}, +${heardOnB.frames - framesBeforeRejoin} frames`
   );
   record(
-    'a identidade da reconexão é nova',
+    'the reconnection identity is new',
     identityA2 !== identityA,
-    'evita que a reentrada derrube a própria sessão anterior'
+    'prevents rejoining from terminating the previous session itself'
   );
-  record('actorId sobrevive à troca de identidade',
+  record('actorId survives the identity change',
     lkToken.actorIdFromIdentity(identityA2) === ACTOR_A,
     `${lkToken.actorIdFromIdentity(identityA2)} === ${ACTOR_A}`);
 
-  record('qualidade de conexão reportada pelo SFU', qualitySeen !== null,
-    qualitySeen !== null ? `valor=${qualitySeen}` : 'nenhum evento observado');
+  record('connection quality reported by the SFU', qualitySeen !== null,
+    qualitySeen !== null ? `value=${qualitySeen}` : 'no event observed');
 
-  // ── 8. LiveKit fora do ar ──────────────────────────────────────────────────
-  console.log('\n8. LiveKit indisponível');
-  // A pergunta é se a falha é *capturável*. Um transporte que derruba o
-  // processo levaria o servidor de jogo junto — e o jogo tem que continuar
-  // quando a voz cai, não o contrário.
+  // ── 8. LiveKit unavailable ─────────────────────────────────────────────────
+  console.log('\n8. LiveKit unavailable');
+  // The question is whether the failure can be *caught*. A transport that
+  // crashes the process would take the game server down with it — and the
+  // game must keep running when voice goes down, not the other way around.
   let deadHandled = false;
   let deadDetail = '';
   const roomDead = new Room();
@@ -443,9 +445,9 @@ async function main() {
     deadHandled = true;
     deadDetail = String(err.message).slice(0, 60);
   }
-  record('servidor inalcançável falha de forma capturável', deadHandled, deadDetail);
+  record('unreachable server fails in a catchable way', deadHandled, deadDetail);
 
-  // ── encerramento ───────────────────────────────────────────────────────────
+  // ── Shutdown ───────────────────────────────────────────────────────────────
   pushing2 = false;
   await pump2.catch(() => {});
   await roomA2.disconnect();
@@ -454,18 +456,18 @@ async function main() {
   console.log('\n─────────────────────────────────────────');
   const pass = results.filter((r) => r.ok === true).length;
   const fail = results.filter((r) => r.ok === false).length;
-  console.log(`${pass} passaram, ${fail} falharam, ${results.length} verificações`);
-  console.log('\nNÃO PROVADO por este spike (exige pessoa/jogo, não código):');
-  console.log('  - voz inteligível ao ouvido humano');
-  console.log('  - dois clientes Skyrim reais');
-  console.log('  - captura pela CEF ou pelo voice-helper');
-  console.log('  - origem não autorizada sem acesso ao microfone (é do CefPermissionHandler)');
-  console.log('  - rede real: latência, perda e jitter fora de 127.0.0.1');
+  console.log(`${pass} passed, ${fail} failed, ${results.length} checks`);
+  console.log('\nNOT PROVEN by this spike (requires a person/game, not code):');
+  console.log('  - voice intelligibility to the human ear');
+  console.log('  - two real Skyrim clients');
+  console.log('  - capture through CEF or voice-helper');
+  console.log('  - unauthorized origin without microphone access (handled by CefPermissionHandler)');
+  console.log('  - real-world network conditions: latency, packet loss, and jitter beyond 127.0.0.1');
 
   process.exit(fail === 0 ? 0 : 1);
 }
 
 main().catch((err) => {
-  console.error('\nSPIKE ABORTADO:', err);
+  console.error('\nSPIKE ABORTED:', err);
   process.exit(1);
 });

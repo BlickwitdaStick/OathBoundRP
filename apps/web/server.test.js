@@ -402,6 +402,21 @@ describe('master API de sessão (contrato do SkyMP)', () => {
     assert.equal(res.status, 404);
   });
 
+  test('heartbeat do servidor de jogo (POST /api/servers/:masterKey) responde 200', async () => {
+    // Contrato do MasterClient do skymp5-server: POST a cada 5 s com
+    // { name, maxPlayers, online }. Sem a rota, o console do servidor
+    // imprimia "Error updating info on master server: ... 404" sem parar.
+    const res = await post(`/api/servers/${MASTER_KEY}`, { name: 'Oathbound RP', maxPlayers: 40, online: 1 });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true });
+    assert.equal(queryLog.length, 0, 'heartbeat nunca toca o banco');
+  });
+
+  test('heartbeat com masterKey errada responde 404', async () => {
+    const res = await post('/api/servers/chave-errada', { name: 'x', maxPlayers: 1, online: 0 });
+    assert.equal(res.status, 404);
+  });
+
   test('sessão desconhecida responde 404', async () => {
     // 404 é o que o SkyMP espera: ele manda `loginFailedSessionNotFound`
     // pro cliente, que é a mensagem correta pro jogador.
