@@ -62,3 +62,18 @@ test('index.html only starts this in-game (RODANDO_FORA_DO_JOGO=false), never in
     'the handshake must be inside the !RODANDO_FORA_DO_JOGO block, otherwise the ' +
     'out-of-game mock will also trigger it (the same class of bug fixed on 23/08).');
 });
+
+test('index.html wires the F8 admin panel (markup, styles, script after the player panel, key dispatch)', () => {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  assert.ok(html.includes('<link rel="stylesheet" href="admin-panel.css">'));
+  assert.ok(html.includes('<div id="admin-panel"'));
+  const pp = html.indexOf('<script src="player-panel.js"></script>');
+  const ap = html.indexOf('<script src="admin-panel.js"></script>');
+  assert.ok(pp !== -1 && ap > pp, 'admin-panel.js reuses the player panel styles and must load after it.');
+  const handler = html.slice(html.indexOf('window.handlePlayerShortcutKey = (action) => {'));
+  assert.ok(handler.slice(0, 600).includes("action === 'admin:open'"), 'the F8 action must reach the admin panel.');
+  for (const id of ['ap-char-query', 'ap-char-retired', 'ap-item-query', 'ap-item-type', 'ap-item-count', 'ap-item-target', 'ap-item-give',
+    'ap-creature-query', 'ap-creature-spawn', 'ap-players-refresh', 'ap-close', 'ap-result']) {
+    assert.ok(html.includes(`id="${id}"`), `admin-panel.js needs #${id}`);
+  }
+});

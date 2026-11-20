@@ -8,6 +8,13 @@
  *   voice.pushToTalk  V    hold to transmit voice (released = muted)
  *   voice.cycleMode   F11  whisper → normal → shout
  *   voice.toggleMute  —    unbound by default
+ *   chat.open         Enter
+ *   admin.open        F8   staff only: opens the admin panel (admin-panel-service.js)
+ *
+ * The property also carries `staff` (true when admin-service knows a role for
+ * this actor). The snippet opens the admin panel only when it is true, so a
+ * player pressing F8 gets nothing; the server checks permissions again on
+ * every admin action anyway.
  *
  * Each account's choices live in `account_keybinds` (migration v30, see
  * core/keybinds.js). The server sends the resolved map to the owner through
@@ -53,12 +60,13 @@ const DEFAULT_BINDINGS = keybinds.defaultBindings();
  *    goes through so voice can never get stuck open.
  */
 const SNIPPET_DO_CLIENTE = `
-  ctx.state.oathboundKeybinds = ctx.state.oathboundKeybinds || { registered: false, sentAt: null, bindings: null, pttDown: false, pttCode: null };
+  ctx.state.oathboundKeybinds = ctx.state.oathboundKeybinds || { registered: false, sentAt: null, bindings: null, pttDown: false, pttCode: null, staff: false };
   var kb = ctx.state.oathboundKeybinds;
 
   if (ctx.value && ctx.value.bindings && ctx.value.sentAt !== kb.sentAt) {
     kb.sentAt = ctx.value.sentAt;
     kb.bindings = ctx.value.bindings;
+    kb.staff = ctx.value.staff === true;
     if (ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
       ctx.sp.browser.executeJavaScript('window.handleKeybindsUpdate && window.handleKeybindsUpdate(' + JSON.stringify(kb.bindings) + ')');
     }
@@ -71,7 +79,7 @@ const SNIPPET_DO_CLIENTE = `
     // on the client, without waiting for the server to flip browserFocused.
     ctx.sp.on('browserMessage', function (e) {
       var m = e && e.arguments && e.arguments[0];
-      if (m && typeof m === 'object' && (m.type === 'panel:close' || m.type === 'chat:close') && ctx.sp.browser && ctx.sp.browser.setFocused) {
+      if (m && typeof m === 'object' && (m.type === 'panel:close' || m.type === 'chat:close' || m.type === 'admin:close') && ctx.sp.browser && ctx.sp.browser.setFocused) {
         ctx.sp.browser.setFocused(false);
       }
     });
@@ -112,6 +120,12 @@ const SNIPPET_DO_CLIENTE = `
         if (br.setVisible) br.setVisible(true);
         if (br.setFocused) br.setFocused(true);
         br.executeJavaScript('window.openChat && window.openChat()');
+      } else if (code === b['admin.open']) {
+        // Staff only. For everyone else this key does nothing at all.
+        if (!kb.staff) return;
+        if (br.setVisible) br.setVisible(true);
+        if (br.setFocused) br.setFocused(true);
+        br.executeJavaScript('window.handlePlayerShortcutKey && window.handlePlayerShortcutKey("admin:open")');
       }
     });
   }
@@ -125,6 +139,18 @@ let _db = null;
 
 /** actorId -> JSON of the bindings last sent (diffing, avoids resending). */
 const _ultimoEnvio = new Map();
+
+/** actorId -> staff flag last sent (the role loads at login, maybe after the first send). */
+const _ultimoStaff = new Map();
+
+/** Staff according to admin-service (lazy require: it needs the database module). */
+function isStaff(actorId) {
+  try {
+    return Boolean(require('../admin-service').getRole(actorId));
+  } catch {
+    return false;
+  }
+}
 
 /** accountId -> resolved bindings (avoids a DB read per tick). */
 const _cachePorConta = new Map();
@@ -166,10 +192,12 @@ async function bindingsFor(actorId) {
 
 function sendBindings(actorId, bindings, { force = false } = {}) {
   const json = JSON.stringify(bindings);
-  if (!force && _ultimoEnvio.get(actorId) === json) return;
+  const staff = isStaff(actorId);
+  if (!force && _ultimoEnvio.get(actorId) === json && _ultimoStaff.get(actorId) === staff) return;
   _ultimoEnvio.set(actorId, json);
+  _ultimoStaff.set(actorId, staff);
   try {
-    mp.set(actorId, PROPERTY, { sentAt: Date.now(), bindings });
+    mp.set(actorId, PROPERTY, { sentAt: Date.now(), bindings, staff });
   } catch (err) {
     console.error(`[player-shortcuts] Failed to send keybinds to 0x${actorId.toString(16)}:`, err.message);
   }
@@ -180,11 +208,12 @@ async function tick() {
 
   const presentes = new Set(commands.listActiveActorIds());
   for (const actorId of _ultimoEnvio.keys()) {
-    if (!presentes.has(actorId)) _ultimoEnvio.delete(actorId);
+    if (!presentes.has(actorId)) { _ultimoEnvio.delete(actorId); _ultimoStaff.delete(actorId); }
   }
 
   for (const actorId of presentes) {
-    if (_ultimoEnvio.has(actorId) || _carregando.has(actorId)) continue;
+    if (_carregando.has(actorId)) continue;
+    if (_ultimoEnvio.has(actorId) && _ultimoStaff.get(actorId) === isStaff(actorId)) continue;
     _carregando.add(actorId);
     try {
       sendBindings(actorId, await bindingsFor(actorId));
@@ -272,6 +301,7 @@ function shutdownPlayerShortcutsService() {
   if (_timer) clearInterval(_timer);
   _timer = null;
   _ultimoEnvio.clear();
+  _ultimoStaff.clear();
   _cachePorConta.clear();
   _carregando.clear();
 }

@@ -94,10 +94,10 @@
 
   function switchTab(tab) {
     ppState.activeTab = tab;
-    for (const btn of document.querySelectorAll('.pp-tab')) {
+    for (const btn of document.querySelectorAll('#player-panel .pp-tab')) {
       btn.classList.toggle('active', btn.dataset.tab === tab);
     }
-    for (const section of document.querySelectorAll('.pp-section')) {
+    for (const section of document.querySelectorAll('#player-panel .pp-section')) {
       section.classList.toggle('active', section.id === `pp-section-${tab}`);
     }
     if (tab === 'controls') {
@@ -499,7 +499,7 @@
   };
 
   // ── Initialization (script loaded at the end of <body>, DOM already ready) ─
-  for (const btn of document.querySelectorAll('.pp-tab')) {
+  for (const btn of document.querySelectorAll('#player-panel .pp-tab')) {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   }
   const closeBtn = $('pp-close');

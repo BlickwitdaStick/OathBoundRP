@@ -23,11 +23,12 @@ const valid = () => ({
   'voice.pushToTalk': 47,
   'voice.cycleMode': 87,
   'voice.toggleMute': null,
-  'chat.open': 28
+  'chat.open': 28,
+  'admin.open': 66
 });
 
 describe('keybinds: defaults', () => {
-  it('F2 panel, V push-to-talk, F11 voice mode, mute unbound, Enter opens chat', () => {
+  it('F2 panel, V push-to-talk, F11 voice mode, mute unbound, Enter opens chat, F8 admin panel', () => {
     assert.deepStrictEqual(keybinds.defaultBindings(), valid());
   });
 

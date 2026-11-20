@@ -62,6 +62,7 @@ const serverOptions  = require(path.join(gamemodeDir, 'core', 'server-options'))
 const governance    = require(path.join(gamemodeDir, 'governance-service'));
 const marketStalls  = require(path.join(gamemodeDir, 'market-stalls-service'));
 const playerPanel   = require(path.join(gamemodeDir, 'player-panel-service'));
+const adminPanel    = require(path.join(gamemodeDir, 'admin-panel-service'));
 const deathService  = require(path.join(gamemodeDir, 'death-service'));
 const professionService = require(path.join(gamemodeDir, 'profession-service'));
 const miningService = require(path.join(gamemodeDir, 'mining-service'));
@@ -370,6 +371,28 @@ moduleRegistry.register({
     uiEventRouter.unregister('panel');
     playerPanel.shutdownPlayerPanelService();
   }
+});
+
+// F8 admin panel (staff only): characters, items, creatures, players. Every
+// action is permission-checked and audited on the server — see
+// admin-panel-service.js. On by default: ENABLE_ADMIN_PANEL unset counts as
+// true; set it to false to switch the panel off.
+adminPanel.applyDefaultFlag(process.env);
+moduleRegistry.register({
+  id: 'admin-panel',
+  enabledBy: adminPanel.FLAG,
+  phase: 'lab',
+  dependencies: [],
+  commands: adminPanel.commandDefs(),
+  initialize: async () => {
+    adminPanel.initAdminPanelService();
+    uiEventRouter.register('admin', adminPanel.handleUiEvent);
+  },
+  shutdown: async () => {
+    uiEventRouter.unregister('admin');
+    adminPanel.shutdownAdminPanelService();
+  },
+  healthCheck: () => uiEventRouter.list().includes('admin')
 });
 
 // LAB: ponte SELF → /painel (Tarefa 11, objetivo 3). Zero UI nova — ver
@@ -807,6 +830,13 @@ if (typeof mp !== "undefined") {
         ctx.sp.browser.executeJavaScript('window.handlePanelData && window.handlePanelData(' + payload + ')');
       }
     `,
+    updateNeighbor: ''
+  });
+  // F8 admin panel data (staff only) — same channel-merge shape as panelData.
+  mp.makeProperty(adminPanel.PROPERTY, {
+    isVisibleByOwner: true,
+    isVisibleByNeighbors: false,
+    updateOwner: adminPanel.UPDATE_OWNER_SNIPPET,
     updateNeighbor: ''
   });
   // Ticket de conexão de voz (emitido pelo comando /voz) — o cliente recebe
