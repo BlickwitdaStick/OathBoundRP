@@ -41,7 +41,7 @@
 
 const db = require('./database');
 const transactionService = require('./core/transaction-service');
-const { actorRef } = require('./core/papyrus');
+const { actorRef, baseRef } = require('./core/papyrus');
 
 // Cache de itens já sincronizados nessa sessão: characterId → Set<baseId>
 // Reset automático na desconexão (cleanup via removeActiveCharacter)
@@ -79,7 +79,7 @@ async function syncInventoryToClient(actorId, characterId) {
 
       if (typeof mp !== 'undefined') {
         try {
-          mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [row.base_id, row.count, true]);
+          mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [baseRef(row.base_id), row.count, true]);
           synced.add(row.base_id);
           syncedCount++;
         } catch (clientErr) {

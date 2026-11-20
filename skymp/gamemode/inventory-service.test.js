@@ -65,11 +65,24 @@ after(() => {
   delete global.mp;
 });
 
+
+// Item arguments to Papyrus must be base-record refs (core/papyrus.baseRef):
+// SkyMP silently ignores a raw FormID, so the item never reached the game.
+// The fake rejects a raw number so that bug cannot come back unnoticed.
+function itemIdOf(a) {
+  if (!a || typeof a !== 'object' || a.type !== 'espm') {
+    throw new Error(`item argument must be baseRef ({type:'espm'}), got ${JSON.stringify(a)}`);
+  }
+  const d = String(a.desc);
+  return d.startsWith('desc-') ? Number(d.slice(5)) : parseInt(d.split(':')[0], 16);
+}
+
 global.mp = {
   getDescFromId: (formId) => `${formId.toString(16)}:Skyrim.esm`,
   callPapyrusFunction: (kind, className, fn, self, args) => {
     if (kind === 'method' && className === 'ObjectReference' && fn === 'AddItem') {
-      const [baseId, count] = args;
+      const baseId = itemIdOf(args[0]);
+      const count = args[1];
       addItemCalls.push({ baseId, count, self });
       addItemImpl(baseId, count, self);
     }

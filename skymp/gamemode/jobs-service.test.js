@@ -71,6 +71,15 @@ after(() => {
   delete global.mp;
 });
 
+// Item arguments to Papyrus must be base-record refs (core/papyrus.baseRef).
+function itemIdOf(a) {
+  if (!a || typeof a !== 'object' || a.type !== 'espm') {
+    throw new Error(`item argument must be baseRef ({type:'espm'}), got ${JSON.stringify(a)}`);
+  }
+  const d = String(a.desc);
+  return d.startsWith('desc-') ? Number(d.slice(5)) : parseInt(d.split(':')[0], 16);
+}
+
 global.mp = {
   getDescFromId: (formId) => `${formId.toString(16)}:Skyrim.esm`,
   callPapyrusFunction: (kind, className, fn, self, args) => {
@@ -79,7 +88,7 @@ global.mp = {
       return null;
     }
     if (className === 'Actor' && fn === 'GetItemCount') {
-      const toolBaseId = args[0];
+      const toolBaseId = itemIdOf(args[0]);
       return toolCounts.has(toolBaseId) ? toolCounts.get(toolBaseId) : 1;
     }
     return null;

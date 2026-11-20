@@ -13,7 +13,7 @@
 
 const db = require('../database');
 const crypto = require('crypto');
-const { actorRef } = require('./papyrus');
+const { actorRef, baseRef } = require('./papyrus');
 
 /**
  * Gera um UUID v4 simples usando o módulo nativo crypto.
@@ -325,9 +325,9 @@ function _applyToClient(actorId, baseId, delta) {
   if (typeof mp === 'undefined') return;
   try {
     if (delta > 0) {
-      mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [baseId, delta, true]);
+      mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [baseRef(baseId), delta, true]);
     } else {
-      mp.callPapyrusFunction('method', 'ObjectReference', 'RemoveItem', actorRef(actorId), [baseId, Math.abs(delta), true, null]);
+      mp.callPapyrusFunction('method', 'ObjectReference', 'RemoveItem', actorRef(actorId), [baseRef(baseId), Math.abs(delta), true, null]);
     }
   } catch (err) {
     // Log sem throw: BD já está correto. Reconciliação cuidará do cliente na próxima reconexão.

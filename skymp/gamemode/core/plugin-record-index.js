@@ -41,6 +41,8 @@ const INDEXED_TYPES = new Set([...ITEM_TYPES, ...NPC_TYPES]);
 const HEADER_SIZE = 24;
 const FLAG_MASTER = 0x1;
 const FLAG_LOCALIZED = 0x80;
+/** TES4 flag of a light (ESL-flagged) plugin. */
+const FLAG_LIGHT = 0x200;
 const RECORD_FLAG_DELETED = 0x20;
 const RECORD_FLAG_COMPRESSED = 0x00040000;
 
@@ -113,6 +115,7 @@ function parseHeader(buf) {
     masters,
     localized: Boolean(flags & FLAG_LOCALIZED),
     isMaster: Boolean(flags & FLAG_MASTER),
+    isLight: Boolean(flags & FLAG_LIGHT),
     headerSize: HEADER_SIZE + size
   };
 }
@@ -150,10 +153,18 @@ function walkGroup(group, onRecord) {
 
 /**
  * Converts a plugin-local FormID to the server's global id.
+ *
+ * Numbering follows the game and the patched server (patches/skymp/
+ * light-plugins.patch): full plugins take indexes 00, 01, 02… in load order,
+ * skipping light ones; a light plugin's forms live in FE space,
+ * 0xFE000000 | lightIndex << 12 | (id & 0xFFF). Counting light plugins as
+ * full slots put every later plugin's items on the wrong index ("does not
+ * exist in the loaded plugins", or a different record).
+ *
  * @param {number} formId        - as stored in the plugin
  * @param {string[]} masters      - the plugin's MAST list
  * @param {string} selfName       - the plugin's own file name
- * @param {Map<string, number>} loadIndex - lower-case file name -> load order index
+ * @param {Map<string, number|{light: number}>} loadIndex - lower-case file name -> full index, or {light: n}
  * @returns {number|null}
  */
 function toGlobalId(formId, masters, selfName, loadIndex) {
@@ -161,7 +172,39 @@ function toGlobalId(formId, masters, selfName, loadIndex) {
   const owner = hi < masters.length ? masters[hi] : selfName;
   const idx = loadIndex.get(String(owner).toLowerCase());
   if (idx === undefined) return null;
+  if (typeof idx === 'object' && idx !== null) {
+    return ((0xfe000000 | ((idx.light & 0xfff) << 12) | (formId & 0x00000fff)) >>> 0);
+  }
   return ((idx << 24) >>> 0) + (formId & 0x00ffffff);
+}
+
+/** Light plugin? By extension, or by the ESL flag in its TES4 header. */
+async function readIsLight(filePath, name) {
+  if (/\.esl$/i.test(name)) return true;
+  const fh = await fs.promises.open(filePath, 'r');
+  try {
+    const head = Buffer.alloc(HEADER_SIZE);
+    await fh.read(head, 0, HEADER_SIZE, 0);
+    if (head.toString('latin1', 0, 4) !== 'TES4') return false;
+    return Boolean(head.readUInt32LE(8) & FLAG_LIGHT);
+  } finally {
+    await fh.close();
+  }
+}
+
+/**
+ * file name -> index, numbered like the game: full plugins count 0,1,2…,
+ * light plugins get {light: 0,1,2…} in their own sequence.
+ * @param {{name: string, light: boolean}[]} files - in load order
+ */
+function buildLoadIndex(files) {
+  const map = new Map();
+  let full = 0;
+  let light = 0;
+  for (const f of files) {
+    map.set(f.name.toLowerCase(), f.light ? { light: light++ } : full++);
+  }
+  return map;
 }
 
 /**
@@ -258,7 +301,14 @@ function pluginsFromServerSettings(mpApi, cwd = process.cwd()) {
 async function buildIndex(files, opts = {}) {
   const parseFile = opts.parseFile || parsePluginFile;
   const log = opts.log || (() => {});
-  const loadIndex = new Map(files.map((f, i) => [f.name.toLowerCase(), i]));
+  const isLight = opts.isLight || readIsLight;
+  const flagged = [];
+  for (const f of files) {
+    let light = false;
+    try { light = await isLight(f.path, f.name); } catch { light = /\.esl$/i.test(f.name); }
+    flagged.push({ name: f.name, light });
+  }
+  const loadIndex = buildLoadIndex(flagged);
   const byId = new Map();
   const errors = [];
   for (const file of files) {
@@ -406,6 +456,8 @@ module.exports = {
   parsePluginBuffer,
   parsePluginFile,
   toGlobalId,
+  buildLoadIndex,
+  readIsLight,
   pluginsFromServerSettings,
   buildIndex,
   search,

@@ -192,3 +192,39 @@ describe('plugin-record-index: search', () => {
     assert.strictEqual(ri.status().status, 'unavailable');
   });
 });
+
+describe('plugin-record-index: light (ESL) plugins', () => {
+  const { buildLoadIndex, toGlobalId } = require('./plugin-record-index');
+  // The real order on this server: light plugins sit between full ones.
+  const loadIndex = buildLoadIndex([
+    { name: 'Skyrim.esm', light: false },
+    { name: 'Update.esm', light: false },
+    { name: '_ResourcePack.esl', light: true },
+    { name: 'ccbgssse001-fish.esm', light: false },
+    { name: 'ccbgssse037-curios.esl', light: true },
+    { name: 'unofficial skyrim special edition patch.esp', light: false },
+    { name: 'FortSnowhawk_rebuild.esp', light: true },
+    { name: 'Immersive Weapons.esp', light: false }
+  ]);
+
+  it('full plugins skip light ones when numbering', () => {
+    assert.equal(loadIndex.get('ccbgssse001-fish.esm'), 2);
+    assert.equal(loadIndex.get('unofficial skyrim special edition patch.esp'), 3);
+    assert.equal(loadIndex.get('immersive weapons.esp'), 4);
+  });
+
+  it('light plugins take FE ids in their own sequence', () => {
+    assert.equal(toGlobalId(0x00000801, [], '_ResourcePack.esl', loadIndex), 0xfe000801);
+    assert.equal(toGlobalId(0x01000805, ['Skyrim.esm'], 'ccbgssse037-curios.esl', loadIndex), 0xfe001805);
+    // an id in a light plugin that points at its master stays the master's
+    assert.equal(toGlobalId(0x00000805, ['Skyrim.esm'], 'ccbgssse037-curios.esl', loadIndex), 0x00000805);
+    assert.equal(toGlobalId(0x01000abc, ['Skyrim.esm'], 'FortSnowhawk_rebuild.esp', loadIndex), 0xfe002abc);
+  });
+
+  it('a mod item after the light plugins gets the index the server uses', () => {
+    // Immersive Weapons record 0x01012345 (own record: master list has 1 entry)
+    assert.equal(toGlobalId(0x01012345, ['Skyrim.esm'], 'Immersive Weapons.esp', loadIndex), 0x04012345);
+    // ...and a Skyrim.esm record it overrides keeps its vanilla id
+    assert.equal(toGlobalId(0x00012eb7, ['Skyrim.esm'], 'Immersive Weapons.esp', loadIndex), 0x00012eb7);
+  });
+});

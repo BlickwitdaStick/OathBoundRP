@@ -51,7 +51,7 @@ const resourceNodeService = require('./resource-node-service');
 const serverOptions = require('./core/server-options');
 const interactionRegistry = require('./core/interaction-registry');
 const physicalAnchorRegistry = require('./core/physical-anchor-registry');
-const { actorRef } = require('./core/papyrus');
+const { actorRef, baseRef } = require('./core/papyrus');
 
 const MODULE = 'mining';
 const PROFESSION_CODE = 'miner';
@@ -143,7 +143,7 @@ async function _nodeAt(formId) {
  */
 function _hasPickaxe(actorId) {
   if (typeof mp === 'undefined') return true;
-  const count = mp.callPapyrusFunction('method', 'Actor', 'GetItemCount', actorRef(actorId), [ITEM_PICKAXE]);
+  const count = mp.callPapyrusFunction('method', 'Actor', 'GetItemCount', actorRef(actorId), [baseRef(ITEM_PICKAXE)]);
   return count > 0;
 }
 

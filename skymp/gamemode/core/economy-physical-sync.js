@@ -39,7 +39,7 @@
 
 const moduleRegistry = require('./module-registry');
 const papyrus = require('./skymp-adapter/papyrus-catalog');
-const { actorRef } = require('./papyrus');
+const { actorRef, baseRef } = require('./papyrus');
 const database = require('../database');
 
 const MODULE_ID = 'economy-physical-sync';
@@ -104,7 +104,7 @@ async function reconcileOnLogin(actorId, characterId, dependencies = {}) {
 
   let count;
   try {
-    count = deps.mp.callPapyrusFunction('method', 'ObjectReference', 'GetItemCount', actorRef(actorId), [GOLD_BASE_ID]);
+    count = deps.mp.callPapyrusFunction('method', 'ObjectReference', 'GetItemCount', actorRef(actorId), [baseRef(GOLD_BASE_ID)]);
   } catch (err) {
     deps.logger.error(`[economy-physical-sync] Falha ao ler GetItemCount para ${characterId}: ${err.message}`);
     return;
@@ -119,7 +119,7 @@ async function reconcileOnLogin(actorId, characterId, dependencies = {}) {
 
   try {
     if (papyrus.isKnownPapyrusFunction('method', 'ObjectReference', 'RemoveItem')) {
-      deps.mp.callPapyrusFunction('method', 'ObjectReference', 'RemoveItem', actorRef(actorId), [GOLD_BASE_ID, count, true, null]);
+      deps.mp.callPapyrusFunction('method', 'ObjectReference', 'RemoveItem', actorRef(actorId), [baseRef(GOLD_BASE_ID), count, true, null]);
     }
   } catch (err) {
     deps.logger.error(`[economy-physical-sync] Falha ao remover Gold001 físico de ${characterId}: ${err.message}`);

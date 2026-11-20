@@ -127,10 +127,22 @@ Module._load = function (request) {
   return originalLoad.apply(this, arguments);
 };
 
+
+// Item arguments to Papyrus must be base-record refs (core/papyrus.baseRef):
+// SkyMP silently ignores a raw FormID, so the item never reached the game.
+// The fake rejects a raw number so that bug cannot come back unnoticed.
+function itemIdOf(a) {
+  if (!a || typeof a !== 'object' || a.type !== 'espm') {
+    throw new Error(`item argument must be baseRef ({type:'espm'}), got ${JSON.stringify(a)}`);
+  }
+  const d = String(a.desc);
+  return d.startsWith('desc-') ? Number(d.slice(5)) : parseInt(d.split(':')[0], 16);
+}
+
 global.mp = {
   callPapyrusFunction: (tipo, classe, funcao, self, args = []) => {
-    if (funcao === 'AddItem') clienteAplicado.push({ baseId: args[0], delta: args[1] });
-    if (funcao === 'RemoveItem') clienteAplicado.push({ baseId: args[0], delta: -args[1] });
+    if (funcao === 'AddItem') clienteAplicado.push({ baseId: itemIdOf(args[0]), delta: args[1] });
+    if (funcao === 'RemoveItem') clienteAplicado.push({ baseId: itemIdOf(args[0]), delta: -args[1] });
     return null;
   },
   get: () => null,

@@ -39,7 +39,7 @@
 
 const commands = require('./commands');
 const transactionService = require('./core/transaction-service');
-const { actorRef } = require('./core/papyrus');
+const { actorRef, baseRef } = require('./core/papyrus');
 
 const MODULE = 'jobs';
 
@@ -96,7 +96,7 @@ function _beginGather(actorId, toolBaseId, toolName) {
   // decide se a acao COMECA, nao o que o jogador recebe. Quem burlar ganha uma
   // animacao; o item so nasce pelo transaction-service, no fim.
   if (toolBaseId !== null) {
-    const hasTool = mp.callPapyrusFunction('method', 'Actor', 'GetItemCount', actorRef(actorId), [toolBaseId]);
+    const hasTool = mp.callPapyrusFunction('method', 'Actor', 'GetItemCount', actorRef(actorId), [baseRef(toolBaseId)]);
     if (hasTool <= 0) {
       notify(`Você precisa de ${toolName}.`);
       return null;
