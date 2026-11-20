@@ -704,7 +704,7 @@ describe('registerInteractions', () => {
       data: { baseId: RING, holdId: WHITERUN }
     };
 
-    await assert.rejects(() => rob.execute(ctx), /rendido nem incapacitado/);
+    await assert.rejects(() => rob.execute(ctx), /not surrendered/);
     assert.strictEqual(h.state.characterInventory[`${VICTIM}:${RING}`], 1, 'nada deveria ter sido movido');
   });
 });

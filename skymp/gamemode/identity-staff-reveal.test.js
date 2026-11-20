@@ -288,7 +288,7 @@ describe('/revelaridentidade — alvo ausente', () => {
 
     assert.equal(linhaDeRevelacao(), null, 'nao houve revelacao — nada a registrar');
     assert.ok(
-      notificacoesDaStaff().some(m => /nao encontrado/i.test(m)),
+      notificacoesDaStaff().some(m => /not found/i.test(m)),
       'a staff precisa saber que o actorId nao corresponde a ninguem carregado'
     );
   });

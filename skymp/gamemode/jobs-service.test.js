@@ -131,10 +131,10 @@ function mockRandomSequence(t, values) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('jobs-service — commandDefs [CURRENT CONTRACT]', () => {
-  it('registra somente /cortarlenha e não expõe os bypasses de mineração/pesca', () => {
+  it('registra somente /chopwood (alias /cortarlenha) e não expõe os bypasses de mineração/pesca', () => {
     const defs = jobs.commandDefs();
     const nomes = defs.map((d) => d.name);
-    assert.deepEqual(nomes, ['/cortarlenha']);
+    assert.deepEqual(nomes, [['/chopwood', '/cortarlenha']]);
     assert.equal(new Set(nomes).size, nomes.length, 'nenhum comando duplicado');
   });
 
@@ -150,7 +150,7 @@ describe('jobs-service — commandDefs [CURRENT CONTRACT]', () => {
     resetState();
     t.mock.timers.enable({ apis: ['setTimeout'] });
     mockRandomSequence(t, [0]); // woodAmount = floor(0*3)+1 = 1
-    const handler = jobs.commandDefs().find((d) => d.name === '/cortarlenha').handler;
+    const handler = jobs.commandDefs().find((d) => [].concat(d.name).includes('/chopwood')).handler;
     handler(ATOR);
     await tickAndFlush(t, 10000);
     assert.equal(giveItemCalls.length, 1);

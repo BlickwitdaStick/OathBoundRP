@@ -29,35 +29,35 @@ const { STATES } = characterState;
 const STATE_RESTRICTIONS = {
   [STATES.RESTRAINED]: {
     blocked: ['gameplay', 'combat', 'trade', 'craft', 'gather', 'move', 'use_item'],
-    message: 'Você está algemado e não pode realizar essa ação.'
+    message: 'You are restrained and cannot do that.'
   },
   [STATES.IMPRISONED]: {
     blocked: ['trade', 'craft', 'gather', 'work', 'combat', 'move_world', 'sell'],
-    message: 'Você está preso e não pode realizar essa ação.'
+    message: 'You are imprisoned and cannot do that.'
   },
   [STATES.DOWNED]: {
     blocked: ['gameplay', 'combat', 'trade', 'craft', 'gather', 'move', 'use_item', 'speak_rp'],
-    message: 'Você está abatido e não pode agir. Aguarde socorro.'
+    message: 'You are downed and cannot act. Wait for help.'
   },
   [STATES.DEAD]: {
     blocked: ['gameplay', 'combat', 'trade', 'craft', 'gather', 'move', 'use_item', 'speak_rp'],
-    message: 'Você está morto.'
+    message: 'You are dead.'
   },
   [STATES.IN_TRADE]: {
     blocked: ['gather', 'work', 'craft', 'combat', 'move_world'],
-    message: 'Você está em uma negociação. Cancele antes de realizar essa ação.'
+    message: 'You are in a trade. Cancel it first.'
   },
   [STATES.IN_CRAFT]: {
     blocked: ['gather', 'work', 'trade', 'combat', 'move_world'],
-    message: 'Você está fabricando um item. Conclua ou cancele antes.'
+    message: 'You are crafting an item. Finish or cancel it first.'
   },
   [STATES.IN_DIALOG]: {
     blocked: ['gather', 'work', 'trade', 'craft', 'combat'],
-    message: 'Você está em um diálogo. Conclua-o antes.'
+    message: 'You are in a conversation. Finish it first.'
   },
   [STATES.BUSY]: {
     blocked: ['gather', 'work', 'craft', 'trade', 'combat'],
-    message: 'Você está ocupado com outra atividade.'
+    message: 'You are busy with something else.'
   }
 };
 
@@ -138,7 +138,7 @@ function canPerform(characterId, actionId, context = {}) {
   const action = _actions.get(actionId);
   if (!action) {
     // Ação não registrada — bloquear por segurança
-    return { allowed: false, reason: `Ação desconhecida: ${actionId}` };
+    return { allowed: false, reason: `Unknown action: ${actionId}` };
   }
 
   const currentState = characterState.get(characterId);
@@ -168,8 +168,8 @@ function canPerform(characterId, actionId, context = {}) {
         return {
           allowed: false,
           reason: veredito.side === 'target'
-            ? `Seu alvo está sob proteção de ${onde}.`
-            : `Você está em ${onde} e não pode fazer isso aqui.`
+            ? `Your target is protected by ${onde}.`
+            : `You are in ${onde} and cannot do that here.`
         };
       }
     }

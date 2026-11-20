@@ -82,7 +82,7 @@ describe('interaction-targets — tipo sem resolvedor', () => {
     for (const tipo of [TARGET_TYPES.CONTAINER, TARGET_TYPES.DOOR, TARGET_TYPES.NPC, TARGET_TYPES.PROPERTY, TARGET_TYPES.WORLD_POINT]) {
       const r = targets.resolve(tipo, ALVO, ATOR);
       assert.equal(r.ok, false);
-      assert.equal(r.reason, 'Tipo de alvo nao suportado.');
+      assert.equal(r.reason, 'Unsupported target type.');
     }
   });
 });

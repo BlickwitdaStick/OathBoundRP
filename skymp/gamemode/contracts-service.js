@@ -663,9 +663,9 @@ function _parseContractId(args) {
 function commandDefs() {
   return [
     {
-      name: '/contratocriar',
-      description: '[Contratos] Publica um contrato, travando a recompensa no escrow',
-      usage: '/contratocriar <categoria> <recompensa> <titulo>',
+      name: ['/contractcreate', '/contratocriar'],
+      description: '[Contracts] Post a contract; the reward is held in escrow',
+      usage: '/contractcreate <category> <reward> <title>',
       handler: async (actorId, args) => {
         const creatorCharacterId = _characterIdFor(actorId);
         if (!creatorCharacterId) return _notify(actorId, 'Personagem não carregado.');
@@ -683,9 +683,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratoaceitar',
-      description: '[Contratos] Aceita um contrato aberto',
-      usage: '/contratoaceitar <id>',
+      name: ['/contractaccept', '/contratoaceitar'],
+      description: '[Contracts] Accept an open contract',
+      usage: '/contractaccept <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
         if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
@@ -697,9 +697,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratoentregar',
-      description: '[Contratos] Declara a entrega de um contrato aceito',
-      usage: '/contratoentregar <id>',
+      name: ['/contractdeliver', '/contratoentregar'],
+      description: '[Contracts] Declare an accepted contract delivered',
+      usage: '/contractdeliver <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
         if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
@@ -713,9 +713,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratocontestar',
-      description: '[Contratos] Contesta a entrega de um contrato (trava o escrow para revisão da staff)',
-      usage: '/contratocontestar <id>',
+      name: ['/contractdispute', '/contratocontestar'],
+      description: '[Contracts] Dispute a delivery (locks the escrow for staff review)',
+      usage: '/contractdispute <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
         if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
@@ -727,9 +727,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratoacertar',
-      description: '[Contratos] Libera a recompensa entregue para o trabalhador',
-      usage: '/contratoacertar <id>',
+      name: ['/contractsettle', '/contratoacertar'],
+      description: '[Contracts] Release the reward to the worker',
+      usage: '/contractsettle <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
         if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
@@ -741,9 +741,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratocancelar',
-      description: '[Contratos] Cancela um contrato ainda aberto e devolve o escrow',
-      usage: '/contratocancelar <id>',
+      name: ['/contractcancel', '/contratocancelar'],
+      description: '[Contracts] Cancel an open contract and refund the escrow',
+      usage: '/contractcancel <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
         if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
@@ -755,9 +755,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratolistar',
-      description: '[Contratos] Lista os contratos abertos',
-      usage: '/contratolistar',
+      name: ['/contracts', '/contratolistar'],
+      description: '[Contracts] List open contracts',
+      usage: '/contracts',
       handler: async (actorId) => {
         const abertos = await listOpen();
         if (abertos.length === 0) return _notify(actorId, 'Nenhum contrato aberto no momento.');
@@ -769,9 +769,9 @@ function commandDefs() {
       }
     },
     {
-      name: '/contratoinfo',
-      description: '[Contratos] Mostra detalhes de um contrato',
-      usage: '/contratoinfo <id>',
+      name: ['/contractinfo', '/contratoinfo'],
+      description: '[Contracts] Show a contract',
+      usage: '/contractinfo <id>',
       handler: async (actorId, args) => {
         const contractId = _parseContractId(args);
         if (!contractId) return _notify(actorId, 'Uso: /contratoinfo <id>');

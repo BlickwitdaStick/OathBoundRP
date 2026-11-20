@@ -175,7 +175,7 @@ function validatePayload(schema, payload) {
 
   if (payload !== undefined && payload !== null &&
     (typeof payload !== 'object' || Array.isArray(payload))) {
-    return { ok: false, reason: 'Dados da acao invalidos.' };
+    return { ok: false, reason: 'Invalid action data.' };
   }
   const source = /** @type {Record<string, unknown>} */ (payload || {});
   /** @type {Record<string, unknown>} */
@@ -222,7 +222,7 @@ function validatePayload(schema, payload) {
       }
       case 'formid': {
         const parsed = strictFormId(value);
-        if (parsed === null) return { ok: false, reason: `Campo ${name} nao e um FormID valido.` };
+        if (parsed === null) return { ok: false, reason: `Field ${name} is not a valid FormID.` };
         data[name] = parsed;
         break;
       }
@@ -233,7 +233,7 @@ function validatePayload(schema, payload) {
       }
       case 'enum': {
         if (typeof value !== 'string' || !spec.values.includes(value)) {
-          return { ok: false, reason: `Campo ${name} tem valor invalido.` };
+          return { ok: false, reason: `Field ${name} has an invalid value.` };
         }
         data[name] = value;
         break;
@@ -241,7 +241,7 @@ function validatePayload(schema, payload) {
       default:
         // Só acontece se `register` deixar passar um tipo novo — por isso ele
         // valida o schema no registro, e não aqui, com o jogador esperando.
-        return { ok: false, reason: `Campo ${name} tem tipo desconhecido no servidor.` };
+        return { ok: false, reason: `Field ${name} has a type the server does not know.` };
     }
   }
 

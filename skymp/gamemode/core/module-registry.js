@@ -236,6 +236,31 @@ function isEnabled(id) {
 }
 
 /**
+ * Commands of modules that are switched off (or failed to start). Without this
+ * a player typing `/stalls` on a server with market stalls off got "Unknown
+ * command", indistinguishable from a typo.
+ * @type {Map<string, {module: string, enabledBy: string}>}
+ */
+const _unavailableCommands = new Map();
+
+function rememberUnavailable(mod, id) {
+  for (const cmdDef of mod.commands || []) {
+    const names = Array.isArray(cmdDef.name) ? cmdDef.name : [cmdDef.name];
+    for (const name of names) {
+      if (typeof name !== 'string') continue;
+      const normalized = name.toLowerCase().startsWith('/') ? name.toLowerCase() : `/${name.toLowerCase()}`;
+      _unavailableCommands.set(normalized, { module: id, enabledBy: mod.enabledBy });
+    }
+  }
+}
+
+/** `{module, enabledBy}` when `command` belongs to a module that is off, else null. */
+function unavailableCommand(command) {
+  if (typeof command !== 'string') return null;
+  return _unavailableCommands.get(command.toLowerCase()) || null;
+}
+
+/**
  * Estado atual de um módulo, ou `null` se ele nem foi registrado.
  *
  * Diferente de `isEnabled`, isto distingue **desligado por flag** de **falhou
@@ -273,6 +298,7 @@ async function bootAll() {
       console.log(`[module-registry] [${mod.phase.toUpperCase()}] ${id}: DESATIVADO (${mod.enabledBy}=false ou não definido)`);
       _states.set(id, STATES.DISABLED);
       results.disabled.push(id);
+      rememberUnavailable(mod, id);
       continue;
     }
 
@@ -285,6 +311,7 @@ async function bootAll() {
       console.error(`[module-registry] ${id}: FALHOU — dependências não ativas: ${missingDeps.join(', ')}`);
       _states.set(id, STATES.FAILED);
       results.failed.push({ id, reason: `dependências ausentes: ${missingDeps.join(', ')}` });
+      rememberUnavailable(mod, id);
       continue;
     }
 
@@ -325,6 +352,7 @@ async function bootAll() {
       );
       _states.set(id, STATES.FAILED);
       results.failed.push({ id, reason: err.message });
+      rememberUnavailable(mod, id);
     }
   }
 
@@ -414,11 +442,12 @@ function _reset() {
   _modules.clear();
   _active.clear();
   _states.clear();
+  _unavailableCommands.clear();
 }
 
 module.exports = {
   STATES,
-  register, isEnabled, getState,
+  register, isEnabled, getState, unavailableCommand,
   bootAll, shutdownAll, healthCheckAll, list,
   topologicalOrder,
   _reset

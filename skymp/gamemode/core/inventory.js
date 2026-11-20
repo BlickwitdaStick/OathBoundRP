@@ -199,7 +199,7 @@ function normalizeItems(raw) {
 
   const lista = Array.isArray(raw) ? raw : [raw];
   if (lista.length === 0) {
-    return recusar('EMPTY', 'Nenhum item na transferencia.');
+    return recusar('EMPTY', 'No items in the transfer.');
   }
   if (lista.length > MAX_ITEMS_PER_TRANSFER) {
     return recusar('TOO_MANY', `Maximo de ${MAX_ITEMS_PER_TRANSFER} itens por transferencia.`);
@@ -218,13 +218,13 @@ function normalizeItems(raw) {
     // `Number.isSafeInteger` recusa NaN, Infinity, 1.5 e 1e400 de uma vez. É a
     // barreira que o §19 do pedido chama de "negative quantity, NaN, overflow".
     if (!Number.isSafeInteger(baseId) || baseId <= 0) {
-      return recusar('INVALID_ITEM', 'FormID invalido.');
+      return recusar('INVALID_ITEM', 'Invalid FormID.');
     }
     if (!Number.isSafeInteger(quantity) || quantity <= 0) {
-      return recusar('INVALID_QUANTITY', 'Quantidade invalida.');
+      return recusar('INVALID_QUANTITY', 'Invalid quantity.');
     }
     if (quantity > MAX_QUANTITY_PER_ITEM) {
-      return recusar('INVALID_QUANTITY', `Quantidade acima do maximo (${MAX_QUANTITY_PER_ITEM}).`);
+      return recusar('INVALID_QUANTITY', `Quantity above the maximum (${MAX_QUANTITY_PER_ITEM}).`);
     }
 
     // `pareceItem` devolve `ok` quando não sabe (sem `mp`, servidor antigo). Só
@@ -232,12 +232,12 @@ function normalizeItems(raw) {
     // inventário. É diagnóstico de digitação, não autoridade — ver core/espm.js.
     const veredito = espm.pareceItem(baseId);
     if (!veredito.ok) {
-      return recusar('UNKNOWN_FORMID', `Item invalido: ${veredito.motivo}.`);
+      return recusar('UNKNOWN_FORMID', `Invalid item: ${veredito.motivo}.`);
     }
 
     const anterior = somados.get(baseId) || 0;
     if (anterior + quantity > MAX_QUANTITY_PER_ITEM) {
-      return recusar('INVALID_QUANTITY', `Quantidade acima do maximo (${MAX_QUANTITY_PER_ITEM}).`);
+      return recusar('INVALID_QUANTITY', `Quantity above the maximum (${MAX_QUANTITY_PER_ITEM}).`);
     }
     somados.set(baseId, anterior + quantity);
   }
@@ -360,19 +360,19 @@ async function exchange(opts) {
   // conexão do pool. Um payload malformado não deve custar um `getConnection`.
 
   if (!Array.isArray(legsRaw) || legsRaw.length === 0) {
-    return falha('EMPTY', 'Nenhuma perna na transferencia.');
+    return falha('EMPTY', 'Nothing in the transfer.');
   }
   if (legsRaw.length > MAX_LEGS) {
     return falha('TOO_MANY', `Maximo de ${MAX_LEGS} pernas por transferencia.`);
   }
   if (typeof requestId !== 'string' || !REQUEST_ID_PATTERN.test(requestId)) {
-    return falha('INVALID_REQUEST_ID', 'Identificador de pedido invalido.');
+    return falha('INVALID_REQUEST_ID', 'Invalid request id.');
   }
   if (typeof reason !== 'string' || !reason.trim() || reason.length > 64) {
-    return falha('INVALID_REASON', 'Motivo invalido.');
+    return falha('INVALID_REASON', 'Invalid reason.');
   }
   if (typeof mod !== 'string' || !mod.trim() || mod.length > 32) {
-    return falha('INVALID_MODULE', 'Modulo invalido.');
+    return falha('INVALID_MODULE', 'Invalid module.');
   }
 
   /** @type {Array<{from: object, to: object, items: Array<{baseId:number, quantity:number}>}>} */
@@ -394,7 +394,7 @@ async function exchange(opts) {
         // Mesma resposta do Interaction Framework para tipo de alvo sem
         // resolvedor: fechada, nomeada, sem ensinar a sondar o servidor.
         console.warn(`[inventory] sem adaptador para dono '${lado.type}'`);
-        return falha('NO_ADAPTER', 'Tipo de dono nao suportado.');
+        return falha('NO_ADAPTER', 'Unsupported owner type.');
       }
     }
 
@@ -484,7 +484,7 @@ async function exchange(opts) {
         const adapter = _adapters.get(lado.type);
         if (typeof adapter.assertOwner === 'function') {
           const existe = await adapter.assertOwner(conn, lado);
-          if (!existe) throw new RegraViolada(`Dono nao encontrado: ${lado.label}`, 'OWNER_NOT_FOUND');
+          if (!existe) throw new RegraViolada(`Owner not found: ${lado.label}`, 'OWNER_NOT_FOUND');
         }
       }
     }
@@ -541,7 +541,7 @@ async function exchange(opts) {
     }
     return falha(
       regra ? (err.code || 'INSUFFICIENT') : 'DB',
-      regra ? err.message : 'Nao foi possivel concluir a operacao.'
+      regra ? err.message : 'Could not complete the operation.'
     );
   } finally {
     conn.release();

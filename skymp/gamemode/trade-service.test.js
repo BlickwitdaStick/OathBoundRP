@@ -207,7 +207,7 @@ describe('oferta', () => {
     await abrirTroca();
 
     assert.strictEqual(await trade.addItem(A_ATOR, ESPADA, 3), false);
-    assert.match(ultimaMensagem(A_ATOR), /tem 1/);
+    assert.match(ultimaMensagem(A_ATOR), /have 1/);
   });
 
   it('quantidade negativa remove da propria oferta, nao cria divida', async () => {
@@ -392,7 +392,7 @@ describe('cancelamento, desconexao e expiracao', () => {
     trade.onDisconnect(A_ATOR);
 
     assert.strictEqual(trade._sessionOf(B_ATOR), null);
-    assert.match(ultimaMensagem(B_ATOR), /saiu/i);
+    assert.match(ultimaMensagem(B_ATOR), /left/i);
     // A oferta era intencao em memoria: o item nunca esteve em custodia, entao
     // nao existe estado orfao para recuperar.
     assert.strictEqual(itemDe(A_CHAR, ESPADA), 1);

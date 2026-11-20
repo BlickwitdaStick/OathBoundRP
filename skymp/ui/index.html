@@ -943,7 +943,7 @@
 
       case 'auth_failed':
         state.voiceFatal = true;
-        setStatus('error', 'VOICE FAILED — try /voz again');
+        setStatus('error', 'VOICE FAILED — try /voice again');
         if (state.ws) state.ws.close();
         break;
 
@@ -1247,12 +1247,12 @@
         showInteractionToast(
           'In-game voice is unavailable: this SkyMP client does not allow microphone access. ' +
           'It is a known client limitation — not a problem with your microphone or the server, ' +
-          'and running /voz again will not help. Use a Discord voice channel: ask staff for /voz-criar.'
+          'and running /voice again will not help. Use a Discord voice channel: ask staff for /voz-criar.'
         );
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         setStatus('error', 'NO MICROPHONE FOUND');
         showInteractionToast(
-          'The client found no microphone. Check the device in Windows and run /voz again. ' +
+          'The client found no microphone. Check the device in Windows and run /voice again. ' +
           'If you would rather not depend on this, the Discord voice channel works now (ask staff for /voz-criar).'
         );
       } else {

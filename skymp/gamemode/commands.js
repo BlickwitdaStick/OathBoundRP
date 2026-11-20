@@ -5,6 +5,16 @@ const { createRpChatService } = require('./rp-chat-service');
 const commandRegistry = require('./core/command-registry');
 const characterState = require('./core/character-state');
 const inventoryService = require('./inventory-service');
+const characterNumbers = require('./core/character-numbers');
+
+/** Command of a module that is switched off, or null (lazy: module-registry requires the world). */
+function unavailableCommand(command) {
+  try {
+    return require('./core/module-registry').unavailableCommand(command);
+  } catch {
+    return null;
+  }
+}
 
 // Cache em memoria dos personagens ativos no servidor
 // Chave: actorId (number), Valor: { characterId, firstName, lastName, accountId, profileId }
@@ -16,7 +26,8 @@ function registerActiveCharacter(actorId, character, accountId, profileId) {
     firstName: character.first_name,
     lastName: character.last_name,
     accountId: accountId,
-    profileId: profileId
+    profileId: profileId,
+    charNumber: Number.isInteger(character.char_number) ? character.char_number : null
   });
   console.log(`[commands] Cached character name for actor ${actorId.toString(16)}: ${character.first_name} ${character.last_name}`);
   identity.loadKnownIdentities(character.id);
@@ -39,6 +50,26 @@ function getActiveCharacterData(actorId) {
  */
 function listActiveActorIds() {
   return [...activeCharacters.keys()];
+}
+
+/** Records the number assigned at login (core/character-numbers.js). */
+function setCharacterNumber(actorId, charNumber) {
+  const char = activeCharacters.get(actorId);
+  if (char) char.charNumber = Number.isInteger(charNumber) ? charNumber : null;
+}
+
+/** Online actor holding character number `n`, or null. */
+function getActorByCharacterNumber(n) {
+  for (const [actorId, character] of activeCharacters.entries()) {
+    if (character.charNumber === n) return actorId;
+  }
+  return null;
+}
+
+/** "#12" for display, or "#?" before a number is assigned. */
+function formatCharacterNumber(actorId) {
+  const char = activeCharacters.get(actorId);
+  return char && char.charNumber ? `#${char.charNumber}` : '#?';
 }
 
 function getActiveActorByCharacterId(characterId) {
@@ -278,11 +309,11 @@ async function handleIntroduceCommand(actorId, args) {
   const targetCharacter = getActiveCharacterData(targetActorId);
 
   if (!sourceCharacter) {
-    sendNotification(actorId, 'Seu personagem ainda nao esta carregado.');
+    sendNotification(actorId, 'Your character is not loaded yet.');
     return;
   }
   if (!targetCharacter || targetActorId === actorId) {
-    sendNotification(actorId, 'Uso correto: /apresentar <actorId>');
+    sendNotification(actorId, 'Usage: /introduce <player#> (someone else, online)');
     return;
   }
 
@@ -300,11 +331,11 @@ async function handleIntroduceCommand(actorId, args) {
     `sourceCharacterId=${sourceCharacter.characterId} targetCharacterId=${targetCharacter.characterId}`
   );
 
-  sendNotification(actorId, `Voce se apresentou para ${getDisplayNameForObserver(targetActorId, actorId)}.`);
-  sendNotification(targetActorId, `${realName} se apresentou a voce.`);
+  sendNotification(actorId, `You introduced yourself to ${getDisplayNameForObserver(targetActorId, actorId)}.`);
+  sendNotification(targetActorId, `${realName} introduced themselves to you.`);
   broadcastProximityMessage(
     actorId,
-    (observerActorId) => `* ${getDisplayNameForObserver(actorId, observerActorId)} se apresenta.`,
+    (observerActorId) => `* ${getDisplayNameForObserver(actorId, observerActorId)} introduces themselves.`,
     INTRODUCE_RANGE
   );
 }
@@ -317,7 +348,7 @@ async function handleAliasCommand(actorId, args) {
   const targetCharacter = getActiveCharacterData(targetActorId);
 
   if (!sourceCharacter || !targetCharacter || targetActorId === actorId || !alias) {
-    sendNotification(actorId, 'Uso correto: /apelido <actorId> <nome conhecido>');
+    sendNotification(actorId, 'Usage: /alias <player#> <name you know them by>');
     return;
   }
 
@@ -334,7 +365,7 @@ async function handleAliasCommand(actorId, args) {
     `observerCharacterId=${sourceCharacter.characterId} targetCharacterId=${targetCharacter.characterId} alias=${alias}`
   );
 
-  sendNotification(actorId, `Voce passara a reconhecer essa pessoa como: ${alias}.`);
+  sendNotification(actorId, `You will now recognize this person as: ${alias}.`);
 }
 
 /**
@@ -375,7 +406,7 @@ function registerIdentityInteractions() {
     module: 'identity',
     target: interactionRegistry.TARGET_TYPES.PLAYER,
     section: 'social',
-    label: 'Apresentar-se',
+    label: 'Introduce yourself',
     order: 10,
     distance: INTRODUCE_RANGE,
     // Apresentar-se é fala: quem está algemado, abatido ou morto não o faz.
@@ -398,14 +429,14 @@ function registerIdentityInteractions() {
 function registerCoreCommands() {
   registerIdentityInteractions();
 
-  commandRegistry.register(['/apresentar', '/introduce'], (actorId, args) => {
+  commandRegistry.register(['/introduce', '/apresentar'], (actorId, args) => {
     handleIntroduceCommand(actorId, args).catch(err => {
       console.error('[identity] Failed to introduce character:', err.message);
       sendNotification(actorId, 'Could not record the introduction.');
     });
   }, {
     module: 'identity', phase: 'core',
-    description: 'Introduce your character to someone', usage: '/introduce <actorId>',
+    description: 'Introduce your character to someone', usage: '/introduce <player#>',
     // Tarefa 11 (Legacy Command Cleanup): redundante desde que virou
     // `identity.introduce` no Interaction Framework (linha 352 deste
     // arquivo) — some do menu de interação quando o alvo já conhece o
@@ -415,12 +446,12 @@ function registerCoreCommands() {
     hidden: true
   });
 
-  commandRegistry.register(['/apelido', '/alias'], (actorId, args) => {
+  commandRegistry.register(['/alias', '/apelido'], (actorId, args) => {
     handleAliasCommand(actorId, args).catch(err => {
       console.error('[identity] Failed to set alias:', err.message);
       sendNotification(actorId, 'Could not save the nickname.');
     });
-  }, { module: 'identity', phase: 'core', description: 'Set the name you know someone by', usage: '/alias <actorId> <name>' });
+  }, { module: 'identity', phase: 'core', description: 'Set the name you know someone by', usage: '/alias <player#> <name>' });
 
   commandRegistry.register('/anim', (actorId, args) => {
     if (args) {
@@ -428,18 +459,18 @@ function registerCoreCommands() {
       const adminService = require('./admin-service');
       adminService.playAnimation(actorId, parseInt(parts[0], 16), parts[1] || 'IdleStop');
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Play an animation on an actor', usage: '/anim <actorId> <animName>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Play an animation on an actor', usage: '/anim <player#> <animName>' });
 
   commandRegistry.register('/additem', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
       require('./admin-service').giveItemAdmin(actorId, parseInt(parts[0], 16), parseInt(parts[1], 16), parseInt(parts[2]) || 1);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Give an item to a player', usage: '/additem <actorId> <baseId> <count>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Give an item to a player', usage: '/additem <player#> <baseId> <count>' });
 
   commandRegistry.register('/tp', (actorId, args) => {
     if (args) require('./admin-service').teleportTo(actorId, parseInt(args, 16));
-  }, { module: 'admin', phase: 'core', description: '[Staff] Teleport to a player', usage: '/tp <actorId>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Teleport to a player', usage: '/tp <player#>' });
 
   commandRegistry.register('/kick', (actorId, args) => {
     if (args) {
@@ -447,7 +478,7 @@ function registerCoreCommands() {
       const reason = parts.slice(1).join(' ') || 'No reason given';
       require('./admin-service').kickPlayer(actorId, parseInt(parts[0], 16), reason);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Kick a player', usage: '/kick <actorId> [reason]' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Kick a player', usage: '/kick <player#> [reason]' });
 
   commandRegistry.register('/permakill', (actorId, args) => {
     if (args) {
@@ -455,30 +486,30 @@ function registerCoreCommands() {
       const reason = parts.slice(1).join(' ');
       require('./admin-service').retireCharacter(actorId, parseInt(parts[0], 16), reason);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Retire a character permanently (soft-delete)', usage: '/permakill <actorId> <reason>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Retire a character permanently (soft-delete)', usage: '/permakill <player#> <reason>' });
 
   commandRegistry.register('/setgold', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
       require('./admin-service').setGold(actorId, parseInt(parts[0], 16), parseInt(parts[1]));
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Set a player\'s gold', usage: '/setgold <actorId> <amount>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Set a player\'s gold', usage: '/setgold <player#> <amount>' });
 
   // Alias técnico em inglês pelo mesmo padrão de /apresentar → /introduce.
   // `parseActorId` (e não `parseInt(args, 16)` como os outros de staff) porque
   // este é o comando que a staff digita copiando um id de um log ou do painel,
   // onde ele aparece com o prefixo `0x`.
-  commandRegistry.register(['/revelaridentidade', '/revealidentity'], (actorId, args) => {
+  commandRegistry.register(['/revealidentity', '/revelaridentidade'], (actorId, args) => {
     const targetActorId = parseActorId(args);
     if (!Number.isFinite(targetActorId)) {
-      sendNotification(actorId, 'Usage: /revealidentity <actorId>');
+      sendNotification(actorId, 'Usage: /revealidentity <player#>');
       return;
     }
     require('./admin-service').revealIdentity(actorId, targetActorId).catch(err => {
       console.error('[identity] Falha ao revelar identidade:', err.message);
       sendNotification(actorId, '[Staff] Could not reveal the identity.');
     });
-  }, { module: 'admin', phase: 'core', description: '[Staff] Reveal a character\'s real name (audited)', usage: '/revealidentity <actorId>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Reveal a character\'s real name (audited)', usage: '/revealidentity <player#>' });
 
   // /status — diagnóstico de estado do personagem (staff)
   commandRegistry.register('/status', (actorId, args) => {
@@ -486,8 +517,48 @@ function registerCoreCommands() {
     if (!charData) return;
     const state = characterState.get(charData.characterId);
     const meta = characterState.getMetadata(charData.characterId);
-    sendNotification(actorId, `[Staff] State: ${state} | ${JSON.stringify(meta)} | your actorId: 0x${actorId.toString(16)}`);
-  }, { module: 'admin', phase: 'core', description: '[Staff] Show your character state and actorId', usage: '/status' });
+    sendNotification(actorId, `[Staff] ${formatCharacterNumber(actorId)} | State: ${state} | ${JSON.stringify(meta)} | actorId 0x${actorId.toString(16)}`);
+  }, { module: 'admin', phase: 'core', description: '[Staff] Show your character number, state and actorId', usage: '/status' });
+
+  // /whoami — your own character number.
+  commandRegistry.register(['/whoami', '/id'], (actorId) => {
+    const char = getActiveCharacterData(actorId);
+    if (!char) { sendNotification(actorId, 'Your character is not loaded yet.'); return; }
+    sendNotification(actorId, `You are ${char.firstName} ${char.lastName}, character ${formatCharacterNumber(actorId)}.`);
+  }, { module: 'identity', phase: 'core', description: 'Show your character number', usage: '/whoami' });
+
+  // /nearby — who is around you, with the numbers commands take.
+  commandRegistry.register(['/nearby', '/players'], (actorId) => {
+    sendNotification(actorId, describeNearby(actorId));
+  }, { module: 'identity', phase: 'core', description: 'List people near you with their character numbers', usage: '/nearby' });
+}
+
+/** Radius for /nearby, in game units (about one city block). */
+const NEARBY_RADIUS = 3000;
+
+/**
+ * People near `actorId`, closest first, as "#12 Name (8m)". Names respect who
+ * the observer knows: strangers show as "Stranger" but still have a number, so
+ * you can /introduce yourself or /trade with someone whose name you don't know.
+ */
+function describeNearby(actorId) {
+  if (typeof mp === 'undefined') return 'Nobody nearby.';
+  const self = mp.get(actorId, 'locationalData');
+  if (!self || !self.pos) return 'Your position is not known yet.';
+  const people = [];
+  for (const otherId of activeCharacters.keys()) {
+    if (otherId === actorId) continue;
+    const loc = mp.get(otherId, 'locationalData');
+    if (!loc || !loc.pos) continue;
+    const sameCell = (loc.cellOrWorldSpaceId || loc.cellId) === (self.cellOrWorldSpaceId || self.cellId);
+    if (!sameCell) continue;
+    const d = Math.hypot(loc.pos[0] - self.pos[0], loc.pos[1] - self.pos[1], loc.pos[2] - self.pos[2]);
+    if (d > NEARBY_RADIUS) continue;
+    people.push({ d, label: `${formatCharacterNumber(otherId)} ${getDisplayNameForObserver(otherId, actorId)} (${Math.round(d / 70)}m)` });
+  }
+  if (people.length === 0) return 'Nobody nearby.';
+  people.sort((a, b) => a.d - b.d);
+  return `Nearby: ${people.map((p) => p.label).join('  ·  ')}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -560,9 +631,24 @@ function handleChatInput(actorId, text) {
       return;
     }
 
-    const handled = commandRegistry.dispatch(actorId, command, args);
+    // Player slots (`<player#>`) take a character number: `/tp 12`, `/trade #12`.
+    // Handlers still receive an actorId, so none of them had to change.
+    let dispatchArgs = args;
+    if (entry) {
+      const resolved = characterNumbers.resolveTargetArgs(entry.usage, args, getActorByCharacterNumber);
+      if (resolved.error) {
+        sendNotification(actorId, resolved.error);
+        return;
+      }
+      dispatchArgs = resolved.args;
+    }
+
+    const handled = commandRegistry.dispatch(actorId, command, dispatchArgs);
     if (!handled) {
-      sendNotification(actorId, `Unknown command: ${command}. Type /help for the list.`);
+      const off = unavailableCommand(command);
+      sendNotification(actorId, off
+        ? `${command} is part of "${off.module}", which is turned off on this server (${off.enabledBy}).`
+        : `Unknown command: ${command}. Type /help for the list.`);
     }
     return;
   }
@@ -593,6 +679,9 @@ module.exports = {
   getCharacterData: getActiveCharacterData,
 
   getActiveActorByCharacterId,
+  setCharacterNumber,
+  getActorByCharacterNumber,
+  formatCharacterNumber,
   listActiveActorIds,
   handleChatInput,
   broadcastProximityMessage,

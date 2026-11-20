@@ -282,9 +282,9 @@ function gravarRelatorio(relatorio) {
 function commandDefs() {
   return [
     {
-      name: ['/sondacadaver'],
-      description: 'Prova do cadaver: o servidor le e sobrescreve o inventario de um ator morto? (Peça 2 da §16)',
-      usage: '/sondacadaver <actorId em hex>',
+      name: ['/corpseprobe', '/sondacadaver'],
+      description: '[Dev] Test whether the server can read/write a dead actor\'s inventory',
+      usage: '/corpseprobe <npc hex id>',
       handler: (actorId, args) => {
         if (!admin.hasPermission(actorId, 'run_world_probe')) {
           commands.sendNotification(actorId, 'Sem permissao.');

@@ -608,7 +608,7 @@ function registerInteractions(dependencies = {}) {
       deps.characterState.set(ctx.characterId, deps.characterState.STATES.SURRENDERED, { at: Date.now() });
       _applySurrenderAnimation(ctx.actorId);
       deps.commands.broadcastProximityMessage(ctx.actorId, '* Levanta as maos e se rende.', 600);
-      return { message: 'Voce se rendeu. Qualquer um por perto pode revistar ou roubar seus itens agora.' };
+      return { message: 'You surrendered. Anyone nearby can now search or rob you.' };
     }
   });
 
@@ -635,11 +635,11 @@ function registerInteractions(dependencies = {}) {
     canSee: async (ctx) => _isRobbable(ctx.target.characterId, deps),
     canExecute: async (ctx) => {
       const robbable = _isRobbable(ctx.target.characterId, deps);
-      return { allowed: robbable, reason: robbable ? '' : 'O alvo precisa estar rendido ou incapacitado.' };
+      return { allowed: robbable, reason: robbable ? '' : 'The target must have surrendered or be incapacitated.' };
     },
     execute: async (ctx) => {
       if (!_isRobbable(ctx.target.characterId, deps)) {
-        throw new Error('Alvo nao esta rendido nem incapacitado.');
+        throw new Error('The target has not surrendered and is not incapacitated.');
       }
       const result = await markItemStolen({
         victimActorId: ctx.target.actorId,
@@ -649,7 +649,7 @@ function registerInteractions(dependencies = {}) {
         baseId: ctx.data.baseId,
         holdId: ctx.data.holdId || 'unknown'
       }, dependencies);
-      if (!result.ok) throw new Error('Nao foi possivel roubar este item.');
+      if (!result.ok) throw new Error('Could not steal this item.');
       return { message: 'Item roubado.', data: result.data };
     }
   });

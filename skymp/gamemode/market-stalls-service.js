@@ -1169,20 +1169,20 @@ function commandDefs() {
   return [
     {
       name: '/stallplace',
-      description: '[Barraca] Monta uma barraca na posicao atual',
-      usage: '/stallplace <nome>',
+      description: '[Stall] Set up a stall where you stand',
+      usage: '/stallplace <name>',
       handler: (actorId, args) => placeStall(actorId, args)
     },
     {
       name: '/stallpack',
-      description: '[Barraca] Recolhe sua barraca ativa',
+      description: '[Stall] Pack up your stall',
       usage: '/stallpack <stallId>',
       handler: (actorId, args) => packStall(actorId, args.trim())
     },
     {
       name: '/stalladd',
-      description: '[Barraca] Anuncia item do inventario',
-      usage: '/stalladd <stallId> <baseId> <count> <price> <rotulo>',
+      description: '[Stall] List an item from your inventory',
+      usage: '/stalladd <stallId> <baseId> <count> <price> <label>',
       handler: (actorId, args) => {
         const [stallId, baseId, count, price, ...label] = args.split(' ');
         addItem(actorId, stallId, baseId, count, price, label.join(' '));
@@ -1190,25 +1190,25 @@ function commandDefs() {
     },
     {
       name: '/stallremove',
-      description: '[Barraca] Remove item anunciado',
+      description: '[Stall] Remove a listed item',
       usage: '/stallremove <itemId>',
       handler: (actorId, args) => removeItem(actorId, args.trim())
     },
     {
       name: '/stalls',
-      description: '[Barraca] Lista barracas ativas',
+      description: '[Stall] List active stalls',
       usage: '/stalls',
       handler: (actorId) => listStalls(actorId)
     },
     {
       name: '/stallitems',
-      description: '[Barraca] Lista itens de uma barraca',
+      description: '[Stall] List the items of a stall',
       usage: '/stallitems <stallId>',
       handler: (actorId, args) => listItems(actorId, args.trim())
     },
     {
       name: '/stallbuy',
-      description: '[Barraca] Compra item anunciado',
+      description: '[Stall] Buy a listed item',
       usage: '/stallbuy <stallId> <itemId> <count>',
       handler: (actorId, args) => {
         const [stallId, itemId, count] = args.split(' ');
@@ -1217,8 +1217,8 @@ function commandDefs() {
     },
     {
       name: '/stalllicense',
-      description: '[Gov] Emite licenca de comerciante',
-      usage: '/stalllicense <actorId> <cityId> <dias>',
+      description: '[Gov] Issue a merchant license',
+      usage: '/stalllicense <player#> <cityId> <days>',
       handler: (actorId, args) => {
         const [targetActor, cityId, days] = args.split(' ');
         issueLicense(actorId, targetActor, cityId, days);
@@ -1226,14 +1226,14 @@ function commandDefs() {
     },
     {
       name: '/stallinspect',
-      description: '[Fiscal] Inspeciona barraca',
+      description: '[Inspector] Inspect a stall',
       usage: '/stallinspect <stallId>',
       handler: (actorId, args) => inspectStall(actorId, args.trim())
     },
     {
       name: '/stallsuspend',
-      description: '[Fiscal] Suspende barraca',
-      usage: '/stallsuspend <stallId> <motivo>',
+      description: '[Inspector] Suspend a stall',
+      usage: '/stallsuspend <stallId> <reason>',
       handler: (actorId, args) => {
         const [stallId, ...reason] = args.split(' ');
         suspendStall(actorId, stallId, reason.join(' '));
@@ -1241,8 +1241,8 @@ function commandDefs() {
     },
     {
       name: '/stallconfiscate',
-      description: '[Fiscal] Confisca item de barraca',
-      usage: '/stallconfiscate <itemId> <motivo>',
+      description: '[Inspector] Confiscate a listed item',
+      usage: '/stallconfiscate <itemId> <reason>',
       handler: (actorId, args) => {
         const [itemId, ...reason] = args.split(' ');
         confiscateItem(actorId, itemId, reason.join(' '));
