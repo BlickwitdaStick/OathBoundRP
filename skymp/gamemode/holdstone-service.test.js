@@ -79,6 +79,10 @@ function createDb() {
     if (s.includes('FROM characters WHERE char_number')) return t.characters.filter((c) => c.char_number === p[0]);
     if (s.includes('FROM characters WHERE id IN')) return t.characters.filter((c) => p.includes(c.id));
 
+    if (s.startsWith('DELETE FROM holdstones WHERE hold_id')) {
+      t.holdstones = t.holdstones.filter((r) => r.hold_id !== p[0]);
+      return { affectedRows: 1 };
+    }
     if (s.startsWith('DELETE FROM holdstones WHERE object_id')) {
       t.holdstones = t.holdstones.filter((r) => !(r.object_id === p[0] && r.hold_id !== p[1]));
       return { affectedRows: 1 };
@@ -398,5 +402,110 @@ describe('holdstone-service: parceling tool and holdstone', () => {
     assert.equal(modals.at(-1).type, 'holdstone:open');
     assert.equal(modals.at(-1).data.yourRank, 'Citizen');
     assert.equal(modals.at(-1).data.canManage, false);
+  });
+});
+
+describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
+  const HOLDSTONE_BASE = 0xfe000800;
+  let placed;
+  let sets;
+  let destroyed;
+  let nextRef;
+
+  beforeEach(async () => {
+    setup();
+    placed = new Map(); // refId → baseId
+    sets = [];
+    destroyed = [];
+    nextRef = 0xff000100;
+    const base = global.mp;
+    global.mp = {
+      ...base,
+      // runtime references have no plugin in their desc, as in SkyMP's FormDesc
+      getDescFromId: (id) => (id >= 0xff000000 ? (id - 0xff000000).toString(16) : base.getDescFromId(id)),
+      getIdFromDesc: (d) => {
+        if (d === service.HOLDSTONE_BASE_DESC) return HOLDSTONE_BASE;
+        return d.includes(':') ? base.getIdFromDesc(d) : 0xff000000 + parseInt(d, 16);
+      },
+      get: (id, prop) => {
+        if (prop === 'baseDesc' && placed.has(id)) return service.HOLDSTONE_BASE_DESC;
+        if (prop === 'locationalData' && id === STAFF) return { pos: [1000, 2000, 50], rot: [0, 0, 90], cellOrWorldDesc: '3c:Skyrim.esm' };
+        return base.get(id, prop);
+      },
+      place: (baseId) => { const id = nextRef++; placed.set(id, baseId); return id; },
+      set: (id, prop, value) => sets.push({ id, prop, value }),
+      destroyActor: (id) => { destroyed.push(id); placed.delete(id); }
+    };
+    service.registerPhysicalAnchors();
+    await service.reload();
+  });
+  afterEach(() => { delete global.mp; });
+
+  it('/holdstone spawn puts the stone in front of staff, facing them, and binds it', async () => {
+    await service.handleHoldstoneCommand(STAFF, 'spawn whiterun');
+    assert.match(lastNote(STAFF), /Whiterun holdstone placed in front of you/);
+    const [ref] = placed.keys();
+    assert.equal(placed.get(ref), HOLDSTONE_BASE);
+    const loc = sets.find((s) => s.id === ref && s.prop === 'locationalData').value;
+    // facing 90° (east): 180 units further along +X, rune face turned back toward the player
+    assert.deepEqual(loc.pos.map(Math.round), [1180, 2000, 50]);
+    assert.deepEqual(loc.rot, [0, 0, 90]);
+    assert.equal(loc.cellOrWorldDesc, '3c:Skyrim.esm');
+    assert.deepEqual(db.tables.holdstones, [{ hold_id: 'whiterun', object_id: '100' }]);
+    assert.equal(service.getIndex().holdstoneById.get(ref), 'whiterun');
+    assert.equal(physicalAnchorRegistry.has(ref), true, 'pressing E on it opens the hold menu');
+  });
+
+  it('spawning again moves the hold to the new stone and removes the old one', async () => {
+    await service.spawnHoldstone(STAFF, 'whiterun');
+    const res = await service.spawnHoldstone(STAFF, 'whiterun');
+    assert.equal(res.ok, true);
+    assert.match(res.message, /old one was removed/);
+    assert.deepEqual(destroyed, [0xff000100]);
+    assert.deepEqual(db.tables.holdstones, [{ hold_id: 'whiterun', object_id: '101' }]);
+  });
+
+  it('clearing a hold removes a spawned stone, but never a map object', async () => {
+    await service.setHoldstone('riften', desc(STONE));
+    await service.clearHoldstone('riften');
+    assert.deepEqual(destroyed, [], 'a stone that is part of the map stays');
+
+    await service.spawnHoldstone(STAFF, 'whiterun');
+    const res = await service.clearHoldstone('whiterun');
+    assert.match(res.message, /removed from the world/);
+    assert.deepEqual(destroyed, [0xff000100]);
+  });
+
+  it('an unbound holdstone tells the player it belongs to no hold, and staff how to bind it', async () => {
+    const ref = global.mp.place(HOLDSTONE_BASE);
+    assert.equal(service.handleActivation(ref, ANA), false);
+    assert.match(lastNote(ANA), /belongs to no hold yet/);
+    assert.equal(service.handleActivation(ref, STAFF), false);
+    assert.match(lastNote(STAFF), /\/holdstone place <hold>/);
+  });
+
+  it('/holdstone place works on a spawned stone; a typed desc without its plugin is still refused', async () => {
+    const ref = global.mp.place(HOLDSTONE_BASE);
+    await service.handleHoldstoneCommand(STAFF, 'place riften');
+    service.handleActivation(ref, STAFF);
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(service.getIndex().holdstoneById.get(ref), 'riften');
+
+    const typed = await service.setHoldstone('whiterun', '12eb7');
+    assert.equal(typed.ok, false);
+  });
+
+  it('refuses when the plugin is not loaded or the hold is unknown', async () => {
+    assert.match((await service.spawnHoldstone(STAFF, 'nowhere')).message, /Unknown hold/);
+    global.mp.getIdFromDesc = () => { throw new Error('OathboundHoldstone.esp not found in loaded files'); };
+    assert.match((await service.spawnHoldstone(STAFF, 'whiterun')).message, /not loaded on the server/);
+    assert.equal(placed.size, 0);
+  });
+
+  it('non-staff cannot spawn', async () => {
+    await service.handleHoldstoneCommand(ANA, 'spawn whiterun');
+    assert.match(lastNote(ANA), /Staff only/);
+    assert.equal(placed.size, 0);
   });
 });

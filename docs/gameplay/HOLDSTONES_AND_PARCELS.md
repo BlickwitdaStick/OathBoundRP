@@ -66,12 +66,21 @@ as minimum rank become owner-only.
 
 ## Staff: setting up a hold
 
-1. **Place the holdstone.** Stand next to the object that will be the stone
-   (any object: a standing stone, a banner, a table) and type
-   `/holdstone place whiterun`, then press **E** on the object. The server
+1. **Place the holdstone.** Stand where it should go, face that way and type
+   `/holdstone spawn whiterun`. The holdstone model (a runed monolith from
+   `OathboundHoldstone.esp`, built by `tools/holdstone/`) appears about 2.5 m
+   in front of you with its runes facing you, already bound to the hold. It
+   is saved with the world, so it stays after restarts. Spawning again moves
+   the hold to the new stone and removes the old one; `/holdstone clear`
+   removes a spawned stone too.
+
+   To use an object that is already in the world instead (any object: a
+   standing stone, a banner, a table, or a holdstone placed in the Creation
+   Kit), type `/holdstone place whiterun`, then press **E** on it. The server
    stores it by FormDesc (`hex:Plugin.esm`, never a numeric FormID).
    Fallback: `/holdstone set whiterun 1a2b3:Skyrim.esm`.
-   One stone per hold — placing a new one replaces the old one.
+   One stone per hold — placing a new one replaces the old one. A holdstone
+   model that no hold owns says so when someone presses E on it.
 2. **Appoint the leaders.** `/holdrank whiterun 12 jarl` (12 = the player's
    character number, see `/nearby`). The player must be online for the
    command; at the stone, leaders can use any number, online or not.
@@ -89,7 +98,7 @@ as minimum rank become owner-only.
 All staff commands:
 
 ```
-/holdstone list | place <hold> | set <hold> <formDesc> | clear <hold>
+/holdstone list | spawn <hold> | place <hold> | set <hold> <formDesc> | clear <hold>
 /holdstone ranks <hold> | addrank <hold> <key> <position> <leader|member> <name> | delrank <hold> <key>
 /holdrank <hold> <player#> <rank|none>
 /parcel list <hold> | info <id> | create <hold> <name> | rename <id> <name> | delete <id>

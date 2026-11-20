@@ -48,6 +48,17 @@ const HOLDSTONE_RANGE = 350;
 const NAME_MAX = 64;
 const RANK_KEY_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 const FORM_DESC_PATTERN = /^[0-9a-f]{1,8}:[^\s:]+\.(esm|esp|esl)$/i;
+/**
+ * A reference the server created at runtime (mp.place) has an id of
+ * 0xFF000000 + n, and SkyMP writes its desc as just `n` in hex, with no
+ * plugin. Accepted only from the server itself (descOf / spawnHoldstone),
+ * never typed, so a FormDesc with its plugin left off is not mistaken for one.
+ */
+const DYNAMIC_DESC_PATTERN = /^[0-9a-f]{1,6}$/;
+/** The holdstone activator in tools/holdstone/dist/OathboundHoldstone.esp. */
+const HOLDSTONE_BASE_DESC = '800:OathboundHoldstone.esp';
+/** Placed this far in front of the staff member who spawns it (~2.5 m). */
+const HOLDSTONE_SPAWN_DISTANCE = 180;
 
 let _index = parcelLocks.EMPTY_INDEX;
 /** actorId → { parcelId } | { placeHoldId } */
@@ -102,7 +113,9 @@ function descOf(formId) {
   if (!api || typeof api.getDescFromId !== 'function') return null;
   try {
     const desc = api.getDescFromId(formId);
-    return typeof desc === 'string' && desc.includes(':') ? desc : null;
+    if (typeof desc !== 'string') return null;
+    if (desc.includes(':')) return desc;
+    return formId >= 0xff000000 && DYNAMIC_DESC_PATTERN.test(desc) ? desc : null;
   } catch {
     return null;
   }
@@ -114,9 +127,10 @@ function idOfDesc(desc) {
   return api.getIdFromDesc(desc);
 }
 
-function normalizeDesc(raw) {
+function normalizeDesc(raw, { allowDynamic = false } = {}) {
   if (typeof raw !== 'string') return null;
   const clean = raw.trim().replace(/^0x/i, '');
+  if (allowDynamic && DYNAMIC_DESC_PATTERN.test(clean)) return clean.toLowerCase();
   if (!FORM_DESC_PATTERN.test(clean)) return null;
   const [hex, plugin] = clean.split(':');
   return `${hex.toLowerCase().replace(/^0+(?=.)/, '')}:${plugin}`;
@@ -249,9 +263,9 @@ function _validName(name) {
   return typeof name === 'string' && name.trim().length >= 2 && name.trim().length <= NAME_MAX;
 }
 
-async function setHoldstone(holdId, objectDesc) {
+async function setHoldstone(holdId, objectDesc, { allowDynamic = false } = {}) {
   if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
-  const desc = normalizeDesc(objectDesc);
+  const desc = normalizeDesc(objectDesc, { allowDynamic });
   if (!desc) return no('That object has no FormDesc (hex:Plugin.esm).');
   if (_index.objectsByDesc.has(desc)) return no('That object is part of a parcel; remove it first.');
   const { db } = deps();
@@ -265,9 +279,94 @@ async function setHoldstone(holdId, objectDesc) {
 }
 
 async function clearHoldstone(holdId) {
+  const old = _index.holdstoneByHold.get(holdId);
   await deps().db.query('DELETE FROM holdstones WHERE hold_id = ?', [holdId]);
   await reload();
-  return ok(`${_holdName(holdId)} has no holdstone now.`);
+  const removed = old ? _removeSpawnedStone(old) : false;
+  return ok(`${_holdName(holdId)} has no holdstone now.${removed ? ' Its stone was removed from the world.' : ''}`);
+}
+
+/** Is this reference an OATHBOUND holdstone (the activator from OathboundHoldstone.esp)? */
+function isHoldstoneObject(formId) {
+  const api = _mp();
+  if (!api || typeof api.get !== 'function') return false;
+  try {
+    return String(api.get(formId, 'baseDesc') || '').toLowerCase() === HOLDSTONE_BASE_DESC.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Deletes a stone that spawnHoldstone created. Only runtime references whose
+ * base is the holdstone activator: a stone that is part of the map (placed in
+ * the Creation Kit, or a vanilla object chosen with "place") is left alone.
+ */
+function _removeSpawnedStone(desc) {
+  const api = _mp();
+  if (!DYNAMIC_DESC_PATTERN.test(desc) || !api || typeof api.destroyActor !== 'function') return false;
+  const formId = idOfDesc(desc);
+  if (!Number.isInteger(formId) || !isHoldstoneObject(formId)) return false;
+  try {
+    api.destroyActor(formId);
+    return true;
+  } catch (err) {
+    deps().logger.error(`[holdstones] could not remove old stone ${desc}:`, err.message);
+    return false;
+  }
+}
+
+/**
+ * Staff: puts a new holdstone in the world in front of `actorId`, facing
+ * them, and makes it `holdId`'s stone. The hold's previous stone, if it was
+ * spawned this way, is removed. The stone is a server reference, saved with
+ * the world like any other, so it stays after restarts.
+ */
+async function spawnHoldstone(actorId, holdId) {
+  if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
+  const api = _mp();
+  if (!api || typeof api.place !== 'function' || typeof api.set !== 'function') {
+    return no('This server build cannot place objects (no mp.place).');
+  }
+  let baseId;
+  try {
+    baseId = api.getIdFromDesc(HOLDSTONE_BASE_DESC);
+  } catch {
+    baseId = null;
+  }
+  if (!Number.isInteger(baseId)) return no('OathboundHoldstone.esp is not loaded on the server.');
+
+  const loc = api.get(actorId, 'locationalData');
+  if (!loc || !Array.isArray(loc.pos)) return no('Could not read your position.');
+  const angle = Array.isArray(loc.rot) ? Number(loc.rot[2]) || 0 : 0;
+  const rad = (angle * Math.PI) / 180;
+  const pos = [
+    loc.pos[0] + Math.sin(rad) * HOLDSTONE_SPAWN_DISTANCE,
+    loc.pos[1] + Math.cos(rad) * HOLDSTONE_SPAWN_DISTANCE,
+    loc.pos[2]
+  ];
+
+  let formId;
+  try {
+    formId = api.place(baseId);
+    if (!Number.isInteger(formId)) throw new Error('mp.place returned no form id');
+    // The rune face is the stone's -Y side; turn it toward the staff member.
+    api.set(formId, 'locationalData', { pos, rot: [0, 0, angle % 360], cellOrWorldDesc: loc.cellOrWorldDesc });
+  } catch (err) {
+    deps().logger.error('[holdstones] spawn failed:', err.message);
+    return no(`Could not place the holdstone: ${err.message}`);
+  }
+
+  const desc = descOf(formId);
+  const previous = _index.holdstoneByHold.get(holdId);
+  const result = await setHoldstone(holdId, desc, { allowDynamic: true });
+  if (!result.ok) {
+    try { api.destroyActor(formId); } catch { /* nothing to undo */ }
+    return result;
+  }
+  const replaced = previous && previous !== desc ? _removeSpawnedStone(previous) : false;
+  deps().logger.log(`[holdstones] ${actorId.toString(16)} placed the ${holdId} holdstone as ${desc} in ${loc.cellOrWorldDesc} at ${pos.map((v) => Math.round(v)).join(',')}`);
+  return ok(`${_holdName(holdId)} holdstone placed in front of you.${replaced ? ' The old one was removed.' : ''}`, { formId, desc });
 }
 
 async function addRank(holdId, key, position, isLeader, name) {
@@ -506,13 +605,21 @@ function handleActivation(targetId, casterId) {
   if (tool && tool.placeHoldId) {
     _tools.delete(caster);
     const desc = descOf(target);
-    setHoldstone(tool.placeHoldId, desc)
+    setHoldstone(tool.placeHoldId, desc, { allowDynamic: true })
       .then((r) => d.commands.sendNotification(caster, `[Holdstone] ${r.message}`))
       .catch((err) => d.logger.error('[holdstones] place failed:', err.message));
     return false;
   }
   if (tool && tool.parcelId && !d.commands.getActiveCharacterData(target) && !physicalAnchorRegistry.has(target)) {
     try { d.openInteractionMenu(caster, target); } catch (err) { d.logger.error('[holdstones] tool menu failed:', err.message); }
+    return false;
+  }
+
+  // A holdstone model that no hold owns yet (e.g. placed in the Creation Kit).
+  if (!parcelLocks.holdOfStone(_index, target) && isHoldstoneObject(target)) {
+    d.commands.sendNotification(caster, d.isStaff(caster)
+      ? '[Holdstone] Not bound to a hold yet: /holdstone place <hold>, then press E on it.'
+      : 'This holdstone is silent. It belongs to no hold yet.');
     return false;
   }
 
@@ -896,7 +1003,8 @@ function _characterFromActorArg(word) {
 }
 
 const HOLDSTONE_HELP =
-  '/holdstone list · /holdstone place <hold> (then press E on the object) · /holdstone set <hold> <formDesc> · ' +
+  '/holdstone list · /holdstone spawn <hold> (puts a holdstone in front of you) · ' +
+  '/holdstone place <hold> (then press E on an existing object) · /holdstone set <hold> <formDesc> · ' +
   '/holdstone clear <hold> · /holdstone ranks <hold> · /holdstone addrank <hold> <key> <position> <leader|member> <name> · ' +
   '/holdstone delrank <hold> <key> · /holdrank <hold> <player#> <rank|none>';
 
@@ -918,6 +1026,8 @@ async function handleHoldstoneCommand(actorId, args) {
       _say(actorId, `[Holdstone] ${lines.join(' · ') || 'No holds.'}`);
       return;
     }
+    case 'spawn':
+      return reply(await spawnHoldstone(actorId, rest[0]));
     case 'place':
       if (!_index.holds.has(rest[0])) return _say(actorId, `[Holdstone] Unknown hold "${rest[0] || ''}".`);
       startPlaceHoldstone(actorId, rest[0]);
@@ -1014,7 +1124,7 @@ function commandDefs() {
     _say(actorId, 'Could not complete that. Check the server log.');
   });
   return [
-    { name: '/holdstone', handler: wrap(handleHoldstoneCommand), description: '[Staff] Set up holdstones and hold ranks', usage: '/holdstone [list|place|set|clear|ranks|addrank|delrank]' },
+    { name: '/holdstone', handler: wrap(handleHoldstoneCommand), description: '[Staff] Set up holdstones and hold ranks', usage: '/holdstone [list|spawn|place|set|clear|ranks|addrank|delrank]' },
     { name: '/holdrank', handler: wrap(handleHoldRankCommand), description: '[Staff] Set a player\'s rank in a hold', usage: '/holdrank <hold> <player#> <rank|none>' },
     { name: '/parcel', handler: wrap(handleParcelCommand), description: '[Staff] Manage parcels (doors and containers that lock)', usage: '/parcel [list|create|info|rename|rank|lock|unlock|disown|delete|add|remove|tool]' },
     { name: '/parcelowner', handler: wrap(handleParcelOwnerCommand), description: '[Staff] Give a parcel to a player', usage: '/parcelowner <parcelId> <player#>' }
@@ -1060,6 +1170,9 @@ module.exports = {
   characterByNumber,
   setHoldstone,
   clearHoldstone,
+  spawnHoldstone,
+  isHoldstoneObject,
+  HOLDSTONE_BASE_DESC,
   addRank,
   removeRank,
   setMemberRank,
