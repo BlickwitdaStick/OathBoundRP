@@ -306,11 +306,11 @@ describe('soul-service — resolucao e auditoria (§14.3)', () => {
     const d = JSON.parse(linha.details);
     assert.strictEqual(d.eventId, 'bencao:altar:7');
     assert.ok(soul.OUTCOMES.includes(d.outcome));
-    assert.strictEqual(typeof d.peso, 'number');
+    assert.strictEqual(typeof d.weight, 'number');
     assert.strictEqual(typeof d.roll, 'number');
     assert.strictEqual(d.inputs.circumstance, 2);
     assert.strictEqual(d.inputs.difficulty, 1);
-    assert.ok(d.inputs.banda, 'a banda usada precisa estar registrada pra reproducao');
+    assert.ok(d.inputs.band, 'the band used must be recorded so the roll can be reproduced');
   });
 
   it('a auditoria NAO carrega a semente — ela vazaria pelo /api/audit do painel', async () => {

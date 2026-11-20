@@ -593,7 +593,7 @@ async function resolveAttempt({ characterId, affinity, eventId, circumstance = 0
         characterId,
         eventId,
         outcome: resultado.outcome,
-        peso: resultado.peso,
+        weight: resultado.weight,
         roll: resultado.roll,
         inputs: resultado.inputs,
         seedRef: registro.seed.slice(0, 8),
