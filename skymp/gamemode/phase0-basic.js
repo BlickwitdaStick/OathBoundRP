@@ -75,6 +75,7 @@ const faunaCensus   = require(path.join(gamemodeDir, 'fauna-census'));
 const corpseProbe   = require(path.join(gamemodeDir, 'corpse-probe'));
 const tradeService  = require(path.join(gamemodeDir, 'trade-service'));
 const depotService  = require(path.join(gamemodeDir, 'core', 'depot-service'));
+const holdstoneService = require(path.join(gamemodeDir, 'holdstone-service'));
 const crimeService  = require(path.join(gamemodeDir, 'core', 'crime-service'));
 const interactionPromptService = require(path.join(gamemodeDir, 'core', 'interaction-prompt-service'));
 const characterDashboardBridge = require(path.join(gamemodeDir, 'core', 'character-dashboard-bridge'));
@@ -582,6 +583,36 @@ moduleRegistry.register({
   initialize: async () => {
     depotService.registerInteractions({ sendModal });
     depotService.registerPhysicalAnchors();
+  }
+});
+
+// Holdstones, hold ranks, parcels and door/container locks
+// (migration-v33-holdstones-parcels.sql, docs/gameplay/HOLDSTONES_AND_PARCELS.md).
+// The stone is a physical anchor: E opens the hold menu via 'interaction-prompt'.
+// Locks hook mp.onActivate through core/activation-events.js and work even
+// without the prompt; the parceling tool menu needs the prompt to open.
+moduleRegistry.register({
+  id: 'holdstones',
+  enabledBy: 'ENABLE_HOLDSTONES',
+  phase: 'lab',
+  version: '1.0.0',
+  // Locks must not depend on the menu framework being on: both are optional.
+  dependencies: [],
+  optionalDependencies: ['interaction', 'interaction-prompt'],
+  commands: holdstoneService.commandDefs(),
+  initialize: async () => {
+    await holdstoneService.initialize({
+      sendModal,
+      openInteractionMenu: (actorId, targetFormId) => {
+        interactionPromptService.handleClientEvent(actorId, { kind: 'inspect', targetFormId })
+          .catch(err => console.error('[holdstones] parcel tool menu failed:', err.message));
+      }
+    });
+    uiEventRouter.register('holdstone', holdstoneService.handleUiEvent);
+  },
+  shutdown: async () => {
+    uiEventRouter.unregister('holdstone');
+    holdstoneService.shutdown();
   }
 });
 
