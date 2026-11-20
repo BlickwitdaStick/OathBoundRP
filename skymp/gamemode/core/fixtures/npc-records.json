@@ -1,0 +1,3294 @@
+{
+ "loadOrder": [
+  "Skyrim.esm",
+  "Update.esm",
+  "Dawnguard.esm",
+  "HearthFires.esm",
+  "Dragonborn.esm"
+ ],
+ "masterMaps": {
+  "Skyrim.esm": [
+   0
+  ],
+  "Update.esm": [
+   0,
+   1
+  ],
+  "Dawnguard.esm": [
+   0,
+   1,
+   2
+  ],
+  "HearthFires.esm": [
+   0,
+   1,
+   3
+  ],
+  "Dragonborn.esm": [
+   0,
+   1,
+   4
+  ]
+ },
+ "records": {
+  "0x0003decb": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "LvlBanditMelee1H",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "000000000000000001000000000064002300ff0f00000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fc9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "7c9c1000"
+    }
+   ]
+  },
+  "0x000b83c1": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "LvlWolf",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "000000000000000001000000000064002300ff0f00000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "c2830b00"
+    },
+    {
+     "type": "RNAM",
+     "hex": "7c9c1000"
+    }
+   ]
+  },
+  "0x0002b35e": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "LvlThalmorMelee1H",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "000000000000000001000000000064002300ff0f00000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "29b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "7c9c1000"
+    }
+   ]
+  },
+  "0x0004e50a": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "LvlHunter",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "000000000000000001000000000064002300ff1f00000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "c23f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "7c9c1000"
+    }
+   ]
+  },
+  "0x04035656": {
+   "plugin": "Dragonborn.esm",
+   "type": "NPC_",
+   "editorId": "DLC2EncCultist07NordMSummoner",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010960000002e000000000064002300be1f84030000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "bc4f030200000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "cd4f0302"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039cfc": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "LCharBanditMelee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000269d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "05000000279d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "09000000289d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0e000000299d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "130000002a9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "190000002b9d030001000000"
+    }
+   ]
+  },
+  "0x00109c7c": {
+   "plugin": "Skyrim.esm",
+   "type": "RACE",
+   "editorId": "FoxRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "98370100953701006c2a0900"
+    },
+    {
+     "type": "DATA",
+     "hex": "0f0fff00ff00ff00ff00ff00ff0000009a99993f0000803f0000803f0000803f48891000"
+    }
+   ]
+  },
+  "0x000b83c2": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "LCharWolf",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000be3a020001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000005fe100001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000be3a020001000000"
+    }
+   ]
+  },
+  "0x0002b129": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "LCharThalmorMelee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000f9950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0c000000fc950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "1400000000960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "1c00000003960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "2400000006960f0001000000"
+    }
+   ]
+  },
+  "0x00073fc2": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "LCharHunter",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000bd3f070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000bf3f070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000c03f070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000c13f070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000045fb0b0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000048fb0b0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000047fb0b0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000046fb0b0001000000"
+    }
+   ]
+  },
+  "0x04034fbc": {
+   "plugin": "Dragonborn.esm",
+   "type": "FACT",
+   "editorId": "DLC2CultistFaction",
+   "fields": []
+  },
+  "0x04034fcd": {
+   "plugin": "Dragonborn.esm",
+   "type": "NPC_",
+   "editorId": "DLC2EncCultist07TemplateSummoner",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010960000002e000000000064002300b61f84030000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "bc4f030200000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d60c0302"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00013746": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "NordRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100"
+    },
+    {
+     "type": "DATA",
+     "hex": "070a060509050a0511050c05ff0000000ad7833f0ad7833f0000803f0000803f4389a050"
+    }
+   ]
+  },
+  "0x00039d26": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharBandit01Melee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000f79c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f69c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f59c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000d8bc010001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000fa9c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f89c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f99c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f69c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000d8bc010001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000fa9c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f99c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000a03c0c0001000000"
+    }
+   ]
+  },
+  "0x00039d27": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharBandit02Melee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000fe9c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000ff9c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000009d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000019d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000039d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000049d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000059d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000ff9c030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000019d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000039d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000059d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000a23c0c0001000000"
+    }
+   ]
+  },
+  "0x00039d28": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharBandit03Melee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000069d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000079d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000089d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000099d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000b9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000c9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000d9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000079d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000099d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000b9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000d9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000a43c0c0001000000"
+    }
+   ]
+  },
+  "0x00039d29": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharBandit04Melee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "010000000e9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000f9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000109d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000119d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000139d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000149d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000159d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000f9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000119d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000139d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000159d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000a63c0c0001000000"
+    }
+   ]
+  },
+  "0x00039d2a": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharBandit05Melee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000169d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000179d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000189d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000199d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001b9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001c9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001d9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000179d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000199d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001b9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001d9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000a83c0c0001000000"
+    }
+   ]
+  },
+  "0x00039d2b": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharBandit06Melee1H",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "010000001e9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001f9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000209d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000219d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000239d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000249d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000259d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000001f9d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000219d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000239d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000259d030001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000aa3c0c0001000000"
+    }
+   ]
+  },
+  "0x00023abe": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncWolf",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180000000000000002000000000064002300000000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "1300000000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "93e8020000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "93e0030000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "91e6030000000000"
+    },
+    {
+     "type": "RNAM",
+     "hex": "0a320100"
+    }
+   ]
+  },
+  "0x0010fe05": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncWolfRed",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180000000000000002000000000064002300be1f00000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "1300000000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "93e8020000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "93e0030000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "91e6030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3a0200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "0a320100"
+    }
+   ]
+  },
+  "0x000f95f9": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharThalmor01Melee",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "0100000026b1020001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000008328070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000b960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000a960f0001000000"
+    }
+   ]
+  },
+  "0x000f95fc": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharThalmor02Melee",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "01000000f1950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000a62a070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f2950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000007a29070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000e960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000d960f0001000000"
+    }
+   ]
+  },
+  "0x000f9600": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharThalmor03Melee",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "0100000061d9070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f4950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000062d9070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f3950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000010960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000000f960f0001000000"
+    }
+   ]
+  },
+  "0x000f9603": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharThalmor04Melee",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "0100000067d9070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f6950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000006ed9070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f5950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000012960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000011960f0001000000"
+    }
+   ]
+  },
+  "0x000f9606": {
+   "plugin": "Skyrim.esm",
+   "type": "LVLN",
+   "editorId": "SubCharThalmor05Melee",
+   "fields": [
+    {
+     "type": "LVLO",
+     "hex": "010000006cd9070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f8950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "010000006fd9070001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "01000000f7950f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000014960f0001000000"
+    },
+    {
+     "type": "LVLO",
+     "hex": "0100000013960f0001000000"
+    }
+   ]
+  },
+  "0x00073fbd": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "98002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00073fbf": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "98002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00073fc0": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "98002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00073fc1": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterWoodElfM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "98002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "49370100"
+    }
+   ]
+  },
+  "0x000bfb45": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "99002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x000bfb48": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "99002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x000bfb47": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "99002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000bfb46": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunterWoodElfF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "99002010e7ffe7fff40105000f0064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "be3f0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "49370100"
+    }
+   ]
+  },
+  "0x04030cd6": {
+   "plugin": "Dragonborn.esm",
+   "type": "NPC_",
+   "editorId": "DLC2EncCultist07Template",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010960000002e000000000064002300340f84030000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "bc4f030200000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d20c0302"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039cf7": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002c10e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039cf6": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002410e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039cf5": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002c10e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x0001bcd8": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002410e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039cfa": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HOrcM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002410e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "47370100"
+    }
+   ]
+  },
+  "0x00039cf8": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002c10e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00039cf9": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002410e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000c3ca0": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01Melee1HKhajiitM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002410e7ff140001000000000064002300be0ff1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "fd9c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "45370100"
+    }
+   ]
+  },
+  "0x00039cfe": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002810e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039cff": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d00": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002810e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d01": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d03": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HOrcM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "47370100"
+    }
+   ]
+  },
+  "0x00039d04": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002810e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00039d05": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000c3ca2": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02Melee1HKhajiitM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff140005000000000064002300be0f0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "d9bc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "45370100"
+    }
+   ]
+  },
+  "0x00039d06": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d07": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d08": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d09": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d0b": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HOrcM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "47370100"
+    }
+   ]
+  },
+  "0x00039d0c": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00039d0d": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000c3ca4": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03Melee1HKhajiitM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff190009000000000064002300be0f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "dabc0100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "45370100"
+    }
+   ]
+  },
+  "0x00039d0e": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d0f": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d10": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d11": {
+   "plugin": "Dragonborn.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d13": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HOrcM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "47370100"
+    }
+   ]
+  },
+  "0x00039d14": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00039d15": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000c3ca6": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04Melee1HKhajiitM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320000000e00000064002300be0f7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "0de60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "45370100"
+    }
+   ]
+  },
+  "0x00039d16": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d17": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d18": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d19": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d1b": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HOrcM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "47370100"
+    }
+   ]
+  },
+  "0x00039d1c": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00039d1d": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000c3ca8": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05Melee1HKhajiitM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320013000000000064002300be0f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "10e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "45370100"
+    }
+   ]
+  },
+  "0x00039d1e": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HImperialF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d1f": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HImperialM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "44370100"
+    }
+   ]
+  },
+  "0x00039d20": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HNordF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d21": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HNordM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039d23": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HOrcM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "47370100"
+    }
+   ]
+  },
+  "0x00039d24": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HRedguardF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x00039d25": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HRedguardM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "48370100"
+    }
+   ]
+  },
+  "0x000c3caa": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06Melee1HKhajiitM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff640019000000000064002300be0faf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "11e60100"
+    },
+    {
+     "type": "RNAM",
+     "hex": "45370100"
+    }
+   ]
+  },
+  "0x00000013": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "CreatureFaction",
+   "fields": []
+  },
+  "0x0002e893": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "PredatorFaction",
+   "fields": []
+  },
+  "0x0003e093": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "SprigganPredatorFaction",
+   "fields": []
+  },
+  "0x0003e691": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "WolfFaction",
+   "fields": []
+  },
+  "0x0001320a": {
+   "plugin": "Skyrim.esm",
+   "type": "RACE",
+   "editorId": "WolfRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "98370100953701006c2a0900"
+    },
+    {
+     "type": "DATA",
+     "hex": "0f0fff00ff00ff00ff00ff00ff0000009a99993f0000803f0000803f0000803f48891000"
+    }
+   ]
+  },
+  "0x0002b126": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor01Melee1HM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000004000000000064002300bf1f32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x00072883": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor01Melee1HF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000004000000000064002300be1f32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f960b": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor01Melee1HFDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000004000000000064002300a61f32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f960a": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor01Melee1HMDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000004000000000064002300a71f32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "26b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f1": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor02Melee1HMShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010000000000c000000000064002300b71e64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "a62a0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x00072aa6": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor02Melee1HM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010000000000c000000000064002300bd1f64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f2": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor02Melee1HFShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000004000000000064002300be1f32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "26b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007297a": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor02Melee1HF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000004000000000064002300b61e32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "26b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f960e": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor02Melee1HFDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000004000000000064002300a61e32000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "26b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f960d": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor02Melee1HMDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010000000000c000000000064002300a71e64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "a62a0700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007d961": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor03Melee1HF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000014000000000064002300be1f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "62d90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f4": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor03Melee1HFShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000014000000000064002300b61e96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "62d90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007d962": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor03Melee1HM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000014000000000064002300b51f96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f3": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor03Melee1HMShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000014000000000064002300b71e96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "62d90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f9610": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor03Melee1HFDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000014000000000064002300a61e96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "62d90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f960f": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor03Melee1HMDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000014000000000064002300a71e96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "62d90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007d967": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor04Melee1HF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002810000000001c000000000064002300be1fc8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6ed90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f6": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor04Melee1HFShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002810000000001c000000000064002300b61ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6ed90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007d96e": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor04Melee1HM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010000000001c000000000064002300b51fc8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f5": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor04Melee1HMShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010000000001c000000000064002300b71ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6ed90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f9612": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor04Melee1HFDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "19002810000000001c000000000064002300a61ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6ed90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f9611": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor04Melee1HMDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010000000001c000000000064002300a71ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6ed90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007d96c": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor05Melee1HF",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000024000000000064002300be1fc8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6fd90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f8": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor05Melee1HFShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000024000000000064002300b61ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6fd90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0007d96f": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor05Melee1HM",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000024000000000064002300b51fc8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "24b10200"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f95f7": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor05Melee1HMShield",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000024000000000064002300b71ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6fd90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f9614": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor05Melee1HFDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "190028100000000024000000000064002300a61ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6fd90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x000f9613": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor05Melee1HMDual",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000024000000000064002300a71ec8000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "6fd90700"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x0004e509": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "HunterFaction",
+   "fields": []
+  },
+  "0x00051596": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "JobMerchantFaction",
+   "fields": []
+  },
+  "0x000ac9c2": {
+   "plugin": "Update.esm",
+   "type": "FACT",
+   "editorId": "WEServicesHunterFaction",
+   "fields": []
+  },
+  "0x000522b6": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "WIGenericCrimeFaction",
+   "fields": []
+  },
+  "0x00073fbe": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncHunter00Template",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "98002010e7ffe7fff40105000f00640023000000f1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "09e5040000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "9615050000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c2c90a0000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "b622050000000000"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00013744": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "ImperialRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100"
+    },
+    {
+     "type": "DATA",
+     "hex": "160a14051705060509050b05ff0000000000803f0000803f0000803f0000803f4389a050"
+    }
+   ]
+  },
+  "0x00013748": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "RedguardRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100"
+    },
+    {
+     "type": "DATA",
+     "hex": "060a080509050a0514051205ff000000d7a3803f0000803f0000803f0000803f4389a050"
+    }
+   ]
+  },
+  "0x00013749": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "WoodElfRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100"
+    },
+    {
+     "type": "DATA",
+     "hex": "080a0f050e050d050c051005ff00000048e17a3f0000803f0000803f0000803f4389a050"
+    }
+   ]
+  },
+  "0x04030cd2": {
+   "plugin": "Dragonborn.esm",
+   "type": "NPC_",
+   "editorId": "DLC2EncCultist00Template",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020103200e7ff01000000000064002300000000000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "bc4f030200000000"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x0001bcc0": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "BanditFaction",
+   "fields": []
+  },
+  "0x00039cfd": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit01TemplateMelee",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002410e7ff140001000000000064002300b40ef1ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "f49c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00013747": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "OrcRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100"
+    },
+    {
+     "type": "DATA",
+     "hex": "0b0a0a050605070509051705ff0000008fc2853f8fc2853f0000803f0000803f4389a050"
+    }
+   ]
+  },
+  "0x00013745": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "KhajiitRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100d1610d00"
+    },
+    {
+     "type": "DATA",
+     "hex": "0f0a0e050d05100506050805ff0000000000803f3333733f0000003f0000803f4389a050"
+    }
+   ]
+  },
+  "0x0001bcd9": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit02TemplateMelee",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff140005000000000064002300240e0f000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "f49c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x0001bcda": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit03TemplateMelee",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff190009000000000064002300240a64000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "f49c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x0001e60d": {
+   "plugin": "Dragonborn.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit04TemplateMelee",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff32000e000e00000064002300240e7d000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "f49c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x0001e610": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit05TemplateMelee",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff320013000000000064002300340e96000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "f49c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x0001e611": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit06TemplateMelee",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff640019000000000064002300340eaf000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "TPLT",
+     "hex": "f49c0300"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  },
+  "0x00039f26": {
+   "plugin": "Skyrim.esm",
+   "type": "FACT",
+   "editorId": "ThalmorFaction",
+   "fields": []
+  },
+  "0x0002b124": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncThalmor00MeleeTemplate",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "180020100000000004000000000064002300000032000000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "269f030000000000"
+    },
+    {
+     "type": "RNAM",
+     "hex": "43370100"
+    }
+   ]
+  },
+  "0x00013743": {
+   "plugin": "Update.esm",
+   "type": "RACE",
+   "editorId": "HighElfRace",
+   "fields": [
+    {
+     "type": "KWDA",
+     "hex": "94370100"
+    },
+    {
+     "type": "DATA",
+     "hex": "150a12051305140516051705ff000000713d8a3f713d8a3f0000003f0000003f4389a050"
+    }
+   ]
+  },
+  "0x00039cf4": {
+   "plugin": "Skyrim.esm",
+   "type": "NPC_",
+   "editorId": "EncBandit00Template",
+   "fields": [
+    {
+     "type": "ACBS",
+     "hex": "18002010e7ff0000010000000000640023000000e7ff0000"
+    },
+    {
+     "type": "SNAM",
+     "hex": "c0bc010000000000"
+    },
+    {
+     "type": "RNAM",
+     "hex": "46370100"
+    }
+   ]
+  }
+ }
+}

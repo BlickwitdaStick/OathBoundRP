@@ -32,5 +32,6 @@
     }
   ],
   "isPapyrusHotReloadEnabled": false,
+  "npcEnabled": true,
   "master": "http://127.0.0.1:3001"
 }
