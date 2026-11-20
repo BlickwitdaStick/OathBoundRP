@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="player-panel.css">
   <link rel="stylesheet" href="admin-panel.css">
   <link rel="stylesheet" href="depot-panel.css">
+  <link rel="stylesheet" href="holdstone-panel.css">
   <link rel="stylesheet" href="interaction-prompt.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -650,6 +651,49 @@
     </div>
 
     <div class="dp-hint">Stored at this depot only — what you leave in Whiterun is not available in Solitude.</div>
+  </div>
+</div>
+
+<!-- Holdstone: hold menu (gamemode/holdstone-service.js) -->
+<div id="holdstone-panel" aria-hidden="true">
+  <div class="hs-shell">
+    <div class="hs-head">
+      <div class="hs-head-text">
+        <div class="hs-eyebrow">Holdstone</div>
+        <div class="hs-title" id="hs-hold-name">—</div>
+        <div class="hs-sub" id="hs-your-rank"></div>
+      </div>
+      <button type="button" class="hs-close" id="hs-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="hs-section-title">Ranks, lowest to highest</div>
+    <div class="hs-ranks" id="hs-ranks"></div>
+
+    <div class="hs-columns">
+      <div>
+        <div class="hs-section-title">Members</div>
+        <div class="hs-list" id="hs-members"></div>
+      </div>
+      <div>
+        <div class="hs-section-title">Parcels</div>
+        <div class="hs-list" id="hs-parcels"></div>
+      </div>
+    </div>
+
+    <div class="hs-manage" id="hs-manage">
+      <div class="hs-section-title">Leadership</div>
+      <form class="hs-form" id="hs-rank-form">
+        <input id="hs-rank-player" type="number" min="1" max="5000" placeholder="Player #" aria-label="Player number">
+        <input id="hs-rank-key" type="text" maxlength="32" placeholder="Rank key or none" aria-label="Rank key">
+        <button type="submit" class="hs-btn">Set rank</button>
+      </form>
+      <form class="hs-form" id="hs-parcel-form">
+        <input id="hs-parcel-name" type="text" maxlength="64" placeholder="New parcel name" aria-label="Parcel name">
+        <input id="hs-parcel-rank" type="text" maxlength="32" placeholder="Minimum rank or none" aria-label="Minimum rank">
+        <button type="submit" class="hs-btn">Create parcel</button>
+      </form>
+      <div class="hs-hint">Rename, transfer and minimum rank: press E on the holdstone and pick the action. Parcel tool: then press E on doors and containers.</div>
+    </div>
   </div>
 </div>
 
@@ -1934,6 +1978,12 @@
     if (message.type === 'depot:update' && window.DepotPanel) {
       window.DepotPanel.update(message.data);
     }
+    if (message.type === 'holdstone:open' && window.HoldstonePanel) {
+      window.HoldstonePanel.open(message.data);
+    }
+    if (message.type === 'holdstone:update' && window.HoldstonePanel) {
+      window.HoldstonePanel.update(message.data);
+    }
   };
 
   // Disparado pela property SkyMP 'voipTicket' quando o jogador roda /voz.
@@ -2154,12 +2204,16 @@
     if (event.key === 'Escape' && window.DepotPanel && window.DepotPanel.isOpen()) {
       window.DepotPanel.close();
     }
+    if (event.key === 'Escape' && window.HoldstonePanel && window.HoldstonePanel.isOpen()) {
+      window.HoldstonePanel.close();
+    }
   });
 </script>
 <script src="keybinds.js"></script>
 <script src="player-panel.js"></script>
 <script src="admin-panel.js"></script>
 <script src="depot-panel.js"></script>
+<script src="holdstone-panel.js"></script>
 <script src="interaction-prompt.js"></script>
 </body>
 </html>

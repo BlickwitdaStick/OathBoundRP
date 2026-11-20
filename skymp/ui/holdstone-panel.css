@@ -1,0 +1,143 @@
+/* ============================================================================
+ * holdstone-panel.css — hold menu at a holdstone. Same stone/parchment family
+ * as depot-panel.css; system serif fonts only (CEF may have no network).
+ * ==========================================================================*/
+
+#holdstone-panel {
+    --hs-stone-1: #17140f;
+    --hs-stone-2: #231d16;
+    --hs-parchment: #e8dcc0;
+    --hs-parchment-dim: rgba(232, 220, 192, 0.62);
+    --hs-parchment-faint: rgba(232, 220, 192, 0.28);
+    --hs-metal: #8a7a52;
+    --hs-metal-bright: #c9b877;
+    --hs-metal-dim: rgba(201, 184, 119, 0.16);
+    --hs-danger: #c0463a;
+    --hs-ok: #6f8f4f;
+    --hs-font: 'Bookman Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: min(820px, calc(100vw - 48px));
+    max-height: calc(100vh - 96px);
+    transform: translate(-50%, -50%) scale(0.97);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    z-index: 210;
+    font-family: var(--hs-font);
+    color: var(--hs-parchment);
+}
+
+#holdstone-panel.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+#holdstone-panel .hs-shell {
+    background: linear-gradient(180deg, var(--hs-stone-2), var(--hs-stone-1));
+    border: 1px solid var(--hs-metal);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 48px rgba(0, 0, 0, 0.55);
+    padding: 18px 22px;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+}
+
+#holdstone-panel .hs-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-bottom: 1px solid var(--hs-metal-dim);
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+#holdstone-panel .hs-head-text { flex: 1; }
+#holdstone-panel .hs-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--hs-metal-bright);
+}
+#holdstone-panel .hs-title { font-size: 24px; margin-top: 2px; }
+#holdstone-panel .hs-sub { font-size: 13px; color: var(--hs-parchment-dim); margin-top: 2px; }
+
+#holdstone-panel .hs-close {
+    background: none;
+    border: 1px solid var(--hs-metal-dim);
+    color: var(--hs-parchment);
+    font-size: 20px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+}
+
+#holdstone-panel .hs-section-title {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--hs-metal-bright);
+    margin: 14px 0 6px;
+}
+
+#holdstone-panel .hs-ranks { display: flex; flex-wrap: wrap; gap: 6px; }
+#holdstone-panel .hs-rank {
+    border: 1px solid var(--hs-metal-dim);
+    padding: 2px 8px;
+    font-size: 13px;
+}
+#holdstone-panel .hs-rank.leader { border-color: var(--hs-metal); color: var(--hs-metal-bright); }
+
+#holdstone-panel .hs-columns {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 18px;
+}
+
+#holdstone-panel .hs-list { display: flex; flex-direction: column; gap: 4px; }
+#holdstone-panel .hs-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+}
+#holdstone-panel .hs-row-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#holdstone-panel .hs-row-name { flex: 1; font-size: 14px; }
+#holdstone-panel .hs-row-meta { font-size: 12px; color: var(--hs-parchment-dim); }
+
+#holdstone-panel .hs-lock { font-size: 12px; padding: 1px 6px; border: 1px solid; }
+#holdstone-panel .hs-lock.locked { color: var(--hs-danger); border-color: var(--hs-danger); }
+#holdstone-panel .hs-lock.open { color: var(--hs-ok); border-color: var(--hs-ok); }
+
+#holdstone-panel .hs-btn {
+    background: var(--hs-metal-dim);
+    border: 1px solid var(--hs-metal);
+    color: var(--hs-parchment);
+    font-family: var(--hs-font);
+    font-size: 12px;
+    padding: 3px 8px;
+    cursor: pointer;
+}
+#holdstone-panel .hs-btn:hover { background: rgba(201, 184, 119, 0.3); }
+
+#holdstone-panel .hs-empty { font-size: 13px; color: var(--hs-parchment-faint); padding: 4px 0; }
+
+#holdstone-panel .hs-manage { display: none; border-top: 1px solid var(--hs-metal-dim); margin-top: 14px; }
+#holdstone-panel .hs-manage.visible { display: block; }
+#holdstone-panel .hs-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+#holdstone-panel .hs-form input {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--hs-metal-dim);
+    color: var(--hs-parchment);
+    font-family: var(--hs-font);
+    padding: 4px 6px;
+    font-size: 13px;
+}
+#holdstone-panel .hs-hint { font-size: 12px; color: var(--hs-parchment-faint); margin-top: 8px; }
+
+@media (max-width: 640px) {
+    #holdstone-panel .hs-columns { grid-template-columns: 1fr; }
+}
