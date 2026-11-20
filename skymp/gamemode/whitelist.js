@@ -236,6 +236,9 @@ async function checkWhitelist(userId, profileId, actorId) {
       
       try {
         mp.set(actorId, 'locationalData', locData);
+        // From here on the actor stands where it logged out, so its position
+        // may be saved (core/position-persistence.js).
+        require('./core/position-persistence').getInstance().markRestored(actorId);
         mp.set(actorId, 'browserVisible', true);
         console.log(`[whitelist] Spawn locData applied successfully for ${character.first_name} ${character.last_name}`);
         

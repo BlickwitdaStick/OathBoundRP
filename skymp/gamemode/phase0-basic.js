@@ -858,6 +858,8 @@ if (typeof mp !== "undefined") {
 if (typeof mp !== 'undefined') {
   const connectionMonitor = createConnectionMonitor({ mp, whitelist, commands, playerPanel });
   connectionMonitor.start();
+  // Log back in where you logged out (characters.pos_*/cell_id).
+  require('./core/position-persistence').getInstance().start();
   createRuntimeTelemetry({
     connectionMonitor,
     uiEventRateLimiter,

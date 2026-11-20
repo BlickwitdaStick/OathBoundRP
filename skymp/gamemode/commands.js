@@ -82,6 +82,10 @@ function getActiveActorByCharacterId(characterId) {
 }
 
 function removeActiveCharacter(actorId) {
+  // Save where the character logged out, while it is still known here.
+  if (typeof mp !== 'undefined' && activeCharacters.has(actorId)) {
+    require('./core/position-persistence').getInstance().onDisconnect(actorId);
+  }
   browserModal.forgetActor(actorId);
   if (activeCharacters.has(actorId)) {
     const char = activeCharacters.get(actorId);
@@ -550,7 +554,8 @@ function describeNearby(actorId) {
     if (otherId === actorId) continue;
     const loc = mp.get(otherId, 'locationalData');
     if (!loc || !loc.pos) continue;
-    const sameCell = (loc.cellOrWorldSpaceId || loc.cellId) === (self.cellOrWorldSpaceId || self.cellId);
+    const cellOf = (l) => l.cellOrWorldDesc || l.cellOrWorldSpaceId || l.cellId || null;
+    const sameCell = cellOf(loc) === cellOf(self);
     if (!sameCell) continue;
     const d = Math.hypot(loc.pos[0] - self.pos[0], loc.pos[1] - self.pos[1], loc.pos[2] - self.pos[2]);
     if (d > NEARBY_RADIUS) continue;
