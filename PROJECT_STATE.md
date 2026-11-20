@@ -1,227 +1,240 @@
-# Estado do Projeto — SkyMP Heavy RP
+# Project Status — SkyMP Heavy RP
 
-> Última unificação: 2026-08-22. Consolida PR #34 (Profissões), PR #44
-> (Economia/Vault), PR #46 (Depot — recuperado de snapshot) e PR #45 (UX)
-> em `main`, antes do início do módulo de Justiça.
+> Last consolidation: 2026-08-22. Consolidates PR #34 (Professions), PR #44
+> (Economy/Vault), PR #46 (Depot — recovered from snapshot), and PR #45 (UX)
+> into `main`, before the start of the Justice module.
 >
-> **Snapshot local vigente (26/08/2026):** [PRODUCTION_READINESS_ACTION_PLAN.md](docs/roadmap/PRODUCTION_READINESS_ACTION_PLAN.md)
-> continua sendo a referência operacional. O gamemode possui **1.262 testes,
-> todos aprovados**, migrations lineares até **v29**, **80 tabelas
-> declaradas** e typecheck limpo. MariaDB e clientes reais não estavam
-> disponíveis para homologação. O total agregado de testes de produto e os
-> checks externos do snapshot de 24/08 não foram recalculados nesta revisão. O
-> parecer de promoção permanece **NO-GO**; ver
+> **Current local snapshot (26/08/2026):** [PRODUCTION_READINESS_ACTION_PLAN.md](docs/roadmap/PRODUCTION_READINESS_ACTION_PLAN.md)
+> remains the operational reference. The gamemode has **1,262 tests,
+> all passing**, linear migrations through **v29**, **80 declared tables**,
+> and a clean typecheck. MariaDB and real clients were not available for
+> acceptance testing. The aggregate product test total and the external
+> checks from the 24/08 snapshot were not recalculated in this review. The
+> promotion assessment remains **NO-GO**; see
 > [PRODUCTION_BLOCKERS_2026-08-24.md](docs/operations/PRODUCTION_BLOCKERS_2026-08-24.md).
 
-## O que o framework faz hoje
+## What the Framework Currently Does
 
-- **Identidade**: whitelist, aplicação de personagem, credenciais opacas
-  (AUTH-003), identidades Discord, revelação de staff.
-- **Governança**: cargos, permissões, facções, prisões/custódia, mandados,
-  confiscos, multas — módulo `governance-service` + tabelas de
+- **Identity**: whitelist, character application, opaque credentials
+  (AUTH-003), Discord identities, staff identity disclosure.
+- **Governance**: roles, permissions, factions, arrests/custody, warrants,
+  confiscations, fines — `governance-service` module + tables from
   `migration-v3-governance.sql`.
-- **Economia**: ouro 100% virtual via `characters.gold`, ledger de
-  transações, tesouraria institucional, mercado regional, dívidas,
-  contratos, escrow, anti-cheat de ouro físico
-  (`core/economy-physical-sync.js`), limite de auditoria de transação
-  grande (`economy.largeTransactionThreshold`).
-- **Profissões**: núcleo grant/revoke/rank/XP (`profession-service.js`),
-  registry de 13 profissões — nenhuma tem gameplay própria ainda além do
-  Minerador (consumidor de `core/profession-registry.js`).
-- **Depot** *(recuperado nesta unificação — ver nota abaixo)*: armazenamento
-  regional de itens por hold (`core/depot-service.js`), painel de UI
-  (`ui/depot-panel.js`), sem reserva de ouro própria e sem checagem de
-  combate (nenhum sinal de combate ao vivo existe no projeto).
-- **Ambiente**: relógio autoritativo do servidor (GameTime/TimeScale),
-  heartbeat de correção de deriva, persistência entre restarts
-  (`environment-service.js`). Sem clima.
-- **Persistência**: estado de célula / `/dropitem` (Tarefa 9, cell-persistence
-  — já estava em `main` antes desta unificação).
-- **UX / Interaction Hub** (Tarefa 11): prompt de interação `[E]`
-  (`core/interaction-prompt-service.js`), ponte SELF → `/painel`
-  (`character-dashboard-bridge.js`) e alvo exato por
-  `Game.getCurrentCrosshairRef()` + `mp.onActivate`; sem fallback de
-  proximidade. Continua sem homologação no cliente real.
-- **Public Work**: domínio e fluxo genérico quadro→origem→destino,
-  persistência/idempotência/cooldown/ledger e migration v29. O módulo está
-  desligado localmente, sem rotas com FormDesc reais e sem validação MariaDB.
-- **Voz**: SkyVoice, sinalização WebSocket, proximidade por célula.
-- **Launcher / bootstrap de conexão**: configuração fail-closed dos dois
-  contratos SkyMP, sessão opaca sem `profileId` declarado pelo cliente,
-  destino direto com `server-info-ignore:true` e criação do SKSE por `spawn`
-  confirmada por PID. Coberto por testes e build NSIS; homologação com dois
-  clientes reais ainda pendente. Ver
+- **Economy**: 100% virtual gold through `characters.gold`, transaction
+  ledger, institutional treasury, regional market, debts,
+  contracts, escrow, physical gold anti-cheat
+  (`core/economy-physical-sync.js`), large transaction audit threshold
+  (`economy.largeTransactionThreshold`).
+- **Professions**: grant/revoke/rank/XP core (`profession-service.js`),
+  registry of 13 professions — none has its own gameplay yet beyond
+  the Miner (consumer of `core/profession-registry.js`).
+- **Depot** *(recovered during this consolidation — see note below)*:
+  regional item storage by hold (`core/depot-service.js`), UI panel
+  (`ui/depot-panel.js`), with no dedicated gold reservation and no
+  combat check (the project has no live combat signal).
+- **Environment**: authoritative server clock (GameTime/TimeScale),
+  drift-correction heartbeat, persistence across restarts
+  (`environment-service.js`). No weather.
+- **Persistence**: cell state / `/dropitem` (Task 9, cell-persistence
+  — already in `main` before this consolidation).
+- **UX / Interaction Hub** (Task 11): interaction prompt `[E]`
+  (`core/interaction-prompt-service.js`), SELF → `/painel` bridge
+  (`character-dashboard-bridge.js`), and exact targeting through
+  `Game.getCurrentCrosshairRef()` + `mp.onActivate`; no proximity
+  fallback. Still not validated on a real client.
+- **Public Work**: generic board→origin→destination domain and flow,
+  persistence/idempotency/cooldown/ledger, and migration v29. The module is
+  disabled locally, has no routes with real FormDesc values, and has no
+  MariaDB validation.
+- **Voice**: SkyVoice, WebSocket signaling, cell-based proximity.
+- **Launcher / connection bootstrap**: fail-closed configuration for both
+  SkyMP contracts, opaque session without a client-declared `profileId`,
+  direct destination with `server-info-ignore:true`, and SKSE creation
+  through `spawn` confirmed by PID. Covered by tests and NSIS build;
+  validation with two real clients is still pending. See
   [ADR-012](docs/technical/ADR_012_LAUNCHER_CONNECTION_BOOTSTRAP.md).
-- **Crime & Proveniência** *(adicionado depois desta unificação — ver §
-  "O que veio depois" abaixo)*: `item_instances`, item "quente", revista
-  institucional, restituição por combat-log.
-- **Crafting com gate de profissão + Assinatura do Artesão** *(idem)*:
-  `required_profession`/`required_rank` por receita, XP por craft, e a
-  Assinatura do Artesão (`crafted_item_signatures`).
+- **Crime & Provenance** *(added after this consolidation — see §
+  "What Came After" below)*: `item_instances`, "hot" items,
+  institutional searches, restitution through combat logs.
+- **Crafting with Profession Gate + Maker's Mark** *(also added later)*:
+  `required_profession`/`required_rank` per recipe, XP per craft, and
+  the Maker's Mark (`crafted_item_signatures`).
 
-Todos os módulos acima nascem **desligados por padrão** (flags `ENABLE_*`
-em `.env.example`) e entram na fase `lab` — nenhum populou tráfego real de
-jogador ainda.
+All modules above are **disabled by default** (flags `ENABLE_*`
+in `.env.example`) and enter the `lab` phase — none has handled real
+player traffic yet.
 
-## Nota sobre o Depot
+## Note on the Depot
 
-O Depot Service (Tarefas 9+10) não tinha PR aberta — existia só como commit
-de auto-save nunca finalizado (`8e269dd`, "aguardando commit manual") na
-branch `feat/depot-service`. Foi localizado durante esta unificação,
-extraído como um commit revisável e mesclado via PR #46. O código é
-completo e testado (15 testes), mas a integração com Profissões
-**não existe ainda**.
+The Depot Service (Tasks 9+10) did not have an open PR — it existed only as
+an unfinished auto-save commit (`8e269dd`, "awaiting manual commit") on the
+`feat/depot-service` branch. It was located during this consolidation,
+extracted as a reviewable commit, and merged through PR #46. The code is
+complete and tested (15 tests), but integration with Professions
+**does not exist yet**.
 
-## Próximo passo conhecido: ponte Depot ↔ Profissão
+## Known Next Step: Depot ↔ Profession Bridge
 
-O objetivo "Ferreiro Rank 2 acessa depósito de minério raro" não está
-implementado. `profession-service.js` e `depot-service.js` não se
-referenciam hoje. Fica registrado aqui como trabalho futuro — não foi
-implementado nesta unificação para não expandir escopo sem revisão
-explícita.
+The objective "Rank 2 Blacksmith can access the rare ore depot" has not been
+implemented. `profession-service.js` and `depot-service.js` do not reference
+each other today. This is recorded here as future work — it was not
+implemented during this consolidation to avoid expanding the scope without
+explicit review.
 
-## Débito técnico pré-existente — resolvido em 24/08/2026
+## Pre-Existing Technical Debt — Resolved on 24/08/2026
 
-Na unificação de 22/08, `node scripts/check-write-guards.js --all` reportava
-14 ocorrências: 2 FormDesc com prefixo `0x` e 12 migrations antigas sem teste
-que lesse o SQL. Esse registro é histórico. No snapshot vigente de 24/08, os
-2 FormDesc e a cobertura das 13 migrations prioritárias foram corrigidos, e o
-verificador passou a reportar **zero ocorrências**.
+During the 22/08 consolidation, `node scripts/check-write-guards.js --all`
+reported 14 occurrences: 2 FormDesc values with the `0x` prefix and 12 old
+migrations without a test that reads the SQL. This record is historical.
+In the current 24/08 snapshot, the 2 FormDesc issues and the coverage for
+the 13 priority migrations were fixed, and the checker began reporting
+**zero occurrences**.
 
-## Validação histórica desta unificação
+## Historical Validation for This Consolidation
 
-No marco de 22/08, a validação era de **974 testes do gamemode**, 62 arquivos
-de teste registrados e 68 tabelas com migrations lineares até v20. Esses
-números preservam a evolução daquele merge; a baseline operacional vigente é
-a do cabeçalho deste documento: **1.262 testes do gamemode, todos aprovados,
-80 tabelas** e migrations até **v29**.
-- Nenhum arquivo untracked/órfão fora do já esperado (`spikes/` já
-  versionado; configs locais de `.claude/` fora deste merge).
+At the 22/08 milestone, validation consisted of **974 gamemode tests**, 62
+registered test files, and 68 tables with linear migrations through v20.
+These figures preserve the state of that merge; the current operational
+baseline is the one in this document's header: **1,262 gamemode tests, all
+passing, 80 tables**, and migrations through **v29**.
 
-## O que veio depois desta unificação (21-22/08/2026)
+- No unexpected untracked/orphaned files (`spikes/` was already
+  version-controlled; local `.claude/` configs were outside this merge).
 
-Dois módulos novos, cada um seguindo o mesmo padrão acima (`lab`, flag
-própria, desligado por padrão):
+## What Came After This Consolidation (21–22/08/2026)
 
-- **Crime & Proveniência** (commit `fd68762`, Tarefas 12-13): `item_instances`
-  rastreia posse de item roubado, com janela `hot` e restituição automática
-  por combat-log; revista institucional da guarda revela o dono original.
-  Ver [CRIME_SYSTEM_AUDIT.md](docs/technical/CRIME_SYSTEM_AUDIT.md).
-- **Gate de profissão no crafting + Assinatura do Artesão** (commits `c7ddcd7`
-  e `e777ede`): o gate `required_profession`/`required_rank` por receita
-  existia pronto e testado numa branch órfã (`feat/crafting-profession-integration`,
-  20/08) nunca mesclada — trazido em vez de reimplementado, migration
-  renumerada de v20 para v23 para não colidir com Depot/Crime. Em cima disso,
-  a Assinatura do Artesão (`crafted_item_signatures`, v24): artesão com rank
-  suficiente assina o que craft, revista institucional mostra a autoria. Ver
-  [MAKERS_MARK.md](docs/design/MAKERS_MARK.md) e
+Two new modules, each following the same pattern described above (`lab`,
+its own flag, disabled by default):
+
+- **Crime & Provenance** (commit `fd68762`, Tasks 12-13): `item_instances`
+  tracks ownership of stolen items, with a `hot` window and automatic
+  restitution through combat logs; an institutional guard search reveals
+  the original owner. See [CRIME_SYSTEM_AUDIT.md](docs/technical/CRIME_SYSTEM_AUDIT.md).
+- **Profession Gate in Crafting + Maker's Mark** (commits `c7ddcd7`
+  and `e777ede`): the `required_profession`/`required_rank` gate per recipe
+  already existed, complete and tested, on an orphaned branch
+  (`feat/crafting-profession-integration`, 20/08) that had never been merged
+  — it was brought in rather than reimplemented. Its migration was
+  renumbered from v20 to v23 to avoid conflicts with Depot/Crime. On top
+  of that, the Maker's Mark (`crafted_item_signatures`, v24): a crafter
+  with a sufficient rank signs the items they craft, and an institutional
+  search displays the item's creator. See
+  [MAKERS_MARK.md](docs/design/MAKERS_MARK.md) and
   [CRAFTING_SYSTEM.md](docs/gameplay/CRAFTING_SYSTEM.md).
 
-Estado da suíte naquele marco intermediário: **1069 testes, 255 suítes, 0
-falhas**; `check-schema-drift.js --list` seguia linear até v24, sem colisão.
-Naquele momento, `check-write-guards.js --all` ainda encontrava as mesmas 14
-ocorrências pré-existentes; elas foram resolvidas em 24/08, conforme o snapshot
-vigente no cabeçalho.
+Test suite status at that intermediate milestone: **1,069 tests, 255
+suites, 0 failures**; `check-schema-drift.js --list` remained linear through
+v24, with no conflicts. At that point, `check-write-guards.js --all` still
+found the same 14 pre-existing occurrences; they were resolved on 24/08,
+as described in the current snapshot in the header.
 
-- **Atalhos de teclado e menus de ação** (22/08/2026, mesmo padrão `lab`):
-  substitui parte do fluxo "digite o comando" por tecla e botão, sem
-  remover nenhum comando de texto (fallback continua funcionando).
-  - **Voz por proximidade**: `Tab` cicla sussurro/normal/grito, `M` muta —
-    ligando um backend que já existia mas cujo cliente estava morto (o
-    modo de voz e o mute não tinham NENHUM caminho até 22/08, nem tecla
-    nem botão). Indicador persistente na CEF. `/modovoz` e `/mutar` como
-    fallback de texto. Ver
+- **Keyboard Shortcuts and Action Menus** (22/08/2026, same `lab` pattern):
+  replaces part of the "type the command" flow with keys and buttons,
+  without removing any text commands (the fallback continues to work).
+  - **Proximity Voice**: `Tab` cycles between whisper/normal/shout, `M`
+    mutes — activating a backend that already existed but whose client
+    was nonfunctional (voice mode and mute had NO path until 22/08,
+    neither a key nor a button). Persistent indicator in CEF.
+    `/modovoz` and `/mutar` remain as text-command fallbacks. See
     [VOICE_MODE_KEY_AUDIT.md](docs/technical/VOICE_MODE_KEY_AUDIT.md).
-  - **`F2`** abre o `/painel` (`core/player-shortcuts-service.js`, novo
-    módulo `lab`, `ENABLE_PLAYER_SHORTCUTS`).
-  - **Trade overlay consertada**: os três botões (aceitar/confirmar/
-    cancelar) chamavam um evento sem nenhum listener server-side — agora
-    ligados de verdade via `trade-service.js handleUiEvent`.
-  - **`death.rescue`** (`/socorrer`) e **`stall.pack`/`stall.remove`**
-    (`/stallpack`/`/stallremove`) entram no menu de interação `[E]` —
-    o segundo usa `TARGET_TYPES.SELF` (dono agindo sobre a própria
-    barraca), com um acoplamento documentado: o resolvedor `SELF` só
-    existe atrás de `ENABLE_INTERACTION_PROMPT`, então `market-stalls`
-    declara essa dependência como opcional, não obrigatória.
-  - **`/profissoes` e `/alma` viram abas do `/painel`** — `soul-service.js`
-    já tinha `buildPanelPayload`, só sem painel nenhum chamando.
-  - **Modal de escolha** (`browserModal` tipo `'choice'`, novo em
-    `commands.sendChoice`): pedido de revista chega com botões
-    Aceitar/Recusar, não só texto — `/searchaccept`/`/searchdeny`
-    continuam funcionando, o modal é um segundo caminho pro mesmo
+  - **`F2`** opens `/painel` (`core/player-shortcuts-service.js`, new
+    `lab` module, `ENABLE_PLAYER_SHORTCUTS`).
+  - **Trade overlay fixed**: the three buttons (accept/confirm/
+    cancel) were calling an event with no server-side listener — they are
+    now properly connected through `trade-service.js handleUiEvent`.
+  - **`death.rescue`** (`/socorrer`) and **`stall.pack`/`stall.remove`**
+    (`/stallpack`/`/stallremove`) are added to the `[E]` interaction menu —
+    the latter uses `TARGET_TYPES.SELF` (the owner acting on their own
+    stall), with a documented dependency: the `SELF` resolver only
+    exists behind `ENABLE_INTERACTION_PROMPT`, so `market-stalls`
+    declares this dependency as optional, not required.
+  - **`/profissoes` and `/alma` become tabs in `/painel`** —
+    `soul-service.js` already had `buildPanelPayload`, but no panel was
+    calling it.
+  - **Choice modal** (`browserModal` type `'choice'`, new
+    `commands.sendChoice`): a search request arrives with Accept/Decline
+    buttons, not just text — `/searchaccept`/`/searchdeny` continue
+    working, and the modal is a second path to the same
     `approveSearch`.
 
-  Nenhum item acima foi validado numa sessão de jogo real — mesma
-  ressalva de todo módulo `lab` deste projeto; o que existe é teste
-  automatizado (servidor) e, para as partes de CEF que a ferramenta de
-  browser conseguiu carregar nesta sessão, verificação num navegador
-  comum fora do SkyMP. Plano completo, decisões e o que ficou de fora
-  em [PLAYER_ACTION_SHORTCUTS_PLAN.md](docs/technical/PLAYER_ACTION_SHORTCUTS_PLAN.md)
-  e [PLAYER_SHORTCUTS_AUDIT.md](docs/technical/PLAYER_SHORTCUTS_AUDIT.md).
+  None of the items above has been validated in a real game session —
+  the same caveat that applies to every `lab` module in this project. What
+  exists is automated testing (server-side) and, for the CEF portions that
+  the browser tool was able to load during this session, verification in
+  a regular browser outside SkyMP. The full plan, decisions, and items
+  left out are documented in
+  [PLAYER_ACTION_SHORTCUTS_PLAN.md](docs/technical/PLAYER_ACTION_SHORTCUTS_PLAN.md)
+  and [PLAYER_SHORTCUTS_AUDIT.md](docs/technical/PLAYER_SHORTCUTS_AUDIT.md).
 
-  Estado da suíte naquele marco intermediário: **1107 testes, 264 suítes, 0
-  falhas**; o typecheck ainda preservava 4 erros pré-existentes. No snapshot
-  vigente de 26/08, o gamemode possui **1.262 testes, todos aprovados**,
-  e o typecheck do gamemode está limpo. O total agregado de produto não foi
-  recalculado nesta revisão.
+  Test suite status at that intermediate milestone: **1,107 tests, 264
+  suites, 0 failures**; the typecheck still had 4 pre-existing errors. In
+  the current 26/08 snapshot, the gamemode has **1,262 tests, all passing**,
+  and the gamemode typecheck is clean. The aggregate product total was not
+  recalculated in this review.
 
-## Housekeeping de documentação (23/08/2026)
+## Documentation Housekeeping (23/08/2026)
 
-Sem mudança de código. Auditoria de ~150 arquivos `.md` do repositório (local
-e branches remotas) achou banners de status desatualizados e conferiu contra
-`phase0-basic.js`, não só contra outro documento:
+No code changes. An audit of approximately 150 `.md` files in the repository
+(local and remote branches) found outdated status banners and checked them
+against `phase0-basic.js`, rather than just against another document:
 
-- `docs/gameplay/CONTRACTS.md` e `docs/framework/MODULE_SYSTEM.md` ainda
-  diziam PARKED para `jobs`, `crafting` e `trade` — os três têm descritor
-  registrado (`moduleRegistry.register`) desde antes ou desde a reativação de
-  20/08. PARKED de verdade hoje: `economy-regional`, `housing-service`,
+- `docs/gameplay/CONTRACTS.md` and `docs/framework/MODULE_SYSTEM.md` still
+  said PARKED for `jobs`, `crafting`, and `trade` — all three have had
+  registered descriptors (`moduleRegistry.register`) since before or
+  since their reactivation on 20/08. The modules that are genuinely PARKED
+  today are: `economy-regional`, `housing-service`,
   `horse-service` (commit `a4cb389`).
-- Seis documentos de pesquisa de forks em `docs/research/` (três rodadas sobre
-  conjuntos diferentes de projetos, não duplicatas) ganharam um índice único
+- Six fork research documents in `docs/research/` (three rounds covering
+  different project sets, not duplicates) received a single index
   ([`SKYMP_FORK_RESEARCH_INDEX.md`](docs/research/SKYMP_FORK_RESEARCH_INDEX.md))
-  e duas notas de correção onde um fato datado de 14/08 não tinha propagado
-  para os documentos de 13/08 que ele corrigia (commit `531233c`).
+  and two correction notes where a fact dated 14/08 had not propagated
+  to the 13/08 documents it corrected (commit `531233c`).
 
-## Voz nativa fora do CEF (27/08/2026)
+## Native Voice Outside CEF (27/08/2026)
 
-O CEF do client recusa `getUserMedia`, então a captura de microfone saiu para um
-executável separado, `voice-helper/` (a reprodução continua no navegador do
-jogo). Estado atual, tudo em `main`:
+The client CEF refuses `getUserMedia`, so microphone capture was moved to a
+separate executable, `voice-helper/` (playback remains in the game browser).
+Current state, all in `main`:
 
-- **Captura + relay** (`voice-helper.exe` ↔ `voip-service.js` ↔ `index.html`):
-  WASAPI → PCM 20ms → servidor anexa volume por proximidade → CEF toca. Medido
-  na bancada (mic real → ouvinte instrumentado), nunca ouvido por uma pessoa.
-- **Supressão de ruído**: RNNoise no laço de envio (`--no-denoise` desliga).
-- **Opus** no lugar do PCM cru (`codec:"opus"` por quadro, compat com PCM;
-  `--pcm` volta ao cru). Decodificado na CEF via WebCodecs `AudioDecoder`.
-- **Empacotamento**: `voice-helper.exe` entra no instalador do launcher como
-  `resources/vendor/` (build estático `x64-windows-static`, um arquivo), copiado
-  para `Data/Platform/` no JOGAR. Fail-open — a voz é opcional.
-- **Handoff do ticket**: `/voz` → `senderTicket` na property `voipTicket` → a CEF
-  faz POST em `127.0.0.1:19848` → o launcher sobe o helper. O andaime
-  `VOIP_DEBUG_EXPOSE_TICKET` fica como fallback de bancada.
+- **Capture + relay** (`voice-helper.exe` ↔ `voip-service.js` ↔ `index.html`):
+  WASAPI → PCM 20ms → server attaches volume based on proximity → CEF plays it. Measured
+  on the test bench (real microphone → instrumented listener), never actually
+  heard by a person.
+- **Noise suppression**: RNNoise in the send loop (`--no-denoise` disables it).
+- **Opus** instead of raw PCM (`codec:"opus"` per frame, compatible with PCM;
+  `--pcm` switches back to raw PCM). Decoded in CEF through WebCodecs
+  `AudioDecoder`.
+- **Packaging**: `voice-helper.exe` is included in the launcher installer as
+  `resources/vendor/` (static `x64-windows-static` build, a single file), copied
+  to `Data/Platform/` when PLAY is selected. Fail-open — voice is optional.
+- **Ticket handoff**: `/voz` → `senderTicket` in the `voipTicket` property → CEF
+  sends a POST to `127.0.0.1:19848` → the launcher starts the helper. The
+  `VOIP_DEBUG_EXPOSE_TICKET` scaffolding remains as a test-bench fallback.
 
-Detalhe completo e as verificações em
+Full details and verification are documented in
 [`VOICE_NATIVE_HELPER.md`](docs/technical/VOICE_NATIVE_HELPER.md) §8.3–8.7.
 
-### TODO — teste com 2–3 jogadores reais (bloqueia o fechamento desta trilha)
+### TODO — Test with 2–3 Real Players (Blocks Completion of This Track)
 
-Nada abaixo dá pra verificar sem cliente Skyrim real; o que existe é teste
-automatizado e verificação no Chromium do navegador do app (mesma base do CEF
-108, mas não o build do SkyrimPlatform):
+Nothing below can be verified without a real Skyrim client; what exists
+is automated testing and verification in the app's Chromium browser (the
+same CEF 108 foundation, but not the SkyrimPlatform build):
 
-1. **Inteligibilidade** — alguém fala no microfone e outro jogador ouve voz
-   reconhecível, não só "tem sinal" (passo 6 da etapa 8.2 do
+1. **Intelligibility** — one person speaks into a microphone and another
+   player hears recognizable speech, not merely "there is a signal"
+   (step 6 of stage 8.2 in
    [`FASE_0_ROTEIRO.md`](docs/technical/FASE_0_ROTEIRO.md)).
-2. **RNNoise no ouvido** — o ruído de teclado/ambiente de fato cai.
-3. **Decode Opus no CEF real** — o `AudioDecoder` (WebCodecs) funciona no CEF do
-   client, não só no navegador do app.
-4. **`fetch` da CEF pro loopback** — o POST de `file://` para `127.0.0.1:19848`
-   passa (PNA/CSP/sandbox do CEF). Se **não** passar, o handoff automático não
-   funciona e o fallback `VOIP_DEBUG_EXPOSE_TICKET` **não pode ser removido**.
-5. **Cadeia inteira** — `/voz` no jogo → launcher sobe o helper → jogador na
-   cena ouve.
+2. **RNNoise at the receiving end** — keyboard/environmental noise is
+   actually reduced.
+3. **Opus decoding in real CEF** — the WebCodecs `AudioDecoder` works in
+   the client CEF, not just in the app's browser.
+4. **CEF `fetch` to loopback** — the POST from `file://` to `127.0.0.1:19848`
+   succeeds (PNA/CSP/CEF sandbox). If it **does not** succeed, automatic
+   handoff will not work and the `VOIP_DEBUG_EXPOSE_TICKET` fallback
+   **cannot be removed**.
+5. **Full chain** — `/voz` in-game → launcher starts the helper → player
+   in the scene hears the voice.
 
-Quando (4) e a cadeia passarem, remover o scaffold `VOIP_DEBUG_EXPOSE_TICKET`
-(`_exposeDebugTicket`, a flag, a §11 do doc de voz, os testes) — lista exata na
-§11.
+Once (4) and the full chain pass, remove the `VOIP_DEBUG_EXPOSE_TICKET`
+scaffolding (`_exposeDebugTicket`, the flag, §11 of the voice document,
+and the tests) — exact list in §11.

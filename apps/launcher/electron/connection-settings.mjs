@@ -61,14 +61,14 @@ function readExistingJson(filePath) {
   } catch (cause) {
     throw new ConnectionSettingsError(
       'INVALID_EXISTING_JSON',
-      `O arquivo de conexão existente não contém JSON válido: ${path.basename(filePath)}`,
+      `The existing connection file does not contain valid JSON: ${path.basename(filePath)}`,
       cause
     );
   }
   if (!isRecord(parsed)) {
     throw new ConnectionSettingsError(
       'INVALID_EXISTING_SHAPE',
-      `O arquivo de conexão existente precisa conter um objeto JSON: ${path.basename(filePath)}`
+      `The existing connection file must contain a JSON object: ${path.basename(filePath)}`
     );
   }
   return parsed;
@@ -141,7 +141,7 @@ function readWrittenObject(filePath) {
   } catch (cause) {
     throw new ConnectionSettingsError(
       'VERIFY_FAILED',
-      `Não foi possível reler a configuração gravada: ${path.basename(filePath)}`,
+      `Could not reread the saved configuration: ${path.basename(filePath)}`,
       cause
     );
   }
@@ -153,39 +153,92 @@ function hasForbiddenCredential(record) {
 }
 
 /**
+ * Monta o conteúdo de `Data/Platform/PluginsNoLoad/auth-data-no-load.js`.
+ *
+ * Este é o ÚNICO lugar de onde o skymp5-client distribuído (AuthService)
+ * obtém uma sessão remota: `readAuthDataFromDisk()` faz
+ * `JSON.parse(conteudo.slice(2))` e, no menu principal, mostra o widget de
+ * autorização com o nome do jogador e o botão "Play". O clique em "Play"
+ * dispara `authAttempt` com `{ remote: authData }`, conecta no peer direto e
+ * envia `loginWithSkympIo { gameData: { session } }`; o servidor resolve a
+ * sessão no master API do OATHBOUND (`/api/servers/:masterKey/sessions/:s`).
+ *
+ * `gameData.session` em `skymp5-client-settings.txt` NÃO é lido pelo cliente
+ * (só `gameData.profileId`, que é o modo offline proibido pelo ADR-001). Sem
+ * este arquivo o widget aparecia como "not authorized" e "Play" respondia
+ * "login first" — ou tentava OAuth no gateway público do SkyMP.
+ *
+ * O formato é `//` + JSON: o prefixo de comentário existe porque o SkyrimPlatform
+ * trata a pasta como plugins JS (mesmo em PluginsNoLoad).
+ *
+ * @param {{ticket:string, displayName?:string|null}} input
+ */
+export function buildRemoteAuthData({ ticket, displayName }) {
+  const name = typeof displayName === 'string' ? displayName.trim() : '';
+  return {
+    session: ticket,
+    // `masterApiId` só é exibido quando não há nome; o cliente não o envia ao
+    // servidor. A identidade real é resolvida server-side a partir da sessão.
+    masterApiId: 0,
+    discordUsername: name || 'OATHBOUND',
+    discordDiscriminator: null,
+    discordAvatar: null
+  };
+}
+
+/** @param {Record<string, unknown>} authData */
+export function serializeRemoteAuthData(authData) {
+  return `//${JSON.stringify(authData)}`;
+}
+
+/** @param {string} contents */
+export function parseRemoteAuthData(contents) {
+  const text = contents.charCodeAt(0) === 0xfeff ? contents.slice(1) : contents;
+  if (!text.startsWith('//')) return null;
+  return JSON.parse(text.slice(2)) || null;
+}
+
+/**
  * Prepara os dois contratos de conexão consumidos pelo cliente SkyMP.
  * Lança `ConnectionSettingsError` em qualquer inconsistência; o chamador não
  * deve iniciar o jogo nesse caso.
  *
- * @param {{gamePath:string, ticket:string, serverIp:string, serverPort:number|string, discordId?:string}} input
- * @returns {{configPath:string, clientSettingsPath:string, config:Record<string, unknown>, clientSettings:Record<string, unknown>}}
+ * Também publica a sessão remota em `PluginsNoLoad/auth-data-no-load.js` (ver
+ * `buildRemoteAuthData`). Nada aqui conecta automaticamente: o cliente só
+ * conecta quando o jogador clica "Play" no widget de autorização do menu.
+ *
+ * @param {{gamePath:string, ticket:string, serverIp:string, serverPort:number|string, discordId?:string, displayName?:string|null}} input
+ * @returns {{configPath:string, clientSettingsPath:string, authDataPath:string, config:Record<string, unknown>, clientSettings:Record<string, unknown>}}
  */
 export function prepararConfiguracaoConexao(input) {
   const gamePath = typeof input?.gamePath === 'string' ? input.gamePath.trim() : '';
   if (!gamePath || gamePath.includes('\0')) {
-    throw new ConnectionSettingsError('INVALID_GAME_PATH', 'O caminho do jogo é inválido.');
+    throw new ConnectionSettingsError("INVALID_GAME_PATH", "The game path is invalid.");
   }
 
   const ticket = typeof input?.ticket === 'string' ? input.ticket : '';
   if (!ticket.trim() || ticket.includes('\0')) {
-    throw new ConnectionSettingsError('EMPTY_TICKET', 'O ticket de inicialização está vazio ou inválido.');
+    throw new ConnectionSettingsError("EMPTY_TICKET", "The launch ticket is empty or invalid.");
   }
 
   const serverIp = typeof input?.serverIp === 'string' ? input.serverIp.trim() : '';
   if (!isValidHost(serverIp)) {
-    throw new ConnectionSettingsError('INVALID_SERVER_HOST', 'O host do servidor é inválido.');
+    throw new ConnectionSettingsError("INVALID_SERVER_HOST", "The server host is invalid.");
   }
 
   const serverPort = typeof input?.serverPort === 'string' && /^\d+$/.test(input.serverPort)
     ? Number(input.serverPort)
     : input?.serverPort;
   if (!Number.isInteger(serverPort) || serverPort < 1 || serverPort > 65535) {
-    throw new ConnectionSettingsError('INVALID_SERVER_PORT', 'A porta do servidor deve estar entre 1 e 65535.');
+    throw new ConnectionSettingsError('INVALID_SERVER_PORT', 'The server port must be between 1 and 65535.');
   }
 
   const pluginsDirectory = path.join(gamePath, 'Data', 'Platform', 'Plugins');
   const configPath = path.join(pluginsDirectory, 'skymp_config.json');
   const clientSettingsPath = path.join(pluginsDirectory, 'skymp5-client-settings.txt');
+  const authDataDirectory = path.join(gamePath, 'Data', 'Platform', 'PluginsNoLoad');
+  const authDataPath = path.join(authDataDirectory, 'auth-data-no-load.js');
+  const authData = buildRemoteAuthData({ ticket, displayName: input.displayName });
 
   // Leia ambos antes de alterar qualquer um: JSON legado corrompido falha sem
   // deixar metade da configuração atualizada.
@@ -212,14 +265,32 @@ export function prepararConfiguracaoConexao(input) {
   try {
     atomicWriteFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
     atomicWriteFile(clientSettingsPath, `${JSON.stringify(clientSettings, null, 2)}\n`);
+    fs.mkdirSync(authDataDirectory, { recursive: true });
+    // Sem newline final: o cliente faz JSON.parse(slice(2)) do arquivo inteiro,
+    // e JSON.parse tolera whitespace, mas mantemos o formato exato que o
+    // próprio cliente grava em writeAuthDataToDisk.
+    atomicWriteFile(authDataPath, serializeRemoteAuthData(authData));
   } catch (cause) {
-    throw new ConnectionSettingsError('WRITE_FAILED', 'Falha ao gravar a configuração de conexão.', cause);
+    throw new ConnectionSettingsError("WRITE_FAILED", "Failed to save the connection configuration.", cause);
   }
 
   const writtenConfig = readWrittenObject(configPath);
   const writtenSettings = readWrittenObject(clientSettingsPath);
   const writtenGameData = isRecord(writtenSettings.gameData) ? writtenSettings.gameData : null;
+  let writtenAuthData = null;
+  try {
+    writtenAuthData = parseRemoteAuthData(fs.readFileSync(authDataPath, 'utf8'));
+  } catch (cause) {
+    throw new ConnectionSettingsError(
+      'VERIFY_FAILED',
+      `Could not reread the saved configuration: ${path.basename(authDataPath)}`,
+      cause
+    );
+  }
   const valid =
+    isRecord(writtenAuthData) &&
+    writtenAuthData.session === ticket &&
+    !hasForbiddenCredential(writtenAuthData) &&
     writtenConfig.session === `ticket:${ticket}` &&
     writtenConfig.serverAddress === formatServerAddress(serverIp, serverPort) &&
     !hasForbiddenCredential(writtenConfig) &&
@@ -233,12 +304,13 @@ export function prepararConfiguracaoConexao(input) {
     !hasForbiddenCredential(writtenGameData);
 
   if (!valid) {
-    throw new ConnectionSettingsError('VERIFY_FAILED', 'A configuração relida não corresponde à conexão solicitada.');
+    throw new ConnectionSettingsError("VERIFY_FAILED", "The saved configuration does not match the requested connection.");
   }
 
-  return { configPath, clientSettingsPath, config: writtenConfig, clientSettings: writtenSettings };
+  return { configPath, clientSettingsPath, authDataPath, config: writtenConfig, clientSettings: writtenSettings };
 }
 
 // Alias descritivo para consumidores que já adotem nomes em inglês. O contrato
 // canônico usado pelo launcher é `prepararConfiguracaoConexao`.
 export const prepareConnectionSettings = prepararConfiguracaoConexao;
+

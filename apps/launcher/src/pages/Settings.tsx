@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bug, Download, FolderOpen, Search, Wrench } from 'lucide-react';
 
@@ -14,7 +14,7 @@ export function Settings() {
     window.electronAPI.getLauncherConfig().then((config) => {
       if (config.gamePath) setGamePath(config.gamePath);
     });
-    window.electronAPI.onUpdateProgress((value) => setReport(`Cliente: ${value.phase} ${value.percent}%`));
+    window.electronAPI.onUpdateProgress((value) => setReport(`Client: ${value.phase} ${value.percent}%`));
     window.electronAPI.onModsUpdateProgress((value) => setReport(`Mods: ${value.phase} ${value.percent}%`));
   }, []);
 
@@ -26,7 +26,7 @@ export function Settings() {
 
   const requirePath = () => {
     if (!gamePath) {
-      setError('Selecione a pasta do Skyrim primeiro.');
+      setError('Select the Skyrim directory first.');
       return false;
     }
     resetMessages();
@@ -41,12 +41,12 @@ export function Settings() {
       const valid = await window.electronAPI.saveGamePath(selected);
       if (valid.ok) {
         setGamePath(selected);
-        setSuccess('Pasta validada e salva com sucesso.');
+        setSuccess('Directory validated and saved successfully.');
       } else {
-        setError(`Pasta invalida: ${valid.reason}`);
+        setError(`Invalid directory: ${valid.reason}`);
       }
     } catch (e: any) {
-      setError(e.message || 'Erro ao selecionar pasta.');
+      setError(e.message || 'Failed to select directory.');
     }
   };
 
@@ -55,10 +55,10 @@ export function Settings() {
     setBusy('repair-ini');
     try {
       const result = await window.electronAPI.ensureSkyrimIni({ mode: 'borderless' });
-      if (result.ok) setSuccess(result.skipped ? 'INI ja estava valido.' : `INI reparado: ${result.width}x${result.height} ${result.mode}.`);
-      else setError(result.error || 'Falha ao reparar INI.');
+      if (result.ok) setSuccess(result.skipped ? 'INI was already valid.' : `INI repaired: ${result.width}x${result.height} ${result.mode}.`);
+      else setError(result.error || 'Failed to repair INI.');
     } catch (e: any) {
-      setError(e.message || 'Falha ao reparar INI.');
+      setError(e.message || 'Failed to repair INI.');
     } finally {
       setBusy('');
     }
@@ -69,11 +69,11 @@ export function Settings() {
     setBusy('repair-ui');
     try {
       const result = await window.electronAPI.ensureSkympUi(gamePath);
-      if (!result.ok) setError(result.error || 'Falha ao reparar a interface.');
-      else if (result.repaired.length > 0) setSuccess(`Interface reparada: ${result.repaired.length} arquivo(s).`);
-      else setSuccess(`Interface valida: ${result.files || 0} arquivo(s).`);
+      if (!result.ok) setError(result.error || 'Failed to repair the interface.');
+      else if (result.repaired.length > 0) setSuccess(`Interface repaired: ${result.repaired.length} arquivo(s).`);
+      else setSuccess(`Interface valid: ${result.files || 0} arquivo(s).`);
     } catch (e: any) {
-      setError(e.message || 'Falha ao reparar a interface.');
+      setError(e.message || 'Failed to repair the interface.');
     } finally {
       setBusy('');
     }
@@ -85,19 +85,19 @@ export function Settings() {
     try {
       const verify = await window.electronAPI.verifyMods(gamePath);
       if (!verify.success) {
-        setError(verify.error || 'Falha ao verificar mods.');
+        setError(verify.error || 'Failed to verify mods.');
         return;
       }
       if (verify.loadOrder) await window.electronAPI.syncLoadorder(gamePath, verify.loadOrder);
       const analysis = await window.electronAPI.analyzePlugins(gamePath, verify.loadOrder || []);
       if (analysis.ok) {
-        setSuccess(`Mods e load order OK. Plugins analisados: ${analysis.plugins.length}.`);
+        setSuccess(`Mods and load order OK. Plugins analyzed: ${analysis.plugins.length}.`);
       } else {
-        setError('Problemas encontrados no load order.');
+        setError('Load-order problems found.');
         setReport(analysis.problems.slice(0, 8).join('\n'));
       }
     } catch (e: any) {
-      setError(e.message || 'Falha ao analisar mods.');
+      setError(e.message || 'Failed to analyze mods.');
     } finally {
       setBusy('');
     }
@@ -110,11 +110,11 @@ export function Settings() {
       const client = await window.electronAPI.checkClientUpdate(gamePath);
       const mods = await window.electronAPI.checkModsUpdate(gamePath);
       setReport([
-        `Cliente: ${client.error || (client.updateAvailable ? `update ${client.installedVersion || 'nenhum'} -> ${client.version}` : `atual ${client.installedVersion || client.version || 'desconhecido'}`)}`,
-        `Mods: ${mods.error || (mods.updateAvailable ? `update ${mods.installedVersion || 'nenhum'} -> ${mods.version}` : `atual ${mods.installedVersion || mods.version || 'desconhecido'}`)}`
+        `Client: ${client.error || (client.updateAvailable ? `update ${client.installedVersion || 'none'} -> ${client.version}` : `current ${client.installedVersion || client.version || 'unknown'}`)}`,
+        `Mods: ${mods.error || (mods.updateAvailable ? `update ${mods.installedVersion || 'none'} -> ${mods.version}` : `current ${mods.installedVersion || mods.version || 'unknown'}`)}`
       ].join('\n'));
     } catch (e: any) {
-      setError(e.message || 'Falha ao checar updates.');
+      setError(e.message || 'Failed to check for updates.');
     } finally {
       setBusy('');
     }
@@ -122,14 +122,14 @@ export function Settings() {
 
   const handleInstallClient = async () => {
     if (!requirePath()) return;
-    if (!confirm('Atualizar cliente SkyMP agora? Feche o jogo antes de continuar.')) return;
+    if (!confirm('Update the SkyMP client now? Close the game before continuing.')) return;
     setBusy('client-update');
     try {
       const result = await window.electronAPI.installClientUpdate(gamePath);
-      if (result.success) setSuccess(`Cliente atualizado para ${result.version}.`);
-      else setError(result.error || 'Falha ao atualizar cliente.');
+      if (result.success) setSuccess(`Client updated to ${result.version}.`);
+      else setError(result.error || 'Failed to update client.');
     } catch (e: any) {
-      setError(e.message || 'Falha ao atualizar cliente.');
+      setError(e.message || 'Failed to update client.');
     } finally {
       setBusy('');
     }
@@ -137,14 +137,14 @@ export function Settings() {
 
   const handleInstallMods = async () => {
     if (!requirePath()) return;
-    if (!confirm('Atualizar modpack agora? Feche o jogo antes de continuar.')) return;
+    if (!confirm('Update the modpack now? Close the game before continuing.')) return;
     setBusy('mods-update');
     try {
       const result = await window.electronAPI.installModsUpdate(gamePath, false);
-      if (result.success) setSuccess(`Mods atualizados para ${result.version}.`);
-      else setError(result.error || 'Falha ao atualizar mods.');
+      if (result.success) setSuccess(`Mods updated to ${result.version}.`);
+      else setError(result.error || 'Failed to update mods.');
     } catch (e: any) {
-      setError(e.message || 'Falha ao atualizar mods.');
+      setError(e.message || 'Failed to update mods.');
     } finally {
       setBusy('');
     }
@@ -156,12 +156,12 @@ export function Settings() {
     try {
       const result = await window.electronAPI.reportRecentCrashes();
       if (result.ok) {
-        setSuccess(result.sent ? `Crash report enviado (${result.sent} arquivo(s)).` : 'Nenhum crash recente encontrado.');
+        setSuccess(result.sent ? `Crash report sent (${result.sent} arquivo(s)).` : 'No recent crashes found.');
       } else {
-        setError(result.error || 'Falha ao enviar crash report.');
+        setError(result.error || 'Failed to send crash report.');
       }
     } catch (e: any) {
-      setError(e.message || 'Falha ao enviar crash report.');
+      setError(e.message || 'Failed to send crash report.');
     } finally {
       setBusy('');
     }
@@ -173,13 +173,13 @@ export function Settings() {
         <button className="btn-secondary" onClick={() => navigate('/home')} style={{ padding: '8px' }}>
           <ArrowLeft size={20} />
         </button>
-        <h1 style={{ fontSize: '24px', color: 'var(--text-main)' }}>Configuracoes</h1>
+        <h1 style={{ fontSize: '24px', color: 'var(--text-main)' }}>Settings</h1>
       </div>
 
       <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-        <h2 style={{ fontSize: '18px', color: 'var(--accent-gold)', marginBottom: '16px' }}>Diretorio do Jogo</h2>
+        <h2 style={{ fontSize: '18px', color: 'var(--accent-gold)', marginBottom: '16px' }}>Game Directory</h2>
         <p style={{ color: 'var(--text-muted)', marginBottom: '16px', fontSize: '14px' }}>
-          Selecione a pasta onde o Skyrim Special Edition da Steam esta instalado.
+          Select the folder where Steam Skyrim Special Edition is installed.
         </p>
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -208,28 +208,28 @@ export function Settings() {
       </div>
 
       <div style={{ background: 'var(--bg-panel)', padding: '24px', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '20px' }}>
-        <h2 style={{ fontSize: '18px', color: 'var(--accent-gold)', marginBottom: '16px' }}>Manutencao e Diagnostico</h2>
+        <h2 style={{ fontSize: '18px', color: 'var(--accent-gold)', marginBottom: '16px' }}>Maintenance & Diagnostics</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px' }}>
           <button className="btn-secondary" onClick={handleRepairIni} disabled={!!busy}>
-            <Wrench size={18} /> Reparar INI
+            <Wrench size={18} /> Repair INI
           </button>
           <button className="btn-secondary" onClick={handleRepairUi} disabled={!!busy}>
-            <Wrench size={18} /> Reparar Interface
+            <Wrench size={18} /> Repair Interface
           </button>
           <button className="btn-secondary" onClick={handleAnalyze} disabled={!!busy}>
-            <Search size={18} /> Analisar Mods
+            <Search size={18} /> Analyze Mods
           </button>
           <button className="btn-secondary" onClick={handleCheckUpdates} disabled={!!busy}>
-            <Download size={18} /> Checar Updates
+            <Download size={18} /> Check for Updates
           </button>
           <button className="btn-secondary" onClick={handleInstallClient} disabled={!!busy}>
-            <Download size={18} /> Atualizar Cliente
+            <Download size={18} /> Update Client
           </button>
           <button className="btn-secondary" onClick={handleInstallMods} disabled={!!busy}>
-            <Download size={18} /> Atualizar Mods
+            <Download size={18} /> Update Mods
           </button>
           <button className="btn-secondary" onClick={handleReportCrashes} disabled={!!busy}>
-            <Bug size={18} /> Enviar Crash
+            <Bug size={18} /> Send Crash Report
           </button>
         </div>
         {busy && <p style={{ color: 'var(--accent-gold)', marginTop: '12px' }}>Executando: {busy}</p>}
@@ -249,3 +249,6 @@ export function Settings() {
     </div>
   );
 }
+
+
+

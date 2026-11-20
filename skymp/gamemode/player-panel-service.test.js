@@ -423,7 +423,65 @@ describe('player-panel — o tick de vitals só paga por quem está olhando', ()
 
     assert.deepEqual(
       chamadasPapyrus,
-      ['Actor.getActorValue', 'Actor.getActorValue', 'Actor.getActorValue']
+      ['Actor.GetActorValuePercentage', 'Actor.GetActorValuePercentage', 'Actor.GetActorValuePercentage']
     );
+  });
+});
+
+/**
+ * Regressões vistas em jogo em 19/11/2026:
+ *  1. Status vazio ("No data received from the server yet"): seis `mp.set`
+ *     seguidos na MESMA property e o SkyMP só replica o último valor.
+ *  2. F2 às vezes não reabria: fechar o painel nunca devolvia o foco ao jogo.
+ */
+describe('player-panel — entrega ao cliente', () => {
+  const ATOR = 0xff000789;
+  let sets;
+  const mpOriginal = global.mp;
+
+  before(() => {
+    global.mp = { set: (actorId, prop, value) => sets.push({ actorId, prop, value }) };
+  });
+
+  after(() => {
+    playerPanel.cleanup(ATOR);
+    if (mpOriginal === undefined) delete global.mp;
+    else global.mp = mpOriginal;
+  });
+
+  it('cada envio carrega TODAS as seções já enviadas, não só a última', () => {
+    sets = [];
+    playerPanel.sendPanelData(ATOR, 'status', { name: 'Ysolda' });
+    playerPanel.sendPanelData(ATOR, 'governance', { warrants: 0 });
+    playerPanel.sendPanelData(ATOR, 'soul', { sinais: [] });
+
+    const last = sets.filter(s => s.prop === 'panelData').at(-1).value;
+    assert.deepStrictEqual(Object.keys(last.channels).sort(), ['governance', 'soul', 'status']);
+    assert.deepStrictEqual(last.channels.status, { name: 'Ysolda' });
+    assert.strictEqual(typeof last.sentAt, 'number');
+  });
+
+  it('BigInt e Date viram JSON puro; seção impossível é pulada sem derrubar as outras', () => {
+    sets = [];
+    playerPanel.sendPanelData(ATOR, 'status', { gold: 10n, at: new Date('2026-11-19T00:00:00Z') });
+    const circular = {}; circular.self = circular;
+    playerPanel.sendPanelData(ATOR, 'social', circular);
+    const last = sets.filter(x => x.prop === 'panelData').at(-1).value;
+    assert.deepStrictEqual(last.channels.status, { gold: 10, at: '2026-11-19T00:00:00.000Z' });
+    assert.ok(!('social' in last.channels));
+    assert.doesNotThrow(() => JSON.stringify(last));
+    playerPanel.cleanup(ATOR);
+  });
+
+  it('panel:close devolve o foco ao jogo e esquece as seções', async () => {
+    sets = [];
+    playerPanel.sendPanelData(ATOR, 'status', { name: 'Ysolda' });
+    await playerPanel.handleUiEvent(ATOR, { type: 'panel:close' });
+    assert.ok(sets.some(s => s.prop === 'browserFocused' && s.value === false), 'browserFocused=false enviado');
+
+    sets = [];
+    playerPanel.sendPanelData(ATOR, 'economy', { gold: 5 });
+    const next = sets.at(-1).value;
+    assert.deepStrictEqual(Object.keys(next.channels), ['economy'], 'reabrir não traz dados velhos');
   });
 });

@@ -1,0 +1,3221 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 88dc9a15..e190b853 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -77,7 +77,10 @@ enable_testing()
+ 
+ # Check the Visual Studio version
+ if(MSVC)
+-  if(NOT CMAKE_GENERATOR MATCHES "Visual Studio 17 2022")
++  # OATHBOUND: also accept Visual Studio 2026 (MSVC 14.5x). MSVC toolsets from
++  # 2015 on are binary compatible, and vcpkg builds every dependency with the
++  # same compiler, so the 2026 generator produces a consistent build.
++  if(NOT CMAKE_GENERATOR MATCHES "Visual Studio 17 2022|Visual Studio 18 2026")
+     message(FATAL_ERROR "This project requires \"Visual Studio 17 2022\". But the generator was \"${CMAKE_GENERATOR}\"")
+   endif()
+ endif()
+diff --git a/libespm/include/libespm/Browser.h b/libespm/include/libespm/Browser.h
+index d34f4488..b4bd23dd 100644
+--- a/libespm/include/libespm/Browser.h
++++ b/libespm/include/libespm/Browser.h
+@@ -32,6 +32,10 @@ public:
+   const std::vector<const void*>& GetSubsEnsured(
+     const GroupHeader* group) const;
+ 
++  // The highest id below the top byte among this file's records whose id
++  // has this top byte, or 0 when it has none.
++  uint32_t GetHighestLocalId(uint8_t topByte) const noexcept;
++
+ private:
+   bool ReadAny(const GroupStack* parentGrStack);
+   Browser(const Browser&) = delete;
+diff --git a/libespm/include/libespm/BrowserInfo.h b/libespm/include/libespm/BrowserInfo.h
+index 5d60943b..3590e097 100644
+--- a/libespm/include/libespm/BrowserInfo.h
++++ b/libespm/include/libespm/BrowserInfo.h
+@@ -8,13 +8,15 @@ class CombineBrowser;
+ struct BrowserInfo
+ {
+   BrowserInfo() = default;
+-  BrowserInfo(const CombineBrowser* parent_, uint8_t fileIdx_);
++  BrowserInfo(const CombineBrowser* parent_, uint16_t fileIdx_);
+ 
+   // Returns 0 for empty (default constructed) LookupResult
+   uint32_t ToGlobalId(uint32_t rawId) const noexcept;
+ 
+   const CombineBrowser* const parent = nullptr;
+-  const uint8_t fileIdx = 0;
++  // Position of the plugin in the load order. A byte held 256 plugins; the
++  // game holds up to 254 full and 4096 light ones.
++  const uint16_t fileIdx = 0;
+ };
+ 
+ }
+diff --git a/libespm/include/libespm/CombineBrowser.h b/libespm/include/libespm/CombineBrowser.h
+index 8393d8d4..007a79e9 100644
+--- a/libespm/include/libespm/CombineBrowser.h
++++ b/libespm/include/libespm/CombineBrowser.h
+@@ -2,6 +2,7 @@
+ #include "CellOrGridPos.h"
+ #include "GroupStack.h"
+ #include "IdMapping.h"
++#include "LoadOrder.h"
+ #include "LookupResult.h"
+ 
+ namespace espm {
+@@ -34,7 +35,10 @@ public:
+ 
+   // Returns nullptr on failure
+   const IdMapping* GetCombMapping(size_t fileIndex) const noexcept;
+-  const IdMapping* GetRawMapping(size_t fileIndex) const noexcept;
++  const RawIdMapping* GetRawMapping(size_t fileIndex) const noexcept;
++
++  // Every source in the order it was added, with the slot the game gives it
++  const LoadOrder& GetLoadOrder() const noexcept;
+ 
+   // CompressedFieldsCache is not logically related to Combiner, this method is
+   // added for usability
+@@ -49,15 +53,18 @@ private:
+   {
+     Browser* br = nullptr;
+     std::string fileName;
+-    std::unique_ptr<espm::IdMapping> toComb, toRaw;
++    std::unique_ptr<espm::IdMapping> toComb;
++    std::unique_ptr<espm::RawIdMapping> toRaw;
+   };
+ 
+   struct Impl
+   {
+     CompressedFieldsCache cache;
+ 
+-    std::array<Source, 256> sources;
+-    size_t numSources = 0;
++    // Up to 254 full and 4096 light plugins, the game's own limits, which
++    // Combiner::Combine enforces. A fixed 256 used to cap the two together.
++    std::vector<Source> sources;
++    LoadOrder loadOrder;
+     int32_t GetFileIndex(const char* fileName) const noexcept;
+   };
+   std::shared_ptr<Impl> pImpl;
+diff --git a/libespm/include/libespm/Combiner.h b/libespm/include/libespm/Combiner.h
+index d01eea3b..cfee1c07 100644
+--- a/libespm/include/libespm/Combiner.h
++++ b/libespm/include/libespm/Combiner.h
+@@ -31,7 +31,7 @@ public:
+       : logic_error(str) {};
+   };
+ 
+-  void AddSource(Browser* src, const char* fileName) noexcept;
++  void AddSource(Browser* src, const char* fileName);
+ 
+   // Throws CombineError
+   std::unique_ptr<CombineBrowser> Combine();
+diff --git a/libespm/include/libespm/IdMapping.h b/libespm/include/libespm/IdMapping.h
+index 6cc10c21..6ab37698 100644
+--- a/libespm/include/libespm/IdMapping.h
++++ b/libespm/include/libespm/IdMapping.h
+@@ -1,9 +1,51 @@
+ #pragma once
++#include "LoadOrder.h"
+ #include <array>
+ #include <cstdint>
++#include <optional>
++#include <vector>
+ 
+ namespace espm {
+ 
+-using IdMapping = std::array<uint8_t, 256>;
++// From the ids written inside one plugin file to the ids the game gives
++// them. Inside a file the top byte of an id indexes that file's own MAST
++// list, and the index one past the last master is the file itself. Each of
++// those can be a full or a light plugin, so a file's top byte maps to a slot
++// (LoadOrder.h), not to another top byte.
++class IdMapping
++{
++public:
++  void Set(uint8_t fileTopByte, PluginSlot slot) noexcept;
++  std::optional<PluginSlot> GetSlot(uint8_t fileTopByte) const noexcept;
++
++  // An id whose top byte names no plugin comes back as
++  // 0xFF000000 | (id & 0xFFFFFF), at or above 0xFF000000 where no plugin's
++  // form can be. Callers have tested for that since before light plugins.
++  uint32_t Map(uint32_t fileId) const noexcept;
++
++private:
++  std::array<std::optional<PluginSlot>, 256> slots;
++};
++
++// The other way: from an id the game gives a form to the id one plugin file
++// writes for it, when that file can name it at all, that is when the form
++// belongs to one of its masters or to the file itself.
++class RawIdMapping
++{
++public:
++  RawIdMapping() noexcept;
++
++  void Set(PluginSlot slot, uint8_t fileTopByte);
++
++  // An id this file cannot name comes back at or above 0xFF000000, the same
++  // way IdMapping::Map answers.
++  uint32_t Map(uint32_t id) const noexcept;
++
++private:
++  static constexpr uint16_t kNotAMaster = 0xFFFF;
++
++  std::array<uint16_t, PluginSlot::kMaxFullPlugins> fullToFile;
++  std::vector<uint16_t> lightToFile;
++};
+ 
+ }
+diff --git a/libespm/include/libespm/LoadOrder.h b/libespm/include/libespm/LoadOrder.h
+new file mode 100644
+index 00000000..5fcfb6e4
+--- /dev/null
++++ b/libespm/include/libespm/LoadOrder.h
+@@ -0,0 +1,126 @@
++#pragma once
++#include <array>
++#include <cstdint>
++#include <optional>
++#include <string>
++#include <string_view>
++#include <vector>
++
++namespace espm {
++
++// Where a plugin sits in the running game, and so what ids its forms get.
++//
++// Skyrim SE gives a full plugin a top byte of its own, 0x00 to 0xFD, and its
++// forms the ids (index << 24) | (id & 0xFFFFFF). A light plugin has no top
++// byte of its own: every light plugin shares 0xFE and is told apart by a
++// 12 bit index under it, so its forms get
++// 0xFE000000 | (index << 12) | (id & 0xFFF). Each index counts only plugins
++// of its own kind, in load order. 0xFF is left for forms made at runtime,
++// which on this server are the forms the server creates.
++//
++// Measured on 5 Oct (Thornswood #1715): in Patrick's dev session the client
++// listed KhisartinBeards.esp 42nd among its light plugins (index 41, 0x029),
++// and the game gave that plugin's beard head parts 0x827 and 0x838 the ids
++// 0xFE029827 and 0xFE029838.
++struct PluginSlot
++{
++  static constexpr uint32_t kLightTopByte = 0xFE;
++  static constexpr uint32_t kCreatedTopByte = 0xFF;
++  static constexpr uint32_t kMaxFullPlugins = 0xFE;    // 0x00 to 0xFD
++  static constexpr uint32_t kMaxLightPlugins = 0x1000; // 0x000 to 0xFFF
++  static constexpr uint32_t kFullLocalIdMask = 0x00FFFFFF;
++  static constexpr uint32_t kLightLocalIdMask = 0x00000FFF;
++
++  bool light = false;
++  uint16_t index = 0;
++
++  // The bits of an id that stay the same wherever the plugin loads.
++  uint32_t LocalIdMask() const noexcept;
++
++  // The id the game gives the form with this local id in this plugin. A
++  // light plugin keeps only the low 12 bits, as the game does.
++  uint32_t ToId(uint32_t localId) const noexcept;
++
++  // The slot an id belongs to, or nothing for an id at or above 0xFF000000,
++  // which no plugin owns.
++  static std::optional<PluginSlot> Of(uint32_t id) noexcept;
++
++  friend bool operator==(const PluginSlot& a, const PluginSlot& b) noexcept
++  {
++    return a.light == b.light && a.index == b.index;
++  }
++  friend bool operator!=(const PluginSlot& a, const PluginSlot& b) noexcept
++  {
++    return !(a == b);
++  }
++};
++
++// The game's own rule for what is light: the ESL flag, 0x200, in the TES4
++// record header, or an .esl extension, which the game loads as light with or
++// without the flag. An .esp or .esm carrying the flag is light too. Measured
++// on 5 Oct over the 102 plugins the Thornswood client loads: 54 are light,
++// and 50 of those are .esp files with the flag, three are .esl files with the
++// flag and no master flag, and one, _ResourcePack.esl, has both.
++inline constexpr uint32_t kTes4LightFlag = 0x200;
++bool IsLightPlugin(std::string_view fileName, uint32_t tes4Flags) noexcept;
++
++// The plugins the server loaded, in load order, with the slot the game gives
++// each. Descriptors ("827:KhisartinBeards.esp") and ids convert through
++// this, so a light plugin's forms keep the ids the game gives them.
++class LoadOrder
++{
++public:
++  LoadOrder() = default;
++
++  // Throws std::invalid_argument unless the slots are the ones the game
++  // gives these plugins in this order: full indices counting up from 0 and
++  // light indices counting up from 0, each in load order.
++  LoadOrder(std::vector<std::string> fileNames,
++            std::vector<PluginSlot> slots);
++
++  // Every plugin named here is full. For callers that hold no plugin file to
++  // read a header from, such as tests. Lightness lives in the header, so a
++  // light plugin cannot be listed this way; use the constructor above.
++  static LoadOrder FullPlugins(std::vector<std::string> fileNames);
++
++  size_t size() const noexcept { return fileNames.size(); }
++  bool empty() const noexcept { return fileNames.empty(); }
++  const std::string& operator[](size_t i) const { return fileNames.at(i); }
++  std::vector<std::string>::const_iterator begin() const noexcept
++  {
++    return fileNames.begin();
++  }
++  std::vector<std::string>::const_iterator end() const noexcept
++  {
++    return fileNames.end();
++  }
++  const std::vector<std::string>& GetFileNames() const noexcept
++  {
++    return fileNames;
++  }
++
++  PluginSlot GetSlot(size_t i) const { return slots.at(i); }
++
++  // Position in the load order of the plugin named exactly so.
++  std::optional<size_t> FindByFileName(
++    std::string_view fileName) const noexcept;
++
++  // Position in the load order of the plugin that owns this id, or nothing
++  // when no loaded plugin does: an id the server made (0xFF), or a slot no
++  // plugin fills.
++  std::optional<size_t> FindByFormId(uint32_t formId) const noexcept;
++
++  size_t GetNumFullPlugins() const noexcept { return numFull; }
++  size_t GetNumLightPlugins() const noexcept { return lightPositions.size(); }
++
++private:
++  static constexpr int32_t kNoPosition = -1;
++
++  std::vector<std::string> fileNames;
++  std::vector<PluginSlot> slots;
++  size_t numFull = 0;
++  std::array<int32_t, PluginSlot::kMaxFullPlugins> fullPositions{};
++  std::vector<int32_t> lightPositions;
++};
++
++}
+diff --git a/libespm/include/libespm/Loader.h b/libespm/include/libespm/Loader.h
+index 0819d407..81bafaa9 100644
+--- a/libespm/include/libespm/Loader.h
++++ b/libespm/include/libespm/Loader.h
+@@ -42,6 +42,10 @@ public:
+ 
+   std::vector<std::string> GetFileNames() const noexcept;
+ 
++  // The same plugins with the slot the game gives each, full or light. Form
++  // ids and "id:file" descriptors convert through this (FormDesc).
++  const LoadOrder& GetLoadOrder() const noexcept;
++
+   struct FileInfo
+   {
+     uint32_t crc32 = 0;
+diff --git a/libespm/include/libespm/LookupResult.h b/libespm/include/libespm/LookupResult.h
+index 9daf8a56..30e7cba2 100644
+--- a/libespm/include/libespm/LookupResult.h
++++ b/libespm/include/libespm/LookupResult.h
+@@ -8,7 +8,7 @@ struct LookupResult : public BrowserInfo
+ {
+   LookupResult() = default;
+   LookupResult(const CombineBrowser* parent_, const RecordHeader* rec_,
+-               uint8_t fileIdx_);
++               uint16_t fileIdx_);
+ 
+   const RecordHeader* const rec = nullptr;
+ };
+diff --git a/libespm/include/libespm/Utils.h b/libespm/include/libespm/Utils.h
+index c04db72c..7cc068b0 100644
+--- a/libespm/include/libespm/Utils.h
++++ b/libespm/include/libespm/Utils.h
+@@ -22,6 +22,7 @@ bool IsItem(Type type) noexcept;
+ uint32_t CalculateHashcode(const void* readBuffer, size_t length);
+ uint32_t GetCorrectHashcode(const std::string& fileName);
+ uint32_t GetMappedId(uint32_t id, const IdMapping& mapping) noexcept;
++uint32_t GetMappedId(uint32_t id, const RawIdMapping& mapping) noexcept;
+ std::wstring ReadWstring(const uint8_t* ptr);
+ Property::Type GetElementType(Property::Type arrayType);
+ const uint8_t* ReadPropertyValue(const uint8_t* p, Property* prop,
+diff --git a/libespm/src/Browser.cpp b/libespm/src/Browser.cpp
+index ba14a4d8..8e78f917 100644
+--- a/libespm/src/Browser.cpp
++++ b/libespm/src/Browser.cpp
+@@ -15,6 +15,8 @@
+ #include "libespm/RecordHeader.h"
+ #include "libespm/RefrKey.h"
+ #include "libespm/WRLD.h"
++#include <algorithm>
++#include <array>
+ #include <cstring>
+ #include <optional>
+ #include <stdexcept>
+@@ -48,6 +50,7 @@ struct Browser::Impl
+   std::vector<const RecordHeader*> quests;
+   std::vector<const RecordHeader*> worlds;
+   std::vector<const RecordHeader*> cells;
++  std::array<uint32_t, 256> highestLocalId{};
+ 
+   GroupStack grStack;
+   std::vector<std::unique_ptr<GroupStack>> grStackCopies;
+@@ -182,6 +185,11 @@ const std::vector<const void*>& Browser::GetSubsEnsured(
+   return *opt;
+ }
+ 
++uint32_t Browser::GetHighestLocalId(uint8_t topByte) const noexcept
++{
++  return pImpl->highestLocalId[topByte];
++}
++
+ bool Browser::ReadAny(const GroupStack* parentGrStack)
+ {
+   if (pImpl->pos >= pImpl->length) {
+@@ -224,6 +232,8 @@ bool Browser::ReadAny(const GroupStack* parentGrStack)
+     pImpl->groupStackByRecordPtr.emplace(recHeader, parentGrStack);
+ 
+     pImpl->recById[recHeader->id] = recHeader;
++    auto& highest = pImpl->highestLocalId[recHeader->id >> 24];
++    highest = std::max(highest, recHeader->id & 0x00FFFFFF);
+ 
+     Type t = recHeader->GetType();
+     if (utils::Is<espm::REFR>(t) || utils::Is<espm::ACHR>(t)) {
+diff --git a/libespm/src/BrowserInfo.cpp b/libespm/src/BrowserInfo.cpp
+index 1f61b98c..ca679733 100644
+--- a/libespm/src/BrowserInfo.cpp
++++ b/libespm/src/BrowserInfo.cpp
+@@ -4,7 +4,7 @@
+ 
+ namespace espm {
+ 
+-BrowserInfo::BrowserInfo(const CombineBrowser* parent_, uint8_t fileIdx_)
++BrowserInfo::BrowserInfo(const CombineBrowser* parent_, uint16_t fileIdx_)
+   : parent(parent_)
+   , fileIdx(fileIdx_) {};
+ 
+diff --git a/libespm/src/CombineBrowser.cpp b/libespm/src/CombineBrowser.cpp
+index dbc1b930..8bf734c1 100644
+--- a/libespm/src/CombineBrowser.cpp
++++ b/libespm/src/CombineBrowser.cpp
+@@ -2,7 +2,10 @@
+ #include "libespm/Browser.h"
+ #include "libespm/RecordHeader.h"
+ #include "libespm/Utils.h"
++#include <algorithm>
+ #include <array>
++#include <cctype>
++#include <cstring>
+ #include <fmt/format.h>
+ #include <memory>
+ #include <unordered_set>
+@@ -11,10 +14,19 @@ namespace espm {
+ 
+ int32_t CombineBrowser::Impl::GetFileIndex(const char* fileName) const noexcept
+ {
+-  // returns index of sources array or -1 if not found
++  // returns index of sources array or -1 if not found.
++  // Case-insensitive, as in the game: plugins name their masters in any case
++  // (USSEP lists "ccqdrsse001-survivalmode.esl" while the file and the load
++  // order say "ccQDRSSE001-SurvivalMode.esl").
+   if (fileName[0] != '\0') {
+     for (size_t i = 0; i < sources.size(); ++i) {
+-      if (sources[i].fileName == fileName) {
++      const std::string& a = sources[i].fileName;
++      const size_t n = std::strlen(fileName);
++      if (a.size() == n &&
++          std::equal(a.begin(), a.end(), fileName, [](char x, char y) {
++            return std::tolower(static_cast<unsigned char>(x)) ==
++              std::tolower(static_cast<unsigned char>(y));
++          })) {
+         return i;
+       }
+     }
+@@ -31,8 +43,8 @@ LookupResult CombineBrowser::LookupById(uint32_t combFormId) const noexcept
+   }
+ 
+   const RecordHeader* resRec = nullptr;
+-  uint8_t resFileIdx = 0;
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  uint16_t resFileIdx = 0;
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     auto& src = pImpl->sources[i];
+     const uint32_t rawFormId = utils::GetMappedId(combFormId, *src.toRaw);
+     if (rawFormId >= 0xff000000)
+@@ -40,7 +52,7 @@ LookupResult CombineBrowser::LookupById(uint32_t combFormId) const noexcept
+     auto rec = src.br->LookupById(rawFormId);
+     if (rec) {
+       resRec = rec;
+-      resFileIdx = (uint8_t)i;
++      resFileIdx = static_cast<uint16_t>(i);
+     }
+   }
+   return resRec ? LookupResult(this, resRec, resFileIdx) : LookupResult();
+@@ -50,14 +62,14 @@ std::vector<LookupResult> CombineBrowser::LookupByIdAll(
+   uint32_t combFormId) const noexcept
+ {
+   std::vector<LookupResult> res;
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     auto& src = pImpl->sources[i];
+     const uint32_t rawFormId = utils::GetMappedId(combFormId, *src.toRaw);
+     if (rawFormId >= 0xff000000)
+       continue;
+     const RecordHeader* rec = src.br->LookupById(rawFormId);
+     if (rec) {
+-      res.push_back({ this, rec, static_cast<uint8_t>(i) });
++      res.push_back({ this, rec, static_cast<uint16_t>(i) });
+     }
+   }
+   return res;
+@@ -66,7 +78,7 @@ std::vector<LookupResult> CombineBrowser::LookupByIdAll(
+ std::pair<const RecordHeader**, size_t> CombineBrowser::FindNavMeshes(
+   uint32_t worldSpaceId, CellOrGridPos cellOrGridPos) const noexcept
+ {
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     auto& src = pImpl->sources[i];
+     const uint32_t rawFormId = utils::GetMappedId(worldSpaceId, *src.toRaw);
+     if (rawFormId >= 0xff000000)
+@@ -85,7 +97,7 @@ std::vector<const std::vector<const RecordHeader*>*>
+ CombineBrowser::GetRecordsByType(const char* type) const
+ {
+   std::vector<const std::vector<const RecordHeader*>*> res;
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     res.push_back(&pImpl->sources[i].br->GetRecordsByType(type));
+   }
+   return res;
+@@ -94,13 +106,14 @@ CombineBrowser::GetRecordsByType(const char* type) const
+ std::vector<LookupResult> CombineBrowser::GetDistinctRecordsByType(
+   const char* type) const
+ {
+-  if (pImpl->numSources == 0) {
++  if (pImpl->sources.empty()) {
+     return {};
+   }
+ 
+   std::unordered_set<formId> formSet;
+   std::vector<LookupResult> result;
+-  for (size_t i = pImpl->numSources - 1; i != static_cast<size_t>(-1); --i) {
++  for (size_t i = pImpl->sources.size() - 1; i != static_cast<size_t>(-1);
++       --i) {
+     const auto& records = pImpl->sources[i].br->GetRecordsByType(type);
+     formSet.reserve(records.size());
+     result.reserve(records.size());
+@@ -109,7 +122,8 @@ std::vector<LookupResult> CombineBrowser::GetDistinctRecordsByType(
+       auto mappedId =
+         utils::GetMappedId(record->GetId(), *pImpl->sources[i].toComb);
+       if (formSet.insert(mappedId).second) {
+-        result.push_back(LookupResult(this, record, static_cast<uint8_t>(i)));
++        result.push_back(
++          LookupResult(this, record, static_cast<uint16_t>(i)));
+       }
+     }
+   }
+@@ -122,7 +136,7 @@ CombineBrowser::GetRecordsAtPos(uint32_t cellOrWorld, int16_t cellX,
+                                 int16_t cellY) const
+ {
+   std::vector<const std::vector<const RecordHeader*>*> res;
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     res.push_back(
+       &pImpl->sources[i].br->GetRecordsAtPos(cellOrWorld, cellX, cellY));
+   }
+@@ -132,20 +146,26 @@ CombineBrowser::GetRecordsAtPos(uint32_t cellOrWorld, int16_t cellX,
+ const IdMapping* CombineBrowser::GetCombMapping(
+   size_t fileIndex) const noexcept
+ {
+-  if (fileIndex >= pImpl->numSources) {
++  if (fileIndex >= pImpl->sources.size()) {
+     return nullptr;
+   }
+   return pImpl->sources[fileIndex].toComb.get();
+ }
+ 
+-const IdMapping* CombineBrowser::GetRawMapping(size_t fileIndex) const noexcept
++const RawIdMapping* CombineBrowser::GetRawMapping(
++  size_t fileIndex) const noexcept
+ {
+-  if (fileIndex >= pImpl->numSources) {
++  if (fileIndex >= pImpl->sources.size()) {
+     return nullptr;
+   }
+   return pImpl->sources[fileIndex].toRaw.get();
+ }
+ 
++const LoadOrder& CombineBrowser::GetLoadOrder() const noexcept
++{
++  return pImpl->loadOrder;
++}
++
+ CompressedFieldsCache& CombineBrowser::GetCache() const noexcept
+ {
+   return pImpl->cache;
+@@ -154,7 +174,7 @@ CompressedFieldsCache& CombineBrowser::GetCache() const noexcept
+ const GroupStack& CombineBrowser::GetParentGroupsEnsured(
+   const RecordHeader* rec) const
+ {
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     const auto result = pImpl->sources[i].br->GetParentGroupsOptional(rec);
+     if (result) {
+       return *result;
+@@ -167,7 +187,7 @@ const GroupStack& CombineBrowser::GetParentGroupsEnsured(
+ const std::vector<const void*>& CombineBrowser::GetSubsEnsured(
+   const GroupHeader* group) const
+ {
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     const auto result = pImpl->sources[i].br->GetSubsOptional(group);
+     if (result) {
+       return *result;
+diff --git a/libespm/src/Combiner.cpp b/libespm/src/Combiner.cpp
+index ccbafa7a..a578159b 100644
+--- a/libespm/src/Combiner.cpp
++++ b/libespm/src/Combiner.cpp
+@@ -16,38 +16,64 @@ Combiner::Combiner()
+   pImpl = std::make_unique<CombineBrowser::Impl>();
+ }
+ 
+-void espm::Combiner::AddSource(Browser* src, const char* fileName) noexcept
++void espm::Combiner::AddSource(Browser* src, const char* fileName)
+ {
+-  if (pImpl->numSources >= std::size(pImpl->sources)) {
+-    ++pImpl->numSources;
+-    return;
+-  }
+-  pImpl->sources[pImpl->numSources++] = { src, fileName, nullptr };
++  pImpl->sources.push_back({ src, fileName });
+ }
+ 
+ std::unique_ptr<espm::CombineBrowser> Combiner::Combine()
+ {
+-  if (pImpl->numSources > std::size(pImpl->sources)) {
+-    throw CombineError("too many sources");
+-  }
+-
+-  for (size_t i = 0; i < pImpl->numSources; ++i) {
++  // Thornswood #1715. Every plugin gets the slot the game gives it before any
++  // id is mapped, because a master can be of either kind: a full plugin can
++  // have a light master, and a light plugin full or light ones. The game
++  // counts full and light plugins separately, each in load order, and so does
++  // this. Before, every plugin took the next top byte, so a light plugin
++  // listed here would have taken a top byte the game gives the next full
++  // plugin, and every id after it would have been off by one.
++  std::vector<PluginSlot> slots;
++  slots.reserve(pImpl->sources.size());
++  uint32_t numFull = 0;
++  uint32_t numLight = 0;
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
+     auto& src = pImpl->sources[i];
+     if (!src.br) {
+       throw CombineError("nullptr source with index " + std::to_string(i));
+     }
+-
+     const auto tes4 = Convert<TES4>(src.br->LookupById(0));
+     if (!tes4) {
+       throw CombineError(src.fileName + " doesn't have TES4 record");
+     }
++    // GetFlags is the record header's flags field as the file stores it, and
++    // for TES4 that is where the game reads the ESL flag from.
++    if (IsLightPlugin(src.fileName, tes4->GetFlags())) {
++      if (numLight >= PluginSlot::kMaxLightPlugins) {
++        throw CombineError(fmt::format(
++          "{} is light plugin number {} and the game has room for {}",
++          src.fileName, numLight + 1, PluginSlot::kMaxLightPlugins));
++      }
++      slots.push_back({ true, static_cast<uint16_t>(numLight++) });
++    } else {
++      if (numFull >= PluginSlot::kMaxFullPlugins) {
++        throw CombineError(fmt::format(
++          "{} is full plugin number {} and the game has room for {}",
++          src.fileName, numFull + 1, PluginSlot::kMaxFullPlugins));
++      }
++      slots.push_back({ false, static_cast<uint16_t>(numFull++) });
++    }
++  }
++
++  std::vector<std::string> fileNames;
++  fileNames.reserve(pImpl->sources.size());
++
++  for (size_t i = 0; i < pImpl->sources.size(); ++i) {
++    auto& src = pImpl->sources[i];
++
++    const auto tes4 = Convert<TES4>(src.br->LookupById(0));
+     espm::CompressedFieldsCache dummyCache;
+     const auto masters = tes4->GetData(dummyCache).masters;
+ 
+     auto toComb = std::make_unique<IdMapping>();
+-    toComb->fill(0xff);
+-    auto toRaw = std::make_unique<IdMapping>();
+-    toRaw->fill(0xff);
++    auto toRaw = std::make_unique<RawIdMapping>();
+     size_t m = 0;
+     for (m = 0; m < masters.size(); ++m) {
+       const int globalIdx = pImpl->GetFileIndex(masters[m]);
+@@ -55,15 +81,44 @@ std::unique_ptr<espm::CombineBrowser> Combiner::Combine()
+         throw CombineError(src.fileName + " has unresolved dependency (" +
+                            masters[m] + ")");
+       }
+-      (*toComb)[m] = static_cast<uint8_t>(globalIdx);
+-      (*toRaw)[globalIdx] = static_cast<uint8_t>(m);
++      toComb->Set(static_cast<uint8_t>(m), slots[globalIdx]);
++      toRaw->Set(slots[globalIdx], static_cast<uint8_t>(m));
+     }
+-    (*toComb)[m] = static_cast<uint8_t>(i);
+-    (*toRaw)[i] = static_cast<uint8_t>(m);
++    toComb->Set(static_cast<uint8_t>(m), slots[i]);
++    toRaw->Set(slots[i], static_cast<uint8_t>(m));
++
++    // A form under a light plugin has 12 bits of its own and the game drops
++    // the rest, so a form above 0xFFF under a light plugin (the plugin's own,
++    // or one a plugin adds or changes under a light master) collides with
++    // another form in the game, and looked up by the id the game gives it,
++    // it would not be found here. Measured on 5 Oct over the 102 plugins the
++    // Thornswood client loads: no such form, the highest under a light plugin
++    // being 0xFE8 in JK's Castle Volkihar.esp. A collection with one is
++    // broken in a way the game hides, so the server names it.
++    for (size_t fileTopByte = 0; fileTopByte <= m; ++fileTopByte) {
++      const auto slot = toComb->GetSlot(static_cast<uint8_t>(fileTopByte));
++      if (!slot || !slot->light) {
++        continue;
++      }
++      const uint32_t highest =
++        src.br->GetHighestLocalId(static_cast<uint8_t>(fileTopByte));
++      if (highest > PluginSlot::kLightLocalIdMask) {
++        throw CombineError(fmt::format(
++          "{} holds form {:#010x} under a light plugin, where the game keeps "
++          "only the low 12 bits of an id and so cannot tell it from another "
++          "form. Compact the plugin in xEdit, or take it out",
++          src.fileName,
++          (static_cast<uint32_t>(fileTopByte) << 24) | highest));
++      }
++    }
++
+     src.toComb = std::move(toComb);
+     src.toRaw = std::move(toRaw);
++    fileNames.push_back(src.fileName);
+   }
+ 
++  pImpl->loadOrder = LoadOrder(std::move(fileNames), std::move(slots));
++
+   std::unique_ptr<espm::CombineBrowser> res(new CombineBrowser);
+   res->pImpl = pImpl;
+   return res;
+diff --git a/libespm/src/IdMapping.cpp b/libespm/src/IdMapping.cpp
+new file mode 100644
+index 00000000..e3288908
+--- /dev/null
++++ b/libespm/src/IdMapping.cpp
+@@ -0,0 +1,71 @@
++#include "libespm/IdMapping.h"
++
++namespace espm {
++
++namespace {
++uint32_t Unmapped(uint32_t id) noexcept
++{
++  return (PluginSlot::kCreatedTopByte << 24) |
++    (id & PluginSlot::kFullLocalIdMask);
++}
++}
++
++void IdMapping::Set(uint8_t fileTopByte, PluginSlot slot) noexcept
++{
++  slots[fileTopByte] = slot;
++}
++
++std::optional<PluginSlot> IdMapping::GetSlot(
++  uint8_t fileTopByte) const noexcept
++{
++  return slots[fileTopByte];
++}
++
++uint32_t IdMapping::Map(uint32_t fileId) const noexcept
++{
++  const auto& slot = slots[fileId >> 24];
++  if (!slot) {
++    return Unmapped(fileId);
++  }
++  return slot->ToId(fileId);
++}
++
++RawIdMapping::RawIdMapping() noexcept
++{
++  fullToFile.fill(kNotAMaster);
++}
++
++void RawIdMapping::Set(PluginSlot slot, uint8_t fileTopByte)
++{
++  if (!slot.light) {
++    fullToFile.at(slot.index) = fileTopByte;
++    return;
++  }
++  if (slot.index >= lightToFile.size()) {
++    lightToFile.resize(slot.index + 1, kNotAMaster);
++  }
++  lightToFile[slot.index] = fileTopByte;
++}
++
++uint32_t RawIdMapping::Map(uint32_t id) const noexcept
++{
++  const auto slot = PluginSlot::Of(id);
++  if (!slot) {
++    return Unmapped(id);
++  }
++  uint16_t fileTopByte = kNotAMaster;
++  if (slot->light) {
++    if (slot->index < lightToFile.size()) {
++      fileTopByte = lightToFile[slot->index];
++    }
++  } else if (slot->index < fullToFile.size()) {
++    fileTopByte = fullToFile[slot->index];
++  }
++  if (fileTopByte == kNotAMaster) {
++    return Unmapped(id);
++  }
++  return (static_cast<uint32_t>(fileTopByte) << 24) |
++    (id & slot->LocalIdMask());
++}
++
++}
+diff --git a/libespm/src/LoadOrder.cpp b/libespm/src/LoadOrder.cpp
+new file mode 100644
+index 00000000..d8840034
+--- /dev/null
++++ b/libespm/src/LoadOrder.cpp
+@@ -0,0 +1,122 @@
++#include "libespm/LoadOrder.h"
++#include <cctype>
++#include <stdexcept>
++#include <utility>
++
++namespace espm {
++
++uint32_t PluginSlot::LocalIdMask() const noexcept
++{
++  return light ? kLightLocalIdMask : kFullLocalIdMask;
++}
++
++uint32_t PluginSlot::ToId(uint32_t localId) const noexcept
++{
++  if (light) {
++    return (kLightTopByte << 24) | (static_cast<uint32_t>(index) << 12) |
++      (localId & kLightLocalIdMask);
++  }
++  return (static_cast<uint32_t>(index) << 24) | (localId & kFullLocalIdMask);
++}
++
++std::optional<PluginSlot> PluginSlot::Of(uint32_t id) noexcept
++{
++  const uint32_t topByte = id >> 24;
++  if (topByte == kCreatedTopByte) {
++    return std::nullopt;
++  }
++  if (topByte == kLightTopByte) {
++    return PluginSlot{ true, static_cast<uint16_t>((id >> 12) & 0xFFF) };
++  }
++  return PluginSlot{ false, static_cast<uint16_t>(topByte) };
++}
++
++bool IsLightPlugin(std::string_view fileName, uint32_t tes4Flags) noexcept
++{
++  if (tes4Flags & kTes4LightFlag) {
++    return true;
++  }
++  constexpr std::string_view kEsl = ".esl";
++  if (fileName.size() < kEsl.size()) {
++    return false;
++  }
++  const auto ext = fileName.substr(fileName.size() - kEsl.size());
++  for (size_t i = 0; i < kEsl.size(); ++i) {
++    if (std::tolower(static_cast<unsigned char>(ext[i])) != kEsl[i]) {
++      return false;
++    }
++  }
++  return true;
++}
++
++LoadOrder::LoadOrder(std::vector<std::string> fileNames_,
++                     std::vector<PluginSlot> slots_)
++  : fileNames(std::move(fileNames_))
++  , slots(std::move(slots_))
++{
++  if (fileNames.size() != slots.size()) {
++    throw std::invalid_argument("LoadOrder: one slot per plugin");
++  }
++  fullPositions.fill(kNoPosition);
++  for (size_t i = 0; i < slots.size(); ++i) {
++    const auto& slot = slots[i];
++    if (slot.light) {
++      if (slot.index != lightPositions.size() ||
++          lightPositions.size() >= PluginSlot::kMaxLightPlugins) {
++        throw std::invalid_argument(
++          "LoadOrder: " + fileNames[i] +
++          " is not given the next light index in load order");
++      }
++      lightPositions.push_back(static_cast<int32_t>(i));
++    } else {
++      if (slot.index != numFull || numFull >= PluginSlot::kMaxFullPlugins) {
++        throw std::invalid_argument(
++          "LoadOrder: " + fileNames[i] +
++          " is not given the next full index in load order");
++      }
++      fullPositions[numFull++] = static_cast<int32_t>(i);
++    }
++  }
++}
++
++LoadOrder LoadOrder::FullPlugins(std::vector<std::string> fileNames)
++{
++  std::vector<PluginSlot> slots(fileNames.size());
++  for (size_t i = 0; i < slots.size(); ++i) {
++    slots[i] = PluginSlot{ false, static_cast<uint16_t>(i) };
++  }
++  return LoadOrder(std::move(fileNames), std::move(slots));
++}
++
++std::optional<size_t> LoadOrder::FindByFileName(
++  std::string_view fileName) const noexcept
++{
++  for (size_t i = 0; i < fileNames.size(); ++i) {
++    if (fileNames[i] == fileName) {
++      return i;
++    }
++  }
++  return std::nullopt;
++}
++
++std::optional<size_t> LoadOrder::FindByFormId(uint32_t formId) const noexcept
++{
++  const auto slot = PluginSlot::Of(formId);
++  if (!slot) {
++    return std::nullopt;
++  }
++  int32_t position = kNoPosition;
++  if (slot->light) {
++    if (slot->index < lightPositions.size()) {
++      position = lightPositions[slot->index];
++    }
++  } else if (slot->index < numFull) {
++    position = fullPositions[slot->index];
++  }
++  if (position == kNoPosition) {
++    return std::nullopt;
++  }
++  return static_cast<size_t>(position);
++}
++
++}
+diff --git a/libespm/src/Loader.cpp b/libespm/src/Loader.cpp
+index 4036760d..e4a54639 100644
+--- a/libespm/src/Loader.cpp
++++ b/libespm/src/Loader.cpp
+@@ -53,6 +53,11 @@ const CombineBrowser& Loader::GetBrowser() const noexcept
+   return *combineBrowser;
+ }
+ 
++const LoadOrder& Loader::GetLoadOrder() const noexcept
++{
++  return combineBrowser->GetLoadOrder();
++}
++
+ std::vector<std::string> Loader::GetFileNames() const noexcept
+ {
+   std::vector<std::string> res;
+diff --git a/libespm/src/LookupResult.cpp b/libespm/src/LookupResult.cpp
+index 47d17964..bec542fa 100644
+--- a/libespm/src/LookupResult.cpp
++++ b/libespm/src/LookupResult.cpp
+@@ -3,7 +3,7 @@
+ namespace espm {
+ 
+ LookupResult::LookupResult(const CombineBrowser* parent_,
+-                           const RecordHeader* rec_, uint8_t fileIdx_)
++                           const RecordHeader* rec_, uint16_t fileIdx_)
+   : BrowserInfo(parent_, fileIdx_)
+   , rec(rec_)
+ {
+diff --git a/libespm/src/Utils.cpp b/libespm/src/Utils.cpp
+index f4f9ea8d..449eed66 100644
+--- a/libespm/src/Utils.cpp
++++ b/libespm/src/Utils.cpp
+@@ -66,11 +66,17 @@ uint32_t GetCorrectHashcode(const std::string& fileName)
+   return iter == kCorrectHashcode.end() ? 0 : iter->second;
+ }
+ 
++// Thornswood #1715. These used to swap the top byte through a 256 entry
++// table, which cannot name a light plugin's form: the game gives those ids
++// under 0xFE with a 12 bit plugin index of their own (LoadOrder.h).
+ uint32_t GetMappedId(uint32_t id, const IdMapping& mapping) noexcept
+ {
+-  const uint32_t shortId = id % 0x01000000;
+-  const uint8_t index = id / 0x01000000;
+-  return shortId + (mapping[index] * 0x01000000);
++  return mapping.Map(id);
++}
++
++uint32_t GetMappedId(uint32_t id, const RawIdMapping& mapping) noexcept
++{
++  return mapping.Map(id);
+ }
+ 
+ std::wstring ReadWstring(const uint8_t* ptr)
+diff --git a/misc/tests/test_light_plugins.cpp b/misc/tests/test_light_plugins.cpp
+new file mode 100644
+index 00000000..f6dcb3a3
+--- /dev/null
++++ b/misc/tests/test_light_plugins.cpp
+@@ -0,0 +1,463 @@
++// Thornswood #1715. The server gives every form of a light plugin the id the
++// game gives it, 0xFE000000 | (lightIndex << 12) | id, and converts those ids
++// to and from "id:file" descriptors. Run by test_light_plugins.ps1 against the
++// game's Data folder and the client's own load order lists from a session.
++//
++// Arguments: <Data> <Plugins.txt> <Skyrim.ccc> <client load order>
++//            <client light plugin list> <scratch folder>
++// The two client lists are what thornswood-front.js writes from
++// Game.getModName and Game.getLightModName, so they are the game's own answer
++// to which plugin is light and where it sits.
++#include "FormDesc.h"
++#include "libespm/COBJ.h"
++#include "libespm/Combiner.h"
++#include "libespm/Convert.h"
++#include "libespm/FLST.h"
++#include "libespm/GroupUtils.h"
++#include "libespm/Loader.h"
++#include "libespm/REFR.h"
++#include "libespm/Utils.h"
++
++#if __has_include("libespm/LoadOrder.h")
++#  define THORNSWOOD_LIGHT_PLUGINS 1
++#endif
++
++#include <algorithm>
++#include <cctype>
++#include <cstdio>
++#include <cstring>
++#include <filesystem>
++#include <fstream>
++#include <map>
++#include <set>
++#include <string>
++#include <vector>
++
++namespace fs = std::filesystem;
++
++static int failures = 0;
++
++static void Check(bool ok, const std::string& what)
++{
++  std::printf("%s  %s\n", ok ? "PASS" : "FAIL", what.c_str());
++  if (!ok) {
++    ++failures;
++  }
++}
++
++static std::string Lower(std::string s)
++{
++  for (auto& c : s) {
++    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
++  }
++  return s;
++}
++
++static std::string Hex(uint32_t v)
++{
++  char b[16];
++  std::snprintf(b, sizeof(b), "%#x", v);
++  return b;
++}
++
++static std::vector<std::string> ReadLines(const fs::path& p)
++{
++  std::vector<std::string> res;
++  std::ifstream f(p);
++  std::string line;
++  while (std::getline(f, line)) {
++    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
++      line.pop_back();
++    }
++    if (!line.empty()) {
++      res.push_back(line);
++    }
++  }
++  return res;
++}
++
++// What the server converts descriptors through: its load order with
++// lightness, or before #1715 the bare list of file names.
++#ifdef THORNSWOOD_LIGHT_PLUGINS
++static const espm::LoadOrder& ServerLoadOrder(const espm::Loader& l)
++{
++  return l.GetLoadOrder();
++}
++#else
++static std::vector<std::string> ServerLoadOrder(const espm::Loader& l)
++{
++  return l.GetFileNames();
++}
++#endif
++
++// Which plugins the server holds as full and which as light, in order.
++static void ServerLists(const espm::Loader& l, std::vector<std::string>& full,
++                        std::vector<std::string>& light)
++{
++#ifdef THORNSWOOD_LIGHT_PLUGINS
++  const auto& lo = l.GetLoadOrder();
++  for (size_t i = 0; i < lo.size(); ++i) {
++    (lo.GetSlot(i).light ? light : full).push_back(lo[i]);
++  }
++#else
++  // Before #1715 every plugin took the next top byte, as a full plugin does.
++  full = l.GetFileNames();
++#endif
++}
++
++// A plugin file built in memory: a TES4 header naming masters, then records.
++struct Fixture
++{
++  static void U16(std::string& s, uint16_t v)
++  {
++    s.append(reinterpret_cast<const char*>(&v), 2);
++  }
++  static void U32(std::string& s, uint32_t v)
++  {
++    s.append(reinterpret_cast<const char*>(&v), 4);
++  }
++  static std::string Field(const char* type, const std::string& data)
++  {
++    std::string s(type, 4);
++    U16(s, static_cast<uint16_t>(data.size()));
++    return s + data;
++  }
++  static std::string Id(uint32_t v)
++  {
++    std::string s;
++    U32(s, v);
++    return s;
++  }
++  static std::string Z(const std::string& v) { return v + std::string(1, '\0'); }
++  static std::string Record(const char* type, uint32_t flags, uint32_t id,
++                            const std::string& fields)
++  {
++    std::string s(type, 4);
++    U32(s, static_cast<uint32_t>(fields.size()));
++    U32(s, flags);
++    U32(s, id);
++    U32(s, 0);
++    U16(s, 44);
++    U16(s, 0);
++    return s + fields;
++  }
++  static std::string Group(const char* label, const std::string& records)
++  {
++    std::string s("GRUP", 4);
++    U32(s, static_cast<uint32_t>(24 + records.size()));
++    s.append(label, 4);
++    U32(s, 0);
++    U32(s, 0);
++    U32(s, 0);
++    return s + records;
++  }
++  static std::string Tes4(uint32_t flags,
++                          const std::vector<std::string>& masters)
++  {
++    std::string hedr;
++    float version = 1.7f;
++    hedr.append(reinterpret_cast<const char*>(&version), 4);
++    U32(hedr, 0);
++    U32(hedr, 0x800);
++    std::string fields = Field("HEDR", hedr);
++    for (auto& m : masters) {
++      fields += Field("MAST", Z(m)) + Field("DATA", std::string(8, '\0'));
++    }
++    return Record("TES4", flags, 0, fields);
++  }
++  static fs::path Write(const fs::path& dir, const std::string& name,
++                        const std::string& bytes)
++  {
++    auto p = dir / name;
++    std::ofstream f(p, std::ios::binary | std::ios::trunc);
++    f.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
++    return p;
++  }
++};
++
++int main(int argc, char** argv)
++{
++  if (argc < 7) {
++    std::printf("FAIL  usage: <Data> <Plugins.txt> <Skyrim.ccc> <client load "
++                "order> <client light list> <scratch>\n");
++    return 2;
++  }
++  const fs::path data = argv[1];
++  const fs::path scratch = argv[6];
++  fs::create_directories(scratch);
++
++  // The load order the game builds: the five base masters, the Creation Club
++  // plugins Skyrim.ccc names that are in Data, then every active line of
++  // Plugins.txt.
++  std::map<std::string, std::string> onDisk;
++  for (auto& e : fs::directory_iterator(data)) {
++    onDisk[Lower(e.path().filename().string())] =
++      e.path().filename().string();
++  }
++  std::vector<std::string> order;
++  std::set<std::string> listed;
++  auto add = [&](const std::string& name) {
++    auto it = onDisk.find(Lower(name));
++    if (it != onDisk.end() && listed.insert(Lower(name)).second) {
++      order.push_back(it->second);
++    }
++  };
++  for (auto n : { "Skyrim.esm", "Update.esm", "Dawnguard.esm",
++                  "HearthFires.esm", "Dragonborn.esm" }) {
++    add(n);
++  }
++  for (auto& n : ReadLines(argv[3])) {
++    add(n);
++  }
++  for (auto& n : ReadLines(argv[2])) {
++    if (n[0] == '*') {
++      add(n.substr(1));
++    }
++  }
++
++  // A full plugin whose master is light: no plugin in the collection is one,
++  // so it is built here. It changes the beard head part 0x827 of
++  // KhisartinBeards.esp and lists it in a form list of its own.
++  const auto lightMasterUser = Fixture::Write(
++    scratch, "ThornswoodFullOverLight.esp",
++    Fixture::Tes4(0, { "Skyrim.esm", "KhisartinBeards.esp" }) +
++      Fixture::Group(
++        "HDPT",
++        Fixture::Record("HDPT", 0, 0x01000827,
++                        Fixture::Field("EDID", Fixture::Z("FixtureBeard")))) +
++      Fixture::Group(
++        "FLST",
++        Fixture::Record("FLST", 0, 0x02000800,
++                        Fixture::Field("EDID", Fixture::Z("FixtureList")) +
++                          Fixture::Field("LNAM", Fixture::Id(0x01000827)))));
++
++  std::vector<fs::path> paths;
++  for (auto& n : order) {
++    paths.push_back(data / n);
++  }
++  paths.push_back(lightMasterUser);
++
++  espm::Loader loader(paths, nullptr,
++                      espm::Loader::BufferType::AllocatedBuffer);
++  const auto& br = loader.GetBrowser();
++  auto& cache = br.GetCache();
++  const auto& lo = ServerLoadOrder(loader);
++
++  // 1. The server's lists are the game's lists.
++  std::vector<std::string> full, light;
++  ServerLists(loader, full, light);
++  full.pop_back(); // the fixture, which the client does not load
++  auto clientFull = ReadLines(argv[4]);
++  auto clientLight = ReadLines(argv[5]);
++  auto same = [](std::vector<std::string> a, std::vector<std::string> b) {
++    std::transform(a.begin(), a.end(), a.begin(), Lower);
++    std::transform(b.begin(), b.end(), b.begin(), Lower);
++    return a == b;
++  };
++  Check(same(full, clientFull),
++        "the server's full plugins are the client's, in its order (" +
++          std::to_string(full.size()) + " here, " +
++          std::to_string(clientFull.size()) + " in the client)");
++  Check(same(light, clientLight),
++        "the server's light plugins are the client's, in its order (" +
++          std::to_string(light.size()) + " here, " +
++          std::to_string(clientLight.size()) + " in the client)");
++
++  // 2. The beard head parts on WWG Ghost's character, with the ids the game
++  // gave them on the main build on 5 Oct.
++  auto fileOf = [&](const espm::LookupResult& r) {
++    return r.rec ? loader.GetFileNames()[r.fileIdx] : std::string("nothing");
++  };
++  for (auto [id, edid] :
++       { std::pair<uint32_t, const char*>{ 0xFE029827, "KhisartinBeards40" },
++         { 0xFE029838, "KhisartinBeardsMedium01_1bit" } }) {
++    auto all = br.LookupByIdAll(id);
++    bool fromBeards = std::any_of(all.begin(), all.end(), [&](auto& r) {
++      return fileOf(r) == "KhisartinBeards.esp" && r.rec->GetType() == "HDPT" &&
++        std::string(r.rec->GetEditorId(cache)) == edid;
++    });
++    Check(fromBeards,
++          Hex(id) + " is " + edid + ", the HDPT in KhisartinBeards.esp");
++  }
++
++  // 3. Descriptors, the way the gamemode converts with getDescFromId and
++  // getIdFromDesc.
++  try {
++    auto desc = FormDesc::FromFormId(0xFE029827, lo);
++    Check(desc.ToString() == "827:KhisartinBeards.esp",
++          "0xfe029827 is the descriptor 827:KhisartinBeards.esp (got " +
++            desc.ToString() + ")");
++  } catch (std::exception& e) {
++    Check(false, std::string("0xfe029827 has a descriptor: ") + e.what());
++  }
++  try {
++    auto id = FormDesc::FromString("838:KhisartinBeards.esp").ToFormId(lo);
++    Check(id == 0xFE029838,
++          "838:KhisartinBeards.esp is 0xfe029838 (got " + Hex(id) + ")");
++  } catch (std::exception& e) {
++    Check(false, std::string("838:KhisartinBeards.esp has an id: ") + e.what());
++  }
++  try {
++    FormDesc::FromString("1827:KhisartinBeards.esp").ToFormId(lo);
++    Check(false,
++          "1827:KhisartinBeards.esp is refused: a light plugin's ids have "
++          "12 bits");
++  } catch (std::exception& e) {
++    Check(true,
++          std::string("1827:KhisartinBeards.esp is refused: ") + e.what());
++  }
++
++  // Every recipe and placed reference the server can see, round trip.
++  size_t roundTrips = 0, roundTripFails = 0, lightRecipes = 0;
++  std::string firstFail;
++  for (auto type : { "COBJ", "REFR" }) {
++    for (auto& r : br.GetDistinctRecordsByType(type)) {
++      const uint32_t id = r.ToGlobalId(r.rec->GetId());
++      if (std::string(type) == "COBJ" && (id >> 24) == 0xFE) {
++        ++lightRecipes;
++      }
++      ++roundTrips;
++      try {
++        auto back = FormDesc::FromString(FormDesc::FromFormId(id, lo).ToString())
++                      .ToFormId(lo);
++        if (back != id || br.LookupById(id).rec != r.rec) {
++          throw std::runtime_error("came back as " + Hex(back));
++        }
++      } catch (std::exception& e) {
++        if (!roundTripFails++) {
++          firstFail = Hex(id) + " from " + fileOf(r) + ": " + e.what();
++        }
++      }
++    }
++  }
++  Check(roundTripFails == 0,
++        "every recipe and placed reference goes id to descriptor to the same "
++        "id and record (" +
++          std::to_string(roundTrips) + " forms, " +
++          std::to_string(roundTripFails) + " failed" +
++          (firstFail.empty() ? "" : ", first " + firstFail) + ")");
++
++  // 4. The loom. MoreCraftableEquipment.esp is light (index 14, 0x00E).
++  Check(lightRecipes > 0,
++        "recipes from light plugins have the game's 0xFE ids (" +
++          std::to_string(lightRecipes) + ")");
++  auto loomBase = br.LookupById(0xFE00E801);
++  Check(loomBase.rec && loomBase.rec->GetType() == "FURN" &&
++          std::string(loomBase.rec->GetEditorId(cache)) ==
++            "MCECraftingLoomMarker",
++        "0xfe00e801 is the loom, MCECraftingLoomMarker in "
++        "MoreCraftableEquipment.esp (found " +
++          fileOf(loomBase) + ")");
++  auto loomRef = br.LookupById(0xFE00E89B);
++  Check(loomRef.rec && loomRef.rec->GetType() == "REFR" &&
++          loomRef.ToGlobalId(
++            espm::Convert<espm::REFR>(loomRef.rec)->GetData(cache).baseId) ==
++            0xFE00E801,
++        "0xfe00e89b is a placed loom whose base is 0xfe00e801");
++  try {
++    auto bandageId =
++      FormDesc::FromString("154c4:Thornswood-Content.esp").ToFormId(lo);
++    auto bandage = br.LookupById(bandageId);
++    auto cobj = espm::Convert<espm::COBJ>(bandage.rec);
++    auto d = cobj ? cobj->GetData(cache) : espm::COBJ::Data();
++    const uint32_t bench = bandage.ToGlobalId(d.benchKeywordId);
++    auto loomKeywords = loomBase.rec
++      ? loomBase.rec->GetKeywordIds(cache)
++      : std::vector<uint32_t>();
++    bool loomHasIt = false;
++    for (auto k : loomKeywords) {
++      loomHasIt = loomHasIt || loomBase.ToGlobalId(k) == bench;
++    }
++    Check(cobj && std::string(bandage.rec->GetEditorId(cache)) ==
++              "ThornswoodRecipeBandage" &&
++            bench == 0x016CE000 && loomHasIt,
++          "the Bandage recipe asks for keyword 0x16ce000 and the loom "
++          "carries it");
++  } catch (std::exception& e) {
++    Check(false, std::string("the Bandage recipe resolves: ") + e.what());
++  }
++
++  // 5. A light plugin changing a light master's placed reference: the
++  // Embers XD patch moves table 0x30 of GourmetTables.esp (light index 22,
++  // 0x016). Both must land on one id, and chunk loading must find it the
++  // way WorldState::GetNeighborsByPosition does.
++  {
++    const uint32_t tableId = 0xFE016030;
++    auto all = br.LookupByIdAll(tableId);
++    auto last = br.LookupById(tableId);
++    Check(all.size() == 2 && fileOf(all[0]) == "GourmetTables.esp" &&
++            fileOf(last) == "Embers XD - Patch - Gourmet Tables.esp",
++          "0xfe016030 is in GourmetTables.esp and the Embers XD patch "
++          "changes it (" +
++            std::to_string(all.size()) + " records, last from " +
++            fileOf(last) + ")");
++    bool found = false;
++    if (last.rec) {
++      auto refr = espm::Convert<espm::REFR>(last.rec);
++      auto loc = refr->GetData(cache).loc;
++      const uint32_t cellOrWorld =
++        last.ToGlobalId(espm::GetWorldOrCell(br, last.rec));
++      const auto x = static_cast<int16_t>(loc->pos[0] / 4096);
++      const auto y = static_cast<int16_t>(loc->pos[1] / 4096);
++      for (size_t i = 0; i < loader.GetFileNames().size(); ++i) {
++        auto combMapping = br.GetCombMapping(i);
++        auto rawMapping = br.GetRawMapping(i);
++        uint32_t mapped = espm::utils::GetMappedId(cellOrWorld, *rawMapping);
++        auto records = br.GetRecordsAtPos(mapped, x, y);
++        for (auto rec : *records[i]) {
++          found =
++            found || espm::utils::GetMappedId(rec->GetId(), *combMapping) ==
++              tableId;
++        }
++      }
++    }
++    Check(found, "loading its cell finds 0xfe016030");
++  }
++
++  // 6. A full plugin with a light master, both ways.
++  {
++    auto all = br.LookupByIdAll(0xFE029827);
++    auto last = br.LookupById(0xFE029827);
++    Check(all.size() == 2 && fileOf(last) == "ThornswoodFullOverLight.esp",
++          "a full plugin's change to its light master's 0x827 lands on "
++          "0xfe029827 (" +
++            std::to_string(all.size()) + " records, last from " +
++            fileOf(last) + ")");
++    auto list = br.LookupById(0x30000800);
++    auto flst = espm::Convert<espm::FLST>(list.rec);
++    auto ids = flst ? flst->GetData(cache).formIds : std::vector<uint32_t>();
++    Check(ids.size() == 1 && list.ToGlobalId(ids[0]) == 0xFE029827,
++          "and the full plugin, the 49th full one (0x30), names it "
++          "0xfe029827 in its own form list");
++  }
++
++  // 7. A light plugin with a form the game cannot tell from another.
++  {
++    const auto bad = Fixture::Write(
++      scratch, "ThornswoodWideLight.esp",
++      Fixture::Tes4(0x200, {}) +
++        Fixture::Group(
++          "FLST",
++          Fixture::Record("FLST", 0, 0x00001800,
++                          Fixture::Field("EDID", Fixture::Z("Wide")))));
++    std::string error;
++    try {
++      espm::Loader wide(std::vector<fs::path>{ bad }, nullptr,
++                        espm::Loader::BufferType::AllocatedBuffer);
++    } catch (std::exception& e) {
++      error = e.what();
++    }
++    Check(error.find("ThornswoodWideLight.esp") != std::string::npos &&
++            error.find("0x00001800") != std::string::npos,
++          "a light plugin with form 0x1800 is refused by name (" +
++            (error.empty() ? std::string("loaded") : error) + ")");
++  }
++
++#ifdef THORNSWOOD_LIGHT_PLUGINS
++  std::printf("INFO  full plugins %zu, light plugins %zu\n",
++              lo.GetNumFullPlugins(), lo.GetNumLightPlugins());
++#endif
++
++  std::printf(failures ? "FAILED %d\n" : "OK\n", failures);
++  return failures ? 1 : 0;
++}
+diff --git a/misc/tests/test_light_plugins.ps1 b/misc/tests/test_light_plugins.ps1
+new file mode 100644
+index 00000000..1bd5dc9e
+--- /dev/null
++++ b/misc/tests/test_light_plugins.ps1
+@@ -0,0 +1,65 @@
++# Thornswood #1715. Builds misc\tests\test_light_plugins.cpp with MSVC from
++# the libespm and FormDesc sources of a checkout and runs it against a game's
++# Data folder and the plugin lists one of its sessions wrote.
++#
++#   -Source  the checkout whose libespm and FormDesc are under test (this one
++#            by default). The test builds against the code before the change
++#            too, so the same run on an older checkout shows what was broken.
++#   -Build   a configured engine build folder: its vcpkg fmt, spdlog and zlib are
++#            used, static with the static runtime as the x64-windows-sp triplet
++#            builds them.
++#   -Data, -Plugins, -Ccc  the game's Data folder, plugins.txt and Skyrim.ccc.
++#   -ClientFull, -ClientLight  the session's Game.getModName and
++#            Game.getLightModName lists (thornswood-front.js writes them to
++#            Data\Platform\thornswood-loadorder.txt and
++#            thornswood-plugins-light.txt).
++# Prints each check and exits 1 when one fails. Leaves nothing behind.
++param(
++  [string]$Source = (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))),
++  [string]$Build = (Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSCommandPath))) 'build'),
++  [string]$Data = 'C:\Thornswood\Game\Data',
++  [string]$Plugins = 'C:\Thornswood\Profile\LocalAppData\Plugins.txt',
++  [string]$Ccc = 'C:\Thornswood\Game\Skyrim.ccc',
++  [string]$ClientFull = 'C:\Thornswood\Game\Data\Platform\thornswood-loadorder.txt',
++  [string]$ClientLight = 'C:\Thornswood\Game\Data\Platform\thornswood-plugins-light.txt'
++)
++$ErrorActionPreference = 'Stop'
++$test = Join-Path (Split-Path -Parent $PSCommandPath) 'test_light_plugins.cpp'
++foreach ($p in $Data, $Plugins, $Ccc, $ClientFull, $ClientLight, $test) {
++  if (-not (Test-Path -LiteralPath $p)) { throw "Missing $p" }
++}
++$include = Join-Path $Build 'vcpkg_installed\x64-windows-sp\include'
++$lib = Join-Path $Build 'vcpkg_installed\x64-windows-sp\lib'
++if (-not (Test-Path -LiteralPath (Join-Path $include 'fmt\format.h'))) {
++  throw "No vcpkg fmt in $Build; pass -Build with a configured engine build folder"
++}
++
++$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
++$vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
++if (-not $vs) { throw 'No Visual Studio with the C++ tools' }
++foreach ($line in (cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set")) {
++  if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
++}
++
++$scratch = Join-Path ([IO.Path]::GetTempPath()) ('thornswood-light-plugins-' + [guid]::NewGuid().ToString('N'))
++New-Item -ItemType Directory -Path $scratch | Out-Null
++try {
++  $sources = @(Get-ChildItem -LiteralPath (Join-Path $Source 'libespm\src') -Filter *.cpp | ForEach-Object FullName)
++  $sources += Join-Path $Source 'viet\src\AllocatedBuffer.cpp'
++  $sources += Join-Path $Source 'viet\src\MappedBuffer.cpp'
++  $sources += Join-Path $Source 'skymp5-server\cpp\server_guest_lib\FormDesc.cpp'
++  $libs = @('fmt.lib', 'spdlog.lib', 'zlib.lib') | ForEach-Object { Join-Path $lib $_ } | Where-Object { Test-Path -LiteralPath $_ }
++  Push-Location $scratch
++  try {
++    $out = & cl.exe /nologo /EHsc /std:c++20 /MT /O2 /utf-8 /DWIN32 /DSPDLOG_FMT_EXTERNAL /DSPDLOG_COMPILED_LIB `
++      ('/I' + (Join-Path $Source 'libespm\include')) ('/I' + (Join-Path $Source 'libespm\src')) `
++      ('/I' + (Join-Path $Source 'viet\include')) ('/I' + (Join-Path $Source 'skymp5-server\cpp\server_guest_lib')) `
++      ('/I' + $include) $test @sources @libs /Fe:test_light_plugins.exe 2>&1
++    if ($LASTEXITCODE) { $out | Where-Object { $_ -match 'error' } | Select-Object -First 20 | Write-Output; throw 'test_light_plugins did not compile' }
++    & .\test_light_plugins.exe $Data $Plugins $Ccc $ClientFull $ClientLight (Join-Path $scratch 'work')
++    $code = $LASTEXITCODE
++  } finally { Pop-Location }
++} finally {
++  Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction SilentlyContinue
++}
++exit $code
+diff --git a/skymp5-client/src/services/messages_http/serverManifest.ts b/skymp5-client/src/services/messages_http/serverManifest.ts
+index 70da4a1b..57e10dea 100644
+--- a/skymp5-client/src/services/messages_http/serverManifest.ts
++++ b/skymp5-client/src/services/messages_http/serverManifest.ts
+@@ -6,6 +6,17 @@ export interface Mod {
+ 
+ export interface ServerManifest {
+     versionMajor: number;
++    // Full plugins in load order, as Game.getModName lists them
+     mods: Mod[];
++    // Light plugins in light index order, as Game.getLightModName lists them
++    // (Thornswood #1715). Absent from a server built before the server loaded
++    // light plugins, which has nothing to compare them with.
++    light?: Mod[];
+     loadOrder: string[];
+ };
++
++// Both lists from the server's manifest
++export interface ServerMods {
++    mods: Mod[];
++    light?: Mod[];
++};
+diff --git a/skymp5-client/src/services/services/loadOrderCheck.ts b/skymp5-client/src/services/services/loadOrderCheck.ts
+new file mode 100644
+index 00000000..1601b50d
+--- /dev/null
++++ b/skymp5-client/src/services/services/loadOrderCheck.ts
+@@ -0,0 +1,136 @@
++import { Mod, ServerMods } from "../messages_http/serverManifest";
++
++export type ScreenNotice = {
++  text: string;
++  color: [number, number, number, number];
++  clearDelay?: number;
++};
++
++// When getServerMods could not fetch a list after retries. Not a mismatch:
++// the server never answered, so the check did not run.
++export function noticeServerModsUnreachable(): ScreenNotice {
++  return {
++    text:
++      "The server did not answer.\nLoad order could not be checked.\nCheck console for details.",
++    color: [255, 255, 0, 1],
++    clearDelay: 5,
++  };
++}
++
++export function noticeTooManyClientMods(): ScreenNotice {
++  return {
++    text:
++      "LOAD ORDER WARNING: you have more mods than server!\nCheck console for details.",
++    color: [255, 255, 0, 1],
++    clearDelay: 5,
++  };
++}
++
++export function noticeLoadOrderMismatch(ignoreMismatch: boolean): ScreenNotice {
++  if (ignoreMismatch) {
++    return {
++      text:
++        "LOAD ORDER ERROR!\nHowever, ignoring it because of ignoreLoadOrderMismatch being set." +
++        "\nExpect EVERYTHING BREAK, unless you know what you are doing.\nCheck console for details." +
++        "\nThis message will disappear after 30 seconds.",
++      color: [255, 0, 0, 1],
++      clearDelay: 30,
++    };
++  }
++  return {
++    text: "LOAD ORDER ERROR!\nCheck console for details.",
++    color: [255, 0, 0, 1],
++  };
++}
++
++// Which of the game's two plugin lists a result is about. The game numbers
++// full plugins (Game.getModName) and light plugins (Game.getLightModName)
++// apart, and a form names its plugin by its place in one of them, so each
++// list is compared with the server's position by position on its own
++// (Thornswood #1715).
++export type PluginList = "full" | "light";
++
++export type LoadOrderEval =
++  | { kind: "unreachable" }
++  | { kind: "ok" }
++  | { kind: "tooManyClientMods"; list: PluginList }
++  | {
++      kind: "tooFewClientMods";
++      list: PluginList;
++      serverCount: number;
++      clientCount: number;
++    }
++  | { kind: "mismatch"; list: PluginList; indices: number[] };
++
++export interface ClientMods {
++  mods: Mod[];
++  light: Mod[];
++}
++
++function evaluateList(
++  list: PluginList,
++  clientMods: Mod[],
++  serverMods: Mod[],
++): LoadOrderEval {
++  if (clientMods.length < serverMods.length) {
++    return {
++      kind: "tooFewClientMods",
++      list,
++      serverCount: serverMods.length,
++      clientCount: clientMods.length,
++    };
++  }
++  if (clientMods.length > serverMods.length) {
++    return { kind: "tooManyClientMods", list };
++  }
++  const indices: number[] = [];
++  for (let i = 0; i < serverMods.length; ++i) {
++    if (
++      clientMods[i].filename.toLowerCase() !==
++        serverMods[i].filename.toLowerCase() ||
++      clientMods[i].size !== serverMods[i].size ||
++      clientMods[i].crc32 !== serverMods[i].crc32
++    ) {
++      indices.push(i);
++    }
++  }
++  if (indices.length !== 0) {
++    return { kind: "mismatch", list, indices };
++  }
++  return { kind: "ok" };
++}
++
++// The full lists first, then the light ones. A server whose manifest has no
++// light list was built before the server loaded light plugins and has none
++// to compare with.
++export function evaluateLoadOrder(
++  clientMods: ClientMods,
++  serverMods: ServerMods | null,
++): LoadOrderEval {
++  if (serverMods === null) {
++    return { kind: "unreachable" };
++  }
++  const full = evaluateList("full", clientMods.mods, serverMods.mods);
++  if (full.kind !== "ok" || serverMods.light === undefined) {
++    return full;
++  }
++  return evaluateList("light", clientMods.light, serverMods.light);
++}
++
++// Screen text for a completed evaluation. Null when nothing should be shown.
++export function screenNoticeForEval(
++  result: LoadOrderEval,
++  ignoreMismatch: boolean,
++): ScreenNotice | null {
++  switch (result.kind) {
++    case "unreachable":
++      return noticeServerModsUnreachable();
++    case "tooManyClientMods":
++      return noticeTooManyClientMods();
++    case "tooFewClientMods":
++    case "mismatch":
++      return noticeLoadOrderMismatch(ignoreMismatch);
++    case "ok":
++      return null;
++  }
++}
+diff --git a/skymp5-client/src/services/services/loadOrderVerificationService.ts b/skymp5-client/src/services/services/loadOrderVerificationService.ts
+index b0005c16..80d674c7 100644
+--- a/skymp5-client/src/services/services/loadOrderVerificationService.ts
++++ b/skymp5-client/src/services/services/loadOrderVerificationService.ts
+@@ -4,6 +4,11 @@ import { ClientListener, CombinedController, Sp } from "./clientListener";
+ import { Mod } from "../messages_http/serverManifest";
+ import { logTrace } from "../../logging";
+ import { SettingsService } from "./settingsService";
++import {
++  ClientMods,
++  evaluateLoadOrder,
++  screenNoticeForEval,
++} from "./loadOrderCheck";
+ 
+ const STATE_KEY = 'loadOrderCheckState';
+ 
+@@ -26,52 +31,50 @@ export class LoadOrderVerificationService extends ClientListener {
+ 
+     this.resetText();
+     const clientMods = this.getClientMods();
+-    this.printModOrder('Client load order:', clientMods);
++    this.printModOrder('Client load order:', clientMods.mods);
++    this.printModOrder('Client light plugins:', clientMods.light);
+     return settingsService.getServerMods()
+       .then((serverMods) => {
+-        this.printModOrder('Server load order:', serverMods);
+-        if (clientMods.length < serverMods.length) {
+-          throw new Error(`Missing some server mods. Server has ${serverMods.length}, we have ${clientMods.length}`);
++        const result = evaluateLoadOrder(clientMods, serverMods);
++
++        if (result.kind === 'unreachable' || serverMods === null) {
++          printConsole('Server mod list could not be fetched after retries.');
++          const notice = screenNoticeForEval({ kind: 'unreachable' }, false)!;
++          this.updateText(notice.text, notice.color, notice.clearDelay);
++          return;
++        }
++
++        this.printModOrder('Server load order:', serverMods.mods);
++        if (serverMods.light !== undefined) {
++          this.printModOrder('Server light plugins:', serverMods.light);
+         }
+-        if (clientMods.length > serverMods.length) {
+-          this.updateText(
+-            'LOAD ORDER WARNING: you have more mods than server!\n(or could not receive server mod list)\nCheck console for details.',
+-            [255, 255, 0, 1], 5,
++
++        if (result.kind === 'tooFewClientMods') {
++          throw new Error(
++            `Missing some server mods. Server has ${result.serverCount} ${result.list} plugins, we have ${result.clientCount}`,
+           );
+         }
+-        let fail = [];
+-        for (let i = 0; i < serverMods.length; ++i) {
+-          // Need case-insensitive check for 1.6+
+-          if (
+-            clientMods[i].filename.toLowerCase() !== serverMods[i].filename.toLowerCase() ||
+-            clientMods[i].size !== serverMods[i].size ||
+-            clientMods[i].crc32 !== serverMods[i].crc32
+-          ) {
+-            fail.push(i);
+-            printConsole(`${i}-th mod (numbered from 0) does not match.`);
+-            printConsole(`Server has ${JSON.stringify(serverMods[i])}`);
+-            printConsole(`We have ${JSON.stringify(clientMods[i])}`);
+-          }
++        if (result.kind === 'tooManyClientMods') {
++          const notice = screenNoticeForEval(result, false)!;
++          this.updateText(notice.text, notice.color, notice.clearDelay);
++          return;
+         }
+-        if (fail.length !== 0) {
+-          throw new Error('Load order check failed! Indices: ' + JSON.stringify(fail));
++        if (result.kind === 'mismatch') {
++          const server = result.list === 'light' ? serverMods.light! : serverMods.mods;
++          const client = result.list === 'light' ? clientMods.light : clientMods.mods;
++          for (const i of result.indices) {
++            printConsole(`${i}-th ${result.list} plugin (numbered from 0) does not match.`);
++            printConsole(`Server has ${JSON.stringify(server[i])}`);
++            printConsole(`We have ${JSON.stringify(client[i])}`);
++          }
++          throw new Error(`Load order check failed! ${result.list} plugin indices: ` + JSON.stringify(result.indices));
+         }
+       })
+       .catch((err) => {
+         printConsole(err);
+-        if (this.sp.settings['skymp5-client']['ignoreLoadOrderMismatch']) {
+-          this.updateText(
+-            'LOAD ORDER ERROR!\nHowever, ignoring it because of ignoreLoadOrderMismatch being set.' +
+-            '\nExpect EVERYTHING BREAK, unless you know what you are doing.\nCheck console for details.' +
+-            '\nThis message will disappear after 30 seconds.',
+-            [255, 0, 0, 1], 30,
+-          );
+-          return;
+-        }
+-        this.updateText(
+-          'LOAD ORDER ERROR!\nCheck console for details.',
+-          [255, 0, 0, 1],
+-        );
++        const ignore = !!this.sp.settings['skymp5-client']['ignoreLoadOrderMismatch'];
++        const notice = screenNoticeForEval({ kind: 'mismatch', list: 'full', indices: [] }, ignore)!;
++        this.updateText(notice.text, notice.color, notice.clearDelay);
+       });
+   };
+ 
+@@ -119,8 +122,13 @@ export class LoadOrderVerificationService extends ClientListener {
+     return result;
+   }
+ 
+-  private getClientMods() {
+-    return this.enumerateClientMods(Game.getModCount, Game.getModName);
++  // Both of the game's plugin lists: full plugins, then light plugins in
++  // light index order.
++  private getClientMods(): ClientMods {
++    return {
++      mods: this.enumerateClientMods(Game.getModCount, Game.getModName),
++      light: this.enumerateClientMods(Game.getLightModCount, Game.getLightModName),
++    };
+   };
+ 
+   private printModOrder(header: string, order: Mod[]) {
+diff --git a/skymp5-client/src/services/services/settingsService.ts b/skymp5-client/src/services/services/settingsService.ts
+index 07dd941b..5afe3151 100644
+--- a/skymp5-client/src/services/services/settingsService.ts
++++ b/skymp5-client/src/services/services/settingsService.ts
+@@ -1,7 +1,7 @@
+ import { HttpClient, HttpHeaders, HttpResponse, printConsole, Utility } from "skyrimPlatform";
+ import { AuthService } from "./authService";
+ import { ClientListener, CombinedController, Sp } from "./clientListener";
+-import { Mod, ServerManifest } from "../messages_http/serverManifest";
++import { ServerManifest, ServerMods } from "../messages_http/serverManifest";
+ import { TimersService } from "./timersService";
+ import { logTrace } from "../../logging";
+ 
+@@ -138,7 +138,7 @@ export class SettingsService extends ClientListener {
+     states.start();
+   }
+ 
+-  public async getServerMods(): Promise<Mod[]> {
++  public async getServerMods(): Promise<ServerMods | null> {
+     const masterApiClient = this.makeMasterApiClient();
+ 
+     const masterKey = this.getServerMasterKey();
+@@ -154,16 +154,19 @@ export class SettingsService extends ClientListener {
+         const manifest = JSON.parse(res.body) as ServerManifest;
+         if (manifest.versionMajor !== 1) {
+           printConsole(`server manifest version is ${manifest.versionMajor}, we expect 1`);
+-          return [];
++          return { mods: [] };
+         }
+-        return manifest.mods;
++        return { mods: manifest.mods, light: manifest.light };
+       } catch (e) {
+         printConsole(`Request/parse error: ${e}`);
+         await Utility.wait(0.1 + Math.random());
+       }
+     }
+ 
+-    return [];
++    // Unreachable after retries: null, never empty lists. An empty mods list
++    // means the server answered with no mods (or an unsupported manifest
++    // version).
++    return null;
+   };
+ 
+   private normalizeUrl(url: string) {
+diff --git a/skymp5-client/test-load-order-check.js b/skymp5-client/test-load-order-check.js
+new file mode 100644
+index 00000000..7ba719a9
+--- /dev/null
++++ b/skymp5-client/test-load-order-check.js
+@@ -0,0 +1,187 @@
++// test-load-order-check.js
++//
++//     node skymp5-client/test-load-order-check.js
++//
++// Thornswood #1268. getServerMods returns null when the server never answered;
++// verifyLoadOrder then shows a plain "did not answer" notice, not LOAD ORDER
++// WARNING/ERROR. A real mismatch still says LOAD ORDER ERROR.
++//
++// Thornswood #1715. The game numbers full plugins (Game.getModName) and light
++// plugins (Game.getLightModName) apart, and the server's manifest lists them
++// apart too ("mods" and "light"). Each list is compared with the server's on
++// its own; a server whose manifest has no light list has none to compare.
++//
++// It runs the decision helpers in loadOrderCheck.ts themselves, transpiled with
++// the client's own TypeScript (yarn install in skymp5-client first), then
++// checks the TypeScript sources still name the same messages and lists.
++'use strict';
++
++const fs = require('fs');
++const path = require('path');
++const Module = require('module');
++
++const ROOT = __dirname;
++let pass = 0;
++let fail = 0;
++
++function yes(what, cond) {
++  if (cond) {
++    pass++;
++    console.log('PASS  ' + what);
++  } else {
++    fail++;
++    console.log('FAIL  ' + what);
++  }
++}
++
++function load(file) {
++  const ts = require(path.join(ROOT, 'node_modules', 'typescript'));
++  const source = fs.readFileSync(file, 'utf8');
++  const out = ts.transpileModule(source, {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019 },
++  }).outputText;
++  const m = new Module(file);
++  m.filename = file;
++  m.paths = Module._nodeModulePaths(path.dirname(file));
++  m._compile(out, file);
++  return m.exports;
++}
++
++const { evaluateLoadOrder, screenNoticeForEval } = load(
++  path.join(ROOT, 'src/services/services/loadOrderCheck.ts'),
++);
++
++const mod = (filename, size, crc32) => ({ filename, size, crc32 });
++const lists = (mods, light) => ({ mods, light: light || [] });
++
++// --- unreachable vs mismatch ---
++const client = lists([mod('Skyrim.esm', 1, 1), mod('Update.esm', 2, 2)]);
++
++const unreachable = evaluateLoadOrder(client, null);
++yes('null server mods is unreachable', unreachable.kind === 'unreachable');
++const unreachableNotice = screenNoticeForEval(unreachable, false);
++yes(
++  'unreachable notice has no LOAD ORDER wording',
++  !!unreachableNotice &&
++    unreachableNotice.text.indexOf('LOAD ORDER') === -1 &&
++    unreachableNotice.text.indexOf('did not answer') !== -1 &&
++    unreachableNotice.text.indexOf('could not be checked') !== -1,
++);
++
++const emptyList = evaluateLoadOrder(client, { mods: [] });
++yes(
++  'empty server list is tooManyClientMods, not unreachable',
++  emptyList.kind === 'tooManyClientMods',
++);
++const emptyNotice = screenNoticeForEval(emptyList, false);
++yes(
++  'empty-list notice still says LOAD ORDER WARNING',
++  !!emptyNotice && emptyNotice.text.indexOf('LOAD ORDER WARNING') === 0,
++);
++
++const mismatch = evaluateLoadOrder(
++  lists([mod('Skyrim.esm', 1, 1), mod('Update.esm', 2, 9)]),
++  { mods: [mod('Skyrim.esm', 1, 1), mod('Update.esm', 2, 2)] },
++);
++yes('crc mismatch is mismatch', mismatch.kind === 'mismatch' && mismatch.indices[0] === 1);
++const mismatchNotice = screenNoticeForEval(mismatch, false);
++yes(
++  'mismatch notice says LOAD ORDER ERROR',
++  !!mismatchNotice && mismatchNotice.text.indexOf('LOAD ORDER ERROR') === 0,
++);
++
++const ok = evaluateLoadOrder(lists([mod('A.esp', 10, 20)]), { mods: [mod('a.esp', 10, 20)] });
++yes('matching mods (case-insensitive name) are ok', ok.kind === 'ok');
++yes('ok has no screen notice', screenNoticeForEval(ok, false) === null);
++
++const tooFew = evaluateLoadOrder(lists([mod('A.esp', 1, 1)]), {
++  mods: [mod('A.esp', 1, 1), mod('B.esp', 2, 2)],
++});
++yes('fewer client mods is tooFewClientMods', tooFew.kind === 'tooFewClientMods');
++yes(
++  'tooFew uses LOAD ORDER ERROR text',
++  screenNoticeForEval(tooFew, false).text.indexOf('LOAD ORDER ERROR') === 0,
++);
++
++// --- light plugins (#1715) ---
++const full = [mod('Skyrim.esm', 1, 1), mod('Thornswood-Content.esp', 3, 3)];
++const light = [mod('MoreCraftableEquipment.esp', 4, 4), mod('KhisartinBeards.esp', 5, 5)];
++
++const bothOk = evaluateLoadOrder(lists(full, light), { mods: full, light: light });
++yes('the same full and light lists are ok', bothOk.kind === 'ok');
++
++const lightSwapped = evaluateLoadOrder(lists(full, [light[1], light[0]]), {
++  mods: full,
++  light: light,
++});
++yes(
++  'light plugins in another order are a light list mismatch at both places',
++  lightSwapped.kind === 'mismatch' &&
++    lightSwapped.list === 'light' &&
++    JSON.stringify(lightSwapped.indices) === '[0,1]',
++);
++yes(
++  'a light list mismatch says LOAD ORDER ERROR',
++  screenNoticeForEval(lightSwapped, false).text.indexOf('LOAD ORDER ERROR') === 0,
++);
++
++const lightMissing = evaluateLoadOrder(lists(full, [light[0]]), { mods: full, light: light });
++yes(
++  'a missing light plugin is tooFewClientMods on the light list',
++  lightMissing.kind === 'tooFewClientMods' &&
++    lightMissing.list === 'light' &&
++    lightMissing.serverCount === 2 &&
++    lightMissing.clientCount === 1,
++);
++
++const fullFirst = evaluateLoadOrder(lists([full[1], full[0]], [light[1]]), {
++  mods: full,
++  light: light,
++});
++yes(
++  'a full list mismatch is reported before the light list is looked at',
++  fullFirst.kind === 'mismatch' && fullFirst.list === 'full',
++);
++
++const oldServer = evaluateLoadOrder(lists(full, light), { mods: full });
++yes('a server manifest with no light list compares the full list only', oldServer.kind === 'ok');
++
++// --- TypeScript sources lock the same wording and lists ---
++const checkTs = fs.readFileSync(path.join(ROOT, 'src/services/services/loadOrderCheck.ts'), 'utf8');
++const settingsTs = fs.readFileSync(path.join(ROOT, 'src/services/services/settingsService.ts'), 'utf8');
++const verifyTs = fs.readFileSync(
++  path.join(ROOT, 'src/services/services/loadOrderVerificationService.ts'),
++  'utf8',
++);
++const manifestTs = fs.readFileSync(path.join(ROOT, 'src/services/messages_http/serverManifest.ts'), 'utf8');
++
++yes(
++  'loadOrderCheck.ts names the unreachable notice',
++  checkTs.indexOf('The server did not answer.') !== -1 &&
++    checkTs.indexOf('Load order could not be checked.') !== -1 &&
++    checkTs.indexOf('LOAD ORDER ERROR') !== -1,
++);
++yes(
++  'getServerMods return type allows null',
++  /getServerMods\(\):\s*Promise<ServerMods\s*\|\s*null>/.test(settingsTs),
++);
++yes(
++  'getServerMods returns null after retries',
++  /Unreachable after retries[\s\S]*return null;/.test(settingsTs),
++);
++yes(
++  'getServerMods passes the manifest light list on',
++  /light:\s*manifest\.light/.test(settingsTs) && /light\?:\s*Mod\[\]/.test(manifestTs),
++);
++yes(
++  'verifyLoadOrder imports evaluateLoadOrder',
++  verifyTs.indexOf('evaluateLoadOrder') !== -1 && verifyTs.indexOf("result.kind === 'unreachable'") !== -1,
++);
++yes(
++  'verifyLoadOrder reads the light plugins from Game.getLightModName',
++  /Game\.getLightModCount,\s*Game\.getLightModName/.test(verifyTs),
++);
++
++console.log('');
++console.log(pass + ' passed, ' + fail + ' failed');
++process.exit(fail ? 1 : 0);
+diff --git a/skymp5-server/cpp/addon/PapyrusUtils.h b/skymp5-server/cpp/addon/PapyrusUtils.h
+index 9408877d..449f16e8 100644
+--- a/skymp5-server/cpp/addon/PapyrusUtils.h
++++ b/skymp5-server/cpp/addon/PapyrusUtils.h
+@@ -13,7 +13,7 @@ class PapyrusUtils
+ public:
+   static Napi::Value GetJsObjectFromPapyrusObject(
+     Napi::Env env, const VarValue& value,
+-    const std::vector<std::string>& espmFilenames)
++    const espm::LoadOrder& loadOrder)
+   {
+     auto ptr = static_cast<IGameObject*>(value);
+     if (!ptr) {
+@@ -24,7 +24,7 @@ public:
+       auto rawId = concrete->record.rec->GetId();
+       auto id = concrete->record.ToGlobalId(rawId);
+ 
+-      auto desc = FormDesc::FromFormId(id, espmFilenames).ToString();
++      auto desc = FormDesc::FromFormId(id, loadOrder).ToString();
+ 
+       auto result = Napi::Object::New(env);
+       result.Set("type", Napi::String::New(env, "espm"));
+@@ -36,7 +36,7 @@ public:
+       auto formId =
+         concrete->GetFormPtr() ? concrete->GetFormPtr()->GetFormId() : 0;
+ 
+-      auto desc = FormDesc::FromFormId(formId, espmFilenames).ToString();
++      auto desc = FormDesc::FromFormId(formId, loadOrder).ToString();
+ 
+       auto result = Napi::Object::New(env);
+       result.Set("type", Napi::String::New(env, "form"));
+@@ -50,18 +50,18 @@ public:
+ 
+   static Napi::Value GetJsValueFromPapyrusValue(
+     Napi::Env env, const VarValue& value,
+-    const std::vector<std::string>& espmFilenames)
++    const espm::LoadOrder& loadOrder)
+   {
+     if (value.promise) {
+       Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+ 
+-      value.promise->Then([deferred, espmFilenames](const VarValue& v) {
++      value.promise->Then([deferred, loadOrder](const VarValue& v) {
+         auto value =
+-          GetJsValueFromPapyrusValue(deferred.Env(), v, espmFilenames);
++          GetJsValueFromPapyrusValue(deferred.Env(), v, loadOrder);
+         deferred.Resolve(value);
+       });
+ 
+-      value.promise->Catch([deferred, espmFilenames](const char* what) {
++      value.promise->Catch([deferred, loadOrder](const char* what) {
+         auto error = Napi::String::New(deferred.Env(), what);
+         deferred.Reject(error);
+       });
+@@ -69,7 +69,7 @@ public:
+     }
+     switch (value.GetType()) {
+       case VarValue::kType_Object:
+-        return GetJsObjectFromPapyrusObject(env, value, espmFilenames);
++        return GetJsObjectFromPapyrusObject(env, value, loadOrder);
+       case VarValue::kType_Identifier:
+         throw std::runtime_error(
+           "Unexpected convertion from Papyrus identifier");
+@@ -103,7 +103,7 @@ public:
+         for (uint32_t i = 0; i < n; ++i) {
+           arr.Set(i,
+                   GetJsValueFromPapyrusValue(env, (*value.pArray)[i],
+-                                             espmFilenames));
++                                             loadOrder));
+         }
+         return arr;
+       }
+@@ -188,8 +188,8 @@ public:
+           auto desc = NapiHelper::ExtractString(obj.Get("desc"), "desc");
+           auto type = NapiHelper::ExtractString(obj.Get("type"), "type");
+ 
+-          const auto espmFileNames = wst.GetEspm().GetFileNames();
+-          uint32_t id = FormDesc::FromString(desc).ToFormId(espmFileNames);
++          uint32_t id =
++            FormDesc::FromString(desc).ToFormId(wst.GetEspm().GetLoadOrder());
+ 
+           if (type == "form") {
+             MpObjectReference& refr = wst.GetFormAt<MpObjectReference>(id);
+diff --git a/skymp5-server/cpp/addon/ScampServer.cpp b/skymp5-server/cpp/addon/ScampServer.cpp
+index 27cd1c76..111325e1 100644
+--- a/skymp5-server/cpp/addon/ScampServer.cpp
++++ b/skymp5-server/cpp/addon/ScampServer.cpp
+@@ -341,6 +341,13 @@ ScampServer::ScampServer(const Napi::CallbackInfo& info)
+     }
+ 
+     auto espm = new espm::Loader(pluginPaths);
++    // Thornswood #1715 (ported by OATHBOUND). Which plugins are light is read
++    // from each file's TES4 header (ESL flag 0x200) or an .esl extension, the
++    // game's rule. This line is how to see what the server made of the list.
++    logger->info(
++      "Load order: {} full plugins and {} light plugins",
++      espm->GetLoadOrder().GetNumFullPlugins(),
++      espm->GetLoadOrder().GetNumLightPlugins());
+     std::string password = serverSettings.contains("password")
+       ? std::string(kNetworkingPasswordPrefix) +
+         static_cast<std::string>(serverSettings["password"])
+@@ -1250,8 +1257,8 @@ Napi::Value ScampServer::GetDescFromId(const Napi::CallbackInfo& info)
+ {
+   try {
+     auto formId = NapiHelper::ExtractUInt32(info[0], "formId");
+-    auto espmFileNames = partOne->GetEspm().GetFileNames();
+-    auto formDesc = FormDesc::FromFormId(formId, espmFileNames);
++    auto formDesc =
++      FormDesc::FromFormId(formId, partOne->GetEspm().GetLoadOrder());
+ 
+     return Napi::String::New(info.Env(), formDesc.ToString());
+   } catch (std::exception& e) {
+@@ -1264,9 +1271,9 @@ Napi::Value ScampServer::GetIdFromDesc(const Napi::CallbackInfo& info)
+   try {
+     auto formDescStr = NapiHelper::ExtractString(info[0], "formDesc");
+     auto formDesc = FormDesc::FromString(formDescStr);
+-    auto espmFileNames = partOne->GetEspm().GetFileNames();
+ 
+-    return Napi::Number::New(info.Env(), formDesc.ToFormId(espmFileNames));
++    return Napi::Number::New(
++      info.Env(), formDesc.ToFormId(partOne->GetEspm().GetLoadOrder()));
+   } catch (std::exception& e) {
+     throw Napi::Error::New(info.Env(), std::string(e.what()));
+   }
+diff --git a/skymp5-server/cpp/server_guest_lib/ActionListener.cpp b/skymp5-server/cpp/server_guest_lib/ActionListener.cpp
+index 1bab1e63..6beb1ae5 100644
+--- a/skymp5-server/cpp/server_guest_lib/ActionListener.cpp
++++ b/skymp5-server/cpp/server_guest_lib/ActionListener.cpp
+@@ -1050,7 +1050,7 @@ void ActionListener::OnHit(const RawMessageData& rawMsgData,
+   const FormDesc& targetCellOrWorld = targetRef->GetCellOrWorld();
+ 
+   if (aggressorCellOrWorld != targetCellOrWorld) {
+-    const std::vector<std::string>& files = partOne.worldState.espmFiles;
++    const auto& files = partOne.worldState.espmFiles;
+     spdlog::error(
+       "ActionListener::OnHit - aggressor and targetRef are in different cells "
+       "or world. Aggressor: {:x}, targetRef: {:x}, cellOrWorld of aggressor: "
+diff --git a/skymp5-server/cpp/server_guest_lib/FormDesc.cpp b/skymp5-server/cpp/server_guest_lib/FormDesc.cpp
+index a946c29c..cfc2db52 100644
+--- a/skymp5-server/cpp/server_guest_lib/FormDesc.cpp
++++ b/skymp5-server/cpp/server_guest_lib/FormDesc.cpp
+@@ -1,5 +1,6 @@
+ #include "FormDesc.h"
+ #include <cstdio>
++#include <stdexcept>
+ 
+ std::string FormDesc::ToString(char delimiter) const
+ {
+@@ -43,7 +44,16 @@ FormDesc FormDesc::FromString(const std::string& str, char delimiter)
+   return res;
+ }
+ 
+-uint32_t FormDesc::ToFormId(const std::vector<std::string>& files) const
++namespace {
++std::string Hex(uint32_t value)
++{
++  char buffer[16];
++  std::snprintf(buffer, sizeof(buffer), "%x", value);
++  return buffer;
++}
++}
++
++uint32_t FormDesc::ToFormId(const espm::LoadOrder& loadOrder) const
+ {
+   // Workaround legacy tests throwing exceptions (drop support for PartOne
+   // instances without espm to remove this)
+@@ -52,29 +62,32 @@ uint32_t FormDesc::ToFormId(const std::vector<std::string>& files) const
+     return 0x3c;
+   }
+ 
+-  uint32_t realFormId;
+   if (file.empty()) {
+-    realFormId = 0xff000000 + shortFormId;
+-  } else {
+-    int fileIdx = -1;
+-    int numFiles = static_cast<int>(files.size());
+-    for (int i = 0; i < numFiles; ++i) {
+-      if (files[i] == file) {
+-        fileIdx = i;
+-        break;
+-      }
+-    }
+-    if (fileIdx == -1) {
+-      throw std::runtime_error(file + " not found in loaded files");
+-    }
++    return 0xff000000 + shortFormId;
++  }
++
++  const auto fileIdx = loadOrder.FindByFileName(file);
++  if (!fileIdx) {
++    throw std::runtime_error(file + " not found in loaded files");
++  }
+ 
+-    realFormId = fileIdx * 0x01000000 + shortFormId;
++  // Thornswood #1715. A light plugin's form is not fileIdx << 24: the game
++  // gives it 0xFE000000 | (lightIndex << 12) | id, and the id has 12 bits.
++  // An id wider than its plugin allows names no form of that plugin (it used
++  // to run on into the next plugin's ids), so it is refused rather than cut
++  // down into some other form.
++  const auto slot = loadOrder.GetSlot(*fileIdx);
++  if ((shortFormId & ~slot.LocalIdMask()) != 0) {
++    throw std::runtime_error(
++      ToString() + " names no form: " + file + " is a " +
++      (slot.light ? "light" : "full") + " plugin, whose form ids go up to " +
++      Hex(slot.LocalIdMask()));
+   }
+-  return realFormId;
++  return slot.ToId(shortFormId);
+ }
+ 
+ FormDesc FormDesc::FromFormId(uint32_t formId,
+-                              const std::vector<std::string>& files)
++                              const espm::LoadOrder& loadOrder)
+ {
+   // Workaround legacy tests throwing exceptions (drop support for PartOne
+   // instances without espm to remove this)
+@@ -83,17 +96,26 @@ FormDesc FormDesc::FromFormId(uint32_t formId,
+   }
+ 
+   FormDesc res;
+-  if (formId < 0xff000000) {
+-    int fileIdx = formId / 0x01000000;
+-    if (fileIdx >= static_cast<int>(files.size())) {
+-      throw std::runtime_error("FromFormId failed due to invalid file index " +
+-                               std::to_string(fileIdx));
+-    }
+-    res.file = files[fileIdx];
+-    res.shortFormId = formId % 0x01000000;
+-  } else {
++  if (formId >= 0xff000000) {
+     res.shortFormId = formId - 0xff000000;
++    return res;
++  }
++
++  // Thornswood #1715. formId >> 24 is a plugin's place in the load order only
++  // while every plugin is full. Every light plugin's form has 0xFE there, so
++  // every one of them came back as "invalid file index 254", among them the
++  // two beard head parts WWG Ghost's character wore on 5 Oct, 0xFE029827 and
++  // 0xFE029838 from KhisartinBeards.esp.
++  const auto fileIdx = loadOrder.FindByFormId(formId);
++  if (!fileIdx) {
++    const auto slot = espm::PluginSlot::Of(formId);
++    throw std::runtime_error("FromFormId failed due to invalid file index " +
++                             std::string(slot->light ? "light " : "") +
++                             std::to_string(slot->index) + " (" +
++                             Hex(formId) + ")");
+   }
++  res.file = loadOrder[*fileIdx];
++  res.shortFormId = formId & loadOrder.GetSlot(*fileIdx).LocalIdMask();
+   return res;
+ }
+ 
+diff --git a/skymp5-server/cpp/server_guest_lib/FormDesc.h b/skymp5-server/cpp/server_guest_lib/FormDesc.h
+index dbfadc48..4e979773 100644
+--- a/skymp5-server/cpp/server_guest_lib/FormDesc.h
++++ b/skymp5-server/cpp/server_guest_lib/FormDesc.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include "libespm/LoadOrder.h"
+ #include <cstdint>
+ #include <filesystem>
+ #include <string>
+@@ -18,9 +19,13 @@ public:
+   std::string ToString(char delimiter = ':') const;
+   static FormDesc FromString(const std::string& str, char delimiter = ':');
+ 
+-  uint32_t ToFormId(const std::vector<std::string>& files) const;
++  // "id:file" to the id the game gives that form, and back. A light
++  // plugin's forms come out under 0xFE (espm::PluginSlot); the id part of
++  // their descriptor is the 12 bit id inside the plugin, as in
++  // "827:KhisartinBeards.esp" for 0xFE029827.
++  uint32_t ToFormId(const espm::LoadOrder& loadOrder) const;
+   static FormDesc FromFormId(uint32_t formId,
+-                             const std::vector<std::string>& files);
++                             const espm::LoadOrder& loadOrder);
+ 
+   friend bool operator==(const FormDesc& left, const FormDesc& right)
+   {
+diff --git a/skymp5-server/cpp/server_guest_lib/MovementValidation.cpp b/skymp5-server/cpp/server_guest_lib/MovementValidation.cpp
+index f15018fc..256ac071 100644
+--- a/skymp5-server/cpp/server_guest_lib/MovementValidation.cpp
++++ b/skymp5-server/cpp/server_guest_lib/MovementValidation.cpp
+@@ -12,7 +12,7 @@ bool Validate(PartOne& partOne, const NiPoint3& currentPos,
+               const NiPoint3& currentRot, const FormDesc& currentCellOrWorld,
+               const NiPoint3& newPos, const FormDesc& newCellOrWorld,
+               Networking::UserId userId, MpActor* actor,
+-              const std::vector<std::string>& espmFiles)
++              const espm::LoadOrder& espmFiles)
+ {
+   constexpr float kSqrMaxDistance = 4096.f * 4096.f;
+ 
+diff --git a/skymp5-server/cpp/server_guest_lib/MovementValidation.h b/skymp5-server/cpp/server_guest_lib/MovementValidation.h
+index aa85d093..6559c138 100644
+--- a/skymp5-server/cpp/server_guest_lib/MovementValidation.h
++++ b/skymp5-server/cpp/server_guest_lib/MovementValidation.h
+@@ -13,5 +13,5 @@ bool Validate(PartOne& partOne, const NiPoint3& currentPos,
+               const NiPoint3& currentRot, const FormDesc& currentCellOrWorld,
+               const NiPoint3& newPos, const FormDesc& newCellOrWorld,
+               Networking::UserId userId, MpActor* actor,
+-              const std::vector<std::string>& espmFiles);
++              const espm::LoadOrder& espmFiles);
+ }
+diff --git a/skymp5-server/cpp/server_guest_lib/MpActor.cpp b/skymp5-server/cpp/server_guest_lib/MpActor.cpp
+index fa6bd10b..a27a5433 100644
+--- a/skymp5-server/cpp/server_guest_lib/MpActor.cpp
++++ b/skymp5-server/cpp/server_guest_lib/MpActor.cpp
+@@ -1965,7 +1965,7 @@ void MpActor::ReapplyMagicEffects()
+   if (activeEffects.empty()) {
+     return;
+   }
+-  const std::vector<std::string>& modFiles = GetParent()->espmFiles;
++  const auto& modFiles = GetParent()->espmFiles;
+   const bool hasSweetpie = std::any_of(
+     modFiles.begin(), modFiles.end(),
+     [](std::string_view fileName) { return fileName == "SweetPie.esp"; });
+diff --git a/skymp5-server/cpp/server_guest_lib/WorldState.cpp b/skymp5-server/cpp/server_guest_lib/WorldState.cpp
+index 1092f519..6e64a55c 100644
+--- a/skymp5-server/cpp/server_guest_lib/WorldState.cpp
++++ b/skymp5-server/cpp/server_guest_lib/WorldState.cpp
+@@ -55,7 +55,8 @@ struct WorldState::Impl
+   std::vector<RelootTimeForTypesEntry> relootTimeForTypes;
+   std::set<std::string> forbiddenRelootTypes;
+   std::vector<std::unique_ptr<IPapyrusClassBase>> classes;
+-  std::array<std::shared_ptr<std::vector<uint32_t>>, 0x100>
++  // By GetAllForms' modIndex
++  std::unordered_map<uint32_t, std::shared_ptr<std::vector<uint32_t>>>
+     allFormsByModIndexCache;
+   std::vector<uint32_t> attachEspmRecordFailures;
+ };
+@@ -87,7 +88,7 @@ void WorldState::AttachEspm(espm::Loader* espm_,
+   espm = espm_;
+   formCallbacksFactory = formCallbacksFactory_;
+   espmCache.reset(new espm::CompressedFieldsCache);
+-  espmFiles = espm->GetFileNames();
++  espmFiles = espm->GetLoadOrder();
+ }
+ 
+ void WorldState::AttachSaveStorage(
+@@ -563,23 +564,21 @@ bool WorldState::AttachEspmRecord(const espm::CombineBrowser& br,
+     if (worldRecord) {
+       isExterior = true;
+     }
+-    uint32_t npcFileIdx = GetFileIdx(formId);
+-    if (npcFileIdx >= espmFiles.size()) {
+-      spdlog::error("NPC's idx is greater than espmFiles.size(). NPC's"
+-                    "formId "
+-                    "{:#x}, espmFiles size: {}",
++    const auto npcFileIdx = GetFileIdx(formId);
++    if (!npcFileIdx) {
++      spdlog::error("No loaded plugin owns the NPC's formId {:#x}, espmFiles "
++                    "size: {}",
+                     formId, espmFiles.size());
+       if (optionalOutTrace) {
+         *optionalOutTrace
+-          << fmt::format("NPC's idx is greater than espmFiles.size(). NPC's"
+-                         "formId "
+-                         "{:#x}, espmFiles size: {}",
++          << fmt::format("No loaded plugin owns the NPC's formId {:#x}, "
++                         "espmFiles size: {}",
+                          formId, espmFiles.size())
+           << std::endl;
+       }
+       return false;
+     }
+-    auto it = npcSettings.find(espmFiles[npcFileIdx]);
++    auto it = npcSettings.find(espmFiles[*npcFileIdx]);
+     if (it != npcSettings.end()) {
+       spawnInInterior = it->second.spawnInInterior;
+       spawnInExterior = it->second.spawnInExterior;
+@@ -879,10 +878,26 @@ const std::set<MpObjectReference*>& WorldState::GetNeighborsByPosition(
+ std::shared_ptr<std::vector<uint32_t>> WorldState::GetAllForms(
+   uint32_t modIndex)
+ {
+-  if (modIndex >= std::size(pImpl->allFormsByModIndexCache)) {
++  // modIndex is a form id's top byte: a full plugin's index, 0x00 to 0xFD,
++  // or 0xFF for the forms the server made. Thornswood #1715: a light plugin
++  // has no top byte of its own, every light form has 0xFE there, so a light
++  // plugin is 0x100 + its light index, the index SKSE's Game.GetModName
++  // takes for it (CallNativeApi.cpp, kLightModOffset).
++  constexpr uint32_t kLightModOffset = 0x100;
++  const bool light = modIndex >= kLightModOffset &&
++    modIndex < kLightModOffset + espm::PluginSlot::kMaxLightPlugins;
++  if (!light &&
++      (modIndex > 0xFF || modIndex == espm::PluginSlot::kLightTopByte)) {
+     spdlog::error("WorldState::GetAllForms - Invalid mod index {}", modIndex);
+     return nullptr;
+   }
++  const auto inMod = [&](uint32_t formId) {
++    if (light) {
++      return (formId >> 24) == espm::PluginSlot::kLightTopByte &&
++        ((formId >> 12) & 0xFFF) == modIndex - kLightModOffset;
++    }
++    return (formId >> 24) == modIndex;
++  };
+ 
+   auto& resCache = pImpl->allFormsByModIndexCache[modIndex];
+ 
+@@ -892,12 +907,12 @@ std::shared_ptr<std::vector<uint32_t>> WorldState::GetAllForms(
+     // so we don't need de-duplicate in runtime
+     std::unordered_set<uint32_t> formIds;
+     for (const auto& p : forms) {
+-      if ((p.first >> 24) == modIndex) {
++      if (inMod(p.first)) {
+         formIds.insert(p.first);
+       }
+     }
+     for (const auto& p : pImpl->changeFormsForDeferredLoad) {
+-      if ((p.first >> 24) == modIndex) {
++      if (inMod(p.first)) {
+         formIds.insert(p.first);
+       }
+     }
+@@ -1144,13 +1159,12 @@ bool WorldState::IsNpcAllowed(uint32_t refrId) const noexcept
+   if (npcSettings.empty() && defaultSetting.overriden) {
+     return true;
+   }
+-  uint32_t npcFileIdx = GetFileIdx(refrId);
++  const auto npcFileIdx = GetFileIdx(refrId);
+   for (const auto& [fileName, _] : npcSettings) {
+-    auto it = std::find(espmFiles.begin(), espmFiles.end(), fileName);
+-    if (it == espmFiles.end()) {
++    const auto idx = espmFiles.FindByFileName(fileName);
++    if (!idx) {
+       return false;
+     }
+-    auto idx = std::distance(espmFiles.begin(), it);
+     if (npcFileIdx == idx) {
+       return true;
+     }
+@@ -1158,9 +1172,11 @@ bool WorldState::IsNpcAllowed(uint32_t refrId) const noexcept
+   return false;
+ }
+ 
+-uint32_t WorldState::GetFileIdx(uint32_t formId) const noexcept
++std::optional<size_t> WorldState::GetFileIdx(uint32_t formId) const noexcept
+ {
+-  return formId >> 24;
++  // Thornswood #1715. Was formId >> 24, which is a place in the load order
++  // only for full plugins; every light plugin's form has 0xFE there.
++  return espmFiles.FindByFormId(formId);
+ }
+ 
+ void WorldState::SetNpcSettings(
+diff --git a/skymp5-server/cpp/server_guest_lib/WorldState.h b/skymp5-server/cpp/server_guest_lib/WorldState.h
+index bdae61c0..aca7e5ae 100644
+--- a/skymp5-server/cpp/server_guest_lib/WorldState.h
++++ b/skymp5-server/cpp/server_guest_lib/WorldState.h
+@@ -232,7 +232,9 @@ public:
+   void SetEnableConsoleCommandsForAllSetting(bool enable);
+ 
+ public:
+-  std::vector<std::string> espmFiles;
++  // The loaded plugins in load order, full and light, each with the slot the
++  // game gives it. Converts ids and descriptors (FormDesc).
++  espm::LoadOrder espmFiles;
+   std::unordered_map<int32_t, std::set<uint32_t>> actorIdByProfileId;
+   std::unordered_map<std::string, std::set<uint32_t>>
+     actorIdByPrivateIndexedProperty;
+@@ -282,7 +284,10 @@ private:
+   void TickTimers(const std::chrono::system_clock::time_point& now);
+   [[nodiscard]] bool NpcSourceFilesOverriden() const noexcept;
+   [[nodiscard]] bool IsNpcAllowed(uint32_t refrId) const noexcept;
+-  [[nodiscard]] uint32_t GetFileIdx(uint32_t formId) const noexcept;
++  // Place in espmFiles of the plugin that owns formId, or nothing when no
++  // loaded plugin does.
++  [[nodiscard]] std::optional<size_t> GetFileIdx(
++    uint32_t formId) const noexcept;
+   [[nodiscard]] bool IsRelootForbidden(std::string type) const noexcept;
+ 
+ private:
+diff --git a/skymp5-server/package.json b/skymp5-server/package.json
+index fca5e5dd..8b9e8341 100644
+--- a/skymp5-server/package.json
++++ b/skymp5-server/package.json
+@@ -4,6 +4,7 @@
+   "description": "",
+   "license": "AGPL-3.0",
+   "scripts": {
++    "test:manifest-gen": "node tests/manifestGen.js",
+     "build-ts": "tsc --noEmit && esbuild ts/index.ts --loader:.node=copy --bundle --platform=node --target=node16 --keep-names --minify --sourcemap --target=es2022 --outfile=../build/dist/server/dist_back/skymp5-server.js"
+   },
+   "author": "Leonid Pospelov <pospelovlm@yandex.ru>",
+diff --git a/skymp5-server/tests/manifestGen.js b/skymp5-server/tests/manifestGen.js
+new file mode 100644
+index 00000000..b0291e97
+--- /dev/null
++++ b/skymp5-server/tests/manifestGen.js
+@@ -0,0 +1,97 @@
++'use strict';
++// Thornswood #1715. The manifest the client checks its plugins against lists
++// full plugins in "mods" and light plugins, apart, in "light", in light index
++// order, the way the game numbers them (Game.getModName and
++// Game.getLightModName). Lightness is the game's rule: the ESL flag 0x200 in
++// the TES4 record header, or an .esl extension.
++//
++// Runs ts/manifestGen.ts (or the file MANIFEST_GEN names) on plugin files it
++// writes into a folder of its own, and reads back the manifest.json it writes.
++const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), Module = require('node:module');
++const ts = require('typescript');
++
++const file = process.env.MANIFEST_GEN || path.join(__dirname, '../ts/manifestGen.ts');
++function load(p) {
++  const out = ts.transpileModule(fs.readFileSync(p, 'utf8'), {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
++  }).outputText;
++  const m = new Module(p);
++  m.filename = p;
++  m.paths = Module._nodeModulePaths(path.dirname(p)).concat(Module._nodeModulePaths(__dirname));
++  m._compile(out, p);
++  return m.exports;
++}
++const manifestGen = load(file);
++
++// A TES4 record header with these flags and an empty HEDR-less body: enough
++// for the flag test, which reads the type and the flags only.
++function plugin(flags, extra = 0) {
++  const b = Buffer.alloc(24 + extra);
++  b.write('TES4', 0, 'latin1');
++  b.writeUInt32LE(extra, 4);
++  b.writeUInt32LE(flags, 8);
++  return b;
++}
++
++let failed = 0;
++function check(name, ok, detail) {
++  console.log((ok ? 'PASS  ' : 'FAIL  ') + name + (ok || detail === undefined ? '' : '\n      ' + detail));
++  if (!ok) failed++;
++}
++
++const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-gen-'));
++try {
++  const files = {
++    'Skyrim.esm': plugin(0x1, 10),
++    'KhisartinBeards.esp': plugin(0x200, 1),       // light by its flag
++    'Thornswood-Content.esp': plugin(0x0, 2),      // full
++    'ccQDRSSE001-SurvivalMode.esl': plugin(0x0, 3), // light by its extension
++    'MoreCraftableEquipment.esp': plugin(0x200, 4),
++    'Embers XD.esm': plugin(0x201, 5),             // a master with the flag is light
++    'Thornswood-Content.bsa': Buffer.from('full plugin archive'),
++    'KhisartinBeards.bsa': Buffer.from('light plugin archive'),
++  };
++  for (const [name, bytes] of Object.entries(files)) fs.writeFileSync(path.join(dataDir, name), bytes);
++
++  const order = ['Skyrim.esm', 'KhisartinBeards.esp', 'Thornswood-Content.esp', 'ccQDRSSE001-SurvivalMode.esl',
++                 'MoreCraftableEquipment.esp', 'Embers XD.esm', 'NotOnDisk.esp'];
++  const errors = [];
++  const realError = console.error;
++  console.error = (...a) => errors.push(a.join(' '));
++  try {
++    manifestGen.generateManifest({ dataDir, loadOrder: order });
++  } finally {
++    console.error = realError;
++  }
++  const m = JSON.parse(fs.readFileSync(path.join(dataDir, 'manifest.json'), 'utf8'));
++  const names = (list) => (list || []).map((e) => e.filename);
++
++  check('mods holds the full plugins in load order, each followed by its archive',
++        JSON.stringify(names(m.mods)) === JSON.stringify(['Skyrim.esm', 'Thornswood-Content.esp', 'Thornswood-Content.bsa']),
++        JSON.stringify(names(m.mods)));
++  check('light holds the light plugins in light index order, plugins only',
++        JSON.stringify(names(m.light)) ===
++          JSON.stringify(['KhisartinBeards.esp', 'ccQDRSSE001-SurvivalMode.esl', 'MoreCraftableEquipment.esp', 'Embers XD.esm']),
++        JSON.stringify(names(m.light)));
++  const beard = (m.light || []).find((e) => e.filename === 'KhisartinBeards.esp');
++  check('a light entry carries the file size and crc32 the client compares',
++        !!beard && beard.size === files['KhisartinBeards.esp'].length && typeof beard.crc32 === 'number',
++        JSON.stringify(beard));
++  check('loadOrder still names every plugin the server was given',
++        JSON.stringify(m.loadOrder) === JSON.stringify(order), JSON.stringify(m.loadOrder));
++  check('a plugin in the load order and not on disk is named and left out',
++        errors.some((e) => e.indexOf('NotOnDisk.esp') !== -1), JSON.stringify(errors));
++
++  const isLight = manifestGen.isLightPlugin;
++  check('isLightPlugin is exported', typeof isLight === 'function');
++  if (typeof isLight === 'function') {
++    check('the ESL flag makes an .esp light', isLight('a.esp', plugin(0x200)) === true);
++    check('an .esl is light without the flag, any case', isLight('a.ESL', plugin(0)) === true);
++    check('a master flag alone is not light', isLight('a.esm', plugin(0x1)) === false);
++    check('a file that is not a plugin is not light', isLight('a.esp', Buffer.from('not a plugin at all')) === false);
++  }
++} finally {
++  fs.rmSync(dataDir, { recursive: true, force: true });
++}
++console.log(failed ? failed + ' failed' : 'manifestGen: all passed');
++process.exitCode = failed ? 1 : 0;
+diff --git a/skymp5-server/ts/manifestGen.ts b/skymp5-server/ts/manifestGen.ts
+index 623ea3b2..95489808 100644
+--- a/skymp5-server/ts/manifestGen.ts
++++ b/skymp5-server/ts/manifestGen.ts
+@@ -11,14 +11,38 @@ interface ManifestModEntry {
+ 
+ interface Manifest {
+   versionMajor: number;
++  // Full plugins in load order, each followed by its archive when dataDir has
++  // one. The client compares this with Game.getModName.
+   mods: Array<ManifestModEntry>;
++  // Light plugins in light index order, compared with Game.getLightModName,
++  // plugins only. The game numbers light plugins apart from full ones
++  // (Thornswood #1715), so they are a list of their own: in mods every light
++  // plugin would shift the full plugins after it.
++  light: Array<ManifestModEntry>;
+   loadOrder: Array<string>;
+ }
+ 
+-const getBsaNameByEspmName = (espmName: string) => {
+-  if (espmName.endsWith(".esp") || espmName.endsWith(".esm")) {
+-    const nameNoExt = espmName.split(".").slice(0, -1).join(".");
+-    return nameNoExt + ".bsa";
++// The game's rule for what is light, the same one the server applies when it
++// loads the plugins (espm::IsLightPlugin in libespm/LoadOrder.h): the ESL
++// flag, 0x200, in the TES4 record header, or an .esl extension. The header's
++// flags are the four bytes after the record type and size.
++export const isLightPlugin = (fileName: string, content: Uint8Array): boolean => {
++  if (/\.esl$/i.test(fileName)) {
++    return true;
++  }
++  if (content.length < 12 || String.fromCharCode(...content.subarray(0, 4)) !== "TES4") {
++    return false;
++  }
++  const flags = content[8] | (content[9] << 8) | (content[10] << 16) | (content[11] << 24);
++  return (flags & 0x200) !== 0;
++};
++
++// An .esl is a plugin like any other and can ship its own .bsa. Returning null
++// for anything else keeps a stray filename from taking the whole server down
++// during startup, which is what throwing here used to do.
++const getBsaNameByEspmName = (espmName: string): string | null => {
++  if (/\.(esp|esm|esl)$/i.test(espmName)) {
++    return espmName.replace(/\.[^.]+$/, "") + ".bsa";
+   }
+   throw new Error(`'${espmName}' is not a valid esp or esm name`);
+ };
+@@ -26,6 +50,7 @@ const getBsaNameByEspmName = (espmName: string) => {
+ export const generateManifest = (settings: Settings): void => {
+   const manifest: Manifest = {
+     mods: [],
++    light: [],
+     versionMajor: 1,
+     loadOrder: settings.loadOrder.map(x => path.basename(x)),
+   };
+@@ -40,11 +65,19 @@ export const generateManifest = (settings: Settings): void => {
+       : path.join(settings.dataDir, espmName);
+ 
+     const buf: Uint8Array = fs.readFileSync(espmPath);
+-    manifest.mods.push({
++    const entry = {
+       crc32: crc32.buf(buf),
+       filename: espmName,
+       size: buf.length,
+-    });
++    };
++    if (isLightPlugin(espmName, buf)) {
++      // The client compares this list position by position with
++      // Game.getLightModName, which names plugins only, so a light plugin's
++      // archive is not listed after it the way a full plugin's is in mods.
++      manifest.light.push(entry);
++      return;
++    }
++    manifest.mods.push(entry);
+ 
+     const bsaName = getBsaNameByEspmName(espmName);
+     const bsaPath = path.join(settings.dataDir, bsaName);
+diff --git a/skyrim-platform/src/platform_se/skyrim_platform/CallNativeApi.cpp b/skyrim-platform/src/platform_se/skyrim_platform/CallNativeApi.cpp
+index 268eeb6f..06d4b2d7 100644
+--- a/skyrim-platform/src/platform_se/skyrim_platform/CallNativeApi.cpp
++++ b/skyrim-platform/src/platform_se/skyrim_platform/CallNativeApi.cpp
+@@ -70,6 +70,39 @@ Napi::Value CallNativeImpl(
+         std::string s = files[index]->fileName;
+         return Napi::String::New(info.Env(), s);
+       }
++
++    } else if (!stricmp("GetLightModCount", functionName.data())) {
++      // Answered here like GetModCount, as SKSE does
++      // (skse64/PapyrusGame.cpp GetLightModCount), so that it works without
++      // a Papyrus VM: the main menu spawn asks from a tick handler.
++      auto dataHandler = RE::TESDataHandler::GetSingleton();
++      if (!dataHandler) {
++        throw NullPointerException("dataHandler");
++      }
++#ifndef ENABLE_SKYRIM_VR
++      auto numFiles = dataHandler->compiledFileCollection.smallFiles.size();
++#else
++      auto numFiles = dataHandler->VRcompiledFileCollection->smallFiles.size();
++#endif
++      return Napi::Number::New(info.Env(), numFiles);
++
++    } else if (!stricmp("GetLightModName", functionName.data())) {
++      int index = NapiHelper::ExtractInt32(info[nativeArgsStart], "index");
++
++      auto dataHandler = RE::TESDataHandler::GetSingleton();
++      if (!dataHandler) {
++        throw NullPointerException("dataHandler");
++      }
++#ifndef ENABLE_SKYRIM_VR
++      auto smallFiles = dataHandler->compiledFileCollection.smallFiles;
++#else
++      auto smallFiles = dataHandler->VRcompiledFileCollection->smallFiles;
++#endif
++      if (index < 0 || static_cast<uint32_t>(index) >= smallFiles.size()) {
++        return Napi::String::New(info.Env(), "");
++      }
++      std::string s = smallFiles[index]->fileName;
++      return Napi::String::New(info.Env(), s);
+     }
+   }
+ 
+diff --git a/unit/ActorTest.cpp b/unit/ActorTest.cpp
+index 07842905..70f76896 100644
+--- a/unit/ActorTest.cpp
++++ b/unit/ActorTest.cpp
+@@ -69,7 +69,7 @@ TEST_CASE("Actor should load be able to load appearance, equipment, "
+ TEST_CASE("Actor factions in changeForm", "[Actor]")
+ {
+   PartOne p;
+-  p.worldState.espmFiles = { "Skyrim.esm" };
++  p.worldState.espmFiles = espm::LoadOrder::FullPlugins({ "Skyrim.esm" });
+ 
+   MpActor actor(LocationalData(), FormCallbacks::DoNothing());
+ 
+diff --git a/unit/AnimationSystemTest.cpp b/unit/AnimationSystemTest.cpp
+index 75db3323..b544244b 100644
+--- a/unit/AnimationSystemTest.cpp
++++ b/unit/AnimationSystemTest.cpp
+@@ -29,7 +29,11 @@ TEST_CASE("Animations system processes animation events correctly",
+   REQUIRE(actor.GetChangeForm().actorValues.staminaPercentage == 1.f);
+ 
+   // Sweetpie
+-  p.worldState.espmFiles.push_back("SweetPie.esp");
++  {
++    auto withSweetPie = p.worldState.espmFiles.GetFileNames();
++    withSweetPie.push_back("SweetPie.esp");
++    p.worldState.espmFiles = espm::LoadOrder::FullPlugins(withSweetPie);
++  }
+   p.animationSystem.Init(&p.worldState);
+ 
+   data.animEventName = "attackStart";
+diff --git a/unit/FormDescTest.cpp b/unit/FormDescTest.cpp
+index f4a39349..1de05d7c 100644
+--- a/unit/FormDescTest.cpp
++++ b/unit/FormDescTest.cpp
+@@ -17,7 +17,7 @@ TEST_CASE("ToString/FromString", "[FormDesc]")
+ 
+ TEST_CASE("ToFormId/FromFormId", "[FormDesc]")
+ {
+-  std::vector<std::string> list = { "Skyrim.esm", "Update.esm" };
++  auto list = espm::LoadOrder::FullPlugins({ "Skyrim.esm", "Update.esm" });
+ 
+   REQUIRE(FormDesc::FromFormId(0x01000001, list) ==
+           FormDesc(0x1, "Update.esm"));
+@@ -29,3 +29,32 @@ TEST_CASE("ToFormId/FromFormId", "[FormDesc]")
+   REQUIRE(FormDesc(0x1, "Skyrim.esm").ToFormId(list) == 0x00000001);
+   REQUIRE(FormDesc(0x1, "").ToFormId(list) == 0xff000001);
+ }
++
++// Thornswood #1715. A light plugin's forms are 0xFE000000 | (lightIndex <<
++// 12) | id, with light and full plugins counted apart, each in load order.
++TEST_CASE("ToFormId/FromFormId with light plugins", "[FormDesc]")
++{
++  using espm::PluginSlot;
++  espm::LoadOrder list(
++    { "Skyrim.esm", "A.esl", "B.esp", "C.esp", "D.esp" },
++    { PluginSlot{ false, 0 }, PluginSlot{ true, 0 }, PluginSlot{ false, 1 },
++      PluginSlot{ true, 1 }, PluginSlot{ false, 2 } });
++
++  REQUIRE(FormDesc::FromFormId(0xfe000801, list) ==
++          FormDesc(0x801, "A.esl"));
++  REQUIRE(FormDesc::FromFormId(0xfe001827, list) ==
++          FormDesc(0x827, "C.esp"));
++  REQUIRE(FormDesc::FromFormId(0x01000001, list) == FormDesc(0x1, "B.esp"));
++  REQUIRE(FormDesc::FromFormId(0x02000001, list) == FormDesc(0x1, "D.esp"));
++
++  REQUIRE(FormDesc(0x801, "A.esl").ToFormId(list) == 0xfe000801);
++  REQUIRE(FormDesc(0x827, "C.esp").ToFormId(list) == 0xfe001827);
++  REQUIRE(FormDesc(0x1, "B.esp").ToFormId(list) == 0x01000001);
++  REQUIRE(FormDesc(0x1, "D.esp").ToFormId(list) == 0x02000001);
++
++  // No light plugin with index 2, and no full one with index 3
++  REQUIRE_THROWS(FormDesc::FromFormId(0xfe002801, list));
++  REQUIRE_THROWS(FormDesc::FromFormId(0x03000001, list));
++  // A light plugin's ids have 12 bits
++  REQUIRE_THROWS(FormDesc(0x1801, "A.esl").ToFormId(list));
++}
+diff --git a/unit/LightPluginsTest.cpp b/unit/LightPluginsTest.cpp
+new file mode 100644
+index 00000000..f06d8c19
+--- /dev/null
++++ b/unit/LightPluginsTest.cpp
+@@ -0,0 +1,284 @@
++// Thornswood #1715. Light plugins (an .esl, or the TES4 header flag 0x200)
++// get no top byte of their own: the game gives their forms
++// 0xFE000000 | (lightIndex << 12) | (id & 0xFFF), counting light plugins
++// apart from full ones, each in load order. These tests build small plugins
++// in memory, so they need no game data.
++#include "FormCallbacks.h"
++#include "FormDesc.h"
++#include "MpObjectReference.h"
++#include "WorldState.h"
++#include "libespm/Browser.h"
++#include "libespm/Combiner.h"
++#include "libespm/Convert.h"
++#include "libespm/FLST.h"
++#include "libespm/LoadOrder.h"
++#include "libespm/Utils.h"
++#include <catch2/catch_all.hpp>
++#include <memory>
++#include <string>
++#include <vector>
++
++using Catch::Matchers::ContainsSubstring;
++
++namespace {
++
++// Plugin bytes: a TES4 header naming masters, then top level groups.
++void U16(std::string& s, uint16_t v)
++{
++  s.append(reinterpret_cast<const char*>(&v), 2);
++}
++void U32(std::string& s, uint32_t v)
++{
++  s.append(reinterpret_cast<const char*>(&v), 4);
++}
++std::string Field(const char* type, const std::string& data)
++{
++  std::string s(type, 4);
++  U16(s, static_cast<uint16_t>(data.size()));
++  return s + data;
++}
++std::string Z(const std::string& v)
++{
++  return v + std::string(1, '\0');
++}
++std::string Id(uint32_t v)
++{
++  std::string s;
++  U32(s, v);
++  return s;
++}
++std::string Record(const char* type, uint32_t flags, uint32_t id,
++                   const std::string& fields)
++{
++  std::string s(type, 4);
++  U32(s, static_cast<uint32_t>(fields.size()));
++  U32(s, flags);
++  U32(s, id);
++  U32(s, 0);
++  U16(s, 44);
++  U16(s, 0);
++  return s + fields;
++}
++std::string Group(const char* label, const std::string& records)
++{
++  std::string s("GRUP", 4);
++  U32(s, static_cast<uint32_t>(24 + records.size()));
++  s.append(label, 4);
++  U32(s, 0);
++  U32(s, 0);
++  U32(s, 0);
++  return s + records;
++}
++std::string Tes4(uint32_t flags, const std::vector<std::string>& masters)
++{
++  std::string hedr;
++  float version = 1.7f;
++  hedr.append(reinterpret_cast<const char*>(&version), 4);
++  U32(hedr, 0);
++  U32(hedr, 0x800);
++  std::string fields = Field("HEDR", hedr);
++  for (auto& m : masters) {
++    fields += Field("MAST", Z(m)) + Field("DATA", std::string(8, '\0'));
++  }
++  return Record("TES4", flags, 0, fields);
++}
++std::string FormList(uint32_t id, const char* edid,
++                     const std::vector<uint32_t>& entries)
++{
++  std::string fields = Field("EDID", Z(edid));
++  for (auto e : entries) {
++    fields += Field("LNAM", Id(e));
++  }
++  return Record("FLST", 0, id, fields);
++}
++
++// Owns the bytes and browsers a Combiner reads.
++struct Plugins
++{
++  std::vector<std::unique_ptr<std::string>> bytes;
++  std::vector<std::unique_ptr<espm::Browser>> browsers;
++  espm::Combiner combiner;
++
++  void Add(const char* fileName, std::string content)
++  {
++    bytes.push_back(std::make_unique<std::string>(std::move(content)));
++    browsers.push_back(std::make_unique<espm::Browser>(
++      bytes.back()->data(), bytes.back()->size()));
++    combiner.AddSource(browsers.back().get(), fileName);
++  }
++};
++
++std::string EditorId(const espm::LookupResult& r)
++{
++  espm::CompressedFieldsCache cache;
++  return r.rec ? r.rec->GetEditorId(cache) : "";
++}
++
++}
++
++TEST_CASE("IsLightPlugin is the game's rule", "[LightPlugins]")
++{
++  REQUIRE(espm::IsLightPlugin("KhisartinBeards.esp", 0x200));
++  REQUIRE(espm::IsLightPlugin("Embers XD.esm", 0x201));
++  REQUIRE(espm::IsLightPlugin("ccQDRSSE001-SurvivalMode.esl", 0));
++  REQUIRE(espm::IsLightPlugin("UPPER.ESL", 0));
++  REQUIRE_FALSE(espm::IsLightPlugin("Skyrim.esm", 0x1));
++  REQUIRE_FALSE(espm::IsLightPlugin("Thornswood-Content.esp", 0));
++  REQUIRE_FALSE(espm::IsLightPlugin("esl", 0));
++}
++
++TEST_CASE("PluginSlot gives the ids the game gives", "[LightPlugins]")
++{
++  using espm::PluginSlot;
++  // KhisartinBeards.esp, 42nd light plugin on the main build on 5 Oct
++  REQUIRE(PluginSlot{ true, 0x29 }.ToId(0x827) == 0xFE029827);
++  REQUIRE(PluginSlot{ false, 0x2d }.ToId(0x19bad4) == 0x2d19bad4);
++  REQUIRE(PluginSlot::Of(0xFE029838) == PluginSlot{ true, 0x29 });
++  REQUIRE(PluginSlot::Of(0x0100122a) == PluginSlot{ false, 1 });
++  REQUIRE_FALSE(PluginSlot::Of(0xFF000ded).has_value());
++}
++
++TEST_CASE("LoadOrder counts full and light plugins apart", "[LightPlugins]")
++{
++  using espm::PluginSlot;
++  espm::LoadOrder lo({ "Skyrim.esm", "A.esl", "B.esp", "C.esp" },
++                     { PluginSlot{ false, 0 }, PluginSlot{ true, 0 },
++                       PluginSlot{ false, 1 }, PluginSlot{ true, 1 } });
++  REQUIRE(lo.GetNumFullPlugins() == 2);
++  REQUIRE(lo.GetNumLightPlugins() == 2);
++  REQUIRE(lo.FindByFormId(0x01000800) == 2u);
++  REQUIRE(lo.FindByFormId(0xFE001800) == 3u);
++  REQUIRE_FALSE(lo.FindByFormId(0xFE002800).has_value());
++  REQUIRE_FALSE(lo.FindByFormId(0x02000800).has_value());
++  REQUIRE_FALSE(lo.FindByFormId(0xFF000800).has_value());
++
++  // Slots the game would not give are refused.
++  REQUIRE_THROWS(espm::LoadOrder({ "A.esp", "B.esp" },
++                                 { PluginSlot{ false, 0 },
++                                   PluginSlot{ false, 2 } }));
++  REQUIRE_THROWS(espm::LoadOrder({ "A.esl" }, { PluginSlot{ true, 1 } }));
++}
++
++TEST_CASE("Combiner gives a light plugin's forms the game's ids, both ways",
++          "[LightPlugins]")
++{
++  Plugins p;
++  p.Add("Base.esm",
++        Tes4(0x1, {}) +
++          Group("FLST", FormList(0x00000800, "BaseList", {})));
++  // Light by its flag: an own form 0x827 and a change to Base.esm's list.
++  p.Add("Beards.esp",
++        Tes4(0x200, { "Base.esm" }) +
++          Group("FLST",
++                FormList(0x01000827, "Beard", {}) +
++                  FormList(0x00000800, "BaseListFromBeards",
++                           { 0x01000827 })));
++  // Full, with a light master: changes the beard and names it in a list.
++  p.Add("Full.esp",
++        Tes4(0, { "Base.esm", "Beards.esp" }) +
++          Group("FLST",
++                FormList(0x01000827, "BeardFromFull", {}) +
++                  FormList(0x02000801, "FullList", { 0x01000827 })));
++  // Light by its extension, after a full plugin: light index 1, not 2.
++  p.Add("Late.esl",
++        Tes4(0, { "Beards.esp" }) +
++          Group("FLST", FormList(0x01000801, "Late", { 0x00000827 })));
++
++  auto br = p.combiner.Combine();
++  const auto& lo = br->GetLoadOrder();
++  REQUIRE(lo.GetNumFullPlugins() == 2);
++  REQUIRE(lo.GetNumLightPlugins() == 2);
++
++  // The game's ids: Beards.esp is light index 0, Late.esl light index 1,
++  // Full.esp full index 1.
++  auto beard = br->LookupByIdAll(0xFE000827);
++  REQUIRE(beard.size() == 2);
++  REQUIRE(EditorId(beard[0]) == "Beard");
++  REQUIRE(EditorId(beard[1]) == "BeardFromFull");
++  REQUIRE(EditorId(br->LookupById(0x01000801)) == "FullList");
++  REQUIRE(EditorId(br->LookupById(0xFE001801)) == "Late");
++  REQUIRE(EditorId(br->LookupById(0x00000800)) == "BaseListFromBeards");
++
++  // Ids written inside each file come out as the game's ids.
++  espm::CompressedFieldsCache cache;
++  auto fullList = br->LookupById(0x01000801);
++  auto ids = espm::Convert<espm::FLST>(fullList.rec)->GetData(cache).formIds;
++  REQUIRE(ids.size() == 1);
++  REQUIRE(fullList.ToGlobalId(ids[0]) == 0xFE000827);
++  auto late = br->LookupById(0xFE001801);
++  ids = espm::Convert<espm::FLST>(late.rec)->GetData(cache).formIds;
++  REQUIRE(ids.size() == 1);
++  REQUIRE(late.ToGlobalId(ids[0]) == 0xFE000827);
++
++  // And back: the game's id to the id each file writes, where it can.
++  REQUIRE(espm::utils::GetMappedId(0xFE000827, *br->GetRawMapping(2)) ==
++          0x01000827);
++  REQUIRE(espm::utils::GetMappedId(0xFE000827, *br->GetRawMapping(1)) ==
++          0x01000827);
++  REQUIRE(espm::utils::GetMappedId(0xFE000827, *br->GetRawMapping(3)) ==
++          0x00000827);
++  // Base.esm cannot name a form of Beards.esp.
++  REQUIRE(espm::utils::GetMappedId(0xFE000827, *br->GetRawMapping(0)) >=
++          0xFF000000);
++
++  // Descriptors
++  REQUIRE(FormDesc::FromFormId(0xFE000827, lo).ToString() ==
++          "827:Beards.esp");
++  REQUIRE(FormDesc::FromString("801:Late.esl").ToFormId(lo) == 0xFE001801);
++  REQUIRE(FormDesc::FromString("801:Full.esp").ToFormId(lo) == 0x01000801);
++}
++
++TEST_CASE("A light plugin with a form the game cannot tell apart is refused",
++          "[LightPlugins]")
++{
++  Plugins p;
++  p.Add("Wide.esp",
++        Tes4(0x200, {}) + Group("FLST", FormList(0x00001800, "Wide", {})));
++  try {
++    p.combiner.Combine();
++    FAIL("Combine accepted form 0x1800 in a light plugin");
++  } catch (std::exception& e) {
++    REQUIRE_THAT(e.what(), ContainsSubstring("Wide.esp"));
++    REQUIRE_THAT(e.what(), ContainsSubstring("0x00001800"));
++  }
++}
++
++TEST_CASE("GetAllForms finds a light plugin's forms by 0x100 and its light "
++          "index",
++          "[LightPlugins]")
++{
++  using espm::PluginSlot;
++  WorldState worldState;
++  worldState.espmFiles = espm::LoadOrder(
++    { "Skyrim.esm", "Beards.esp", "Full.esp" },
++    { PluginSlot{ false, 0 }, PluginSlot{ true, 0 },
++      PluginSlot{ false, 1 } });
++  for (uint32_t id : { 0x00000d62u, 0xFE000827u, 0xFE000838u, 0x01000801u,
++                       0xFF000001u }) {
++    worldState.AddForm(std::make_unique<MpObjectReference>(
++                         LocationalData(), FormCallbacks::DoNothing(),
++                         0x00000d62, "STAT"),
++                       id);
++  }
++  // A full plugin and the server's own forms by their top byte, as before
++  auto skyrim = worldState.GetAllForms(0);
++  auto full = worldState.GetAllForms(1);
++  auto created = worldState.GetAllForms(0xFF);
++  // A light plugin by 0x100 + its light index
++  auto beards = worldState.GetAllForms(0x100);
++  auto noSuchLight = worldState.GetAllForms(0x101);
++  REQUIRE(skyrim);
++  REQUIRE(full);
++  REQUIRE(created);
++  REQUIRE(beards);
++  REQUIRE(noSuchLight);
++  REQUIRE(skyrim->size() == 1);
++  REQUIRE(full->size() == 1);
++  REQUIRE((*full)[0] == 0x01000801);
++  REQUIRE(created->size() == 1);
++  REQUIRE(beards->size() == 2);
++  REQUIRE(noSuchLight->empty());
++  // 0xFE names no plugin: every light plugin's forms have it
++  REQUIRE_FALSE(worldState.GetAllForms(0xFE));
++  REQUIRE_FALSE(worldState.GetAllForms(0x1100));
++}
+diff --git a/unit/MovementValidationTest.cpp b/unit/MovementValidationTest.cpp
+index 4b4dc703..d287fa13 100644
+--- a/unit/MovementValidationTest.cpp
++++ b/unit/MovementValidationTest.cpp
+@@ -22,7 +22,8 @@ TEST_CASE("Returns true and sends nothing for normal movement",
+   partOne.Messages().clear();
+   bool res = MovementValidation::Validate(
+     partOne, { 0, 0, 0 }, { 0, 0, 0 }, FormDesc::Tamriel(), { 1, 1, 1 },
+-    FormDesc::Tamriel(), 0, &actor, { "Skyrim.esm" });
++    FormDesc::Tamriel(), 0, &actor,
++    espm::LoadOrder::FullPlugins({ "Skyrim.esm" }));
+   REQUIRE(res);
+   REQUIRE(partOne.Messages().empty());
+ }
+@@ -43,7 +44,8 @@ TEST_CASE("Returns false and sends teleport packet when moving too fast",
+   bool res = MovementValidation::Validate(
+     partOne, { 1, -1, 1 }, { 123, 111, 123 }, FormDesc::Tamriel(),
+     NiPoint3{ 1, -1, 1 } + NiPoint3{ maxLegalMove + 1.f, 0, 0 },
+-    FormDesc::Tamriel(), 0, &actor, { "Skyrim.esm" });
++    FormDesc::Tamriel(), 0, &actor,
++    espm::LoadOrder::FullPlugins({ "Skyrim.esm" }));
+   REQUIRE(!res);
+   REQUIRE(partOne.Messages().size() == 1);
+   REQUIRE(partOne.Messages()[0].j ==
+@@ -70,7 +72,7 @@ TEST_CASE(
+   bool res = MovementValidation::Validate(
+     partOne, { 1, -1, 1 }, { 123, 111, 123 }, FormDesc::Tamriel(),
+     { 1, -1, 1 }, FormDesc::FromString("ffffff:Skyrim.esm"), 0, &actor,
+-    { "Skyrim.esm" });
++    espm::LoadOrder::FullPlugins({ "Skyrim.esm" }));
+   REQUIRE(!res);
+   REQUIRE(partOne.Messages().size() == 1);
+   REQUIRE(partOne.Messages()[0].j ==
+diff --git a/unit/SaveStorageTest.cpp b/unit/SaveStorageTest.cpp
+index f2ba05dd..caceb443 100644
+--- a/unit/SaveStorageTest.cpp
++++ b/unit/SaveStorageTest.cpp
+@@ -204,7 +204,7 @@ TEST_CASE("AttachSaveStorage forces loading", "[save]")
+     SECTION("Testing with " + st->GetName())
+     {
+       PartOne p;
+-      p.worldState.espmFiles = { "AaAaAa.esm" };
++      p.worldState.espmFiles = espm::LoadOrder::FullPlugins({ "AaAaAa.esm" });
+       p.worldState.AddForm(
+         std::unique_ptr<MpObjectReference>(new MpObjectReference(
+           LocationalData(), FormCallbacks::DoNothing(), 0xaaaa, "STAT")),
+diff --git a/unit/SweetHidePlayerNamesTest.cpp b/unit/SweetHidePlayerNamesTest.cpp
+index 94d06967..d46bb622 100644
+--- a/unit/SweetHidePlayerNamesTest.cpp
++++ b/unit/SweetHidePlayerNamesTest.cpp
+@@ -5,7 +5,11 @@ using Catch::Matchers::ContainsSubstring;
+ TEST_CASE("SweetHidePlayerNames Service Integration", "[SweetHide]")
+ {
+   PartOne partOne;
+-  partOne.worldState.espmFiles.push_back("SweetPie.esp");
++  {
++    auto withSweetPie = partOne.worldState.espmFiles.GetFileNames();
++    withSweetPie.push_back("SweetPie.esp");
++    partOne.worldState.espmFiles = espm::LoadOrder::FullPlugins(withSweetPie);
++  }
+   partOne.GetActionListener();
+ 
+   // Setup User 0 with "Oberyn"
+diff --git a/unit/WorldStateTest.cpp b/unit/WorldStateTest.cpp
+index b38f963f..42ae80f3 100644
+--- a/unit/WorldStateTest.cpp
++++ b/unit/WorldStateTest.cpp
+@@ -34,7 +34,8 @@ TEST_CASE("DestroyForm failures", "[WorldState]")
+ TEST_CASE("Load ChangeForm of created Actor", "[WorldState]")
+ {
+   WorldState worldState;
+-  worldState.espmFiles = { "Morrowind.esm", "Tribunal.esm" };
++  worldState.espmFiles =
++    espm::LoadOrder::FullPlugins({ "Morrowind.esm", "Tribunal.esm" });
+ 
+   MpChangeForm changeForm;
+   changeForm.recType = MpChangeForm::ACHR;
+@@ -56,7 +57,8 @@ TEST_CASE("Load ChangeForm of created Actor with isDisabled=true",
+           "[WorldState]")
+ {
+   WorldState worldState;
+-  worldState.espmFiles = { "Morrowind.esm", "Tribunal.esm" };
++  worldState.espmFiles =
++    espm::LoadOrder::FullPlugins({ "Morrowind.esm", "Tribunal.esm" });
+ 
+   MpChangeForm changeForm;
+   changeForm.recType = MpChangeForm::ACHR;
+@@ -76,7 +78,8 @@ TEST_CASE("Load ChangeForm of created Actor with isDisabled=true",
+ TEST_CASE("Load ChangeForm of created Actor with profileId", "[WorldState]")
+ {
+   WorldState worldState;
+-  worldState.espmFiles = { "Morrowind.esm", "Tribunal.esm" };
++  worldState.espmFiles =
++    espm::LoadOrder::FullPlugins({ "Morrowind.esm", "Tribunal.esm" });
+ 
+   MpChangeForm changeForm;
+   changeForm.recType = MpChangeForm::ACHR;
+@@ -96,7 +99,7 @@ TEST_CASE("Load ChangeForm of created Actor with profileId", "[WorldState]")
+ TEST_CASE("Load ChangeForm of modified object", "[WorldState]")
+ {
+   WorldState worldState;
+-  worldState.espmFiles = { "Skyrim.esm" };
++  worldState.espmFiles = espm::LoadOrder::FullPlugins({ "Skyrim.esm" });
+ 
+   MpChangeForm changeForm;
+   changeForm.formDesc = { 0xeeee, "Skyrim.esm" };
+@@ -123,7 +126,7 @@ TEST_CASE("Load ChangeForm of modified object with changed baseType",
+           "[WorldState]")
+ {
+   WorldState worldState;
+-  worldState.espmFiles = { "Skyrim.esm" };
++  worldState.espmFiles = espm::LoadOrder::FullPlugins({ "Skyrim.esm" });
+   auto newRefr = new MpObjectReference(
+     LocationalData(), FormCallbacks::DoNothing(), 0x0000ded0, "STAT");
+   worldState.AddForm(std::unique_ptr<MpObjectReference>(newRefr), 0xeeee);
+@@ -154,7 +157,7 @@ TEST_CASE("Loads VirtualMachine with all scripts", "[WorldState]")
+ TEST_CASE("HasEspmFile is working correctly", "[WorldState]")
+ {
+   WorldState worldState;
+-  worldState.espmFiles = { "file1", "file2" };
++  worldState.espmFiles = espm::LoadOrder::FullPlugins({ "file1", "file2" });
+   REQUIRE(worldState.HasEspmFile("file1"));
+   REQUIRE(worldState.HasEspmFile("file2"));
+   REQUIRE_FALSE(worldState.HasEspmFile("BlowSkyrimModIndustry.exe"));

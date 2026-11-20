@@ -1,15 +1,14 @@
 'use strict';
 
 /**
- * Caracterização estática de `index.html` — não roda dentro do CEF (não há
- * runner pra isso neste projeto), só confirma que o arquivo continua com a
- * sequência de bootstrap de auth que a evidência de 27/08/2026 exige: ver o
- * comentário acima do bloco em `index.html` pra fonte (bundle oficial do
- * skymp5-client + `skymp5-client.log` real, ambos fora deste repositório).
+ * Static characterization of `index.html` — does not run inside CEF (there
+ * is no test runner for that in this project). It only confirms that the file
+ * still wires the main-menu auth bootstrap (27/08/2026 evidence, corrected on
+ * 19/11/2026 after an in-game run): auth-widgets.js is loaded, and the
+ * repeating front-loaded handshake starts only in-game.
  *
- * Se este teste quebrar porque alguém removeu ou reordenou o `sendMessage`,
- * é sinal de que a regressão do AUTH bloqueador (connections.total: 0)
- * provavelmente volta.
+ * The handshake behaviour itself (install widgets, repeat front-loaded until
+ * the client draws the form) is tested in auth-widgets.test.js.
  */
 
 const assert = require('assert');
@@ -18,30 +17,48 @@ const path = require('path');
 const { test } = require('node:test');
 
 const HTML_PATH = path.join(__dirname, 'index.html');
+const WIDGETS_PATH = path.join(__dirname, 'auth-widgets.js');
 
-test('index.html manda front-loaded antes de authAttemptEvent, dentro do jogo', () => {
+test('index.html loads auth-widgets.js and starts the front-loaded handshake', () => {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const scriptIdx = html.indexOf('<script src="auth-widgets.js"></script>');
+  const startIdx = html.indexOf('OathboundAuthWidgets.startFrontLoadedHandshake(');
 
-  const frontLoadedIdx = html.indexOf("sendMessage('front-loaded')");
-  const authAttemptIdx = html.indexOf("sendMessage('authAttemptEvent')");
-
-  assert.notStrictEqual(frontLoadedIdx, -1,
-    "front-loaded precisa ser mandado -- e o primeiro sinal que o AuthService " +
-    "nativo espera antes de sequer considerar authNeeded (ver comentario).");
-  assert.notStrictEqual(authAttemptIdx, -1,
-    'authAttemptEvent continua sendo mandado por precaucao.');
-  assert.ok(frontLoadedIdx < authAttemptIdx,
-    'front-loaded precisa vir ANTES de authAttemptEvent, nunca depois.');
+  assert.notStrictEqual(scriptIdx, -1, 'auth-widgets.js must be loaded.');
+  assert.notStrictEqual(startIdx, -1,
+    'the handshake must start: without front-loaded the native AuthService never ' +
+    'draws the authorization form (in-game log: authNeeded but no browserWindowLoaded).');
+  assert.ok(scriptIdx < startIdx, 'auth-widgets.js must load before the bootstrap script runs.');
+  assert.ok(html.slice(startIdx, startIdx + 200).includes('getPlatform: () => window.skyrimPlatform'),
+    'the handshake must read the real bridge lazily, not a snapshot taken at load.');
 });
 
-test('index.html so dispara isso dentro do jogo (RODANDO_FORA_DO_JOGO=false), nunca no mock', () => {
+test('the handshake source still sends front-loaded and installs widgets first', () => {
+  const js = fs.readFileSync(WIDGETS_PATH, 'utf8');
+  const fn = js.slice(js.indexOf('function startFrontLoadedHandshake'));
+  const installIdx = fn.indexOf('installOn(platform');
+  const sendIdx = fn.indexOf("sendMessage('front-loaded')");
+  assert.ok(installIdx !== -1 && sendIdx !== -1 && installIdx < sendIdx,
+    'widgets must exist BEFORE front-loaded, which is what makes AuthService draw the form.');
+});
+
+test('nothing in the UI auto-sends authAttemptEvent (that is the Play button)', () => {
+  // With the launcher-seeded remote session, an automatic authAttemptEvent
+  // would connect on game load and skip the authentication screen.
+  for (const file of [HTML_PATH, WIDGETS_PATH]) {
+    const src = fs.readFileSync(file, 'utf8');
+    assert.strictEqual(src.indexOf("sendMessage('authAttemptEvent')"), -1, file);
+    assert.strictEqual(src.indexOf('sendMessage("authAttemptEvent")'), -1, file);
+  }
+});
+
+test('index.html only starts this in-game (RODANDO_FORA_DO_JOGO=false), never in the mock', () => {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const guardIdx = html.indexOf('if (!RODANDO_FORA_DO_JOGO && window.OathboundAuthWidgets) {');
+  const startIdx = html.indexOf('OathboundAuthWidgets.startFrontLoadedHandshake(');
 
-  const guardIdx = html.indexOf('if (!RODANDO_FORA_DO_JOGO) {');
-  const frontLoadedIdx = html.indexOf("sendMessage('front-loaded')");
-
-  assert.notStrictEqual(guardIdx, -1, 'guarda RODANDO_FORA_DO_JOGO precisa existir.');
-  assert.ok(guardIdx !== -1 && frontLoadedIdx > guardIdx,
-    'o disparo de front-loaded precisa estar dentro do bloco !RODANDO_FORA_DO_JOGO, ' +
-    'senão o mock de fora do jogo tambem dispara (mesma classe de bug corrigida em 23/08).');
+  assert.notStrictEqual(guardIdx, -1, 'the RODANDO_FORA_DO_JOGO guard must exist.');
+  assert.ok(startIdx > guardIdx && startIdx - guardIdx < 200,
+    'the handshake must be inside the !RODANDO_FORA_DO_JOGO block, otherwise the ' +
+    'out-of-game mock will also trigger it (the same class of bug fixed on 23/08).');
 });

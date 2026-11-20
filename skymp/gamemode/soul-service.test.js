@@ -184,7 +184,7 @@ describe('soul-service — ciclo de vida', () => {
     delete process.env.SOUL_SECRET;
     await assert.rejects(
       () => soulService.initSoulService(),
-      /SOUL_SECRET ausente/,
+      /SOUL_SECRET is missing/,
       'derivar alma com segredo vazio deixaria a ficha publica calcular a alma de todo mundo'
     );
     process.env.SOUL_SECRET = SEGREDO;
@@ -474,7 +474,7 @@ describe('soul-service — no irreversivel exige consentimento (§14.2, item 6)'
     // A.3 do Anexo: aviso antes do irreversível. Recusa silenciosa seria pior
     // que não ter a regra — o jogador precisa saber que a porta existe.
     assert.ok(
-      notificacoes.some(n => /não tem volta/i.test(n.message)),
+      notificacoes.some(n => /cannot be undone/i.test(n.message)),
       'recusar sem avisar deixaria o jogador achando que e bug'
     );
   });

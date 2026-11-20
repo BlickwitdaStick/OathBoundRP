@@ -141,12 +141,22 @@ async function main() {
   }
 
   console.log(`[manifest] Hasheando ${entries.length} arquivos em ${dataDir}...`);
-  const mods = [];
-  for (const filename of entries) {
-    const hash = await hashFile(path.join(dataDir, filename));
-    mods.push({ filename, hash });
-    process.stdout.write(`  ${filename} ${hash}\n`);
+  const mods = new Array(entries.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(4, entries.length);
+
+  async function hashWorker() {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= entries.length) return;
+      const filename = entries[index];
+      const hash = await hashFile(path.join(dataDir, filename));
+      mods[index] = { filename, hash };
+      process.stdout.write(`  ${filename} ${hash}\n`);
+    }
   }
+
+  await Promise.all(Array.from({ length: workerCount }, () => hashWorker()));
 
   let loadOrder;
   if (args.pluginsTxt) {

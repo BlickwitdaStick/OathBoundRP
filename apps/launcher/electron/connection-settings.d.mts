@@ -27,11 +27,27 @@ export interface PrepareConnectionSettingsInput {
   serverIp: string;
   serverPort: number | string;
   discordId?: string;
+  /** Label shown in the stock client's main-menu authorization widget. */
+  displayName?: string | null;
 }
+
+export interface RemoteAuthData {
+  session: string;
+  masterApiId: number;
+  discordUsername: string;
+  discordDiscriminator: null;
+  discordAvatar: null;
+}
+
+export function buildRemoteAuthData(input: { ticket: string; displayName?: string | null }): RemoteAuthData;
+export function serializeRemoteAuthData(authData: Record<string, unknown>): string;
+export function parseRemoteAuthData(contents: string): Record<string, unknown> | null;
 
 export interface PreparedConnectionSettings {
   configPath: string;
   clientSettingsPath: string;
+  /** Data/Platform/PluginsNoLoad/auth-data-no-load.js */
+  authDataPath: string;
   config: Record<string, unknown>;
   clientSettings: Record<string, unknown>;
 }

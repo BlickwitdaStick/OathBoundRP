@@ -9,7 +9,7 @@
  * argumento que seja uma referência de objeto — precisa ser um **objeto**
  * `{ type, desc }`, nunca o FormID numérico:
  *
- *     mp.callPapyrusFunction('method', 'Actor', 'Resurrect', actorRef(id), []);
+ *     mp.callPapyrusFunction('method', 'Actor', 'IsDead', actorRef(id), []);
  *
  * Isso não é preferência de estilo. Os nove testes oficiais do SkyMP
  * (`misc/tests/` no repositório upstream) usam **exclusivamente** essa forma,

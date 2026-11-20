@@ -652,3 +652,20 @@ describe('analyzeCreationClub', () => {
     assert.equal(r.problems.length, 2);
   });
 });
+
+it('analyzeCreationClub: CC enabled in plugins.txt counts as loaded (install without Skyrim.ccc)', () => {
+  const r = analyzeCreationClub({
+    cccEntries: [],
+    localPlugins: ['Skyrim.esm', 'ccBGSSSE001-Fish.esm'],
+    serverLoadOrder: ['Skyrim.esm', 'ccBGSSSE001-Fish.esm'],
+    enabledPlugins: ['Skyrim.esm', 'ccBGSSSE001-Fish.esm']
+  });
+  assert.equal(r.ok, true, r.problems.join('; '));
+  const missing = analyzeCreationClub({
+    cccEntries: [],
+    localPlugins: ['Skyrim.esm', 'ccBGSSSE001-Fish.esm'],
+    serverLoadOrder: ['Skyrim.esm', 'ccBGSSSE001-Fish.esm'],
+    enabledPlugins: ['Skyrim.esm']
+  });
+  assert.equal(missing.ok, false, 'still required when neither ccc nor plugins.txt loads it');
+});

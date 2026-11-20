@@ -56,3 +56,11 @@ skymp/config/secrets.*
 *.zip
 *.7z
 *.rar
+
+# Mods hospedados pelo servidor: binarios de terceiros (licenca dos autores),
+# nao versionar. Ver apps/game-api/clientMods.js.
+skymp/client-mods/*
+!skymp/client-mods/README.txt
+apps/game-api/client-mods-manifest.json
+apps/game-api/client-mods-hash-cache.json
+skymp/config/client-mods.local.json

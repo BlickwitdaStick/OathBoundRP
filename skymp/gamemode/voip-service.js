@@ -744,44 +744,9 @@ function _exposeDebugTicket(actorId, senderTicket) {
   }
 }
 
-/**
- * Scan codes DirectInput das teclas de voz — mesma ressalva de sempre
- * (`docs/technical/VOICE_MODE_KEY_AUDIT.md` §13-14): leitura de tabela, não
- * teste. `Tab` cicla whisper→normal→shout→whisper; `M` muta/desmuta.
- */
-const SCAN_CODE_VOICE_CYCLE = 15; // Tab
-const SCAN_CODE_VOICE_MUTE = 50; // M
+// Teclas de voz (push-to-talk, ciclar modo, mutar): ver
+// core/player-shortcuts-service.js — keybinds por conta desde 19/11/2026.
 
-/**
- * Roda no cliente, dentro do Skyrim Platform, anexado ao MESMO `updateOwner`
- * da property `voipTicket` (ver `phase0-basic.js`) — o ticket só chega
- * quando o jogador roda `/voz`, que é exatamente o momento em que teclas de
- * controle de voz passam a fazer sentido. Registrado uma vez, guarda em
- * `ctx.state`, mesmo padrão de `interaction-prompt-service.js` e
- * `player-shortcuts-service.js`.
- *
- * Este trecho NÃO decide o próximo modo nem o novo estado de mute — só avisa
- * a CEF de qual tecla foi apertada. A decisão (qual é "o próximo modo",
- * ligar ou desligar o mute) mora em `index.html`, que já guarda
- * `state.voiceMode`/`state.muted` — o sandbox do Skyrim Platform não tem
- * acesso a esse estado, só ao `keyPress` bruto.
- */
-const VOICE_CONTROL_KEYS_SNIPPET = `
-  ctx.state.voiceControls = ctx.state.voiceControls || { registrouTecla: false };
-  var vc = ctx.state.voiceControls;
-
-  if (!vc.registrouTecla && ctx.sp && typeof ctx.sp.on === 'function') {
-    vc.registrouTecla = true;
-    ctx.sp.on('keyPress', function (key) {
-      if (!ctx.sp.browser || !ctx.sp.browser.executeJavaScript) return;
-      if (key === ${SCAN_CODE_VOICE_CYCLE}) {
-        ctx.sp.browser.executeJavaScript('window.handleVoiceCycleKey && window.handleVoiceCycleKey()');
-      } else if (key === ${SCAN_CODE_VOICE_MUTE}) {
-        ctx.sp.browser.executeJavaScript('window.handleVoiceMuteKey && window.handleVoiceMuteKey()');
-      }
-    });
-  }
-`;
 
 /**
  * Fallback de texto pro Tab/M (docs/technical/VOICE_MODE_KEY_AUDIT.md §13-14
@@ -877,9 +842,6 @@ module.exports = {
   DEFAULT_VOIP_ROLE,
   // Allowlist de `voice_mode` e snippet de teclas — ver VOICE_MODE_KEY_AUDIT.md
   VOICE_MODE_VALUES,
-  VOICE_CONTROL_KEYS_SNIPPET,
-  SCAN_CODE_VOICE_CYCLE,
-  SCAN_CODE_VOICE_MUTE,
   // Fallback de texto (/modovoz, /mutar) — expostos pra teste direto
   VOICE_MODE_ALIASES,
   setVoiceModeCommand,

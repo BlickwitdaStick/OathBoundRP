@@ -51,6 +51,27 @@ foreach ($svc in $services) {
   $ready += $svc
 }
 
+# Mods hospedados pelo servidor (skymp\client-mods): gera o manifesto que o
+# launcher baixa, copia os plugins para o data dir do servidor SkyMP, poe-nos no
+# loadOrder do server-settings.json e regenera o mods.json. Precisa rodar ANTES
+# de subir game-api e servidor. Falha aqui e fatal: subir com load order
+# diferente entre servidor e cliente desloca FormIDs sem erro nenhum.
+$syncScript = Join-Path $rootDir "apps\game-api\scripts\sync-client-mods.js"
+if (Test-Path -LiteralPath $syncScript) {
+  Write-Host "Sincronizando mods do servidor (skymp\client-mods)..." -ForegroundColor Cyan
+  Push-Location (Join-Path $rootDir "apps\game-api")
+  try {
+    & node "scripts\sync-client-mods.js"
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "Falha ao sincronizar skymp\client-mods. Corrija e rode de novo." -ForegroundColor Red
+      exit 1
+    }
+  } finally {
+    Pop-Location
+  }
+  Write-Host ""
+}
+
 # O manifesto de mods nao impede o boot, mas sem ele nenhum jogador passa da
 # verificacao de paridade — entao avisamos alto em vez de deixar descobrir em jogo.
 $manifestPath = Join-Path $rootDir "apps\game-api\mods.json"

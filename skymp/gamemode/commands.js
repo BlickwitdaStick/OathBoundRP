@@ -1,4 +1,5 @@
 const db = require('./database');
+const browserModal = require('./core/browser-modal');
 const identity = require('./identity-service');
 const { createRpChatService } = require('./rp-chat-service');
 const commandRegistry = require('./core/command-registry');
@@ -50,6 +51,7 @@ function getActiveActorByCharacterId(characterId) {
 }
 
 function removeActiveCharacter(actorId) {
+  browserModal.forgetActor(actorId);
   if (activeCharacters.has(actorId)) {
     const char = activeCharacters.get(actorId);
     console.log(`[commands] Removed cached character for actor ${actorId.toString(16)}: ${char.firstName} ${char.lastName}`);
@@ -165,7 +167,7 @@ async function logRpChatEvent(event) {
 function sendNotification(actorId, message) {
   if (typeof mp === 'undefined') return;
   try {
-    mp.set(actorId, 'browserModal', { type: 'toast', data: { message }, sentAt: Date.now() });
+    browserModal.pushModal(actorId, 'toast', { message });
   } catch (err) {
     console.error(`[commands] Failed to send notification to actor ${actorId.toString(16)}:`, err.message);
   }
@@ -185,7 +187,7 @@ function sendNotification(actorId, message) {
 function sendChoice(actorId, payload) {
   if (typeof mp === 'undefined') return;
   try {
-    mp.set(actorId, 'browserModal', { type: 'choice', data: payload, sentAt: Date.now() });
+    browserModal.pushModal(actorId, 'choice', payload);
   } catch (err) {
     console.error(`[commands] Failed to send choice to actor ${actorId.toString(16)}:`, err.message);
   }

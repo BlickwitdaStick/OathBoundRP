@@ -1,26 +1,27 @@
 #!/usr/bin/env node
 /**
- * e2e-harness.js — sobe o voip-service isolado, com posições falsas, pra provar
- * o pipeline de voz sem precisar de um servidor Skyrim rodando.
+ * e2e-harness.js — starts the voip-service in isolation, with fake positions,
+ * to validate the voice pipeline without needing a Skyrim server running.
  *
- * ⚠️ FERRAMENTA DE TESTE LOCAL. Emite ticket de voz pra qualquer actorId que
- * pedir, sem autenticação nenhuma — é exatamente o furo que o handshake por
- * ticket existe pra fechar. Só faz sentido em 127.0.0.1, numa máquina de
- * desenvolvimento. Nunca perto de produção, nunca com bind público.
+ * ⚠️ LOCAL TESTING TOOL. Issues voice tickets to any actorId that requests one,
+ * with no authentication whatsoever — this is exactly the security hole that
+ * the ticket-based handshake exists to close. It only makes sense on
+ * 127.0.0.1, on a development machine. Never use it near production, and
+ * never bind it to a public interface.
  *
- * O que ele monta:
- *   - `mp` mockado, com posições que você controla por HTTP;
- *   - o voip-service de verdade (mesmo código do gamemode), em porta conhecida;
- *   - um HTTP server que serve `skymp/ui/index.html` e emite tickets.
+ * What it sets up:
+ *   - a mocked `mp`, with positions you can control over HTTP;
+ *   - the real voip-service (the same code used by the gamemode), on a known port;
+ *   - an HTTP server that serves `skymp/ui/index.html` and issues tickets.
  *
- * Uso:
+ * Usage:
  *   node voice-helper/tools/e2e-harness.js [--voip-port 7778] [--http-port 8099]
  *
- * Rotas:
- *   GET /                          → o index.html real de skymp/ui/
+ * Routes:
+ *   GET /                          → the real index.html from skymp/ui/
  *   GET /ticket?actorId=0xFF000A12 → { actorId, ticket, host, port }
- *   GET /move?actorId=..&x=..&y=..&z=..  → reposiciona um ator
- *   GET /state                     → posições e conectados
+ *   GET /move?actorId=..&x=..&y=..&z=..  → repositions an actor
+ *   GET /state                     → positions and connected actors
  */
 
 const http = require('http');
@@ -38,11 +39,12 @@ const HTTP_PORT = Number.parseInt(argOf('--http-port', '8099'), 10);
 const UI_ROOT = path.resolve(__dirname, '..', '..', 'skymp', 'ui');
 const GAMEMODE = path.resolve(__dirname, '..', '..', 'skymp', 'gamemode');
 
-// Posições dos atores no mundo, em unidades do Skyrim.
+// Actor positions in the world, in Skyrim units.
 const positions = new Map();
 
-// O gamemode fala com o servidor por este global. O voip-service só lê
-// `locationalData`, então é só isso que o mock precisa entregar.
+// The gamemode communicates with the server through this global. The
+// voip-service only reads `locationalData`, so that is all the mock needs
+// to provide.
 global.mp = {
   get: (actorId, prop) => {
     if (prop !== 'locationalData') return null;
@@ -52,8 +54,8 @@ global.mp = {
   set: () => {}
 };
 
-// `database` é puxado transitivamente por `commands`; sem stub, o harness tenta
-// abrir MySQL só pra emitir um ticket.
+// `database` is pulled in transitively by `commands`; without a stub, the
+// harness tries to open MySQL just to issue a ticket.
 const Module = require('module');
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
@@ -72,8 +74,8 @@ function json(res, code, body) {
   const raw = JSON.stringify(body, null, 2);
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
-    // A página é servida daqui e conversa com o WebSocket noutra porta; sem isto
-    // o fetch do /ticket feito pela própria página seria bloqueado.
+    // The page is served from here and communicates with the WebSocket on
+    // another port; without this, the page's /ticket fetch would be blocked.
     'Access-Control-Allow-Origin': '*'
   });
   res.end(raw);
@@ -84,23 +86,24 @@ const server = http.createServer((req, res) => {
   const actorId = Number.parseInt(url.searchParams.get('actorId'), 0);
 
   if (url.pathname === '/ticket') {
-    if (!Number.isFinite(actorId)) return json(res, 400, { error: 'actorId invalido' });
-    // Ticket por papel: o mesmo jogador precisa de um pro helper (`sender`) e um
-    // pra UI (`listener`), e um não serve no lugar do outro. Sem `role` a rota
-    // devolve o de listener — que é o que a própria página busca ao carregar.
+    if (!Number.isFinite(actorId)) return json(res, 400, { error: 'invalid actorId' });
+    // Tickets are role-specific: the same player needs one for the helper
+    // (`sender`) and one for the UI (`listener`), and one cannot be used in
+    // place of the other. Without a `role`, the route returns a listener
+    // ticket — the one the page itself requests when it loads.
     const role = url.searchParams.get('role') || 'listener';
     if (!voip.VOIP_ROLES.includes(role)) {
-      return json(res, 400, { error: `role invalido: ${role}` });
+      return json(res, 400, { error: `invalid role: ${role}` });
     }
     const ticket = voip.issueTicket(actorId, role);
     return json(res, 200, { actorId, ticket, role, host: '127.0.0.1', port: VOIP_PORT });
   }
 
   if (url.pathname === '/move') {
-    if (!Number.isFinite(actorId)) return json(res, 400, { error: 'actorId invalido' });
+    if (!Number.isFinite(actorId)) return json(res, 400, { error: 'invalid actorId' });
     const pos = ['x', 'y', 'z'].map((k) => Number.parseFloat(url.searchParams.get(k) || '0'));
     positions.set(actorId, pos);
-    voip.tickProximity(); // aplica agora em vez de esperar o ticker de 2s
+    voip.tickProximity(); // apply immediately instead of waiting for the 2s ticker
     return json(res, 200, { actorId, pos });
   }
 
@@ -118,12 +121,12 @@ const server = http.createServer((req, res) => {
     });
   }
 
-  // Qualquer outra coisa: serve o diretório da UI.
+  // Anything else: serve files from the UI directory.
   const rel = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
   const file = path.resolve(UI_ROOT, rel);
   if (!file.startsWith(UI_ROOT)) { res.writeHead(403); return res.end('nope'); }
   fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('nao encontrado'); }
+    if (err) { res.writeHead(404); return res.end('not found'); }
     const ext = path.extname(file);
     const mime = ext === '.html' ? 'text/html; charset=utf-8'
       : ext === '.js' ? 'text/javascript; charset=utf-8'
@@ -136,8 +139,8 @@ const server = http.createServer((req, res) => {
 server.listen(HTTP_PORT, '127.0.0.1', () => {
   console.log(`[harness] voip-service   ws://127.0.0.1:${VOIP_PORT}`);
   console.log(`[harness] UI + tickets   http://127.0.0.1:${HTTP_PORT}/`);
-  console.log(`[harness] alcance normal ${VOICE_RANGES.normal} unidades`);
-  console.log('[harness] ⚠️  emite ticket sem autenticacao — so em maquina local.');
+  console.log(`[harness] normal range   ${VOICE_RANGES.normal} units`);
+  console.log('[harness] ⚠️  issues tickets without authentication — local machine only.');
 });
 
 process.on('SIGINT', () => {

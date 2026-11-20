@@ -30,7 +30,7 @@ export default function App() {
       <div className="app-container">
         <TitleBar />
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <p>Carregando...</p>
+          <p>Loading...</p>
         </div>
       </div>
     );

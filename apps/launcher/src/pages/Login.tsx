@@ -19,10 +19,10 @@ export function Login({ setAuth }: LoginProps) {
       if (authData) {
         setAuth(authData);
       } else {
-        setError("Login cancelado ou falhou.");
+        setError("Login was cancelled or failed.");
       }
     } catch (e: any) {
-      setError(e.message || "Erro desconhecido ao logar.");
+      setError(e.message || "Unknown login error.");
     } finally {
       setIsLoggingIn(false);
     }
@@ -34,8 +34,8 @@ export function Login({ setAuth }: LoginProps) {
         <img src="/logo.png" alt="" style={{ width: '96px', height: '96px', objectFit: 'contain' }} />
 
         <div style={{ textAlign: 'center' }}>
-          <h1 className="brand-title" style={{ fontSize: '34px', marginBottom: '10px' }}>Skyrim Heavy RP</h1>
-          <p style={{ color: 'var(--text-muted)' }}>Autenticação necessária para jogar</p>
+          <h1 className="brand-title" style={{ fontSize: '34px', marginBottom: '10px' }}>OATHBOUND RP</h1>
+          <p style={{ color: 'var(--text-muted)' }}>Authentication required to play</p>
         </div>
 
         <div className="brand-flourish">
@@ -49,7 +49,7 @@ export function Login({ setAuth }: LoginProps) {
           disabled={isLoggingIn}
         >
           <LogIn size={20} />
-          {isLoggingIn ? "Autenticando..." : "Entrar com Discord"}
+          {isLoggingIn ? "Authenticating..." : "Sign in with Discord"}
         </button>
 
         {error && <p style={{ color: 'var(--error)' }}>{error}</p>}
