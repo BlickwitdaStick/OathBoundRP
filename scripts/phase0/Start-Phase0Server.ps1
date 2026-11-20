@@ -6,6 +6,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Clicking inside this window starts QuickEdit "Select" mode, which pauses any
+# program writing to it: the game server froze mid-boot and nobody could
+# connect until someone pressed Esc. Turn QuickEdit off for this window only.
+try {
+  Add-Type -Namespace OathboundConsole -Name Mode -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern System.IntPtr GetStdHandle(int h);
+[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(System.IntPtr h, out uint m);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(System.IntPtr h, uint m);
+'@
+  $stdin = [OathboundConsole.Mode]::GetStdHandle(-10)
+  $mode = 0
+  if ([OathboundConsole.Mode]::GetConsoleMode($stdin, [ref]$mode)) {
+    # clear ENABLE_QUICK_EDIT_MODE (0x40), keep ENABLE_EXTENDED_FLAGS (0x80) set so it sticks
+    [void][OathboundConsole.Mode]::SetConsoleMode($stdin, (($mode -band (-bnot 0x40)) -bor 0x80))
+  }
+} catch {
+  Write-Warning "Could not turn off QuickEdit: clicking in this window may pause the server (press Esc to resume)."
+}
+
 $rootDir = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $server = Join-Path $rootDir "skymp\server"
 $entry = Join-Path $server "dist_back\skymp5-server.js"
