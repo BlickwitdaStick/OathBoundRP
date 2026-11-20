@@ -1,3 +1,41 @@
+## [OATHBOUND rebuild — 2026-11-19]
+
+### Fixed
+
+- **The SkyMP sign-in form never appeared, so the full launcher → main menu → auth → connect flow dead-ended at the vanilla menu.** Two causes stacked: our UI never registered the `widgets` host the native `AuthService` draws into, and `front-loaded` was sent exactly once — if the bridge wasn't ready yet, the signal was lost and `authNeeded` never fired. `skymp/ui/auth-widgets.js` now hosts the widgets and repeats the `front-loaded` handshake until the client answers with `widgets.set`. The launcher writes the remote session into `PluginsNoLoad/auth-data-no-load.js` and rereads it before starting the game. No offline mode, no auto-connect. **Confirmed in game.**
+
+- **The server refused to boot with USSEP and the COTN towns: `'_ResourcePack.esl' is not a valid esp or esm name`, then `unresolved dependency (ccqdrsse001-survivalmode.esl)`.** Stock SkyMP has no light-plugin (ESL) support at all, and it matched master names case-sensitively — the game doesn't, and USSEP spells that CC master in lowercase. This is why Mereth could ship ESLs and we couldn't: they run a patched build. We now do too — `patches/skymp/light-plugins.patch` carries the core of ThornswoodRP's light-plugin work (upstream #1715: every light-plugin form gets the same `0xFE…` id the game gives it) plus a case-insensitive `CombineBrowser::GetFileIndex`. Registered in `patches/manifest.json` with its loss condition: reinstalling stock SkyMP silently undoes it. The server now boots with `Load order: 22 full plugins and 3 light plugins`. Light unit tests 6/6, full SkyMP unit suite green. **Confirmed in game.**
+
+- **Death service spammed errors every tick (`getActorValue is not a function`, `_wasDead` undefined).** It called Papyrus functions this SkyMP build doesn't implement. Switched to `IsDead`/`GetActorValuePercentage`, which are in the catalog, and tracked state in a `Map`. `papyrus-usage.test.js` now fails the build if the gamemode calls anything outside the catalog.
+
+- **The F2 panel opened empty, sometimes didn't open at all, and kept the mouse cursor after closing.** Panel data went out on two channels that overwrote each other (a property only replicates its latest value), and focus was never released on close. Channels merged, payload deduped, focus released on `panel:close`, and the panel opens locally first with a waiting/timeout state instead of a blank screen.
+
+- **Installing 4,000+ mod files hit `429 Too Many Requests` halfway through.** Game API rate limit raised to 6,000 requests/min with `Retry-After`, and the launcher retries on 429/503.
+
+- **The server window closed instantly on crash, taking the error with it.** `Start-Phase0Server.ps1` now waits on exit so the log can be read.
+
+### Added
+
+- **Server-hosted mods: drop files into `skymp/client-mods`, the launcher installs them.** `sync-client-mods.js` reads every plugin header, builds a masters-first load order (existing plugins keep their place, new ones go last), and writes the server's `loadOrder` and the client manifest together, so they can't drift. Creation Club masters are detected from the player's game and never redistributed. The launcher downloads, verifies by SHA-256, swaps in atomically, and enables plugins in `plugins.txt`. Currently 20 plugins / about 11 GB, including SkyUI, RaceMenu, SMIM, JK's Skyrim, The Great Cities, COTN and USSEP.
+
+- **Rebindable keys, saved per account.** New Controls tab in the F2 panel. Defaults: **V** push-to-talk, **F11** cycle voice mode, **F2** panel, **Enter** chat. Stored server-side (migration v30), so they follow the account, not the PC.
+
+- **Chat box on Enter.** Enter opens it and sends; closing it gives the mouse back to the game.
+
+- **Redesigned F2 panel**: centered, gold OATHBOUND styling, Controls tab, and loading/timeout states instead of an empty frame.
+
+- **English everywhere players can see it**: launcher, in-game UI, panel and notifications.
+
+- **Recommended module set turned on**: death, governance, player panel, soul, nametag, profession, environment, interaction framework + `[E]` prompt, trade, depot, crafting and player shortcuts. `SOUL_SECRET` generated locally (it signs soul state so clients can't forge it).
+
+- **Second-developer setup.** [`OATHBOUND_COLLABORATOR_SETUP.md`](docs/OATHBOUND_COLLABORATOR_SETUP.md), plus `scripts/skymp-build/Build-PatchedSkyMP.ps1` (clone SkyMP at the pin, apply the patch, build) and `Install-PatchedSkyMP.ps1` (install server/client with backups, never touches `skymp5-client-settings.txt`).
+
+### Known gaps
+
+- **Other players need the patched client files too**, or their game won't agree with the server on light-plugin records. The launcher doesn't distribute them yet — for now they go out as `OATHBOUND-patched-skymp.zip`.
+- Controls tab and chat box have not been tested with more than one player.
+- The server still logs `server-options: … AINDA NAO faz nada` for options that aren't wired up — noise, not errors.
+
 ## [Não lançado]
 
 ### Corrigido
