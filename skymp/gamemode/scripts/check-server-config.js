@@ -30,6 +30,30 @@ function validateServerConfig(config, options = {}) {
   if (environment === 'production' && config.isPapyrusHotReloadEnabled === true) {
     error('DEBUG_HOT_RELOAD', 'Papyrus hot reload não pode ficar ativo em produção');
   }
+  // NPC switches. SkyMP (ScampServer.cpp) reads npcSettings keys as plugin
+  // file names, and WorldState::IsNpcAllowed returns false as soon as it meets
+  // a key that is not a loaded plugin — so a "default" entry, or a plugin that
+  // is not in loadOrder, can silently block NPCs from every plugin. The
+  // "default" entry is also never parsed as a default (the parser looks for a
+  // top-level "default" and then reads top-level spawnIn* keys). The project
+  // uses npcEnabled alone and filters in the gamemode (NPC_SPAWN_FILTER.md).
+  if (config.npcSettings !== undefined && config.npcSettings !== null) {
+    if (typeof config.npcSettings !== 'object' || Array.isArray(config.npcSettings)) {
+      error('NPC_SETTINGS_INVALID', 'npcSettings must be an object keyed by plugin file name');
+    } else {
+      const loaded = new Set((Array.isArray(config.loadOrder) ? config.loadOrder : []).map((p) => String(p).toLowerCase()));
+      for (const key of Object.keys(config.npcSettings)) {
+        if (key.toLowerCase() === 'default') {
+          error('NPC_SETTINGS_DEFAULT', 'npcSettings.default is read as a plugin named "default" and can block every NPC; remove it (see docs/technical/NPC_SPAWN_FILTER.md)');
+        } else if (!loaded.has(key.toLowerCase())) {
+          error('NPC_SETTINGS_UNKNOWN_PLUGIN', `npcSettings key "${key}" is not in loadOrder; SkyMP then refuses NPCs from other plugins too`);
+        }
+      }
+    }
+  }
+  if (config.npcSettings && config.npcEnabled !== true) {
+    warn('NPC_SETTINGS_IGNORED', 'npcSettings has no effect while npcEnabled is not true');
+  }
   if (environment === 'production' && ['127.0.0.1', 'localhost'].includes(config.listenHost)) {
     warn('NETWORK_LOOPBACK', 'listenHost de produção está limitado ao loopback');
   }

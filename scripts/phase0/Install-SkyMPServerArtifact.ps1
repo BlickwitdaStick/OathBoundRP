@@ -56,6 +56,12 @@ $settings.databaseName = "..\world"
 $settings.gamemodePath = $GamemodePath
 $settings.offlineMode = [bool]$OfflineMode
 $settings.isPapyrusHotReloadEnabled = $false
+# NPCs: SkyMP disables every NPC unless npcEnabled is true. The template sets
+# it; an older server-settings.local.json may not have it. Warn, do not guess.
+# Do NOT add npcSettings here: see docs/technical/NPC_SPAWN_FILTER.md.
+if ($null -eq $settings.PSObject.Properties['npcEnabled']) {
+  Write-Warning "server-settings.local.json has no npcEnabled: SkyMP will spawn NO NPCs (no wolves, no bandits). Add `"npcEnabled`": true (see server-settings.local.example.json)."
+}
 $settings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $serverSettings -Encoding ASCII
 
 $scriptsDir = Join-Path $root "skymp\data\scripts"

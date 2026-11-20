@@ -203,6 +203,24 @@ moduleRegistry.register({
   }
 });
 
+// CORE: NPC spawn filter — hostile creatures and hostile-faction NPCs stay,
+// every peaceful NPC is disabled (never deleted). Needs `npcEnabled: true` in
+// server-settings.json. Guide: docs/technical/NPC_SPAWN_FILTER.md
+const npcSpawnFilter = require(path.join(gamemodeDir, 'npc-spawn-filter'));
+moduleRegistry.register({
+  id: 'npc-spawn-filter',
+  enabledBy: 'ENABLE_NPC_SPAWN_FILTER',
+  phase: 'core',
+  dependencies: [],
+  commands: npcSpawnFilter.commandDefs(),
+  initialize: async () => {
+    npcSpawnFilter.start();
+  },
+  shutdown: async () => {
+    npcSpawnFilter.stop();
+  }
+});
+
 // LAB: Serviço de morte — DOWNED com janela de socorro, penalidade e respawn
 moduleRegistry.register({
   id: 'death',

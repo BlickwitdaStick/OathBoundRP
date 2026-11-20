@@ -39,3 +39,26 @@ test('config doctor — hot reload é fail-closed em produção', () => {
   const findings = validateServerConfig(valid({ isPapyrusHotReloadEnabled: true }), { environment: 'production' });
   assert.ok(findings.some((f) => f.code === 'DEBUG_HOT_RELOAD'));
 });
+
+test('config doctor — npcSettings.default is the SkyMP parser trap', () => {
+  const findings = validateServerConfig(valid({
+    npcEnabled: true,
+    loadOrder: ['Skyrim.esm'],
+    npcSettings: { default: { spawnInInterior: true, spawnInExterior: true } }
+  }), { environment: 'production' });
+  assert.ok(findings.some((f) => f.code === 'NPC_SETTINGS_DEFAULT' && f.level === 'ERROR'));
+});
+
+test('config doctor — npcSettings plugin outside loadOrder is refused', () => {
+  const findings = validateServerConfig(valid({
+    npcEnabled: true,
+    loadOrder: ['Skyrim.esm'],
+    npcSettings: { 'Skyrim.esm': { spawnInExterior: true }, 'Missing.esp': { spawnInExterior: true } }
+  }), { environment: 'production' });
+  assert.ok(findings.some((f) => f.code === 'NPC_SETTINGS_UNKNOWN_PLUGIN' && f.message.includes('Missing.esp')));
+  assert.ok(!findings.some((f) => f.message.includes('"Skyrim.esm"')));
+});
+
+test('config doctor — npcEnabled alone (the project setup) is clean', () => {
+  assert.deepEqual(validateServerConfig(valid({ npcEnabled: true }), { environment: 'production' }), []);
+});
