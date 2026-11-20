@@ -570,7 +570,7 @@ function commandDefs() {
     {
       name: '/addingredient',
       description: '[Staff] Adds an ingredient to a recipe',
-      usage: '/addingredient <recipeId> <baseId hex> <count>',
+      usage: '/addingredient <recipeId> <baseId> <count>',
       handler: async (actorId, args) => {
         const [recipeIdRaw, baseIdRaw, countRaw] = String(args || '').trim().split(/\s+/);
         const recipeId = Number.parseInt(recipeIdRaw, 10);

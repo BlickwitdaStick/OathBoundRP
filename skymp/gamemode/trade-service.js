@@ -127,8 +127,8 @@ function sessionOf(actorId) {
   const prazo = session.state === STATES.REQUESTED ? INVITE_TTL_MS : SESSION_TTL_MS;
   if (now() - session.touchedAt > prazo) {
     finish(session, STATES.EXPIRED);
-    notify(session.a.actorId, 'A troca expirou.');
-    notify(session.b.actorId, 'A troca expirou.');
+    notify(session.a.actorId, 'The trade expired.');
+    notify(session.b.actorId, 'The trade expired.');
     return null;
   }
   return session;
@@ -178,28 +178,28 @@ function requestTrade(actorId, targetActorId) {
   if (!eu) return false;
 
   if (!Number.isSafeInteger(targetActorId) || targetActorId <= 0 || targetActorId === actorId) {
-    notify(actorId, 'Alvo invalido.');
+    notify(actorId, 'Invalid target.');
     return false;
   }
 
   const alvo = commands.getActiveCharacterData(targetActorId);
   if (!alvo) {
-    notify(actorId, 'Essa pessoa nao esta disponivel.');
+    notify(actorId, 'That person is not available.');
     return false;
   }
 
   if (sessionOf(actorId)) {
-    notify(actorId, 'Voce ja esta numa troca.');
+    notify(actorId, 'You are already in a trade.');
     return false;
   }
   if (sessionOf(targetActorId)) {
-    notify(actorId, 'Essa pessoa ja esta numa troca.');
+    notify(actorId, 'That person is already in a trade.');
     return false;
   }
 
   const alcance = rangeUtils.assertRange(actorId, targetActorId, TRADE_RANGE);
   if (!alcance.ok) {
-    notify(actorId, alcance.reason || 'Alvo fora de alcance.');
+    notify(actorId, alcance.reason || 'Target out of range.');
     return false;
   }
 
@@ -217,9 +217,9 @@ function requestTrade(actorId, targetActorId) {
   _byActor.set(actorId, session.id);
   _byActor.set(targetActorId, session.id);
 
-  notify(actorId, 'Convite de troca enviado.');
-  notify(targetActorId, 'Alguem quer negociar com voce. /tradeaccept para abrir.');
-  commands.broadcastProximityMessage(actorId, '* Estende a mao, propondo um negocio.', 500);
+  notify(actorId, 'Trade invitation sent.');
+  notify(targetActorId, 'Someone wants to trade with you. /tradeaccept to open it.');
+  commands.broadcastProximityMessage(actorId, '* holds out a hand, offering a deal.', 500);
   console.log(`[trade] ${session.id}: ${eu.characterId} -> ${alvo.characterId}`);
   return true;
 }
@@ -228,19 +228,19 @@ function requestTrade(actorId, targetActorId) {
 function acceptTrade(actorId) {
   const session = sessionOf(actorId);
   if (!session || session.state !== STATES.REQUESTED) {
-    notify(actorId, 'Nenhum convite de troca pendente.');
+    notify(actorId, 'No pending trade invitation.');
     return false;
   }
   // Quem convidou não aceita o próprio convite.
   if (session.a.actorId === actorId) {
-    notify(actorId, 'Aguardando a outra pessoa aceitar.');
+    notify(actorId, 'Waiting for the other person to accept.');
     return false;
   }
 
   session.state = STATES.ACTIVE;
   session.touchedAt = now();
-  notify(session.a.actorId, 'Troca aberta. /tradeadd <baseId> <qtd> para ofertar.');
-  notify(session.b.actorId, 'Troca aberta. /tradeadd <baseId> <qtd> para ofertar.');
+  notify(session.a.actorId, 'Trade open. /tradeadd <baseId> <quantity> to offer items.');
+  notify(session.b.actorId, 'Trade open. /tradeadd <baseId> <quantity> to offer items.');
   return true;
 }
 
@@ -256,16 +256,16 @@ function acceptTrade(actorId) {
 async function addItem(actorId, baseId, quantity) {
   const session = sessionOf(actorId);
   if (!session || session.state !== STATES.ACTIVE) {
-    notify(actorId, 'Voce nao esta numa troca aberta.');
+    notify(actorId, 'You are not in an open trade.');
     return false;
   }
 
   if (!Number.isSafeInteger(baseId) || baseId <= 0) {
-    notify(actorId, 'FormID invalido.');
+    notify(actorId, 'Invalid FormID.');
     return false;
   }
   if (!Number.isSafeInteger(quantity) || quantity === 0) {
-    notify(actorId, 'Quantidade invalida.');
+    notify(actorId, 'Invalid quantity.');
     return false;
   }
 
@@ -274,19 +274,19 @@ async function addItem(actorId, baseId, quantity) {
   const novo = atual + quantity;
 
   if (novo < 0) {
-    notify(actorId, 'Voce nao ofertou essa quantidade.');
+    notify(actorId, 'You did not offer that many.');
     return false;
   }
   if (novo === 0) {
     eu.items.delete(baseId);
   } else {
     if (!eu.items.has(baseId) && eu.items.size >= MAX_ITEMS_PER_SIDE) {
-      notify(actorId, `Maximo de ${MAX_ITEMS_PER_SIDE} tipos de item por lado.`);
+      notify(actorId, `At most ${MAX_ITEMS_PER_SIDE} item types per side.`);
       return false;
     }
     const emMaos = await inventory.getStack(inventory.character(eu.characterId), baseId);
     if (emMaos < novo) {
-      notify(actorId, `Voce tem ${emMaos}, tentou ofertar ${novo}.`);
+      notify(actorId, `You have ${emMaos}, tried to offer ${novo}.`);
       return false;
     }
     eu.items.set(baseId, novo);
@@ -300,13 +300,13 @@ async function addItem(actorId, baseId, quantity) {
 /** Manda a oferta atual para os dois lados. É a UI inteira, por enquanto. */
 function descrever(session) {
   const linha = (lado) => lado.items.size === 0
-    ? '(nada)'
+    ? '(nothing)'
     : [...lado.items.entries()].map(([b, q]) => `0x${b.toString(16)}x${q}`).join(', ');
 
   const a = linha(session.a);
   const b = linha(session.b);
-  notify(session.a.actorId, `Troca v${session.version} — voce: ${a} | eles: ${b}`);
-  notify(session.b.actorId, `Troca v${session.version} — voce: ${b} | eles: ${a}`);
+  notify(session.a.actorId, `Trade v${session.version} — you: ${a} | them: ${b}`);
+  notify(session.b.actorId, `Trade v${session.version} — you: ${b} | them: ${a}`);
 }
 
 /**
@@ -317,13 +317,13 @@ function descrever(session) {
 async function confirmTrade(actorId) {
   const session = sessionOf(actorId);
   if (!session || session.state !== STATES.ACTIVE) {
-    notify(actorId, 'Voce nao esta numa troca aberta.');
+    notify(actorId, 'You are not in an open trade.');
     return false;
   }
 
   const { eu, outro } = sidesOf(session, actorId);
   if (eu.items.size === 0 && outro.items.size === 0) {
-    notify(actorId, 'Nao ha nada para trocar.');
+    notify(actorId, 'There is nothing to trade.');
     return false;
   }
 
@@ -331,8 +331,8 @@ async function confirmTrade(actorId) {
   session.touchedAt = now();
 
   if (outro.confirmedVersion !== session.version) {
-    notify(actorId, 'Confirmado. Aguardando a outra parte.');
-    notify(outro.actorId, 'A outra parte confirmou. /tradeconfirm para fechar.');
+    notify(actorId, 'Confirmed. Waiting for the other side.');
+    notify(outro.actorId, 'The other side confirmed. /tradeconfirm to close the deal.');
     return true;
   }
 
@@ -360,20 +360,20 @@ async function commitTrade(session) {
 
   const falhar = (motivo) => {
     finish(session, STATES.CANCELLED);
-    notify(session.a.actorId, `Troca cancelada: ${motivo}`);
-    notify(session.b.actorId, `Troca cancelada: ${motivo}`);
+    notify(session.a.actorId, `Trade cancelled: ${motivo}`);
+    notify(session.b.actorId, `Trade cancelled: ${motivo}`);
     return false;
   };
 
   for (const lado of [session.a, session.b]) {
     const vivo = commands.getActiveCharacterData(lado.actorId);
     if (!vivo || vivo.characterId !== lado.characterId) {
-      return falhar('a outra parte saiu.');
+      return falhar('the other side left.');
     }
   }
 
   const alcance = rangeUtils.assertRange(session.a.actorId, session.b.actorId, TRADE_RANGE);
-  if (!alcance.ok) return falhar(alcance.reason || 'voces se afastaram.');
+  if (!alcance.ok) return falhar(alcance.reason || 'you moved too far apart.');
 
   for (const lado of [session.a, session.b]) {
     // `core/action-policy` é a autoridade sobre "este personagem pode negociar
@@ -418,19 +418,19 @@ async function commitTrade(session) {
   }
 
   finish(session, STATES.COMPLETED);
-  notify(session.a.actorId, 'Negocio fechado.');
-  notify(session.b.actorId, 'Negocio fechado.');
-  commands.broadcastProximityMessage(session.a.actorId, '* Aperta a mao, selando o acordo.', 500);
+  notify(session.a.actorId, 'Deal closed.');
+  notify(session.b.actorId, 'Deal closed.');
+  commands.broadcastProximityMessage(session.a.actorId, '* shakes hands, sealing the deal.', 500);
   console.log(`[trade] ${session.id} concluida (transfer=${resultado.transferId})`);
   return true;
 }
 
 /** Qualquer um dos dois cancela, a qualquer momento antes do `COMMITTING`. */
-function cancelTrade(actorId, motivo = 'a troca foi cancelada.') {
+function cancelTrade(actorId, motivo = 'The trade was cancelled.') {
   const session = sessionOf(actorId);
   if (!session) return false;
   if (session.state === STATES.COMMITTING) {
-    notify(actorId, 'A troca ja esta sendo fechada.');
+    notify(actorId, 'The trade is already being closed.');
     return false;
   }
 
@@ -460,7 +460,7 @@ function onDisconnect(actorId) {
   if (session.state === STATES.COMMITTING) return; // deixa o commit terminar
   finish(session, STATES.CANCELLED);
   const { outro } = sidesOf(session, actorId);
-  notify(outro.actorId, 'A outra parte saiu. Troca cancelada.');
+  notify(outro.actorId, 'The other side left. Trade cancelled.');
 }
 
 /** Encerra tudo. Chamado no `shutdown` do módulo. */
@@ -487,7 +487,7 @@ function registerInteractions() {
     id: 'trade.request',
     module: MODULE,
     target: interactionRegistry.TARGET_TYPES.PLAYER,
-    label: 'Propor negocio',
+    label: 'Propose a trade',
     section: 'social',
     order: 20,
     distance: TRADE_RANGE,
@@ -499,7 +499,7 @@ function registerInteractions() {
     canSee: async ctx => !sessionOf(ctx.actorId) && !sessionOf(ctx.target.actorId),
     execute: async ctx => {
       const ok = requestTrade(ctx.actorId, ctx.target.actorId);
-      return { message: ok ? 'Convite enviado.' : 'Nao foi possivel propor.' };
+      return { message: ok ? 'Invitation sent.' : 'Could not propose a trade.' };
     }
   });
 }
@@ -539,43 +539,43 @@ function commandDefs() {
   return [
     {
       name: '/trade',
-      description: '[Troca] Propoe negocio para alguem',
-      usage: '/trade <actorId>',
+      description: '[Trade] Propose a trade to someone',
+      usage: '/trade <player#>',
       handler: (actorId, args) => {
         const alvo = Number.parseInt(String(args).trim().replace(/^0x/i, ''), 16);
-        if (!Number.isSafeInteger(alvo)) return notify(actorId, 'Uso: /trade <actorId>');
+        if (!Number.isSafeInteger(alvo)) return notify(actorId, 'Usage: /trade <player#>');
         requestTrade(actorId, alvo);
       }
     },
     {
       name: '/tradeaccept',
-      description: '[Troca] Aceita o convite pendente',
+      description: '[Trade] Accept the pending invitation',
       usage: '/tradeaccept',
       handler: (actorId) => acceptTrade(actorId)
     },
     {
       name: '/tradeadd',
-      description: '[Troca] Adiciona item a sua oferta (quantidade negativa remove)',
-      usage: '/tradeadd <baseId> <qtd>',
+      description: '[Trade] Add an item to your offer (negative quantity removes)',
+      usage: '/tradeadd <baseId> <quantity>',
       handler: (actorId, args) => {
         const [bruto, qtd] = String(args).trim().split(/\s+/);
         const baseId = Number.parseInt(String(bruto || '').replace(/^0x/i, ''), 16);
         const quantity = Number.parseInt(qtd, 10);
         if (!Number.isSafeInteger(baseId) || !Number.isSafeInteger(quantity)) {
-          return notify(actorId, 'Uso: /tradeadd <baseId> <qtd>');
+          return notify(actorId, 'Usage: /tradeadd <baseId> <quantity>');
         }
         return addItem(actorId, baseId, quantity);
       }
     },
     {
       name: '/tradeconfirm',
-      description: '[Troca] Confirma a oferta atual',
+      description: '[Trade] Confirm the current offer',
       usage: '/tradeconfirm',
       handler: (actorId) => confirmTrade(actorId)
     },
     {
       name: '/tradecancel',
-      description: '[Troca] Cancela a troca',
+      description: '[Trade] Cancel the trade',
       usage: '/tradecancel',
       handler: (actorId) => cancelTrade(actorId)
     }

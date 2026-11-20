@@ -62,6 +62,7 @@ const serverOptions  = require(path.join(gamemodeDir, 'core', 'server-options'))
 const governance    = require(path.join(gamemodeDir, 'governance-service'));
 const marketStalls  = require(path.join(gamemodeDir, 'market-stalls-service'));
 const playerPanel   = require(path.join(gamemodeDir, 'player-panel-service'));
+const adminPanel    = require(path.join(gamemodeDir, 'admin-panel-service'));
 const deathService  = require(path.join(gamemodeDir, 'death-service'));
 const professionService = require(path.join(gamemodeDir, 'profession-service'));
 const miningService = require(path.join(gamemodeDir, 'mining-service'));
@@ -75,6 +76,7 @@ const faunaCensus   = require(path.join(gamemodeDir, 'fauna-census'));
 const corpseProbe   = require(path.join(gamemodeDir, 'corpse-probe'));
 const tradeService  = require(path.join(gamemodeDir, 'trade-service'));
 const depotService  = require(path.join(gamemodeDir, 'core', 'depot-service'));
+const holdstoneService = require(path.join(gamemodeDir, 'holdstone-service'));
 const crimeService  = require(path.join(gamemodeDir, 'core', 'crime-service'));
 const interactionPromptService = require(path.join(gamemodeDir, 'core', 'interaction-prompt-service'));
 const characterDashboardBridge = require(path.join(gamemodeDir, 'core', 'character-dashboard-bridge'));
@@ -200,6 +202,24 @@ moduleRegistry.register({
   commands: [],
   initialize: async () => {
     require(path.join(gamemodeDir, 'npc-cleaner')).startWorldCleaner();
+  }
+});
+
+// CORE: NPC spawn filter — hostile creatures and hostile-faction NPCs stay,
+// every peaceful NPC is disabled (never deleted). Needs `npcEnabled: true` in
+// server-settings.json. Guide: docs/technical/NPC_SPAWN_FILTER.md
+const npcSpawnFilter = require(path.join(gamemodeDir, 'npc-spawn-filter'));
+moduleRegistry.register({
+  id: 'npc-spawn-filter',
+  enabledBy: 'ENABLE_NPC_SPAWN_FILTER',
+  phase: 'core',
+  dependencies: [],
+  commands: npcSpawnFilter.commandDefs(),
+  initialize: async () => {
+    npcSpawnFilter.start();
+  },
+  shutdown: async () => {
+    npcSpawnFilter.stop();
   }
 });
 
@@ -352,6 +372,28 @@ moduleRegistry.register({
     uiEventRouter.unregister('panel');
     playerPanel.shutdownPlayerPanelService();
   }
+});
+
+// F8 admin panel (staff only): characters, items, creatures, players. Every
+// action is permission-checked and audited on the server — see
+// admin-panel-service.js. On by default: ENABLE_ADMIN_PANEL unset counts as
+// true; set it to false to switch the panel off.
+adminPanel.applyDefaultFlag(process.env);
+moduleRegistry.register({
+  id: 'admin-panel',
+  enabledBy: adminPanel.FLAG,
+  phase: 'lab',
+  dependencies: [],
+  commands: adminPanel.commandDefs(),
+  initialize: async () => {
+    adminPanel.initAdminPanelService();
+    uiEventRouter.register('admin', adminPanel.handleUiEvent);
+  },
+  shutdown: async () => {
+    uiEventRouter.unregister('admin');
+    adminPanel.shutdownAdminPanelService();
+  },
+  healthCheck: () => uiEventRouter.list().includes('admin')
 });
 
 // LAB: ponte SELF → /painel (Tarefa 11, objetivo 3). Zero UI nova — ver
@@ -585,6 +627,36 @@ moduleRegistry.register({
   }
 });
 
+// Holdstones, hold ranks, parcels and door/container locks
+// (migration-v33-holdstones-parcels.sql, docs/gameplay/HOLDSTONES_AND_PARCELS.md).
+// The stone is a physical anchor: E opens the hold menu via 'interaction-prompt'.
+// Locks hook mp.onActivate through core/activation-events.js and work even
+// without the prompt; the parceling tool menu needs the prompt to open.
+moduleRegistry.register({
+  id: 'holdstones',
+  enabledBy: 'ENABLE_HOLDSTONES',
+  phase: 'lab',
+  version: '1.0.0',
+  // Locks must not depend on the menu framework being on: both are optional.
+  dependencies: [],
+  optionalDependencies: ['interaction', 'interaction-prompt'],
+  commands: holdstoneService.commandDefs(),
+  initialize: async () => {
+    await holdstoneService.initialize({
+      sendModal,
+      openInteractionMenu: (actorId, targetFormId) => {
+        interactionPromptService.handleClientEvent(actorId, { kind: 'inspect', targetFormId })
+          .catch(err => console.error('[holdstones] parcel tool menu failed:', err.message));
+      }
+    });
+    uiEventRouter.register('holdstone', holdstoneService.handleUiEvent);
+  },
+  shutdown: async () => {
+    uiEventRouter.unregister('holdstone');
+    holdstoneService.shutdown();
+  }
+});
+
 // LAB: Crime & Proveniência (Tarefa 12 fundação + Tarefa 13 interações,
 // 21/08/2026). `interaction` é dependência OBRIGATÓRIA agora — `crime.surrender`
 // e `crime.rob` precisam do framework de pé pra se registrar. `depot`
@@ -791,6 +863,13 @@ if (typeof mp !== "undefined") {
     `,
     updateNeighbor: ''
   });
+  // F8 admin panel data (staff only) — same channel-merge shape as panelData.
+  mp.makeProperty(adminPanel.PROPERTY, {
+    isVisibleByOwner: true,
+    isVisibleByNeighbors: false,
+    updateOwner: adminPanel.UPDATE_OWNER_SNIPPET,
+    updateNeighbor: ''
+  });
   // Ticket de conexão de voz (emitido pelo comando /voz) — o cliente recebe
   // {actorId, ticket, senderTicket, host, port}: `ticket` abre o WebSocket de
   // sinalização (ouvir); `senderTicket` a CEF repassa pro launcher em loopback,
@@ -858,6 +937,8 @@ if (typeof mp !== "undefined") {
 if (typeof mp !== 'undefined') {
   const connectionMonitor = createConnectionMonitor({ mp, whitelist, commands, playerPanel });
   connectionMonitor.start();
+  // Log back in where you logged out (characters.pos_*/cell_id).
+  require('./core/position-persistence').getInstance().start();
   createRuntimeTelemetry({
     connectionMonitor,
     uiEventRateLimiter,

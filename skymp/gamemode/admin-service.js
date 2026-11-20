@@ -66,10 +66,17 @@ const skymp = require('./core/skymp-adapter');
 // inofensivo o bastante para moderador — mas separar em duas permissões daria a
 // este projeto uma permissão a mais para justificar sem que ninguém tivesse
 // pedido, e as duas ferramentas rodam na mesma sessão, pela mesma pessoa.
+//
+// `spawn_npc` (19/11/2026) is for the Creatures tab of the F8 admin panel
+// (admin-panel-service.js): placing an NPC or creature in front of the staff
+// member. Not `add_item` — a creature is not a gift to one player, it is a
+// new actor in a shared world that can fight, block a road or ruin a scene —
+// and not moderator, for the same reason `add_item` is not: it changes the
+// world, it does not police it.
 const ROLE_PERMISSIONS = {
   moderator: ['kick', 'teleport', 'view_audit', 'manage_whitelist'],
-  admin:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe'],
-  owner:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'manage_staff', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe']
+  admin:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe', 'spawn_npc'],
+  owner:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'manage_staff', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe', 'spawn_npc']
 };
 
 // Cache em memória: actorId → { role, permissions: Set<string> }
@@ -210,13 +217,13 @@ async function playAnimation(actorId, targetActorId, animName) {
 async function giveItemAdmin(actorId, targetActorId, baseId, count) {
   if (!hasPermission(actorId, 'add_item')) {
     sendDenied(actorId);
-    return;
+    return false;
   }
   const transactionService = require('./core/transaction-service');
   const targetChar = commands.getActiveCharacterData(targetActorId);
   if (!targetChar) {
     sendDenied(actorId);
-    return;
+    return false;
   }
 
   // Confere o FormID contra os plugins carregados antes de gravar.
@@ -233,9 +240,9 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
   const espm = require('./core/espm');
   const veredito = espm.pareceItem(baseId);
   if (!veredito.ok) {
-    commands.sendNotification(actorId, `[Staff] Item invalido: ${veredito.motivo}.`);
+    commands.sendNotification(actorId, `[Staff] Invalid item: ${veredito.motivo}.`);
     console.warn(`[admin] ${actorId.toString(16)} tentou dar 0x${baseId.toString(16)}: ${veredito.motivo}`);
-    return;
+    return false;
   }
 
   const success = await transactionService.giveItem({
@@ -248,8 +255,8 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
   });
 
   if (!success) {
-    commands.sendNotification(actorId, '[Staff] Falha ao entregar item.');
-    return;
+    commands.sendNotification(actorId, '[Staff] Could not give the item.');
+    return false;
   }
 
   const charData = commands.getActiveCharacterData(actorId);
@@ -259,6 +266,7 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
     `role=${getRole(actorId)} baseId=0x${baseId.toString(16)} count=${count}`
   );
   console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) gave 0x${baseId.toString(16)} x${count} to ${targetActorId.toString(16)}`);
+  return true;
 }
 
 /**
@@ -268,7 +276,7 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
 async function teleportTo(actorId, targetActorId) {
   if (!hasPermission(actorId, 'teleport')) {
     sendDenied(actorId);
-    return;
+    return false;
   }
   if (typeof mp !== 'undefined') {
     const targetPos = mp.get(targetActorId, 'locationalData');
@@ -278,6 +286,29 @@ async function teleportTo(actorId, targetActorId) {
   }
   const charData = commands.getActiveCharacterData(actorId);
   await auditLog(charData?.accountId, null, 'staff:teleport', `role=${getRole(actorId)} target=${targetActorId.toString(16)}`);
+  return true;
+}
+
+/**
+ * Brings a player to the staff member (the reverse of teleportTo). F8 panel,
+ * Players tab. Permission: 'teleport' — moving someone to you is the same
+ * power as moving yourself to them, and moderators already have that.
+ */
+async function bringPlayer(actorId, targetActorId) {
+  if (!hasPermission(actorId, 'teleport')) {
+    sendDenied(actorId);
+    return false;
+  }
+  if (typeof mp !== 'undefined') {
+    const myPos = mp.get(actorId, 'locationalData');
+    if (myPos) mp.set(targetActorId, 'locationalData', myPos);
+  }
+  const charData = commands.getActiveCharacterData(actorId);
+  const targetData = commands.getActiveCharacterData(targetActorId);
+  await auditLog(charData?.accountId, targetData?.accountId, 'staff:bring', `role=${getRole(actorId)} target=${targetActorId.toString(16)}`);
+  commands.sendNotification(targetActorId, 'A staff member brought you to them.');
+  console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) brought ${targetActorId.toString(16)}`);
+  return true;
 }
 
 /**
@@ -287,12 +318,12 @@ async function teleportTo(actorId, targetActorId) {
 async function kickPlayer(actorId, targetActorId, reason) {
   if (!hasPermission(actorId, 'kick')) {
     sendDenied(actorId);
-    return;
+    return false;
   }
   const charData = commands.getActiveCharacterData(actorId);
   const targetData = commands.getActiveCharacterData(targetActorId);
   await auditLog(charData?.accountId, targetData?.accountId, 'staff:kick', `role=${getRole(actorId)} reason=${reason}`);
-  commands.sendNotification(targetActorId, `Você foi expulso: ${reason}`);
+  commands.sendNotification(targetActorId, `You were kicked: ${reason}`);
   if (typeof mp !== 'undefined') {
     setTimeout(() => {
       // `mp.kick` recebe `userId`, nao FormID; o adaptador converte. Ver
@@ -311,6 +342,7 @@ async function kickPlayer(actorId, targetActorId, reason) {
     moderator: nomeParaLog(charData, actorId),
     reason
   });
+  return true;
 }
 
 /**
@@ -346,18 +378,18 @@ async function kickPlayer(actorId, targetActorId, reason) {
 async function setGold(actorId, targetActorId, amount) {
   if (!hasPermission(actorId, 'set_gold')) {
     sendDenied(actorId);
-    return;
+    return false;
   }
   const targetChar = commands.getActiveCharacterData(targetActorId);
-  if (!targetChar) return;
+  if (!targetChar) return false;
 
   const alvo = Number(amount);
   if (!Number.isFinite(alvo) || alvo < 0) {
     // `parseInt(parts[1])` no handler devolve NaN pra `/setgold <id>` sem
     // valor. Antes isso virava `SET gold = NaN`, que o MySQL grava como 0 —
     // um erro de digitação zerava o patrimônio do jogador em silêncio.
-    commands.sendNotification(actorId, '[Staff] Valor invalido. Uso: /setgold <actorId> <valor>');
-    return;
+    commands.sendNotification(actorId, '[Staff] Invalid amount. Usage: /setgold <player#> <amount>');
+    return false;
   }
 
   const transactionService = require('./core/transaction-service');
@@ -380,12 +412,12 @@ async function setGold(actorId, targetActorId, amount) {
       });
 
     if (!ok) {
-      commands.sendNotification(actorId, '[Staff] Falha ao ajustar o ouro. Nada foi alterado.');
-      return;
+      commands.sendNotification(actorId, '[Staff] Could not set the gold. Nothing was changed.');
+      return false;
     }
   }
 
-  commands.sendNotification(actorId, `[Staff] Ouro definido para ${alvo} Septims.`);
+  commands.sendNotification(actorId, `[Staff] Gold set to ${alvo} Septims.`);
   const charData = commands.getActiveCharacterData(actorId);
   await auditLog(
     charData?.accountId, targetChar.accountId,
@@ -393,6 +425,7 @@ async function setGold(actorId, targetActorId, amount) {
     `role=${getRole(actorId)} amount=${alvo} anterior=${saldoAtual} delta=${delta}`
   );
   console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) set gold=${alvo} (delta ${delta}) for char ${targetChar.characterId}`);
+  return true;
 }
 
 /**
@@ -411,17 +444,20 @@ async function retireCharacter(actorId, targetActorId, reason) {
     return;
   }
   if (!reason || !reason.trim()) {
-    commands.sendNotification(actorId, 'Motivo obrigatorio: /permakill <actorId> <motivo>');
+    commands.sendNotification(actorId, 'A reason is required: /permakill <player#> <reason>');
     return;
   }
 
   const targetChar = commands.getActiveCharacterData(targetActorId);
   if (!targetChar) {
-    commands.sendNotification(actorId, 'Alvo nao encontrado ou personagem nao carregado.');
+    commands.sendNotification(actorId, 'Target not found or character not loaded.');
     return;
   }
 
   await db.query('UPDATE characters SET status = ? WHERE id = ?', ['retired', targetChar.characterId]);
+  // Free the #number for the next character (core/character-numbers.js).
+  await require('./core/character-numbers').releaseNumber(db, targetChar.characterId)
+    .catch((err) => console.error('[admin] Could not release character number:', err.message));
 
   const charData = commands.getActiveCharacterData(actorId);
   await auditLog(
@@ -430,7 +466,7 @@ async function retireCharacter(actorId, targetActorId, reason) {
     `role=${getRole(actorId)} characterId=${targetChar.characterId} reason=${reason}`
   );
 
-  commands.sendNotification(targetActorId, `Seu personagem foi permanentemente encerrado pela staff. Motivo: ${reason}`);
+  commands.sendNotification(targetActorId, `Your character was permanently retired by staff. Reason: ${reason}`);
   console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) retired character ${targetChar.characterId}: ${reason}`);
 
   moderationLog.notify({
@@ -447,6 +483,87 @@ async function retireCharacter(actorId, targetActorId, reason) {
       if (typeof mp !== 'undefined') skymp.kick(targetActorId);
     }, 3000);
   }
+}
+
+const MAX_RETIRE_REASON_LENGTH = 500;
+
+/**
+ * Retires a character by its database id — online OR offline. Used by the
+ * Characters tab of the F8 admin panel, which lists every character, not
+ * just the ones in game. Same rules as /permakill (retireCharacter above):
+ * permission 'retire_character', a reason is required, never DELETE —
+ * status becomes 'retired', the #number is released, audit_logs records it,
+ * and the player is kicked if they are online.
+ *
+ * Differences from retireCharacter, all because the target may be offline:
+ *   - the character comes from the database, not the online cache;
+ *   - an already retired character is refused (retiring twice would write a
+ *     second audit line for something that did not happen);
+ *   - the UPDATE is conditional on the status, so two staff members clicking
+ *     at once produce one retirement, not two.
+ *
+ * @returns {Promise<{ok: true, wasOnline: boolean, name: string} | {ok: false, error: string}>}
+ */
+async function retireCharacterById(actorId, characterId, reason) {
+  if (!hasPermission(actorId, 'retire_character')) {
+    sendDenied(actorId);
+    return { ok: false, error: 'Permission denied.' };
+  }
+  const cleanReason = typeof reason === 'string' ? reason.trim().slice(0, MAX_RETIRE_REASON_LENGTH) : '';
+  if (!cleanReason) {
+    return { ok: false, error: 'A reason is required.' };
+  }
+  const id = Number(characterId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { ok: false, error: 'Invalid character.' };
+  }
+
+  const rows = await db.query(
+    'SELECT id, account_id, first_name, last_name, status, char_number FROM characters WHERE id = ? LIMIT 1',
+    [id]
+  );
+  const target = rows && rows[0];
+  if (!target) return { ok: false, error: 'Character not found.' };
+  if (target.status === 'retired') return { ok: false, error: 'That character is already retired.' };
+
+  const res = await db.query(
+    "UPDATE characters SET status = ? WHERE id = ? AND status <> 'retired'",
+    ['retired', id]
+  );
+  if (res && res.affectedRows === 0) {
+    return { ok: false, error: 'That character is already retired.' };
+  }
+  await require('./core/character-numbers').releaseNumber(db, id)
+    .catch((err) => console.error('[admin] Could not release character number:', err.message));
+
+  const onlineActor = typeof commands.getActiveActorByCharacterId === 'function'
+    ? commands.getActiveActorByCharacterId(id)
+    : null;
+  const name = `${target.first_name || ''} ${target.last_name || ''}`.trim() || `character ${id}`;
+  const charData = commands.getActiveCharacterData(actorId);
+  await auditLog(
+    charData?.accountId, target.account_id,
+    'staff:retireCharacter',
+    `role=${getRole(actorId)} characterId=${id} number=${target.char_number ?? '-'} online=${onlineActor ? 'yes' : 'no'} via=f8 reason=${cleanReason}`
+  );
+  console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) retired character ${id} (${name}, ${onlineActor ? 'online' : 'offline'}): ${cleanReason}`);
+
+  moderationLog.notify({
+    kind: 'permakill',
+    target: onlineActor ? nomeParaLog(commands.getActiveCharacterData(onlineActor), onlineActor) : `${name} (character ${id}, offline)`,
+    moderator: nomeParaLog(charData, actorId),
+    reason: cleanReason
+  });
+
+  if (onlineActor) {
+    commands.sendNotification(onlineActor, `Your character was permanently retired by staff. Reason: ${cleanReason}`);
+    if (typeof mp !== 'undefined') {
+      setTimeout(() => {
+        if (typeof mp !== 'undefined') skymp.kick(onlineActor);
+      }, 3000);
+    }
+  }
+  return { ok: true, wasOnline: Boolean(onlineActor), name };
 }
 
 /**
@@ -519,7 +636,7 @@ async function revealIdentity(actorId, targetActorId) {
 
   const targetChar = commands.getActiveCharacterData(targetActorId);
   if (!targetChar) {
-    commands.sendNotification(actorId, '[Staff] Alvo nao encontrado ou personagem nao carregado.');
+    commands.sendNotification(actorId, '[Staff] Target not found or character not loaded.');
     return;
   }
 
@@ -545,7 +662,7 @@ async function revealIdentity(actorId, targetActorId) {
 
   commands.sendNotification(
     actorId,
-    `[Staff] 0x${targetActorId.toString(16)} e ${realName} (personagem ${targetChar.characterId}). Revelacao registrada.`
+    `[Staff] ${typeof commands.formatCharacterNumber === 'function' ? commands.formatCharacterNumber(targetActorId) : `0x${targetActorId.toString(16)}`} is ${realName} (character ${targetChar.characterId}). Reveal recorded.`
   );
   console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) revelou identidade de ${targetActorId.toString(16)} (char ${targetChar.characterId})`);
 }
@@ -565,7 +682,7 @@ function nomeParaLog(charData, actorId) {
 }
 
 function sendDenied(actorId) {
-  commands.sendNotification(actorId, '[Staff] Permissão negada.');
+  commands.sendNotification(actorId, '[Staff] Permission denied.');
 }
 
 module.exports = {
@@ -577,8 +694,10 @@ module.exports = {
   playAnimation,
   giveItemAdmin,
   teleportTo,
+  bringPlayer,
   kickPlayer,
   setGold,
   retireCharacter,
+  retireCharacterById,
   revealIdentity
 };

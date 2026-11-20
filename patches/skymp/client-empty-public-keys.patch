@@ -1,0 +1,18 @@
+diff --git a/skymp5-client/src/services/services/serverJsVerificationService.ts b/skymp5-client/src/services/services/serverJsVerificationService.ts
+index 60638601..2444004f 100644
+--- a/skymp5-client/src/services/services/serverJsVerificationService.ts
++++ b/skymp5-client/src/services/services/serverJsVerificationService.ts
+@@ -22,7 +22,12 @@ export class ServerJsVerificationService extends ClientListener {
+     }
+ 
+     const publicKeys = getTargetPeerResult.targetPeerCached.publicKeys;
+-    if (!publicKeys) {
++    // getTargetPeer merges the settings keys and the server's keys with object
++    // spread, so "no keys anywhere" arrives here as {} rather than undefined.
++    // Treating {} as "keys configured" rejected every unsigned snippet
++    // ("no signature found") on servers that never set up signing ? every
++    // event source and updateOwner/updateNeighbor function silently dropped.
++    if (!publicKeys || Object.keys(publicKeys).length === 0) {
+       logTrace(this, 'No public keys configured, skipping server JS verification');
+       return { src, error: null };
+     }

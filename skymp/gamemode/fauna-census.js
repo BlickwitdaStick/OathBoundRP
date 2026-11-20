@@ -309,9 +309,9 @@ function _resumoParaTela(relatorio) {
 function commandDefs() {
   return [
     {
-      name: ['/censofauna'],
-      description: 'Censo somente-leitura dos atores do mundo (Peça 1 da §16 de HOSTILE_MOB_ACTIVATION_DECISION)',
-      usage: '/censofauna | /censofauna alvo <actorId>',
+      name: ['/faunacensus', '/censofauna'],
+      description: '[Dev] Read-only census of world actors',
+      usage: '/faunacensus [target <npc hex id>]',
       handler: (actorId, args) => {
         if (!admin.hasPermission(actorId, 'run_world_probe')) {
           commands.sendNotification(actorId, 'Sem permissao.');
@@ -320,10 +320,10 @@ function commandDefs() {
 
         const partes = String(args || '').trim().split(/\s+/).filter(Boolean);
 
-        if (partes[0] === 'alvo') {
+        if (partes[0] === 'target' || partes[0] === 'alvo') {
           const alvo = Number.parseInt(String(partes[1] || '').replace(/^0x/i, ''), 16);
           if (!Number.isFinite(alvo)) {
-            commands.sendNotification(actorId, 'Uso: /censofauna alvo <actorId em hex>');
+            commands.sendNotification(actorId, 'Usage: /faunacensus target <npc hex id>');
             return;
           }
           const leitura = inspecionarAtor(alvo);
@@ -357,9 +357,9 @@ function commandDefs() {
       }
     },
     {
-      name: ['/ondestou'],
-      description: 'Mostra CELL, posicao e rotacao exatas conhecidas pelo servidor',
-      usage: '/ondestou',
+      name: ['/whereami', '/ondestou'],
+      description: '[Dev] Show your exact cell, position and rotation as the server sees them',
+      usage: '/whereami',
       handler: (actorId) => {
         if (!admin.hasPermission(actorId, 'run_world_probe')) {
           commands.sendNotification(actorId, 'Sem permissao.');

@@ -204,7 +204,7 @@ describe('player-shortcuts-service: snippet de cliente', () => {
   // Só os eventos que Data/Platform/Modules/skyrimPlatform.ts declara.
   const EVENTOS_REAIS = new Set(['buttonEvent', 'browserMessage']);
 
-  function ctxFalso({ bindings = DEFAULTS, focused = false, semValor = false } = {}) {
+  function ctxFalso({ bindings = DEFAULTS, focused = false, semValor = false, staff = undefined } = {}) {
     const handlers = {};
     const executados = [];
     const foco = [];
@@ -217,7 +217,7 @@ describe('player-shortcuts-service: snippet de cliente', () => {
     };
     const ctx = {
       state: {},
-      value: semValor ? undefined : { sentAt: 1, bindings },
+      value: semValor ? undefined : { sentAt: 1, bindings, staff },
       sp: {
         on(nome, fn) {
           if (!EVENTOS_REAIS.has(nome)) throw new Error(`evento inexistente no SkyrimPlatform: ${nome}`);
@@ -257,6 +257,24 @@ describe('player-shortcuts-service: snippet de cliente', () => {
     assert.ok(c.acoes().includes('window.openChat && window.openChat()'));
     c.handlers.browserMessage[0]({ arguments: [{ type: 'chat:close', data: {} }] });
     assert.deepStrictEqual(c.foco, [true, false]);
+  });
+
+  it('F8 opens and focuses the admin panel for staff; admin:close gives focus back', () => {
+    const c = ctxFalso({ staff: true });
+    c.press(66);
+    assert.deepStrictEqual(c.foco, [true]);
+    assert.ok(c.acoes().includes('window.handlePlayerShortcutKey && window.handlePlayerShortcutKey("admin:open")'));
+    c.handlers.browserMessage[0]({ arguments: [{ type: 'admin:close', data: {} }] });
+    assert.deepStrictEqual(c.foco, [true, false]);
+  });
+
+  it('F8 does nothing for non-staff (and before the server said who is staff)', () => {
+    for (const opts of [{ staff: false }, {}, { semValor: true }]) {
+      const c = ctxFalso(opts);
+      c.press(66);
+      assert.deepStrictEqual(c.foco, [], JSON.stringify(opts));
+      assert.deepStrictEqual(c.acoes(), [], JSON.stringify(opts));
+    }
   });
 
   it('o servidor reconhece chat:open/chat:close (sem aviso de prefixo sem dono)', async () => {

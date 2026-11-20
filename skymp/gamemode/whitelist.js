@@ -6,6 +6,7 @@ const characterState = require('./core/character-state');
 const serverOptions = require('./core/server-options');
 const transactionService = require('./core/transaction-service');
 const economyPhysicalSync = require('./core/economy-physical-sync');
+const characterNumbers = require('./core/character-numbers');
 // NOTA: nenhum módulo PARKED é importado aqui. Eles são inicializados
 // exclusivamente pelo module-registry quando a flag ENABLE_* correspondente
 // está ligada — importar direto no boot os faria rodar sem passar pelo registry.
@@ -193,6 +194,20 @@ async function checkWhitelist(userId, profileId, actorId) {
     // Registrar na memória cache de comandos
     commands.registerActiveCharacter(actorId, character, account.id, profileId);
 
+    // Character number (#1..#5000) used by chat commands instead of the actorId.
+    // A failure here must not block the login: commands still accept 0x actorIds.
+    try {
+      const charNumber = await characterNumbers.ensureNumber(db, character.id, character.char_number);
+      commands.setCharacterNumber(actorId, charNumber);
+      if (charNumber) {
+        setTimeout(() => commands.sendNotification(actorId, `Your character number is #${charNumber}. Others use it in commands (e.g. /trade ${charNumber}).`), 8000);
+      } else {
+        console.error(`[whitelist] No free character number for character ${character.id} (all ${characterNumbers.MAX_CHARACTER_NUMBER} in use)`);
+      }
+    } catch (err) {
+      console.error(`[whitelist] Could not assign a character number to character ${character.id}:`, err.message);
+    }
+
     // Registrar cargo de staff (carregado de staff_roles, não de vip_level)
     await adminService.registerStaffRole(actorId, account.id);
     
@@ -221,6 +236,9 @@ async function checkWhitelist(userId, profileId, actorId) {
       
       try {
         mp.set(actorId, 'locationalData', locData);
+        // From here on the actor stands where it logged out, so its position
+        // may be saved (core/position-persistence.js).
+        require('./core/position-persistence').getInstance().markRestored(actorId);
         mp.set(actorId, 'browserVisible', true);
         console.log(`[whitelist] Spawn locData applied successfully for ${character.first_name} ${character.last_name}`);
         

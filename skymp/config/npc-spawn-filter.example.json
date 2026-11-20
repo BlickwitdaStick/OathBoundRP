@@ -1,0 +1,21 @@
+{
+  "_about": "Optional overrides for the NPC spawn filter (ENABLE_NPC_SPAWN_FILTER). Copy to npc-spawn-filter.json. Every key is optional; a missing file means the built-in defaults. Guide: docs/technical/NPC_SPAWN_FILTER.md",
+
+  "_about_safeRadius": "A peaceful NPC is only disabled when no online player is within this many game units of it (another cell counts as far away). 5000 is about 70 m.",
+  "safeRadius": 5000,
+
+  "sweepIntervalMs": 2000,
+
+  "_about_disableOnFirstSight": "true = disable a peaceful NPC as soon as it first streams in near a player, even inside safeRadius. Fewer people ever see a civilian, but someone might see one vanish.",
+  "disableOnFirstSight": false,
+
+  "_about_removeMixedLeveledLists": "A leveled list that can roll either a hostile or a peaceful NPC is kept by default (false). Only matters when the server cannot report the actor's resolved template chain.",
+  "removeMixedLeveledLists": false,
+
+  "_about_extraHostileFactionDescs": "Factions to add to the built-in hostile list, as 'formIdHex:Plugin.esp' (never a bare numeric FormID: the top byte depends on load order).",
+  "extraHostileFactionDescs": [],
+
+  "_about_overrides": "Per-record overrides for the NPC_ base record ('baseDesc' of the actor, see /npcfilter why <hex id>).",
+  "alwaysKeepBaseDescs": [],
+  "alwaysRemoveBaseDescs": []
+}

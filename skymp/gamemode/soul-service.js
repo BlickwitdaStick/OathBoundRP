@@ -763,9 +763,9 @@ function offSoulEvent(evento, handler) { _emitter.off(evento, handler); }
 function commandDefs() {
   return [
     {
-      name: ['/alma', '/soul'],
+      name: ['/soul', '/alma'],
       description: 'Shows what your character knows about their own soul — signs, marks, and path',
-      usage: '/alma',
+      usage: '/soul',
       handler: (actorId) => {
         const character = commands.getActiveCharacterData(actorId);
         if (!character) return;

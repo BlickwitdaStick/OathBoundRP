@@ -766,27 +766,27 @@ function _exposeDebugTicket(actorId, senderTicket) {
  * indicador de outro jeito, ele fica desatualizado até a próxima tecla ou
  * reconexão.
  */
-const VOICE_MODE_ALIASES = { sussurro: 'whisper', normal: 'normal', grito: 'shout' };
+const VOICE_MODE_ALIASES = { whisper: 'whisper', normal: 'normal', shout: 'shout', sussurro: 'whisper', grito: 'shout' };
 
 function setVoiceModeCommand(actorId, args) {
   const entry = voipClients.get(actorId);
   if (!entry) {
-    commands.sendNotification(actorId, 'Conecte-se a voz primeiro com /voz.');
+    commands.sendNotification(actorId, 'Connect to voice first with /voice.');
     return;
   }
   const alvo = VOICE_MODE_ALIASES[(args || '').trim().toLowerCase()];
   if (!alvo) {
-    commands.sendNotification(actorId, 'Uso: /modovoz sussurro|normal|grito');
+    commands.sendNotification(actorId, 'Usage: /voicemode whisper|normal|shout');
     return;
   }
   entry.voiceMode = alvo;
-  commands.sendNotification(actorId, `Modo de voz: ${args.trim().toLowerCase()}.`);
+  commands.sendNotification(actorId, `Voice mode: ${alvo}.`);
 }
 
 function toggleMuteCommand(actorId) {
   const entry = voipClients.get(actorId);
   if (!entry) {
-    commands.sendNotification(actorId, 'Conecte-se a voz primeiro com /voz.');
+    commands.sendNotification(actorId, 'Connect to voice first with /voice.');
     return;
   }
   entry.muted = !entry.muted;
@@ -796,21 +796,21 @@ function toggleMuteCommand(actorId) {
 function commandDefs() {
   return [
     {
-      name: ['/voz', '/voice'],
-      description: 'Conecta ao chat de voz por proximidade (opt-in)',
-      usage: '/voz',
+      name: ['/voice', '/voz'],
+      description: 'Connect to proximity voice chat (opt-in)',
+      usage: '/voice',
       handler: (actorId) => requestVoiceConnection(actorId)
     },
     {
-      name: ['/modovoz', '/voicemode'],
-      description: 'Muda o modo de voz (fallback de texto pro Tab — ver /voz)',
-      usage: '/modovoz <sussurro|normal|grito>',
+      name: ['/voicemode', '/modovoz'],
+      description: 'Change voice mode (text fallback for the key)',
+      usage: '/voicemode <whisper|normal|shout>',
       handler: (actorId, args) => setVoiceModeCommand(actorId, args)
     },
     {
-      name: ['/mutar', '/mute'],
-      description: 'Muta/desmuta o microfone (fallback de texto pro M — ver /voz)',
-      usage: '/mutar',
+      name: ['/mute', '/mutar'],
+      description: 'Mute or unmute your microphone',
+      usage: '/mute',
       handler: (actorId) => toggleMuteCommand(actorId)
     }
   ];

@@ -6,6 +6,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Clicking inside this window starts QuickEdit "Select" mode, which pauses any
+# program writing to it: the game server froze mid-boot and nobody could
+# connect until someone pressed Esc. Turn QuickEdit off for this window only.
+try {
+  Add-Type -Namespace OathboundConsole -Name Mode -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern System.IntPtr GetStdHandle(int h);
+[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(System.IntPtr h, out uint m);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(System.IntPtr h, uint m);
+'@
+  $stdin = [OathboundConsole.Mode]::GetStdHandle(-10)
+  $mode = 0
+  if ([OathboundConsole.Mode]::GetConsoleMode($stdin, [ref]$mode)) {
+    # clear ENABLE_QUICK_EDIT_MODE (0x40), keep ENABLE_EXTENDED_FLAGS (0x80) set so it sticks
+    [void][OathboundConsole.Mode]::SetConsoleMode($stdin, (($mode -band (-bnot 0x40)) -bor 0x80))
+  }
+} catch {
+  Write-Warning "Could not turn off QuickEdit: clicking in this window may pause the server (press Esc to resume)."
+}
+
 $rootDir = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $server = Join-Path $rootDir "skymp\server"
 $entry = Join-Path $server "dist_back\skymp5-server.js"
@@ -60,7 +79,16 @@ try {
     Write-Host "--- STDERR ---"
     Get-Content -LiteralPath $err -ErrorAction SilentlyContinue
   } else {
-    node dist_back/skymp5-server.js
+    # Everything the server prints also goes to skymp/server/logs/, so a
+    # problem can be diagnosed after the fact (the window alone loses it).
+    $logDir = Join-Path $server "logs"
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $logFile = Join-Path $logDir ("server-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    Get-ChildItem -LiteralPath $logDir -Filter 'server-*.log' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 20 | Remove-Item -ErrorAction SilentlyContinue
+    Write-Host "Logging to $logFile"
+    # cmd merges stderr into stdout before PowerShell sees it (PowerShell 5
+    # would turn each stderr line into an error record).
+    cmd /c "node dist_back/skymp5-server.js 2>&1" | Tee-Object -FilePath $logFile
     # Start-AllServices opens this script in its own window, which used to
     # close the instant the server died — taking the error message with it.
     # Keep it open so the reason can be read.

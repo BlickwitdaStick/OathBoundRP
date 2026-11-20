@@ -64,7 +64,7 @@ function registerInteractions(dependencies) {
     module: MODULE_ID,
     target: interactionRegistry.TARGET_TYPES.SELF,
     section: 'self',
-    label: 'Ver personagem',
+    label: 'View character',
     order: 10,
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     execute: async (ctx) => {

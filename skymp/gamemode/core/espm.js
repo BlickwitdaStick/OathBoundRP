@@ -158,14 +158,14 @@ function pareceItem(baseId) {
   if (!r.existe) {
     return {
       ok: false,
-      motivo: `0x${Number(baseId).toString(16)} nao existe nos plugins carregados`
+      motivo: `0x${Number(baseId).toString(16)} does not exist in the loaded plugins`
     };
   }
 
   if (!TIPOS_DE_INVENTARIO.has(r.type)) {
     return {
       ok: false,
-      motivo: `0x${Number(baseId).toString(16)} e ${r.type}${r.editorId ? ` (${r.editorId})` : ''}, que nao vai pra inventario`,
+      motivo: `0x${Number(baseId).toString(16)} is a ${r.type}${r.editorId ? ` (${r.editorId})` : ''}, which cannot go in an inventory`,
       type: r.type,
       editorId: r.editorId
     };

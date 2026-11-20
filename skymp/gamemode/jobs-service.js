@@ -254,9 +254,9 @@ function catchFish(actorId) {
 function commandDefs() {
   return [
     {
-      name: '/cortarlenha',
-      description: '[Trabalho livre] Corta lenha (precisa de Machado de Lenhador)',
-      usage: '/cortarlenha',
+      name: ['/chopwood', '/cortarlenha'],
+      description: '[Job] Chop wood (needs a Woodcutter\'s Axe)',
+      usage: '/chopwood',
       handler: (actorId) => chopWood(actorId)
     }
   ];

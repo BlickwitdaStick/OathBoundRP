@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <title>OATHBOUND RP - UI</title>
   <link rel="stylesheet" href="player-panel.css">
+  <link rel="stylesheet" href="admin-panel.css">
   <link rel="stylesheet" href="depot-panel.css">
+  <link rel="stylesheet" href="holdstone-panel.css">
   <link rel="stylesheet" href="interaction-prompt.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -652,6 +654,49 @@
   </div>
 </div>
 
+<!-- Holdstone: hold menu (gamemode/holdstone-service.js) -->
+<div id="holdstone-panel" aria-hidden="true">
+  <div class="hs-shell">
+    <div class="hs-head">
+      <div class="hs-head-text">
+        <div class="hs-eyebrow">Holdstone</div>
+        <div class="hs-title" id="hs-hold-name">—</div>
+        <div class="hs-sub" id="hs-your-rank"></div>
+      </div>
+      <button type="button" class="hs-close" id="hs-close" aria-label="Close">×</button>
+    </div>
+
+    <div class="hs-section-title">Ranks, lowest to highest</div>
+    <div class="hs-ranks" id="hs-ranks"></div>
+
+    <div class="hs-columns">
+      <div>
+        <div class="hs-section-title">Members</div>
+        <div class="hs-list" id="hs-members"></div>
+      </div>
+      <div>
+        <div class="hs-section-title">Parcels</div>
+        <div class="hs-list" id="hs-parcels"></div>
+      </div>
+    </div>
+
+    <div class="hs-manage" id="hs-manage">
+      <div class="hs-section-title">Leadership</div>
+      <form class="hs-form" id="hs-rank-form">
+        <input id="hs-rank-player" type="number" min="1" max="5000" placeholder="Player #" aria-label="Player number">
+        <input id="hs-rank-key" type="text" maxlength="32" placeholder="Rank key or none" aria-label="Rank key">
+        <button type="submit" class="hs-btn">Set rank</button>
+      </form>
+      <form class="hs-form" id="hs-parcel-form">
+        <input id="hs-parcel-name" type="text" maxlength="64" placeholder="New parcel name" aria-label="Parcel name">
+        <input id="hs-parcel-rank" type="text" maxlength="32" placeholder="Minimum rank or none" aria-label="Minimum rank">
+        <button type="submit" class="hs-btn">Create parcel</button>
+      </form>
+      <div class="hs-hint">Rename, transfer and minimum rank: press E on the holdstone and pick the action. Parcel tool: then press E on doors and containers.</div>
+    </div>
+  </div>
+</div>
+
 <!-- Prompt de interação [E] (Tarefa 11: Interaction Hub) -->
 <div id="interaction-prompt" aria-hidden="true">
   <span class="ip-key">E</span>
@@ -705,6 +750,77 @@
     </div>
   </div>
   <div class="pp-foot"><span id="pp-foot-hint">Esc to close</span></div>
+</div>
+
+<!-- Admin panel (F8 by default, staff only; see ui/admin-panel.js) -->
+<div id="admin-panel" aria-hidden="true" role="dialog" aria-labelledby="ap-title">
+  <div class="pp-head">
+    <div class="pp-head-text">
+      <div class="pp-eyebrow">OATHBOUND · Staff</div>
+      <div class="pp-title" id="ap-title">Admin panel</div>
+    </div>
+    <div class="pp-status-chip ap-role"><span class="pp-status-dot"></span><span id="ap-role">…</span></div>
+    <button id="ap-close" class="pp-close" aria-label="Close">×</button>
+  </div>
+  <div class="pp-layout">
+    <nav class="pp-tabs" aria-label="Admin sections">
+      <button type="button" class="pp-tab active" data-admin-tab="characters">
+        <span class="pp-rune" aria-hidden="true">ᛗ</span><span class="pp-tab-label">Characters</span>
+      </button>
+      <button type="button" class="pp-tab" data-admin-tab="items">
+        <span class="pp-rune" aria-hidden="true">ᚠ</span><span class="pp-tab-label">Spawn items</span>
+      </button>
+      <button type="button" class="pp-tab" data-admin-tab="creatures">
+        <span class="pp-rune" aria-hidden="true">ᚢ</span><span class="pp-tab-label">Spawn creatures</span>
+      </button>
+      <button type="button" class="pp-tab" data-admin-tab="players">
+        <span class="pp-rune" aria-hidden="true">ᛟ</span><span class="pp-tab-label">Players</span>
+      </button>
+    </nav>
+    <div class="pp-body">
+      <div id="ap-result" class="ap-result" role="status"></div>
+      <div id="ap-section-characters" class="pp-section active">
+        <div class="ap-toolbar">
+          <input id="ap-char-query" class="ap-input grow" type="search" maxlength="64" placeholder="Search name, account, #number or id">
+          <label class="ap-check"><input id="ap-char-retired" type="checkbox"> Show retired</label>
+        </div>
+        <div id="ap-char-list" class="ap-list"></div>
+      </div>
+      <div id="ap-section-items" class="pp-section">
+        <div class="ap-toolbar">
+          <input id="ap-item-query" class="ap-input grow" type="search" maxlength="64" placeholder="Search items, e.g. iron sword, or a FormID 0x00012eb7">
+          <select id="ap-item-type" class="ap-select" aria-label="Item type"></select>
+        </div>
+        <div id="ap-item-list" class="ap-list"></div>
+        <div id="ap-item-bar" class="ap-bar" style="display:none">
+          <span>Give <strong id="ap-item-selected"></strong></span>
+          <input id="ap-item-count" class="ap-input num" type="number" min="1" max="1000" value="1" aria-label="Count">
+          <span>to</span>
+          <input id="ap-item-target" class="ap-input num" type="text" maxlength="8" placeholder="me" aria-label="Player number or me">
+          <button type="button" id="ap-item-give" class="ap-btn primary">Give</button>
+        </div>
+      </div>
+      <div id="ap-section-creatures" class="pp-section">
+        <div class="ap-toolbar">
+          <input id="ap-creature-query" class="ap-input grow" type="search" maxlength="64" placeholder="Search NPCs and creatures, e.g. wolf, bandit">
+        </div>
+        <div id="ap-creature-list" class="ap-list"></div>
+        <div id="ap-creature-bar" class="ap-bar" style="display:none">
+          <span>Spawn <strong id="ap-creature-selected"></strong> in front of you</span>
+          <button type="button" id="ap-creature-spawn" class="ap-btn primary">Spawn</button>
+        </div>
+        <div id="ap-spawned" class="ap-list"></div>
+      </div>
+      <div id="ap-section-players" class="pp-section">
+        <div class="ap-toolbar">
+          <span class="ap-sub" style="flex:1">Everyone online, by character number.</span>
+          <button type="button" id="ap-players-refresh" class="ap-btn">Refresh</button>
+        </div>
+        <div id="ap-player-list" class="ap-list"></div>
+      </div>
+    </div>
+  </div>
+  <div class="pp-foot"><span id="ap-foot-hint">F8 or Esc to close · every action is logged</span></div>
 </div>
 
 <script src="auth-widgets.js"></script>
@@ -943,7 +1059,7 @@
 
       case 'auth_failed':
         state.voiceFatal = true;
-        setStatus('error', 'VOICE FAILED — try /voz again');
+        setStatus('error', 'VOICE FAILED — try /voice again');
         if (state.ws) state.ws.close();
         break;
 
@@ -1247,12 +1363,12 @@
         showInteractionToast(
           'In-game voice is unavailable: this SkyMP client does not allow microphone access. ' +
           'It is a known client limitation — not a problem with your microphone or the server, ' +
-          'and running /voz again will not help. Use a Discord voice channel: ask staff for /voz-criar.'
+          'and running /voice again will not help. Use a Discord voice channel: ask staff for /voz-criar.'
         );
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
         setStatus('error', 'NO MICROPHONE FOUND');
         showInteractionToast(
-          'The client found no microphone. Check the device in Windows and run /voz again. ' +
+          'The client found no microphone. Check the device in Windows and run /voice again. ' +
           'If you would rather not depend on this, the Discord voice channel works now (ask staff for /voz-criar).'
         );
       } else {
@@ -1862,6 +1978,12 @@
     if (message.type === 'depot:update' && window.DepotPanel) {
       window.DepotPanel.update(message.data);
     }
+    if (message.type === 'holdstone:open' && window.HoldstonePanel) {
+      window.HoldstonePanel.open(message.data);
+    }
+    if (message.type === 'holdstone:update' && window.HoldstonePanel) {
+      window.HoldstonePanel.update(message.data);
+    }
   };
 
   // Disparado pela property SkyMP 'voipTicket' quando o jogador roda /voz.
@@ -2013,6 +2135,13 @@
   // Game key (F2 by default, rebindable): open the panel shell right away and
   // ask the server for data — never wait for the server to show something.
   window.handlePlayerShortcutKey = (action) => {
+    if (action === 'admin:open') {
+      // F8, staff only (the game-side handler only calls this for staff; the
+      // server checks again and answers "Staff only." to anyone else).
+      if (typeof window.openAdminPanel === 'function') window.openAdminPanel();
+      else sendUiEvent('admin:open', {});
+      return;
+    }
     if (action !== 'panel:open') return;
     if (typeof window.openPlayerPanel === 'function') window.openPlayerPanel();
     else sendUiEvent('panel:open', {});
@@ -2075,11 +2204,16 @@
     if (event.key === 'Escape' && window.DepotPanel && window.DepotPanel.isOpen()) {
       window.DepotPanel.close();
     }
+    if (event.key === 'Escape' && window.HoldstonePanel && window.HoldstonePanel.isOpen()) {
+      window.HoldstonePanel.close();
+    }
   });
 </script>
 <script src="keybinds.js"></script>
 <script src="player-panel.js"></script>
+<script src="admin-panel.js"></script>
 <script src="depot-panel.js"></script>
+<script src="holdstone-panel.js"></script>
 <script src="interaction-prompt.js"></script>
 </body>
 </html>

@@ -87,7 +87,7 @@ describe('espm — pareceItem', () => {
   it('recusa FormID que não existe, e diz isso', () => {
     const r = espm.pareceItem(INEXISTENTE);
     assert.strictEqual(r.ok, false);
-    assert.match(r.motivo, /nao existe/);
+    assert.match(r.motivo, /does not exist/);
   });
 
   it('recusa record que não vai pra inventário, e diz o que ele é', () => {

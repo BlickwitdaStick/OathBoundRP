@@ -92,6 +92,7 @@ chamador é a UI.
 | `staff.manage` | 🔴 | conceder/revogar cargo e permissão | jogo: `manage_staff` ✅ |
 | `factions.view` / `factions.manage` | 🟢 / 🟡 | facções | view sem gate · manage ❌ |
 | `world.probe` | 🟡 | censo de fauna e sonda de cadáver | jogo: `run_world_probe` ✅ |
+| `world.spawn` | 🔴 | colocar NPC/criatura no mundo (painel F8) | jogo: `spawn_npc` ✅ (admin/owner) |
 | `crafting.recipes.manage` | 🔴 | criar/editar receita (regra permanente) | jogo: `manage_recipes` ✅ |
 
 ### 2.5 Servidor, módulos e logs
@@ -131,6 +132,7 @@ possível para um renome.
 | `retire_character` | `characters.permakill` | `admin-service.js` |
 | `reveal_identity` | `identity.reveal` | `admin-service.js` |
 | `run_world_probe` | `world.probe` | `fauna-census.js` (×2), `corpse-probe.js` |
+| `spawn_npc` | `world.spawn` | `admin-panel-service.js` (F8 panel, 19/11/2026) |
 | `manage_recipes` | `crafting.recipes.manage` | `crafting-service.js` (×2) |
 | `manage_staff` | `staff.manage` | `governance-service.js`, `market-stalls-service.js` (×2) |
 | `view_audit` | `logs.view` | nenhum — **órfã** |

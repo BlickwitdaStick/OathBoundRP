@@ -511,7 +511,7 @@ async function handleUiEvent(actorId, uiEvent) {
 function commandDefs() {
   return [
     {
-      name: ['/painel', '/panel'],
+      name: ['/panel', '/painel'],
       description: 'Opens the player panel (status, law, belongings, social)',
       usage: '/panel',
       handler: (actorId) => openPanel(actorId)

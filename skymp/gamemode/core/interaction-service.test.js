@@ -176,7 +176,7 @@ describe('interaction-service — alvo', () => {
     const r = await service.execute(ATOR, { action: 'test.porta', targetId: 1 });
     assert.equal(r.ok, false);
     assert.equal(r.stage, STAGES.TARGET);
-    assert.match(r.reason, /nao suportado/);
+    assert.match(r.reason, /Unsupported/);
   });
 
   it('resolvedor registrado por um módulo passa a funcionar sem tocar o core', async () => {
@@ -217,7 +217,7 @@ describe('interaction-service — alvo', () => {
     const r = await service.execute(ATOR, { action: 'test.acao', targetId: ALVO });
     assert.equal(r.ok, false);
     assert.equal(r.stage, STAGES.TARGET);
-    assert.match(r.reason, /Personagem nao carregado/);
+    assert.match(r.reason, /Character not loaded/);
   });
 });
 
@@ -790,7 +790,7 @@ describe('interaction-service — ponte com a UI', () => {
       type: 'interaction:execute',
       data: { action: 'test.acao', targetId: 0x999 }
     });
-    assert.equal(notificacoes[1].message, 'Alvo invalido.');
+    assert.equal(notificacoes[1].message, 'Invalid target.');
   });
 
   it('data que não é objeto não derruba a ponte', async () => {

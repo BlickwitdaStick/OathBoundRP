@@ -70,6 +70,23 @@
       "upstream_pr": null,
       "added": "2026-11-19",
       "notes": "Core of ThornswoodRP PR #36 (upstream skymp #1715) cherry-picked onto the pin, plus a case-insensitive CombineBrowser::GetFileIndex and a CMakeLists change accepting the \"Visual Studio 18 2026\" generator. upstream_pr is null because #1715 is the upstream PR and it is not ours. Build tree: E:/SkyrimRP/skymp-src branch oathbound/light-plugins; configure with E:/SkyrimRP/tools/configure-skymp.ps1."
+    },
+    {
+      "id": "client-empty-public-keys",
+      "target": "skymp",
+      "file": "skymp/client-empty-public-keys.patch",
+      "upstream_commit": "d85f18d808f877401c4e20484d2c2f6f73cf9caa",
+      "reason": "With server-info-ignore (how the OATHBOUND launcher connects) and no signing keys, the client resolves publicKeys to {} instead of undefined, treats that as \"keys configured\", and rejects every unsigned server snippet with \"no signature found\". Every mp.makeEventSource and every updateOwner/updateNeighbor function is silently dropped: in-game chat and all other UI events never reach the server, keybinds never sync, panel data never arrives.",
+      "files_touched": [
+        "skymp5-client/src/services/services/serverJsVerificationService.ts"
+      ],
+      "impact": "An empty key set skips verification exactly like no key set. Servers that configure real public keys still require valid signatures. Client-only change: players need the rebuilt skymp5-client.js.",
+      "test": "Diagnosed from source and from the database (zero rp_chat audit rows across all sessions while the chat handler, run offline, logs every line). In-game confirmation pending: chat replies, /help, Controls tab loading keybinds.",
+      "loss_condition": "Installing a stock skymp5-client.js (Install-SkyMPClient.ps1, a launcher client download, or a SkyMP update) brings the bug back silently: chat and UI events stop reaching the server with no error outside the in-game console. Applies on top of light-plugins.patch (same tree).",
+      "removal_strategy": "Delete when upstream ServerJsVerificationService treats an empty key set as no keys (or getTargetPeer stops merging undefined into {}) and the pin moves past it.",
+      "upstream_pr": null,
+      "added": "2026-11-19",
+      "notes": "Not yet proposed upstream; small, self-contained candidate for a PR. Applied after light-plugins.patch by scripts/skymp-build/Build-PatchedSkyMP.ps1."
     }
   ]
 }

@@ -1,5 +1,9 @@
 # Decisao Tecnica Sobre NPCs
 
+> **Superseded on 2026-11-19 (owner decision):** hostile creatures and
+> hostile-faction NPCs (bandits included) stay; every peaceful NPC is disabled.
+> See [NPC_SPAWN_FILTER.md](NPC_SPAWN_FILTER.md).
+
 > **Estado do codigo (06/08/2026): a Opcao C passou a ser o que o
 > `npc-cleaner.js` faz.** Ate esta data o servico implementava a **Opcao B na
 > forma mais extrema**: varria `mp.getActorsByProfileId(0)` e chamava
