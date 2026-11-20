@@ -219,7 +219,7 @@ describe('/revelaridentidade — revelar sem auditar e proibido', () => {
       'o nome real vazou mesmo com a permissao negada'
     );
     assert.ok(
-      mensagens.some(m => /permiss/i.test(m) && /negad/i.test(m)),
+      mensagens.some(m => /permiss/i.test(m) && /negad|denied/i.test(m)),
       'negar em silencio faz a staff achar que o comando esta quebrado'
     );
   });

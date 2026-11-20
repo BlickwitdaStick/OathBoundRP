@@ -401,11 +401,11 @@ function registerCoreCommands() {
   commandRegistry.register(['/apresentar', '/introduce'], (actorId, args) => {
     handleIntroduceCommand(actorId, args).catch(err => {
       console.error('[identity] Failed to introduce character:', err.message);
-      sendNotification(actorId, 'Nao foi possivel registrar a apresentacao.');
+      sendNotification(actorId, 'Could not record the introduction.');
     });
   }, {
     module: 'identity', phase: 'core',
-    description: 'Apresenta seu personagem a outro', usage: '/apresentar <actorId>',
+    description: 'Introduce your character to someone', usage: '/introduce <actorId>',
     // Tarefa 11 (Legacy Command Cleanup): redundante desde que virou
     // `identity.introduce` no Interaction Framework (linha 352 deste
     // arquivo) — some do menu de interação quando o alvo já conhece o
@@ -418,9 +418,9 @@ function registerCoreCommands() {
   commandRegistry.register(['/apelido', '/alias'], (actorId, args) => {
     handleAliasCommand(actorId, args).catch(err => {
       console.error('[identity] Failed to set alias:', err.message);
-      sendNotification(actorId, 'Nao foi possivel registrar o apelido.');
+      sendNotification(actorId, 'Could not save the nickname.');
     });
-  }, { module: 'identity', phase: 'core', description: 'Define como você reconhece outra pessoa', usage: '/apelido <actorId> <nome>' });
+  }, { module: 'identity', phase: 'core', description: 'Set the name you know someone by', usage: '/alias <actorId> <name>' });
 
   commandRegistry.register('/anim', (actorId, args) => {
     if (args) {
@@ -428,26 +428,26 @@ function registerCoreCommands() {
       const adminService = require('./admin-service');
       adminService.playAnimation(actorId, parseInt(parts[0], 16), parts[1] || 'IdleStop');
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Reproduz animação em ator', usage: '/anim <actorId> <animName>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Play an animation on an actor', usage: '/anim <actorId> <animName>' });
 
   commandRegistry.register('/additem', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
       require('./admin-service').giveItemAdmin(actorId, parseInt(parts[0], 16), parseInt(parts[1], 16), parseInt(parts[2]) || 1);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Entrega item a jogador', usage: '/additem <actorId> <baseId> <count>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Give an item to a player', usage: '/additem <actorId> <baseId> <count>' });
 
   commandRegistry.register('/tp', (actorId, args) => {
     if (args) require('./admin-service').teleportTo(actorId, parseInt(args, 16));
-  }, { module: 'admin', phase: 'core', description: '[Staff] Teleporta para jogador', usage: '/tp <actorId>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Teleport to a player', usage: '/tp <actorId>' });
 
   commandRegistry.register('/kick', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
-      const reason = parts.slice(1).join(' ') || 'Sem motivo';
+      const reason = parts.slice(1).join(' ') || 'No reason given';
       require('./admin-service').kickPlayer(actorId, parseInt(parts[0], 16), reason);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Expulsa jogador', usage: '/kick <actorId> <motivo>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Kick a player', usage: '/kick <actorId> [reason]' });
 
   commandRegistry.register('/permakill', (actorId, args) => {
     if (args) {
@@ -455,14 +455,14 @@ function registerCoreCommands() {
       const reason = parts.slice(1).join(' ');
       require('./admin-service').retireCharacter(actorId, parseInt(parts[0], 16), reason);
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Encerra um personagem permanentemente (soft-delete)', usage: '/permakill <actorId> <motivo>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Retire a character permanently (soft-delete)', usage: '/permakill <actorId> <reason>' });
 
   commandRegistry.register('/setgold', (actorId, args) => {
     if (args) {
       const parts = args.split(' ');
       require('./admin-service').setGold(actorId, parseInt(parts[0], 16), parseInt(parts[1]));
     }
-  }, { module: 'admin', phase: 'core', description: '[Staff] Define ouro de jogador', usage: '/setgold <actorId> <valor>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Set a player\'s gold', usage: '/setgold <actorId> <amount>' });
 
   // Alias técnico em inglês pelo mesmo padrão de /apresentar → /introduce.
   // `parseActorId` (e não `parseInt(args, 16)` como os outros de staff) porque
@@ -471,14 +471,14 @@ function registerCoreCommands() {
   commandRegistry.register(['/revelaridentidade', '/revealidentity'], (actorId, args) => {
     const targetActorId = parseActorId(args);
     if (!Number.isFinite(targetActorId)) {
-      sendNotification(actorId, 'Uso correto: /revelaridentidade <actorId>');
+      sendNotification(actorId, 'Usage: /revealidentity <actorId>');
       return;
     }
     require('./admin-service').revealIdentity(actorId, targetActorId).catch(err => {
       console.error('[identity] Falha ao revelar identidade:', err.message);
-      sendNotification(actorId, '[Staff] Nao foi possivel revelar a identidade.');
+      sendNotification(actorId, '[Staff] Could not reveal the identity.');
     });
-  }, { module: 'admin', phase: 'core', description: '[Staff] Revela o nome real de um personagem (auditado)', usage: '/revelaridentidade <actorId>' });
+  }, { module: 'admin', phase: 'core', description: '[Staff] Reveal a character\'s real name (audited)', usage: '/revealidentity <actorId>' });
 
   // /status — diagnóstico de estado do personagem (staff)
   commandRegistry.register('/status', (actorId, args) => {
@@ -486,16 +486,60 @@ function registerCoreCommands() {
     if (!charData) return;
     const state = characterState.get(charData.characterId);
     const meta = characterState.getMetadata(charData.characterId);
-    sendNotification(actorId, `[Staff] Estado: ${state} | ${JSON.stringify(meta)}`);
-  }, { module: 'admin', phase: 'core', description: '[Staff] Exibe estado atual do personagem', usage: '/status' });
+    sendNotification(actorId, `[Staff] State: ${state} | ${JSON.stringify(meta)} | your actorId: 0x${actorId.toString(16)}`);
+  }, { module: 'admin', phase: 'core', description: '[Staff] Show your character state and actorId', usage: '/status' });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Handler principal de input do chat
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Chat-service commands, listed by /help (they don't live in the registry). */
+const CHAT_HELP = [
+  '/me <action>', '/do <description>', '/s <message> (whisper)', '/g <message> (shout)',
+  '/ooc <message>', '/roll [2-100]', '/try <action>', '/report <reason>'
+];
+
+function isStaff(actorId) {
+  try {
+    return Boolean(require('./admin-service').getRole(actorId));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * /help: chat commands, then every registered player-facing command. Staff
+ * commands ([Staff] in the description) only for staff.
+ */
+function sendHelp(actorId) {
+  const staff = isStaff(actorId);
+  const seen = new Set();
+  const registered = commandRegistry.list({ playerFacing: true })
+    .filter((c) => staff || !/^\[staff\]/i.test(c.description))
+    .filter((c) => { const key = c.usage; if (seen.has(key)) return false; seen.add(key); return true; })
+    .map((c) => c.usage)
+    .sort();
+  sendNotification(actorId, `Chat: ${CHAT_HELP.join('  ·  ')}`);
+  if (registered.length) {
+    sendNotification(actorId, `${staff ? 'Commands (incl. staff)' : 'Commands'}: ${registered.join('  ·  ')}`);
+  }
+}
+
+/** True when a usage string declares a required argument, e.g. `/tp <actorId>`. */
+function needsArguments(usage) {
+  return typeof usage === 'string' && /<[^>]+>/.test(usage);
+}
+
 function handleChatInput(actorId, text) {
   if (!text || typeof text !== 'string') return;
+
+  const trimmed = text.trim();
+  const firstWord = trimmed.split(/\s+/)[0].toLowerCase();
+  if (firstWord === '/help' || firstWord === '/commands' || firstWord === '/?') {
+    sendHelp(actorId);
+    return;
+  }
 
   // 1. Tentar o rp-chat-service (comandos /falar, /me, /do, etc.)
   if (rpChat.handleChatInput(actorId, text)) {
@@ -503,21 +547,29 @@ function handleChatInput(actorId, text) {
   }
 
   // 2. Tentar o command-registry (comandos de módulos)
-  if (text.startsWith('/')) {
-    const parts = text.split(' ');
+  if (trimmed.startsWith('/')) {
+    const parts = trimmed.split(/\s+/);
     const command = parts[0].toLowerCase();
     const args = parts.slice(1).join(' ');
 
+    // A command typed without the arguments it needs used to do nothing at all
+    // (most staff handlers start with `if (args)`): answer with its usage.
+    const entry = commandRegistry.list().find((c) => c.command === command);
+    if (entry && !args && needsArguments(entry.usage)) {
+      sendNotification(actorId, `Usage: ${entry.usage}${entry.description ? ` — ${entry.description}` : ''}`);
+      return;
+    }
+
     const handled = commandRegistry.dispatch(actorId, command, args);
     if (!handled) {
-      sendNotification(actorId, `Comando desconhecido: ${command}`);
+      sendNotification(actorId, `Unknown command: ${command}. Type /help for the list.`);
     }
     return;
   }
 
   // 3. Chat padrão (falar no local)
   const charName = getCharacterName(actorId);
-  broadcastProximityMessage(actorId, `${charName} diz: ${text}`, 1200);
+  broadcastProximityMessage(actorId, `${charName} says: ${text}`, 1200);
 }
 
 // Registrar comandos CORE ao carregar o módulo

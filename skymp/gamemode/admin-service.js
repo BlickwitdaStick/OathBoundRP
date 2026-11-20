@@ -565,7 +565,7 @@ function nomeParaLog(charData, actorId) {
 }
 
 function sendDenied(actorId) {
-  commands.sendNotification(actorId, '[Staff] Permissão negada.');
+  commands.sendNotification(actorId, '[Staff] Permission denied.');
 }
 
 module.exports = {

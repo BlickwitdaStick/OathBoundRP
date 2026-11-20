@@ -266,7 +266,7 @@ async function comCargo(cargo) {
 
 function negacaoFoiEnviada() {
   return notifications.some(
-    n => n.actorId === STAFF_ACTOR_ID && /permiss/i.test(n.message) && /negad/i.test(n.message)
+    n => n.actorId === STAFF_ACTOR_ID && /permiss/i.test(n.message) && /negad|denied/i.test(n.message)
   );
 }
 

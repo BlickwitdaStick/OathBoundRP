@@ -18,7 +18,8 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path "$PSScriptRoot\..\..").Path
 $manifest = Get-Content -Raw (Join-Path $repo 'patches\manifest.json') | ConvertFrom-Json
 $pin = $manifest.upstream.pin
-$patch = Join-Path $repo 'patches\skymp\light-plugins.patch'
+# Every registered SkyMP patch, in manifest order (each applies on top of the previous).
+$patches = @($manifest.patches | Where-Object { $_.target -eq 'skymp' } | ForEach-Object { Join-Path $repo (Join-Path 'patches' $_.file) })
 
 if (-not (Test-Path (Join-Path $SourceDir '.git'))) {
   Write-Host "Cloning SkyMP into $SourceDir ..."
@@ -32,10 +33,13 @@ try {
     git fetch origin $pin
     git checkout -B oathbound/light-plugins $pin
     if ($LASTEXITCODE) { throw "checkout of pin $pin failed" }
-    git apply --whitespace=nowarn $patch
-    if ($LASTEXITCODE) { throw 'patch did not apply' }
+    foreach ($patch in $patches) {
+      git apply --whitespace=nowarn $patch
+      if ($LASTEXITCODE) { throw "patch did not apply: $patch" }
+      Write-Host "applied $(Split-Path $patch -Leaf)"
+    }
     git add -A
-    git -c user.name=oathbound -c user.email=oathbound@localhost commit -q -m 'OATHBOUND light-plugins patch'
+    git -c user.name=oathbound -c user.email=oathbound@localhost commit -q -m 'OATHBOUND patches'
   } else {
     Write-Host 'Branch oathbound/light-plugins already exists; building it as is.'
   }

@@ -38,7 +38,10 @@ const IGNORED_DIRS = new Set(['moddersource', 'modderresource', 'fomod', 'docs',
 /** Vanilla masters are on every client already; never part of a mod pack. */
 const BASE_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
 
-const MAX_FILES = 5000;
+// Guards against pointing the sync at the wrong folder (a whole drive, a Data
+// folder full of loose files). Real packs grow: SkyUI + RaceMenu + city mods +
+// Immersive Weapons/Armors + Cloaks are already ~6,300 files.
+const MAX_FILES = 25000;
 
 /**
  * A safe relative path: forward slashes, no `..`, no absolute/drive/UNC, no

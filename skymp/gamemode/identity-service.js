@@ -1,6 +1,6 @@
 const db = require('./database');
 
-const UNKNOWN_NAME = 'Desconhecido';
+const UNKNOWN_NAME = 'Stranger';
 const MAX_ALIAS_LENGTH = 64;
 
 const knownByObserver = new Map();
