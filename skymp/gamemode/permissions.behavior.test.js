@@ -94,6 +94,11 @@ function responderQuery(sql, params = []) {
     goldLedger.push({ characterId: params[1], delta: params[8], reason: params[9], module: params[10] });
     return {};
   }
+  if (/SELECT id, account_id, first_name, last_name, status, char_number FROM characters/i.test(sql)) {
+    // retireCharacterById (F8 panel) reads the target from the database: it
+    // may be offline.
+    return [{ id: params[0], account_id: TARGET_ACCOUNT_ID, first_name: 'Alvo', last_name: 'Offline', status: 'approved', char_number: 7 }];
+  }
   if (/UPDATE characters SET status/i.test(sql)) {
     statusUpdates.push({ status: params[0], characterId: params[1] });
     return {};
@@ -190,6 +195,11 @@ const ACOES = {
     invoca: () => admin.playAnimation(STAFF_ACTOR_ID, TARGET_ACTOR_ID, 'IdleApplaud'),
     aconteceu: () => auditEntries.some(e => e.action === 'staff:playAnimation')
   },
+  bringPlayer: {
+    permissao: 'teleport',
+    invoca: () => admin.bringPlayer(STAFF_ACTOR_ID, TARGET_ACTOR_ID),
+    aconteceu: () => auditEntries.some(e => e.action === 'staff:bring')
+  },
   teleportTo: {
     permissao: 'teleport',
     invoca: () => admin.teleportTo(STAFF_ACTOR_ID, TARGET_ACTOR_ID),
@@ -224,6 +234,11 @@ const ACOES = {
     invoca: () => admin.retireCharacter(STAFF_ACTOR_ID, TARGET_ACTOR_ID, 'motivo de teste'),
     aconteceu: () => statusUpdates.some(u => u.status === 'retired')
   },
+  retireCharacterById: {
+    permissao: 'retire_character',
+    invoca: () => admin.retireCharacterById(STAFF_ACTOR_ID, TARGET_CHARACTER_ID, 'motivo de teste'),
+    aconteceu: () => statusUpdates.some(u => u.status === 'retired')
+  },
   revealIdentity: {
     permissao: 'reveal_identity',
     invoca: () => admin.revealIdentity(STAFF_ACTOR_ID, TARGET_ACTOR_ID),
@@ -244,11 +259,15 @@ const MATRIZ = {
   //                 sem cargo  moderator  admin  owner
   playAnimation:   { nenhum: false, moderator: true,  admin: true,  owner: true },
   teleportTo:      { nenhum: false, moderator: true,  admin: true,  owner: true },
+  // F8 panel: pulling a player to you is the same power as going to them.
+  bringPlayer:     { nenhum: false, moderator: true,  admin: true,  owner: true },
   kickPlayer:      { nenhum: false, moderator: true,  admin: true,  owner: true },
   giveItemAdmin:   { nenhum: false, moderator: false, admin: true,  owner: true },
   setGold:         { nenhum: false, moderator: false, admin: true,  owner: true },
   // Morte permanente nunca é decisão de linha de frente.
   retireCharacter: { nenhum: false, moderator: false, admin: true,  owner: true },
+  // F8 panel: same rule, online or offline target.
+  retireCharacterById: { nenhum: false, moderator: false, admin: true, owner: true },
   // Nem furar o anonimato de um jogador: é a única ação de staff que não tem
   // como ser desfeita — nem por outro comando, nem pelo tempo. Ver o bloco de
   // ROLE_PERMISSIONS em admin-service.js.

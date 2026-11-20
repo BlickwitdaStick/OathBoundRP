@@ -1,0 +1,260 @@
+/* ============================================================================
+ * admin-panel.css — F8 staff panel (ui/admin-panel.js)
+ * Same OATHBOUND card as the F2 player panel: it reuses the .pp-* classes
+ * from player-panel.css (head, tab rail, rows, buttons) and only defines the
+ * container (same tokens, a little wider) plus the admin-only controls.
+ * A faint red edge marks it as a staff tool at a glance.
+ * ==========================================================================*/
+
+#admin-panel {
+    --pp-black: #000000;
+    --pp-panel: rgba(12, 10, 8, 0.92);
+    --pp-panel-2: rgba(255, 240, 210, 0.04);
+    --pp-text: #f2ead8;
+    --pp-text-dim: rgba(242, 234, 216, 0.6);
+    --pp-text-faint: rgba(242, 234, 216, 0.32);
+    --pp-border: rgba(217, 183, 110, 0.18);
+    --pp-accent: #d9b76e;
+    --pp-accent-bright: #ecd39a;
+    --pp-accent-dim: rgba(217, 183, 110, 0.14);
+    --pp-danger: #ff7b6b;
+    --pp-danger-dim: rgba(255, 123, 107, 0.14);
+    --pp-success: #8fd19e;
+    --pp-success-dim: rgba(143, 209, 158, 0.14);
+    --pp-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, system-ui, sans-serif;
+    --pp-display: 'Cinzel', 'Trajan Pro', Georgia, 'Times New Roman', serif;
+
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(900px, calc(100vw - 48px));
+    height: min(620px, calc(100vh - 80px));
+    display: none;
+    flex-direction: column;
+    background:
+        radial-gradient(ellipse 120% 80% at 0% 0%, rgba(217, 183, 110, 0.10), transparent 55%),
+        var(--pp-panel);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--pp-border);
+    border-top: 2px solid rgba(255, 123, 107, 0.45);
+    border-radius: 10px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 30px 80px rgba(0, 0, 0, 0.7);
+    color: var(--pp-text);
+    font-family: var(--pp-font);
+    z-index: 210;
+    overflow: hidden;
+    overflow: clip;
+}
+
+    #admin-panel.open {
+        display: flex;
+        animation: pp-in 140ms ease-out;
+    }
+
+    /* Kept inside the card on purpose: anything poking out makes the card
+       scrollable, and focusing an input then scrolls the header out of view. */
+    #admin-panel::before {
+        content: 'ᛏ';
+        position: absolute;
+        bottom: 0;
+        right: 12px;
+        font-size: 200px;
+        line-height: 0.8;
+        color: rgba(217, 183, 110, 0.035);
+        pointer-events: none;
+    }
+
+@media (prefers-reduced-motion: reduce) {
+    #admin-panel.open { animation: none; }
+}
+
+@media (max-width: 720px) {
+    #admin-panel { height: calc(100vh - 48px); }
+}
+
+#admin-panel .ap-role {
+    background: var(--pp-danger-dim);
+    color: var(--pp-danger);
+    border-color: rgba(255, 123, 107, 0.32);
+    text-transform: capitalize;
+}
+
+/* ── Toolbar: search + filters ────────────────────────────────────────────── */
+.ap-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ap-input,
+.ap-select {
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--pp-text);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--pp-border);
+    border-radius: 6px;
+    outline: none;
+    min-width: 0;
+}
+
+    .ap-input:focus,
+    .ap-select:focus {
+        border-color: var(--pp-accent);
+    }
+
+.ap-input.grow { flex: 1 1 180px; }
+.ap-input.num { width: 80px; flex: none; }
+.ap-select option { background: #14110d; color: var(--pp-text); }
+
+.ap-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--pp-text-dim);
+    cursor: pointer;
+}
+
+/* ── Result banner ────────────────────────────────────────────────────────── */
+.ap-result {
+    display: none;
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    line-height: 1.4;
+    border: 1px solid transparent;
+}
+
+    .ap-result.show { display: block; }
+    .ap-result.ok { background: var(--pp-success-dim); color: var(--pp-success); border-color: rgba(143, 209, 158, 0.3); }
+    .ap-result.err { background: var(--pp-danger-dim); color: var(--pp-danger); border-color: rgba(255, 123, 107, 0.32); }
+
+.ap-notice {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--pp-accent-bright);
+    background: var(--pp-accent-dim);
+    border: 1px solid rgba(217, 183, 110, 0.3);
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+.ap-list { display: flex; flex-direction: column; }
+
+.ap-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 2px;
+    border-bottom: 1px solid rgba(217, 183, 110, 0.08);
+    font-size: 12.5px;
+}
+
+    .ap-item:last-child { border-bottom: none; }
+    .ap-item.selected { background: var(--pp-accent-dim); border-radius: 6px; padding-left: 8px; padding-right: 8px; }
+
+.ap-num {
+    flex: none;
+    min-width: 48px;
+    font-weight: 700;
+    color: var(--pp-accent);
+    font-variant-numeric: tabular-nums;
+}
+
+.ap-main { flex: 1; min-width: 0; }
+
+.ap-name {
+    color: var(--pp-text);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ap-sub {
+    color: var(--pp-text-faint);
+    font-size: 11px;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ap-chip {
+    flex: none;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 600;
+    border: 1px solid var(--pp-border);
+    color: var(--pp-text-dim);
+    text-transform: capitalize;
+}
+
+    .ap-chip.online { color: var(--pp-success); border-color: rgba(143, 209, 158, 0.35); background: var(--pp-success-dim); }
+    .ap-chip.retired { color: var(--pp-danger); border-color: rgba(255, 123, 107, 0.32); background: var(--pp-danger-dim); }
+
+.ap-actions {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.ap-btn {
+    padding: 5px 11px;
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--pp-text);
+    background: var(--pp-panel-2);
+    border: 1px solid var(--pp-border);
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+    .ap-btn:hover:not(:disabled) { border-color: var(--pp-accent); }
+    .ap-btn:disabled { opacity: 0.4; cursor: default; }
+    .ap-btn.primary:not(:disabled) { color: #0b0b10; background: var(--pp-accent); border-color: var(--pp-accent); }
+    .ap-btn.danger:not(:disabled) { color: var(--pp-danger); border-color: rgba(255, 123, 107, 0.45); }
+    .ap-btn.danger:hover:not(:disabled) { background: var(--pp-danger-dim); }
+
+/* Inline form under a row (retire reason, kick reason, gold amount). */
+.ap-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 2px 12px 58px;
+    border-bottom: 1px solid rgba(217, 183, 110, 0.08);
+}
+
+/* Give / spawn bar under the search results. */
+.ap-bar {
+    position: sticky;
+    bottom: -20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--pp-border);
+    border-radius: 8px;
+    background: rgba(12, 10, 8, 0.96);
+    font-size: 12px;
+    color: var(--pp-text-dim);
+}
+
+    .ap-bar strong { color: var(--pp-text); }

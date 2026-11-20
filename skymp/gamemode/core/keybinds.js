@@ -23,7 +23,10 @@ const ACTIONS = Object.freeze([
   Object.freeze({ id: 'voice.pushToTalk', defaultCode: 47 }),  // V (hold to talk)
   Object.freeze({ id: 'voice.cycleMode', defaultCode: 87 }),   // F11
   Object.freeze({ id: 'voice.toggleMute', defaultCode: null }),
-  Object.freeze({ id: 'chat.open', defaultCode: 28 })         // Enter
+  Object.freeze({ id: 'chat.open', defaultCode: 28 }),        // Enter
+  // Staff only: the client snippet opens the F8 admin panel only for players
+  // the server marked as staff; for everyone else the key does nothing.
+  Object.freeze({ id: 'admin.open', defaultCode: 66 })        // F8
 ]);
 
 const ACTION_IDS = Object.freeze(ACTIONS.map(a => a.id));
