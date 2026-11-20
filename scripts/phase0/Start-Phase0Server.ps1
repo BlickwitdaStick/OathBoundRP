@@ -79,7 +79,16 @@ try {
     Write-Host "--- STDERR ---"
     Get-Content -LiteralPath $err -ErrorAction SilentlyContinue
   } else {
-    node dist_back/skymp5-server.js
+    # Everything the server prints also goes to skymp/server/logs/, so a
+    # problem can be diagnosed after the fact (the window alone loses it).
+    $logDir = Join-Path $server "logs"
+    New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    $logFile = Join-Path $logDir ("server-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    Get-ChildItem -LiteralPath $logDir -Filter 'server-*.log' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 20 | Remove-Item -ErrorAction SilentlyContinue
+    Write-Host "Logging to $logFile"
+    # cmd merges stderr into stdout before PowerShell sees it (PowerShell 5
+    # would turn each stderr line into an error record).
+    cmd /c "node dist_back/skymp5-server.js 2>&1" | Tee-Object -FilePath $logFile
     # Start-AllServices opens this script in its own window, which used to
     # close the instant the server died — taking the error message with it.
     # Keep it open so the reason can be read.
