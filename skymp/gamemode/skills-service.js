@@ -40,6 +40,9 @@ const trees = require('./core/skill-trees');
 const progressionForms = require('./core/progression-forms');
 const skillActivity = require('./core/skill-activity');
 
+const fs = require('fs');
+const path = require('path');
+
 const MODULE_ID = 'skills';
 const FLAG = 'ENABLE_SKILLS_SERVICE';
 const PROPERTY = 'oathboundProgression';
@@ -108,8 +111,47 @@ const CLIENT_STORE = "((ctx.sp && ctx.sp.storage) ? ctx.sp.storage : (typeof glo
  * Applies the server's progression when a new value arrives (new `sentAt`).
  * Idempotent: perks/spells the player already has are skipped.
  */
+/**
+ * Runs inside the CEF page. The in-game UI is installed by the player's
+ * launcher (Data/Platform/UI), so a launcher built before the skills menu has
+ * no `skills-panel.js`: the F3 key reached `handlePlayerShortcutKey`, which
+ * ignored it. This adds the menu's CSS, its container and its script to the
+ * page, and teaches the shortcut handler `skills:open` — only when the page
+ * does not have the menu already (a newer launcher makes this a no-op).
+ */
+const CEF_INJECTOR = `(function (ui) {
+  if (window.SkillsPanel || !ui || !ui.js) return;
+  var style = document.createElement('style');
+  style.textContent = ui.css || '';
+  document.head.appendChild(style);
+  if (!document.getElementById('skills-panel')) {
+    var box = document.createElement('div');
+    box.id = 'skills-panel';
+    box.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(box);
+  }
+  var script = document.createElement('script');
+  script.textContent = ui.js;
+  document.body.appendChild(script);
+  var previous = window.handlePlayerShortcutKey;
+  window.handlePlayerShortcutKey = function (action) {
+    if (action === 'skills:open') {
+      if (typeof window.openSkillsPanel === 'function') window.openSkillsPanel();
+      return;
+    }
+    if (typeof previous === 'function') return previous(action);
+  };
+})`;
+
 const UPDATE_OWNER_SNIPPET = `
-  ctx.state.obProg = ctx.state.obProg || { sentAt: null };
+  ctx.state.obProg = ctx.state.obProg || { sentAt: null, ui: null, uiAt: null };
+  if (ctx.value && ctx.value.ui) ctx.state.obProg.ui = ctx.value.ui;
+  if (ctx.value && ctx.value.sentAt !== ctx.state.obProg.uiAt && ctx.state.obProg.ui && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+    ctx.state.obProg.uiAt = ctx.value.sentAt;
+    try {
+      ctx.sp.browser.executeJavaScript(${JSON.stringify(CEF_INJECTOR)} + '(' + JSON.stringify(ctx.state.obProg.ui) + ')');
+    } catch (e) {}
+  }
   if (ctx.value && ctx.value.sentAt !== ctx.state.obProg.sentAt && ctx.sp && ctx.sp.Game) {
     var obPlayer = ctx.sp.Game.getPlayer();
     if (obPlayer) {
@@ -499,6 +541,27 @@ function choiceCatalog() {
 // Client sync
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The F3 menu's own files, sent once per session to clients whose launcher
+ * predates the menu (see CEF_INJECTOR). null when they cannot be read.
+ */
+let _uiBundle = null;
+/** actorIds that already received the UI bundle this session */
+const _uiSent = new Set();
+
+function loadUiBundle(dir = path.resolve(__dirname, '..', 'ui')) {
+  try {
+    _uiBundle = {
+      js: fs.readFileSync(path.join(dir, 'skills-panel.js'), 'utf8'),
+      css: fs.readFileSync(path.join(dir, 'skills-panel.css'), 'utf8')
+    };
+  } catch (err) {
+    _uiBundle = null;
+    deps().logger.warn(`[skills] skills-panel.js/.css not found in ${dir}: players with an older launcher will not get the F3 menu (${err.message}).`);
+  }
+  return _uiBundle;
+}
+
 /** characterId → perks sent last time (to remove ones staff took away) */
 const _sentPerks = new Map();
 /** actorId → characterId synced this session */
@@ -549,7 +612,12 @@ function pushToClient(actorId, state) {
   const api = deps().mp();
   if (!api || typeof api.set !== 'function') return;
   try {
-    api.set(actorId, PROPERTY, buildClientPayload(state));
+    const payload = buildClientPayload(state);
+    if (_uiBundle && !_uiSent.has(actorId)) {
+      payload.ui = _uiBundle;
+      _uiSent.add(actorId);
+    }
+    api.set(actorId, PROPERTY, payload);
   } catch (err) {
     deps().logger.error(`[skills] Could not send progression to 0x${actorId.toString(16)}:`, err.message);
   }
@@ -611,6 +679,7 @@ async function tick() {
     const data = present.has(actorId) ? characterOf(actorId) : null;
     if (!data || data.characterId !== characterId) {
       _synced.delete(actorId);
+      _uiSent.delete(actorId);
       _sentPerks.delete(characterId);
       forget(characterId);
     }
@@ -1400,6 +1469,7 @@ async function initialize(overrides = {}) {
     }
   }).catch(err => d.logger.error('[skills] Could not read the plugins for perks/spells:', err.message));
 
+  loadUiBundle();
   _unsubscribeActivity = skillActivity.subscribe(handleActivity);
   subscribeSoul();
   _timer = setInterval(() => { tick().catch(err => d.logger.error('[skills] tick failed:', err.message)); }, 2000);
@@ -1424,6 +1494,8 @@ function _resetForTest() {
   _lastAward.clear();
   _synced.clear();
   _sentPerks.clear();
+  _uiSent.clear();
+  _uiBundle = null;
   _loading = new Set();
   _deps = null;
   setCatalog(EMPTY_CATALOG);
@@ -1444,8 +1516,10 @@ module.exports = {
   PANEL_UPDATE_OWNER_SNIPPET,
   skillForWeaponType,
   skillForWeightClass,
+  CEF_INJECTOR,
   configure,
   setCatalog,
+  loadUiBundle,
   loadState,
   buildProfile,
   buildClientPayload,

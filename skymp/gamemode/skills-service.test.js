@@ -316,3 +316,18 @@ test('client snippets are plain strings with the expected hooks', () => {
   assert.doesNotThrow(() => new Function('ctx', service.REPORT_SNIPPET));
   assert.doesNotThrow(() => new Function('ctx', service.PANEL_UPDATE_OWNER_SNIPPET));
 });
+
+test('older launchers: the F3 menu files go out once per session, and the injector is valid JS', async () => {
+  const t = setup();
+  const bundle = service.loadUiBundle();
+  assert.ok(bundle && bundle.js.includes('window.openSkillsPanel'), 'reads skymp/ui/skills-panel.js');
+  await service.tick();
+  const first = t.lastPayload(PLAYER);
+  assert.equal(first.ui.js, bundle.js);
+  await service.awardExp(1, 'nothing', 1); // no-op, just to show nothing is resent
+  await start();
+  const later = t.lastPayload(PLAYER);
+  assert.equal(later.ui, undefined, 'not resent after the first payload');
+  assert.doesNotThrow(() => new Function(`return ${service.CEF_INJECTOR}`));
+  assert.match(service.UPDATE_OWNER_SNIPPET, /executeJavaScript/);
+});
