@@ -549,15 +549,16 @@ async function exchange(opts) {
 
   // ── Depois do commit: o cliente ──────────────────────────────────────────
   //
-  // O banco já é a fonte de verdade. Uma falha aqui deixa o cliente divergente
-  // e é reconciliada no próximo login — nunca desfaz o que commitou.
+  // O banco já é a fonte de verdade — nunca desfaz o que commitou. Item que
+  // não chega ao jogo de quem recebe (offline, ou AddItem falhou) fica em
+  // character_inventory_pending e é entregue no próximo login.
   for (const leg of legs) {
     for (const item of leg.items) {
       if (leg.from.type === OWNER_TYPES.CHARACTER && leg.from.actorId) {
         transactionService.tx.applyToClient(leg.from.actorId, item.baseId, -item.quantity);
       }
-      if (leg.to.type === OWNER_TYPES.CHARACTER && leg.to.actorId) {
-        transactionService.tx.applyToClient(leg.to.actorId, item.baseId, item.quantity);
+      if (leg.to.type === OWNER_TYPES.CHARACTER) {
+        await transactionService.tx.deliverToCharacter(leg.to.actorId, leg.to.characterId, item.baseId, item.quantity);
       }
     }
   }

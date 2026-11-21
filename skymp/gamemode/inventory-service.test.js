@@ -1,13 +1,11 @@
 /**
- * inventory-service.test.js — CHARACTERIZATION TESTS
+ * inventory-service.test.js
  *
- * Congela o comportamento REAL de inventory-service.js hoje. O arquivo nunca
- * teve teste próprio (só cobertura indireta via outros serviços que o
- * importam), apesar de conter a lógica de reconciliação de login descrita no
- * cabeçalho dele: "previne duplicatas" comparando o snapshot do banco com um
- * cache em memória por sessão. É exatamente o tipo de estado que passa
- * silencioso quando ninguém testa — não quebra, só duplica ou falha em
- * silêncio.
+ * `syncInventoryToClient` roda no login e entrega só o que está em
+ * `character_inventory_pending` (migration-v37). Antes ela dava AddItem em
+ * todo `character_inventory`, em cima do inventário que o SkyMP já salva no
+ * changeForm do personagem: um spell tome dado pelo staff e largado no chão
+ * voltava a cada login. O primeiro describe congela essa regressão.
  *
  * `giveItem`/`removeItem`/`hasItem` são delegadores puros para
  * `core/transaction-service` — o teste deles é só de propagação de
@@ -27,26 +25,61 @@ const assert = require('node:assert/strict');
 const { describe, it, after, beforeEach } = require('node:test');
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Banco falso: duas tabelas em memória, chaveadas por `${characterId}:${baseId}`.
 
-let inventoryRows = []; // [{base_id, count}]
-const addItemCalls = []; // [{baseId, count, actorId}]
+const inventoryTable = new Map(); // character_inventory
+const pendingTable = new Map();   // character_inventory_pending
+const k = (c, b) => `${c}:${b}`;
+
+const addItemCalls = []; // [{baseId, count, self}]
 const giveItemCalls = [];
 const removeItemCalls = [];
 const hasItemCalls = [];
+const queueCalls = [];
 
 let addItemImpl = (baseId, count, actorId) => {}; // sucesso por padrão
 
 const databaseMock = {
   query: async (sql, params) => {
-    assert.match(sql, /SELECT base_id, count FROM character_inventory WHERE character_id = \?/);
-    return inventoryRows;
+    if (/FROM character_inventory_pending p/.test(sql)) {
+      const [charId] = params;
+      const rows = [];
+      for (const [key, count] of pendingTable) {
+        const [c, b] = key.split(':').map(Number);
+        if (c !== charId) continue;
+        rows.push({ base_id: b, pending: count, count: Math.min(count, inventoryTable.get(key) || 0) });
+      }
+      return rows;
+    }
+    if (/^UPDATE character_inventory_pending SET count = count - \?/.test(sql)) {
+      const [n, c, b] = params;
+      if (pendingTable.has(k(c, b))) pendingTable.set(k(c, b), pendingTable.get(k(c, b)) - n);
+      return { affectedRows: 1 };
+    }
+    if (/^DELETE FROM character_inventory_pending/.test(sql)) {
+      const [c, b] = params;
+      if ((pendingTable.get(k(c, b)) ?? 1) <= 0) pendingTable.delete(k(c, b));
+      return { affectedRows: 1 };
+    }
+    // A query do código antigo (reenviava todo character_inventory). Responder
+    // a ela de verdade é o que faz o teste do spell tome falhar se ela voltar.
+    if (/^SELECT base_id, count FROM character_inventory WHERE character_id = \?/.test(sql)) {
+      const [charId] = params;
+      return [...inventoryTable].filter(([key]) => Number(key.split(':')[0]) === charId)
+        .map(([key, count]) => ({ base_id: Number(key.split(':')[1]), count }));
+    }
+    throw new Error(`query inesperada: ${sql}`);
   }
 };
 
 const transactionServiceMock = {
   giveItem: async (opts) => { giveItemCalls.push(opts); return true; },
   removeItem: async (opts) => { removeItemCalls.push(opts); return true; },
-  hasItem: async (characterId, baseId, minCount) => { hasItemCalls.push({ characterId, baseId, minCount }); return true; }
+  hasItem: async (characterId, baseId, minCount) => { hasItemCalls.push({ characterId, baseId, minCount }); return true; },
+  queuePendingDelivery: async (c, b, n) => {
+    queueCalls.push({ c, b, n });
+    pendingTable.set(k(c, b), (pendingTable.get(k(c, b)) || 0) + n);
+  }
 };
 
 const Module = require('module');
@@ -64,7 +97,6 @@ Module._load = originalLoad;
 after(() => {
   delete global.mp;
 });
-
 
 // Item arguments to Papyrus must be base-record refs (core/papyrus.baseRef):
 // SkyMP silently ignores a raw FormID, so the item never reached the game.
@@ -90,108 +122,89 @@ global.mp = {
   }
 };
 
-// `_syncedThisSession` é estado privado do módulo, por characterId, e
-// persiste entre `it()`s porque `require('./inventory-service')` só roda
-// uma vez pro arquivo inteiro (Node cacheia o módulo). Sem isto, o teste 1
-// (char 501, base_id 0x0f e 0x10) marcava os dois como sincronizados, e todo
-// teste seguinte que reusa 501 começava com cache sujo — os próprios 501 e
-// 502 usados abaixo, listados explicitamente em vez de um reset genérico
-// pra não esconder se um teste futuro usar um characterId novo sem limpar.
 beforeEach(() => {
-  inventoryRows = [];
+  inventoryTable.clear();
+  pendingTable.clear();
   addItemCalls.length = 0;
   giveItemCalls.length = 0;
   removeItemCalls.length = 0;
   hasItemCalls.length = 0;
+  queueCalls.length = 0;
   addItemImpl = () => {};
-  inventory.clearSyncCache(501);
-  inventory.clearSyncCache(502);
 });
+
+const SPELL_TOME = 0x0009e2a7; // Spell Tome: Flames, qualquer livro serve
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('syncInventoryToClient — entrega o que o banco sabe', () => {
-  it('chama AddItem uma vez por linha do banco, com self de actorRef', async () => {
-    inventoryRows = [{ base_id: 0x0000000f, count: 3 }, { base_id: 0x00000010, count: 1 }];
+describe('login não reenvia o inventário que o SkyMP já salvou', () => {
+  it('item dado enquanto online e depois largado não volta no login (bug do spell tome)', async () => {
+    // Staff deu 5 tomos com o jogador online: o giveItem já entregou no jogo,
+    // então só `character_inventory` tem a linha — nada pendente.
+    inventoryTable.set(k(501, SPELL_TOME), 5);
 
-    await inventory.syncInventoryToClient(0xff000001, 501);
+    // Jogador largou 4 no chão (só o jogo sabe), sai e entra de novo, várias vezes.
+    for (let login = 0; login < 3; login++) {
+      await inventory.syncInventoryToClient(0xff000001, 501);
+    }
 
-    assert.strictEqual(addItemCalls.length, 2);
-    assert.deepStrictEqual(addItemCalls[0], { baseId: 0x0000000f, count: 3, self: { type: 'form', desc: 'ff000001:Skyrim.esm' } });
-    assert.deepStrictEqual(addItemCalls[1], { baseId: 0x00000010, count: 1, self: { type: 'form', desc: 'ff000001:Skyrim.esm' } });
+    assert.strictEqual(addItemCalls.length, 0, 'nenhum AddItem: o tomo largado não pode reaparecer');
   });
 
-  it('a segunda sincronização da mesma sessão não reenvia o que já foi entregue', async () => {
-    inventoryRows = [{ base_id: 0x0000000f, count: 3 }];
-    await inventory.syncInventoryToClient(0xff000001, 501);
-    assert.strictEqual(addItemCalls.length, 1);
+  it('item dado offline é entregue uma vez e só uma vez', async () => {
+    inventoryTable.set(k(501, 0x0000000f + 1), 3);
+    pendingTable.set(k(501, 0x0000000f + 1), 3);
 
-    // Mutação que este teste pega: remover o cache `_syncedThisSession` (ou
-    // marcar como sincronizado ANTES de chamar AddItem) faria o item chegar
-    // duas vezes ao cliente numa reconexão — é a duplicata que a
-    // reconciliação existe para prevenir.
     await inventory.syncInventoryToClient(0xff000001, 501);
-    assert.strictEqual(addItemCalls.length, 1, 'não pode reenviar item já sincronizado nesta sessão');
+    assert.deepStrictEqual(addItemCalls, [{ baseId: 0x10, count: 3, self: { type: 'form', desc: 'ff000001:Skyrim.esm' } }]);
+    assert.strictEqual(pendingTable.size, 0, 'a pendência é consumida');
+
+    await inventory.syncInventoryToClient(0xff000001, 501);
+    assert.strictEqual(addItemCalls.length, 1, 'o segundo login não entrega de novo');
   });
 
-  it('item novo no banco entre duas sincronizações da mesma sessão é entregue sozinho', async () => {
-    inventoryRows = [{ base_id: 0x0000000f, count: 3 }];
-    await inventory.syncInventoryToClient(0xff000001, 501);
+  it('nunca entrega mais do que o banco diz que o personagem tem', async () => {
+    inventoryTable.set(k(501, 0x20), 2);
+    pendingTable.set(k(501, 0x20), 5);
 
-    inventoryRows = [{ base_id: 0x0000000f, count: 3 }, { base_id: 0x00000020, count: 5 }];
     await inventory.syncInventoryToClient(0xff000001, 501);
-
-    assert.strictEqual(addItemCalls.length, 2, 'só o item novo entra na segunda chamada');
-    assert.strictEqual(addItemCalls[1].baseId, 0x00000020);
+    assert.strictEqual(addItemCalls[0].count, 2);
+    assert.strictEqual(pendingTable.size, 0);
   });
 
-  it('clearSyncCache reseta a reconciliação — a mesma sessão volta a entregar tudo', async () => {
-    inventoryRows = [{ base_id: 0x0000000f, count: 3 }];
-    await inventory.syncInventoryToClient(0xff000001, 501);
-    assert.strictEqual(addItemCalls.length, 1);
+  it('pendência de item que o personagem já não tem é descartada sem AddItem', async () => {
+    pendingTable.set(k(501, 0x20), 5);
 
-    inventory.clearSyncCache(501);
-    await inventory.syncInventoryToClient(0xff000001, 501);
-
-    // Comportamento real hoje: reconexão real dispara reenvio completo,
-    // porque o cache é só de memória do processo, por characterId.
-    assert.strictEqual(addItemCalls.length, 2, 'depois de limpar o cache, o mesmo item é reentregue');
-  });
-
-  it('personagens diferentes têm caches independentes', async () => {
-    inventoryRows = [{ base_id: 0x0000000f, count: 3 }];
-    await inventory.syncInventoryToClient(0xff000001, 501);
-    assert.strictEqual(addItemCalls.length, 1);
-
-    await inventory.syncInventoryToClient(0xff000002, 502);
-    assert.strictEqual(addItemCalls.length, 2, 'char 502 nunca sincronizou este item — não é afetado pelo cache do char 501');
-  });
-
-  it('falha do AddItem em um item não impede os demais, e o item falho não é marcado como sincronizado', async () => {
-    inventoryRows = [{ base_id: 0x0000000f, count: 1 }, { base_id: 0x00000010, count: 1 }];
-    addItemImpl = (baseId) => { if (baseId === 0x0000000f) throw new Error('cliente desconectou no meio'); };
-
-    await inventory.syncInventoryToClient(0xff000001, 501);
-    // Ambos foram *tentados* (addItemCalls conta tentativas), mas só o
-    // segundo teve sucesso real de mock (o primeiro lançou dentro do mock).
-    assert.strictEqual(addItemCalls.length, 2);
-
-    // Mutação que este teste pega: mover `synced.add(row.base_id)` para
-    // ANTES da chamada de `callPapyrusFunction` (em vez de depois, dentro do
-    // try) faria o item que falhou nunca mais ser tentado de novo — o banco
-    // fica correto e o cliente divergente para sempre, ao contrário do que o
-    // comentário do arquivo promete ("será resolvido na próxima
-    // sincronização").
-    addItemImpl = () => {};
-    await inventory.syncInventoryToClient(0xff000001, 501);
-    const tentativasDoItemFalho = addItemCalls.filter(c => c.baseId === 0x0000000f).length;
-    assert.strictEqual(tentativasDoItemFalho, 2, 'item que falhou precisa ser tentado de novo na próxima sincronização');
-  });
-
-  it('banco vazio não chama AddItem nenhuma vez', async () => {
-    inventoryRows = [];
     await inventory.syncInventoryToClient(0xff000001, 501);
     assert.strictEqual(addItemCalls.length, 0);
+    assert.strictEqual(pendingTable.size, 0);
+  });
+
+  it('AddItem que falha devolve a pendência e não impede os demais', async () => {
+    inventoryTable.set(k(501, 0x0f), 1);
+    inventoryTable.set(k(501, 0x10), 1);
+    pendingTable.set(k(501, 0x0f), 1);
+    pendingTable.set(k(501, 0x10), 1);
+    addItemImpl = (baseId) => { if (baseId === 0x0f) throw new Error('cliente desconectou no meio'); };
+
+    await inventory.syncInventoryToClient(0xff000001, 501);
+    assert.strictEqual(addItemCalls.length, 2, 'os dois foram tentados');
+    assert.deepStrictEqual(queueCalls, [{ c: 501, b: 0x0f, n: 1 }]);
+    assert.deepStrictEqual([...pendingTable.keys()], [k(501, 0x0f)], 'só o item que falhou continua pendente');
+
+    addItemImpl = () => {};
+    await inventory.syncInventoryToClient(0xff000001, 501);
+    assert.strictEqual(addItemCalls.filter(c => c.baseId === 0x0f).length, 2, 'tentado de novo no próximo login');
+    assert.strictEqual(pendingTable.size, 0);
+  });
+
+  it('pendências de outro personagem não são entregues', async () => {
+    inventoryTable.set(k(502, 0x0f), 3);
+    pendingTable.set(k(502, 0x0f), 3);
+
+    await inventory.syncInventoryToClient(0xff000001, 501);
+    assert.strictEqual(addItemCalls.length, 0);
+    assert.strictEqual(pendingTable.size, 1);
   });
 
   it('erro de banco não propaga — syncInventoryToClient nunca rejeita', async () => {

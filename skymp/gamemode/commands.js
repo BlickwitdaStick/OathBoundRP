@@ -4,7 +4,6 @@ const identity = require('./identity-service');
 const { createRpChatService } = require('./rp-chat-service');
 const commandRegistry = require('./core/command-registry');
 const characterState = require('./core/character-state');
-const inventoryService = require('./inventory-service');
 const characterNumbers = require('./core/character-numbers');
 
 /** Command of a module that is switched off, or null (lazy: module-registry requires the world). */
@@ -97,7 +96,6 @@ function removeActiveCharacter(actorId) {
     console.log(`[commands] Removed cached character for actor ${actorId.toString(16)}: ${char.firstName} ${char.lastName}`);
     identity.forgetKnownIdentities(char.characterId);
     characterState.cleanup(char.characterId);
-    inventoryService.clearSyncCache(char.characterId);
 
     // O staffCache do admin-service e chaveado por actorId, nao por conta — e o
     // SkyMP reaproveita actorId entre sessoes. Sem limpar aqui, o cargo ficava

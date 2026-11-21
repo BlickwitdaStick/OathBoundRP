@@ -19,11 +19,17 @@ let mockInventory = {};    // { characterId_baseId: count }
 let mockGold = {};         // { characterId: gold }
 let mockLedger = [];       // Array de transações
 let mockIdempotency = new Set(); // Chaves de idempotência usadas
+let mockPending = [];      // INSERTs em character_inventory_pending: [characterId, baseId, count]
 
 function mockDb() {
   return {
     query: async (sql, params) => {
       const s = sql.trim().toUpperCase();
+
+      if (s.startsWith('INSERT INTO CHARACTER_INVENTORY_PENDING')) {
+        mockPending.push(params);
+        return [];
+      }
 
       // Verificação de idempotência
       if (s.startsWith('SELECT TRANSACTION_ID FROM INVENTORY_TRANSACTIONS WHERE IDEMPOTENCY_KEY')) {
@@ -176,6 +182,7 @@ describe('transaction-service', () => {
     mockGold = {};
     mockLedger = [];
     mockIdempotency = new Set();
+    mockPending = [];
   });
 
   describe('giveItem', () => {
@@ -208,6 +215,49 @@ describe('transaction-service', () => {
       
       // Apenas a primeira entrega deve contar
       assert.strictEqual(mockInventory['1_28'], 5, 'Idempotência: deve ter apenas 5 unidades');
+    });
+  });
+
+  // O login entrega só character_inventory_pending (migration-v37). Item que
+  // chegou ao jogo não pode ficar pendente: o SkyMP já o salva, e reenviá-lo
+  // fazia um spell tome largado no chão voltar a cada login.
+  describe('giveItem: entrega no jogo ou fica para o próximo login', () => {
+    const addItems = [];
+    let addItemThrows = false;
+    beforeEach(() => {
+      addItems.length = 0;
+      addItemThrows = false;
+      global.mp = {
+        getDescFromId: (id) => `${id.toString(16)}:Skyrim.esm`,
+        callPapyrusFunction: (kind, cls, fn, self, args) => {
+          if (fn === 'AddItem') {
+            if (addItemThrows) throw new Error('actor sumiu');
+            addItems.push({ self: self.desc, count: args[1] });
+          }
+          return null;
+        }
+      };
+    });
+    const { afterEach } = require('node:test');
+    afterEach(() => { delete global.mp; });
+
+    it('online: AddItem no jogo e nada pendente', async () => {
+      await transactionService.giveItem({ actorId: 0xff000001, characterId: 1, baseId: 0x9e2a7, count: 5, reason: 'admin_give', module: 'admin' });
+      assert.deepStrictEqual(addItems, [{ self: 'ff000001:Skyrim.esm', count: 5 }]);
+      assert.deepStrictEqual(mockPending, []);
+    });
+
+    it('offline (actorId 0, ex. barraca expirada): fica pendente, sem AddItem', async () => {
+      await transactionService.giveItem({ actorId: 0, characterId: 1, baseId: 0x9e2a7, count: 5, reason: 'stall_expire_return', module: 'stalls' });
+      assert.deepStrictEqual(addItems, []);
+      assert.deepStrictEqual(mockPending, [[1, 0x9e2a7, 5]]);
+    });
+
+    it('AddItem que falha: fica pendente', async () => {
+      addItemThrows = true;
+      const ok = await transactionService.giveItem({ actorId: 0xff000001, characterId: 1, baseId: 0x9e2a7, count: 2, reason: 'test', module: 'test' });
+      assert.strictEqual(ok, true, 'o banco já commitou: giveItem continua true');
+      assert.deepStrictEqual(mockPending, [[1, 0x9e2a7, 2]]);
     });
   });
 

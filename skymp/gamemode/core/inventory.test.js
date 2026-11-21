@@ -31,6 +31,7 @@ let containers = new Set();
 let eventos = [];        // 'begin' | 'commit' | 'rollback'
 let erroForcado = null;  // { quando: regex, mensagem }
 let clienteAplicado = []; // AddItem/RemoveItem que chegaram no cliente
+let pendentes = {};      // character_inventory_pending: `${characterId}:${baseId}` -> count
 
 function chave(tabela, dono, baseId) {
   return `${tabela}:${dono}:${baseId}`;
@@ -39,6 +40,14 @@ function chave(tabela, dono, baseId) {
 function responder(sql, params = []) {
   if (erroForcado && new RegExp(erroForcado.quando, 'i').test(sql)) {
     throw new Error(erroForcado.mensagem);
+  }
+
+  // Itens que não chegaram ao jogo de quem recebeu (migration-v37). Antes do
+  // laço abaixo: `INSERT INTO character_inventory` também casaria aqui.
+  if (/INSERT INTO character_inventory_pending/i.test(sql)) {
+    const k = `${params[0]}:${params[1]}`;
+    pendentes[k] = (pendentes[k] || 0) + params[2];
+    return [{}];
   }
 
   // Replay: a âncora de idempotência, conferida DENTRO da transação.
@@ -161,6 +170,7 @@ after(() => { delete global.mp; });
 
 beforeEach(() => {
   estoque = {};
+  pendentes = {};
   ledger = [];
   containers = new Set([1, 2]);
   eventos = [];
@@ -336,6 +346,20 @@ describe('transferência entre personagens', () => {
 
     assert.strictEqual(eventos.at(-1), 'commit');
     assert.deepStrictEqual(clienteAplicado, [{ baseId: 10, delta: -3 }]);
+    // O login (inventory-service) entrega só o que ficou pendente, porque o
+    // SkyMP já salva o inventário de quem estava online.
+    assert.deepStrictEqual(pendentes, { '2:10': 3 }, 'quem estava offline recebe no próximo login');
+  });
+
+  it('quem recebe online ganha o item no jogo e nada fica pendente', async () => {
+    darItem(1, 10, 7);
+    await inventory.transfer({
+      from: inventory.character(1, 0x100), to: inventory.character(2, 0x200),
+      items: [{ baseId: 10, quantity: 3 }], reason: 'trade', module: 'trade', requestId: REQ
+    });
+
+    assert.deepStrictEqual(clienteAplicado, [{ baseId: 10, delta: -3 }, { baseId: 10, delta: 3 }]);
+    assert.deepStrictEqual(pendentes, {}, 'item que chegou ao jogo não pode ser reentregue no login');
   });
 
   it('recusa por estoque insuficiente sem mover nada', async () => {

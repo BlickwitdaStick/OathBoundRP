@@ -331,20 +331,60 @@ async function _applyGoldDelta(conn, characterId, delta) {
 /**
  * Aplica a mudança no cliente SkyMP (sem transação BD, apenas side-effect).
  * Chamado APÓS o COMMIT para garantir que o BD é a fonte de verdade.
- * Em caso de falha, o item está no BD mas não no cliente → será corrigido na reconciliação.
+ *
+ * @returns {boolean} false quando não chegou ao jogo (sem actor online, ou o
+ *   Papyrus falhou). Quem entrega item a um personagem deve usar
+ *   `_deliverToCharacter`, que nesse caso enfileira para o próximo login.
  */
 function _applyToClient(actorId, baseId, delta) {
-  if (typeof mp === 'undefined') return;
+  if (typeof mp === 'undefined') return true;
+  if (!actorId) return false;
   try {
     if (delta > 0) {
       mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [baseRef(baseId), delta, true]);
     } else {
       mp.callPapyrusFunction('method', 'ObjectReference', 'RemoveItem', actorRef(actorId), [baseRef(baseId), Math.abs(delta), true, null]);
     }
+    return true;
   } catch (err) {
-    // Log sem throw: BD já está correto. Reconciliação cuidará do cliente na próxima reconexão.
+    // Log sem throw: BD já está correto.
     console.error(`[transaction] Aviso: falha ao aplicar item 0x${baseId.toString(16)} no cliente ${actorId ? actorId.toString(16) : '?'}:`, err.message);
+    return false;
   }
+}
+
+/**
+ * Guarda itens que o personagem ganhou mas que não chegaram ao jogo, para o
+ * login entregar (`inventory-service.syncInventoryToClient`). Nunca rejeita.
+ *
+ * Só o que está aqui é entregue no login. O resto de `character_inventory` já
+ * está no inventário que o SkyMP salva sozinho; reenviá-lo fazia item largado
+ * ou consumido voltar a cada login.
+ */
+async function _queuePendingDelivery(characterId, baseId, count) {
+  if (!characterId || !(count > 0)) return;
+  try {
+    await db.query(
+      `INSERT INTO character_inventory_pending (character_id, base_id, count) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE count = count + VALUES(count)`,
+      [characterId, baseId, count]
+    );
+    console.log(`[transaction] item 0x${baseId.toString(16)} x${count} fica para o próximo login de char=${characterId}`);
+  } catch (err) {
+    console.error(`[transaction] Não deu para guardar item pendente 0x${baseId.toString(16)} x${count} de char=${characterId}:`, err.message);
+  }
+}
+
+/**
+ * Entrega `count` itens no jogo do personagem; se ele estiver offline ou o
+ * AddItem falhar, enfileira para o próximo login. Chamar depois do commit.
+ *
+ * @returns {Promise<boolean>} true se chegou ao jogo agora
+ */
+async function _deliverToCharacter(actorId, characterId, baseId, count) {
+  if (_applyToClient(actorId, baseId, count)) return true;
+  await _queuePendingDelivery(characterId, baseId, count);
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -389,7 +429,7 @@ async function giveItem(opts) {
     await _applyInventoryDelta(conn, characterId, baseId, count);
     await _recordInventoryLedger(conn, { characterId, baseId, delta: count, reason, module: mod, idempotencyKey });
     await conn.commit();
-    _applyToClient(actorId, baseId, count);
+    await _deliverToCharacter(actorId, characterId, baseId, count);
     console.log(`[transaction] giveItem: char=${characterId} item=0x${baseId.toString(16)} x${count} (${reason})`);
     return true;
   } catch (err) {
@@ -510,7 +550,7 @@ async function transfer(opts) {
     // Aplicar no cliente após COMMIT
     if (itemCount > 0 && baseId > 0) {
       _applyToClient(fromActorId, baseId, -itemCount);
-      _applyToClient(toActorId, baseId, itemCount);
+      await _deliverToCharacter(toActorId, toCharacterId, baseId, itemCount);
     }
 
     console.log(`[transaction] transfer: char=${fromCharacterId}→${toCharacterId} item=0x${(baseId||0).toString(16)} x${itemCount} gold=${goldAmount} (${reason})`);
@@ -683,8 +723,13 @@ module.exports = {
     // `inventory-service`) mostraram que a quarta era o caminho errado. É a
     // mesma função que `giveItem`/`removeItem` já usavam por dentro — o que
     // muda é só quem pode chamá-la.
-    applyToClient: _applyToClient
+    applyToClient: _applyToClient,
+    // Entrega item a um personagem e, se ele estiver offline, guarda para o
+    // próximo login (character_inventory_pending, migration-v37).
+    deliverToCharacter: _deliverToCharacter
   },
+
+  queuePendingDelivery: _queuePendingDelivery,
 
   // Exposto só pra teste: garante que o `self` do Papyrus vai como objeto
   // `{type,desc}` e não como FormID cru (ver core/papyrus.js).

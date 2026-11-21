@@ -13,104 +13,94 @@
  *   - um dono muda (staff dá item, recompensa)      → daqui, ou transaction-service
  *   - **dois** donos (troca, baú, barraca, craft)   → `core/inventory.transfer`
  *
- * ─── Limite conhecido da reconciliação ──────────────────────────────────────
+ * ─── Entrega no login ───────────────────────────────────────────────────────
  *
- * `syncInventoryToClient` é **unidirecional**: ela entrega ao cliente o que o
- * banco conhece e nunca faz o contrário. Ela não remove do cliente o que o
- * cliente tem e o banco não conhece, não compara contagens, e roda uma vez só
- * (chamador único: `whitelist.js`).
+ * O SkyMP salva sozinho o inventário real de cada personagem
+ * (`world/changeForms/*.json`, campo `inv`). `character_inventory` é o
+ * registro do servidor, não uma cópia a reenviar: até 2026-11-21 o login dava
+ * `AddItem` em todas as linhas dela, em cima do inventário salvo, e tudo que o
+ * servidor já tinha dado (give do staff, job, troca) voltava depois de ser
+ * largado, vendido, comido ou lido (spell tome) — uma vez por login.
  *
- * Consequência: item pego do chão, saque de NPC vanilla e recompensa de quest
- * existem só no cliente, para sempre. Isso é a fronteira nomeada no
- * `docs/technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md` §3 — fechá-la exige ler
- * `mp.get(id,'inventory')` (ainda **[DOC]** em `types/mp.d.ts`, nunca
- * exercitada) e decidir uma política de divergência, que é decisão de jogo.
+ * Agora `syncInventoryToClient` entrega só `character_inventory_pending`
+ * (migration-v37): itens dados enquanto o personagem estava offline (ex.:
+ * barraca expirada devolvendo mercadoria) ou cujo `AddItem` falhou. Quem
+ * enfileira é `core/transaction-service.deliverToCharacter`. A pendência é
+ * consumida antes do `AddItem` e devolvida se ele falhar, então reconectar
+ * nunca entrega duas vezes.
  *
- * Serviço de inventário com reconciliação para prevenir duplicatas.
+ * Limite conhecido: o que existe só no cliente (item pego do chão, saque de
+ * NPC) continua fora do banco — `docs/technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md` §3.
  *
- * IMPORTANTE: Este serviço NÃO modifica o banco diretamente.
- * Toda mudança de item usa core/transaction-service para garantir
- * atomicidade e rastreabilidade no ledger.
- *
- * Reconciliação:
- * - No login, o servidor lê o snapshot do banco (character_inventory)
- * - Compara com o que foi entregue nessa sessão (flag em memória)
- * - Só chama AddItem para itens ainda não sincronizados
- * - Divergências são logadas para revisão manual
+ * IMPORTANTE: Este serviço NÃO muda `character_inventory`. Toda mudança de
+ * item usa core/transaction-service (atomicidade + ledger).
  */
 
 const db = require('./database');
 const transactionService = require('./core/transaction-service');
 const { actorRef, baseRef } = require('./core/papyrus');
 
-// Cache de itens já sincronizados nessa sessão: characterId → Set<baseId>
-// Reset automático na desconexão (cleanup via removeActiveCharacter)
-const _syncedThisSession = new Map();
-
 /**
- * Sincroniza o inventário do banco de dados para o cliente.
- * Usa reconciliação para prevenir duplicatas em reconexões.
+ * Entrega no jogo os itens que ficaram pendentes para o personagem.
+ * Nunca rejeita: falha é logada e a pendência fica para o próximo login.
  *
  * @param {number} actorId
  * @param {number} characterId
  */
 async function syncInventoryToClient(actorId, characterId) {
   try {
+    // Nunca entregar mais do que o banco diz que o personagem tem: algo
+    // removido depois de enfileirado não deve aparecer.
     const rows = await db.query(
-      'SELECT base_id, count FROM character_inventory WHERE character_id = ?',
-      [characterId]
+      `SELECT p.base_id, p.count AS pending, LEAST(p.count, COALESCE(ci.count, 0)) AS count
+         FROM character_inventory_pending p
+         LEFT JOIN (SELECT base_id, SUM(count) AS count FROM character_inventory
+                     WHERE character_id = ? GROUP BY base_id) ci ON ci.base_id = p.base_id
+        WHERE p.character_id = ?`,
+      [characterId, characterId]
     );
 
-    // Inicializar set de sincronizados para essa sessão
-    if (!_syncedThisSession.has(characterId)) {
-      _syncedThisSession.set(characterId, new Set());
-    }
-    const synced = _syncedThisSession.get(characterId);
-
-    let syncedCount = 0;
-    let skippedCount = 0;
+    let delivered = 0;
+    let failed = 0;
 
     for (const row of rows) {
-      if (synced.has(row.base_id)) {
-        // Já foi entregue nessa sessão — pular para prevenir duplicata
-        skippedCount++;
-        continue;
-      }
+      const count = Number(row.count);
+      // Consumir primeiro: se o AddItem chegasse e a baixa falhasse depois, a
+      // próxima reconexão entregaria de novo. Nesta ordem, o pior caso é a
+      // pendência voltar para a fila.
+      await _consumePending(characterId, row.base_id, Number(row.pending));
+      if (!(count > 0)) continue;
 
-      if (typeof mp !== 'undefined') {
-        try {
-          mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [baseRef(row.base_id), row.count, true]);
-          synced.add(row.base_id);
-          syncedCount++;
-        } catch (clientErr) {
-          // Falha no cliente: BD está correto, cliente pode ficar divergente
-          // Será resolvido na próxima sincronização ou reconexão
-          console.error(`[inventory] Aviso: falha ao sincronizar item 0x${row.base_id.toString(16)} para actor ${actorId.toString(16)}:`, clientErr.message);
-        }
-      } else {
-        // Sem runtime mp (ambiente de teste) — apenas marcar como sincronizado
-        synced.add(row.base_id);
-        syncedCount++;
+      if (typeof mp === 'undefined') { delivered++; continue; }
+      try {
+        mp.callPapyrusFunction('method', 'ObjectReference', 'AddItem', actorRef(actorId), [baseRef(row.base_id), count, true]);
+        delivered++;
+      } catch (clientErr) {
+        failed++;
+        console.error(`[inventory] Aviso: falha ao entregar item pendente 0x${row.base_id.toString(16)} para actor ${actorId.toString(16)}:`, clientErr.message);
+        await transactionService.queuePendingDelivery(characterId, row.base_id, count);
       }
     }
 
-    console.log(`[inventory] Sync para char ${characterId}: ${syncedCount} itens entregues, ${skippedCount} já sincronizados (total no BD: ${rows.length})`);
-    
-    if (skippedCount > 0) {
-      console.log(`[inventory] Reconciliação: ${skippedCount} itens pulados por já estarem na sessão (previne duplicatas)`);
+    if (rows.length > 0) {
+      console.log(`[inventory] Login char ${characterId}: ${delivered} itens pendentes entregues, ${failed} ficam para o próximo login`);
     }
-
   } catch (err) {
-    console.error(`[inventory] Erro ao sincronizar inventário para char ${characterId}:`, err.message);
+    console.error(`[inventory] Erro ao entregar itens pendentes para char ${characterId}:`, err.message);
   }
 }
 
-/**
- * Limpa o cache de sincronização ao desconectar.
- * @param {number} characterId
- */
-function clearSyncCache(characterId) {
-  _syncedThisSession.delete(characterId);
+async function _consumePending(characterId, baseId, count) {
+  if (count > 0) {
+    await db.query(
+      'UPDATE character_inventory_pending SET count = count - ? WHERE character_id = ? AND base_id = ?',
+      [count, characterId, baseId]
+    );
+  }
+  await db.query(
+    'DELETE FROM character_inventory_pending WHERE character_id = ? AND base_id = ? AND count <= 0',
+    [characterId, baseId]
+  );
 }
 
 /**
@@ -159,7 +149,6 @@ async function hasItem(characterId, baseId, minCount = 1) {
 
 module.exports = {
   syncInventoryToClient,
-  clearSyncCache,
   giveItem,
   removeItem,
   hasItem
