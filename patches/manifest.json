@@ -87,6 +87,23 @@
       "upstream_pr": null,
       "added": "2026-11-19",
       "notes": "Not yet proposed upstream; small, self-contained candidate for a PR. Applied after light-plugins.patch by scripts/skymp-build/Build-PatchedSkyMP.ps1."
+    },
+    {
+      "id": "client-oathbound-calendar",
+      "target": "skymp",
+      "file": "skymp/client-oathbound-calendar.patch",
+      "upstream_commit": "d85f18d808f877401c4e20484d2c2f6f73cf9caa",
+      "reason": "SkyMP's client sets every player's game clock from real UTC time every 2 seconds (year = real year - 2020 + 199, one game day per real day), so the server cannot set its own calendar. OATHBOUND wants 4E 199 in 2026, the real month and day, and a 12-real-hour game day.",
+      "files_touched": [
+        "skymp5-client/src/services/services/timeService.ts"
+      ],
+      "impact": "Year = real year - 2026 + 199; month/day = real UTC date (Sun's Dawn capped at 28); hour = (real UTC hours mod 12) * 2, shifted by the client hoursOffset setting; TimeScale 2 (nudged 1.2 / 2.4 to stay on the hour). Client-only change: players need the rebuilt skymp5-client.js, which ships in skymp/client-mods.",
+      "test": "oathboundCalendar checked on fixed instants (00:00, 06:00, 11:59, 12:00, 18:30 UTC, New Year, 29 Feb); bundle built with webpack. In-game confirmation pending.",
+      "loss_condition": "Installing a stock skymp5-client.js brings back the real-time calendar. Applies on top of light-plugins.patch and client-empty-public-keys.patch (same tree).",
+      "removal_strategy": "OATHBOUND-specific behaviour; keep while the server wants this calendar.",
+      "upstream_pr": null,
+      "added": "2026-11-21",
+      "notes": "Applied after client-empty-public-keys.patch by scripts/skymp-build/Build-PatchedSkyMP.ps1."
     }
   ]
 }

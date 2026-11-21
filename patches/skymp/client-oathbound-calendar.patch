@@ -1,0 +1,67 @@
+diff --git a/skymp5-client/src/services/services/timeService.ts b/skymp5-client/src/services/services/timeService.ts
+index 637ba308..a0b4d655 100644
+--- a/skymp5-client/src/services/services/timeService.ts
++++ b/skymp5-client/src/services/services/timeService.ts
+@@ -9,16 +9,7 @@ export class TimeService extends ClientListener {
+     public getTime() {
+         const hoursOffsetSetting = this.sp.settings["skymp5-client"]["hoursOffset"];
+         const hoursOffset = typeof hoursOffsetSetting === "number" ? hoursOffsetSetting : 0;
+-        const hoursOffsetMs = hoursOffset * 60 * 60 * 1000;
+-
+-        const d = new Date(Date.now() + hoursOffsetMs);
+-
+-        let newGameHourValue = 0;
+-        newGameHourValue += d.getUTCHours();
+-        newGameHourValue += d.getUTCMinutes() / 60;
+-        newGameHourValue += d.getUTCSeconds() / 60 / 60;
+-        newGameHourValue += d.getUTCMilliseconds() / 60 / 60 / 1000;
+-        return { newGameHourValue, date: d };
++        return oathboundCalendar(Date.now(), hoursOffset);
+     }
+ 
+     private every2seconds() {
+@@ -44,12 +35,14 @@ export class TimeService extends ClientListener {
+ 
+         if (diff >= 1 / 60) {
+             gameHour.setValue(newGameHourValue);
+-            gameDay.setValue(date.getUTCDate());
+-            gameMonth.setValue(date.getUTCMonth());
+-            gameYear.setValue(date.getUTCFullYear() - 2020 + 199);
++            gameDay.setValue(date.day);
++            gameMonth.setValue(date.month);
++            gameYear.setValue(date.year);
+         }
+ 
+-        timeScale.setValue(gameHour.getValue() > newGameHourValue ? 0.6 : 1.2);
++        // The game clock runs OATHBOUND_TIMESCALE times real time, nudged a
++        // little slower or faster to stay on the computed hour.
++        timeScale.setValue(OATHBOUND_TIMESCALE * (gameHour.getValue() > newGameHourValue ? 0.6 : 1.2));
+     }
+ 
+     private onUpdate() {
+@@ -62,3 +55,25 @@ export class TimeService extends ClientListener {
+ 
+     private lastTimeUpd = 0;
+ }
++
++// OATHBOUND calendar (patches/skymp/client-oathbound-calendar.patch).
++//
++// - Year: 4E 199 in real year 2026, one more each real year.
++// - Month and day: the real (UTC) date, January = Morning Star (0).
++// - Hour: one in-game day lasts 12 real hours, so the day/night cycle runs
++//   twice per real day (game midnight at 00:00 and 12:00 UTC, shifted by the
++//   client's hoursOffset setting). The date still changes once per real day.
++export const OATHBOUND_TIMESCALE = 2;
++const OATHBOUND_YEAR_BASE_REAL = 2026;
++const OATHBOUND_YEAR_BASE_GAME = 199;
++
++export function oathboundCalendar(nowMs: number, hoursOffset: number) {
++    const d = new Date(nowMs + hoursOffset * 60 * 60 * 1000);
++    const realHours = d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600 + d.getUTCMilliseconds() / 3600000;
++    const newGameHourValue = (realHours % 12) * 2;
++    const month = d.getUTCMonth();
++    // Sun's Dawn has 28 days: a real 29 February stays on the 28th.
++    const day = month === 1 ? Math.min(d.getUTCDate(), 28) : d.getUTCDate();
++    const year = d.getUTCFullYear() - OATHBOUND_YEAR_BASE_REAL + OATHBOUND_YEAR_BASE_GAME;
++    return { newGameHourValue, date: { day, month, year } };
++}
