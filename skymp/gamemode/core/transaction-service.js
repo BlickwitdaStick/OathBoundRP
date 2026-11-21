@@ -251,7 +251,19 @@ async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
  * Continua sendo o nome que crafting e barraca chamam; hoje é um apelido de
  * `_applyStackDelta` com a tabela do personagem.
  */
+/**
+ * Gold001. Gold is `characters.gold` (moved with addGold/removeGold); the
+ * Gold001 in the game inventory is kept equal to it by
+ * core/economy-physical-sync.js. A Gold001 row in character_inventory would be
+ * counted twice (once there, once in the balance) and handed out again by the
+ * login item sync, so it is never written.
+ */
+const GOLD_ITEM_ID = 0x0000000f;
+
 async function _applyInventoryDelta(conn, characterId, baseId, delta) {
+  if (baseId === GOLD_ITEM_ID) {
+    throw new Error('[transaction] gold is not an inventory item: use addGold/removeGold');
+  }
   return _applyStackDelta(conn, 'character_inventory', characterId, baseId, delta);
 }
 
@@ -355,6 +367,9 @@ function _applyToClient(actorId, baseId, delta) {
 async function giveItem(opts) {
   const { actorId, characterId, baseId, count, reason, module: mod, idempotencyKey } = opts;
   if (count <= 0) throw new Error('count deve ser positivo');
+  // Giving Gold001 (e.g. from the admin item list) gives gold: the balance
+  // goes up and the gold sync puts it in the inventory.
+  if (baseId === GOLD_ITEM_ID) return addGold({ characterId, amount: count, reason, module: mod, idempotencyKey });
 
   // Verificação de idempotência antes da transação
   if (idempotencyKey) {
@@ -402,6 +417,7 @@ async function giveItem(opts) {
 async function removeItem(opts) {
   const { actorId, characterId, baseId, count, reason, module: mod, idempotencyKey } = opts;
   if (count <= 0) throw new Error('count deve ser positivo');
+  if (baseId === GOLD_ITEM_ID) return removeGold({ characterId, amount: count, reason, module: mod, idempotencyKey });
 
   if (idempotencyKey) {
     const existing = await db.query(

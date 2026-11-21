@@ -85,6 +85,7 @@ function removeActiveCharacter(actorId) {
   // Save where the character logged out, while it is still known here.
   if (typeof mp !== 'undefined' && activeCharacters.has(actorId)) {
     require('./core/position-persistence').getInstance().onDisconnect(actorId);
+    require('./core/economy-physical-sync').getInstance().onDisconnect(actorId);
   }
   browserModal.forgetActor(actorId);
   if (activeCharacters.has(actorId)) {

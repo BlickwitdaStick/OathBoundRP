@@ -217,11 +217,11 @@ async function checkWhitelist(userId, profileId, actorId) {
     await grantStartingGold(character.id);
     await revelarPrimeiroSinal(character.id);
 
-    // Anti-cheat de ouro físico (Gold001 nunca deveria existir no inventário
-    // — ver core/economy-physical-sync.js). Não bloqueia login por design,
-    // mesma filosofia de grantStartingGold acima.
+    // Inventory gold and characters.gold are the same money from here on
+    // (core/economy-physical-sync.js). After grantStartingGold, so starting
+    // gold reaches the inventory. Never blocks login.
     economyPhysicalSync.reconcileOnLogin(actorId, character.id).catch((err) => {
-      console.error(`[whitelist] Falha no anti-cheat de ouro físico para ${character.id}:`, err.message);
+      console.error(`[whitelist] Gold sync failed for character ${character.id}:`, err.message);
     });
 
     // 5. Atualizar posição do jogador in-game a partir do banco de dados

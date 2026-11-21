@@ -319,18 +319,16 @@ moduleRegistry.register({
   healthCheck: () => environmentService.healthCheck()
 });
 
-// LAB: Anti-cheat de ouro físico — Gold001 nunca deveria existir no
-// inventário (ouro deste projeto é 100% virtual, ver core/economy-service.js
-// e core/economy-physical-sync.js). Detecta e remove no login; nunca mexe em
-// characters.gold.
+// LAB: Gold in the inventory (Gold001) and characters.gold are the same money,
+// kept equal every few seconds (core/economy-physical-sync.js).
 moduleRegistry.register({
   id: 'economy-physical-sync',
   enabledBy: 'ENABLE_ECONOMY_PHYSICAL_SYNC',
   phase: 'lab',
-  version: '1.0.0',
+  version: '2.0.0',
   dependencies: [],
   commands: [],
-  initialize: async () => {},
+  initialize: async () => { economyPhysicalSync.getInstance().start(); },
   healthCheck: () => economyPhysicalSync.healthCheck()
 });
 
@@ -938,7 +936,9 @@ if (typeof mp !== 'undefined') {
   const connectionMonitor = createConnectionMonitor({ mp, whitelist, commands, playerPanel });
   connectionMonitor.start();
   // Log back in where you logged out (characters.pos_*/cell_id).
-  require('./core/position-persistence').getInstance().start();
+  // gamemodeDir, not './': SkyMP runs this file from a temp copy, where './'
+  // is not the gamemode folder ("Cannot find module './core/...'").
+  require(path.join(gamemodeDir, 'core', 'position-persistence')).getInstance().start();
   createRuntimeTelemetry({
     connectionMonitor,
     uiEventRateLimiter,
