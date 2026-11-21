@@ -437,6 +437,32 @@ function commandDefs() {
           `NPC filter: ${s.examined} examined, ${s.kept} kept, ${s.removed} disabled, ${s.pendingNow} waiting, ` +
           `${s.unknown} unreadable, ${s.errors} errors over ${s.sweeps} sweeps.`
         );
+        // Diagnostics: what the server itself sees around the caller right now.
+        try {
+          const online = mp.get(0, 'onlinePlayers');
+          const loc = mp.get(actorId, 'locationalData');
+          const nb = mp.get(actorId, 'actorNeighbors');
+          const list = Array.isArray(nb) ? nb : [];
+          const world = list.filter((id) => id < 0xff000000);
+          const pos = loc && Array.isArray(loc.pos) ? loc.pos.map((v) => Math.round(v)).join(', ') : '?';
+          const sample = world.slice(0, 3).map((id) => {
+            let base = '?';
+            try { base = mp.get(id, 'baseDesc'); } catch { /* ignore */ }
+            let disabled = '?';
+            try { disabled = mp.get(id, 'isDisabled'); } catch { /* ignore */ }
+            return `${id.toString(16)}(${base}${disabled === true ? ', disabled' : ''})`;
+          }).join(' ');
+          let selfDisabled = '?';
+          try { selfDisabled = mp.get(actorId, 'isDisabled'); } catch { /* ignore */ }
+          commands.sendNotification(
+            actorId,
+            `Server view: ${Array.isArray(online) ? online.length : '?'} online; you are 0x${actorId.toString(16)} ` +
+            `in ${loc ? loc.cellOrWorldDesc : '?'} at ${pos}${selfDisabled === true ? ' (DISABLED)' : ''}; ` +
+            `${list.length} neighbours, ${world.length} world NPCs ${sample}`
+          );
+        } catch (err) {
+          commands.sendNotification(actorId, `Server view unavailable: ${err.message}`);
+        }
       }
     }
   ];
