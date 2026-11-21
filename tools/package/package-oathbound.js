@@ -46,13 +46,13 @@ const EXCLUDE_EVERYWHERE = [
 ];
 
 const SERVER_PATHS = [
-  'skymp/server', 'skymp/data', 'skymp/world', 'skymp/gamemode', 'skymp/config', 'skymp/ui',
+  'skymp/server', 'skymp/data', 'skymp/world', 'skymp/gamemode', 'skymp/ui',
   'skymp/packages', 'skymp/client-mods',
   'apps/web', 'apps/game-api', 'apps/bot-discord', 'apps/shared',
   'scripts', 'patches/manifest.json'
 ];
 const SERVER_EXCLUDE = [
-  'skymp/server/logs', 'skymp/config/client-mods.local.json',
+  'skymp/server/logs',
   'apps/web/crash-reports', 'apps/game-api/client-mods-hash-cache.json'
 ];
 
@@ -91,6 +91,19 @@ function dumpDatabase(stage) {
   ], { env: { ...process.env, MYSQL_PWD: cfg.password }, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`database dump failed: ${r.stderr || r.error}`);
   log(`database dump: ${(fs.statSync(outFile).size / 1048576).toFixed(1)} MB`);
+}
+
+/**
+ * skymp/config without client-mods.local.json, listed file by file: the VPS
+ * gets its own copy from the stage, and a --exclude would drop that one too
+ * (tar matches excludes against every source).
+ */
+function configFiles() {
+  const dir = path.join(REPO, 'skymp', 'config');
+  return fs.readdirSync(dir)
+    .filter((n) => n !== 'client-mods.local.json' && fs.statSync(path.join(dir, n)).isFile())
+    .filter((n) => !/.(bak|before-|removed-)/i.test(n))
+    .map((n) => `skymp/config/${n}`);
 }
 
 function stageServerExtras(stage) {
@@ -144,7 +157,7 @@ function main() {
   if (what === 'server' || what === 'both') {
     const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'oathbound-server-'));
     stageServerExtras(stage);
-    made.push(zip('OATHBOUND-Server', SERVER_PATHS, SERVER_EXCLUDE, stage));
+    made.push(zip('OATHBOUND-Server', [...SERVER_PATHS, ...configFiles()], SERVER_EXCLUDE, stage));
     fs.rmSync(stage, { recursive: true, force: true });
   }
   if (what === 'launcher' || what === 'both') {
