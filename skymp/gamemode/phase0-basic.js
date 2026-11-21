@@ -77,6 +77,7 @@ const corpseProbe   = require(path.join(gamemodeDir, 'corpse-probe'));
 const tradeService  = require(path.join(gamemodeDir, 'trade-service'));
 const depotService  = require(path.join(gamemodeDir, 'core', 'depot-service'));
 const holdstoneService = require(path.join(gamemodeDir, 'holdstone-service'));
+const survivalService = require(path.join(gamemodeDir, 'survival-service'));
 const crimeService  = require(path.join(gamemodeDir, 'core', 'crime-service'));
 const interactionPromptService = require(path.join(gamemodeDir, 'core', 'interaction-prompt-service'));
 const characterDashboardBridge = require(path.join(gamemodeDir, 'core', 'character-dashboard-bridge'));
@@ -628,6 +629,21 @@ moduleRegistry.register({
 // Holdstones, hold ranks, parcels and door/container locks
 // (migration-v33-holdstones-parcels.sql, docs/gameplay/HOLDSTONES_AND_PARCELS.md).
 // The stone is a physical anchor: E opens the hold menu via 'interaction-prompt'.
+// LAB: Survival needs (hunger, exhaustion, cold), tracked and shown with
+// /needs. No penalties yet. Cold comes from the vanilla map regions Survival
+// Mode uses (data/survival-data.json). See survival-service.js.
+moduleRegistry.register({
+  id: 'survival',
+  enabledBy: 'ENABLE_SURVIVAL_NEEDS',
+  phase: 'lab',
+  version: '1.0.0',
+  dependencies: [],
+  optionalDependencies: ['environment'],
+  commands: survivalService.commandDefs(),
+  initialize: async () => { await survivalService.initialize(); },
+  healthCheck: () => survivalService.healthCheck()
+});
+
 // Locks hook mp.onActivate through core/activation-events.js and work even
 // without the prompt; the parceling tool menu needs the prompt to open.
 moduleRegistry.register({

@@ -224,6 +224,13 @@ async function checkWhitelist(userId, profileId, actorId) {
       console.error(`[whitelist] Gold sync failed for character ${character.id}:`, err.message);
     });
 
+    // Survival needs carry over from the last session (survival-service.js).
+    if (require('./core/module-registry').isEnabled('survival')) {
+      require('./survival-service').onLogin(actorId, character.id).catch((err) => {
+        console.error(`[whitelist] Survival needs failed to load for character ${character.id}:`, err.message);
+      });
+    }
+
     // 5. Atualizar posição do jogador in-game a partir do banco de dados
     if (typeof mp !== 'undefined' && actorId) {
       console.log(`[whitelist] Moving actor ${actorId.toString(16)} to db location: pos=[${character.pos_x}, ${character.pos_y}, ${character.pos_z}] cell=${character.cell_id}`);

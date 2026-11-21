@@ -86,6 +86,10 @@ function removeActiveCharacter(actorId) {
   if (typeof mp !== 'undefined' && activeCharacters.has(actorId)) {
     require('./core/position-persistence').getInstance().onDisconnect(actorId);
     require('./core/economy-physical-sync').getInstance().onDisconnect(actorId);
+    const survival = require('./survival-service');
+    if (survival.isOnline(actorId)) {
+      survival.onDisconnect(actorId).catch((err) => console.error('[commands] Survival save at logout failed:', err.message));
+    }
   }
   browserModal.forgetActor(actorId);
   if (activeCharacters.has(actorId)) {
