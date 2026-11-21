@@ -27,7 +27,8 @@ const index = require('./plugin-record-index');
 const PROGRESSION_TYPES = new Set(['PERK', 'SPEL']);
 
 /** Default plugins whose perks/spells are mirrored. Patches included. */
-const DEFAULT_TRACKED_PLUGINS = Object.freeze(['Mundus.esp', 'MundusUSSEP.esp', 'Pilgrim.esp', 'PilgrimVanillaPatch.esp']);
+const DEFAULT_TRACKED_PLUGINS = Object.freeze(['Mundus.esp', 'MundusUSSEP.esp', 'Pilgrim.esp', 'PilgrimVanillaPatch.esp',
+  'Apprentice.esp', 'ApprenticeAetherius.esp']);
 
 function parseTrackedPlugins(value) {
   if (typeof value !== 'string' || !value.trim()) return [...DEFAULT_TRACKED_PLUGINS];
