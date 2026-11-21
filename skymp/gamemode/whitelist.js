@@ -233,19 +233,23 @@ async function checkWhitelist(userId, profileId, actorId) {
 
     // 5. Atualizar posição do jogador in-game a partir do banco de dados
     if (typeof mp !== 'undefined' && actorId) {
-      console.log(`[whitelist] Moving actor ${actorId.toString(16)} to db location: pos=[${character.pos_x}, ${character.pos_y}, ${character.pos_z}] cell=${character.cell_id}`);
-      
-      const locData = {
-        pos: [character.pos_x, character.pos_y, character.pos_z],
-        rot: [0, 0, character.angle_z],
-        cellOrWorldDesc: character.cell_id
-      };
-      
+      const positionPersistence = require('./core/position-persistence');
+      // cell_id must reach SkyMP as "id:plugin": a bare '0x162e2' is read as a
+      // nonexistent server-generated cell and freezes the actor there
+      // (see core/position-persistence.js).
+      const locData = positionPersistence.loginLocation(character,
+        typeof mp.getDescFromId === 'function' ? (id) => mp.getDescFromId(id) : null);
+
       try {
-        mp.set(actorId, 'locationalData', locData);
+        if (locData) {
+          console.log(`[whitelist] Moving actor ${actorId.toString(16)} to db location: pos=[${locData.pos.join(', ')}] cell=${locData.cellOrWorldDesc} (stored: ${character.cell_id})`);
+          mp.set(actorId, 'locationalData', locData);
+        } else {
+          console.error(`[whitelist] Character ${character.id} has no usable saved location (pos=[${character.pos_x}, ${character.pos_y}, ${character.pos_z}] cell=${character.cell_id}); leaving the actor where SkyMP placed it.`);
+        }
         // From here on the actor stands where it logged out, so its position
-        // may be saved (core/position-persistence.js).
-        require('./core/position-persistence').getInstance().markRestored(actorId);
+        // may be saved.
+        positionPersistence.getInstance().markRestored(actorId);
         mp.set(actorId, 'browserVisible', true);
         console.log(`[whitelist] Spawn locData applied successfully for ${character.first_name} ${character.last_name}`);
         

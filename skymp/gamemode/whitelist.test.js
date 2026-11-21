@@ -4,6 +4,8 @@ const Module = require('node:module');
 const fs = require('node:fs');
 
 const queries = [];
+const restoredActors = [];
+const realPositionPersistence = require('./core/position-persistence');
 const originalLoad = Module._load;
 
 Module._load = function (request, parent, isMain) {
@@ -67,4 +69,27 @@ test('local auto-whitelist persists the canonical spawn FormDesc', () => {
   const source = fs.readFileSync(require.resolve('./whitelist'), 'utf8');
   assert.match(source, /cell_id: '162e2:Skyrim\.esm'/);
   assert.doesNotMatch(source, /cell_id: '0x162e2'/);
+});
+
+test('login teleport sends the saved cell as id:plugin, never a bare id (actor frozen in a nonexistent cell)', async () => {
+  const sets = [];
+  global.mp = {
+    set: (id, key, value) => sets.push({ id, key, value }),
+    getDescFromId: (id) => `${id.toString(16)}:Skyrim.esm`,
+    kick: () => {}
+  };
+  restoredActors.length = 0;
+  // whitelist.js requires this module lazily (same cached object), so patch it.
+  const realGetInstance = realPositionPersistence.getInstance;
+  realPositionPersistence.getInstance = () => ({ markRestored: (id) => restoredActors.push(id) });
+  try {
+    assert.equal(await whitelist.checkWhitelist(1, 42, 0xff000001), true);
+  } finally {
+    delete global.mp;
+    realPositionPersistence.getInstance = realGetInstance;
+  }
+  const teleport = sets.find((s) => s.key === 'locationalData');
+  assert.ok(teleport, 'the character is moved to its saved location');
+  assert.deepEqual(teleport.value, { pos: [0, 0, 0], rot: [0, 0, 0], cellOrWorldDesc: '3c:Skyrim.esm' });
+  assert.deepEqual(restoredActors, [0xff000001], 'position saving starts after the teleport');
 });
