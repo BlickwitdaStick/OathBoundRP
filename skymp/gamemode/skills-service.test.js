@@ -331,3 +331,13 @@ test('older launchers: the F3 menu files go out once per session, and the inject
   assert.doesNotThrow(() => new Function(`return ${service.CEF_INJECTOR}`));
   assert.match(service.UPDATE_OWNER_SNIPPET, /executeJavaScript/);
 });
+
+test('Tab → Skills: the vanilla StatsMenu is closed and the F3 menu opens instead', () => {
+  const s = service.REPORT_SNIPPET;
+  assert.match(s, /e\.name === 'StatsMenu'/);
+  assert.match(s, /isMenuOpen\('StatsMenu'\)/);
+  assert.match(s, /isMenuOpen\('TweenMenu'\)/);
+  assert.match(s, /tapKey\(1\)/, 'Esc closes the vanilla menus');
+  assert.match(s, /handlePlayerShortcutKey\("skills:open"\)/);
+  assert.match(s, /> 3000/, 'gives up instead of looping');
+});

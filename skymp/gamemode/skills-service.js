@@ -226,6 +226,39 @@ const REPORT_SNIPPET = `
     } catch (e) {}
   });
 
+  // Replaces Skyrim's own Skills screen (Tab → Skills, "StatsMenu") with the
+  // OATHBOUND skills menu. The client hides the page while the Tab menu or
+  // StatsMenu is open, so both are closed first (Esc, only while one of them
+  // is actually open — Esc in the open world would bring up the pause menu),
+  // then the F3 menu opens. Gives up after 3 s so it can never loop.
+  var obRedirect = null;
+  ctx.sp.on('menuOpen', function (e) {
+    if (e && e.name === 'StatsMenu') obRedirect = { since: Date.now(), lastTap: 0 };
+  });
+  ctx.sp.on('update', function () {
+    if (!obRedirect) return;
+    var now = Date.now();
+    if (now - obRedirect.since > 3000) { obRedirect = null; return; }
+    try {
+      var stats = ctx.sp.Ui.isMenuOpen('StatsMenu');
+      var tween = ctx.sp.Ui.isMenuOpen('TweenMenu');
+      if (stats || tween) {
+        if (now - obRedirect.lastTap > 150) {
+          obRedirect.lastTap = now;
+          ctx.sp.Input.tapKey(1);
+        }
+        return;
+      }
+      obRedirect = null;
+      var br = ctx.sp.browser;
+      if (br && br.executeJavaScript) {
+        if (br.setVisible) br.setVisible(true);
+        if (br.setFocused) br.setFocused(true);
+        br.executeJavaScript('window.handlePlayerShortcutKey && window.handlePlayerShortcutKey("skills:open")');
+      }
+    } catch (err) { obRedirect = null; }
+  });
+
   var obOneHand = function (w) {
     if (!w) return false;
     var t = w.getWeaponType();
