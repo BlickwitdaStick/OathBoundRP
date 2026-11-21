@@ -25,7 +25,7 @@ test('governance command definitions are unique and usable by module registry', 
 
 test('default prison uses the canonical spawn FormDesc', () => {
   const source = fs.readFileSync(require.resolve('./governance-service'), 'utf8');
-  assert.match(source, /cellId: '162e2:Skyrim\.esm'/);
+  assert.match(source, /DEFAULT_PRISON_CELL = '162e2:Skyrim\.esm'/);
   assert.doesNotMatch(source, /cellId: '0x162e2'/);
 });
 

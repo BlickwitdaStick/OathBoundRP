@@ -180,7 +180,7 @@ CREATE TABLE IF NOT EXISTS `prison_records` (
   `sentence_minutes` INT NOT NULL DEFAULT 10 COMMENT 'Tempo de pena em minutos in-game',
   `time_served_minutes` INT NOT NULL DEFAULT 0,
   `status` VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT 'active, released, escaped',
-  `cell_id` VARCHAR(64) NOT NULL DEFAULT '0x162e2' COMMENT 'Celula da prisao',
+  `cell_id` VARCHAR(64) NOT NULL DEFAULT '162e2:Skyrim.esm' COMMENT 'Celula da prisao',
   `arrested_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `released_at` TIMESTAMP NULL DEFAULT NULL,
   CONSTRAINT `fk_prison_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE

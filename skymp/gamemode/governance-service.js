@@ -27,6 +27,10 @@ const economyService = require('./core/economy-service');
 const debtService = require('./debt-service');
 const rangeUtils = require('./core/range-utils');
 const { actorRef } = require('./core/papyrus');
+const { toCellDesc } = require('./core/position-persistence');
+
+/** The Bannered Mare, used when no city has a usable prison configured. */
+const DEFAULT_PRISON_CELL = '162e2:Skyrim.esm';
 // Tarefa 13: a Revista Institucional aprende a reconhecer proveniencia suja, e
 // o confisco aprende a rebaixar 'hot' -> 'stolen'. `crime` e modulo `lab`
 // (pode estar desligado); toda chamada abaixo passa por
@@ -980,10 +984,19 @@ async function getDefaultPrison() {
      LIMIT 1`
   );
   if (rows.length === 0) {
-    return { cellId: '162e2:Skyrim.esm', pos: [35, -165, -189] };
+    return { cellId: DEFAULT_PRISON_CELL, pos: [35, -165, -189] };
+  }
+  // prison_cell_id is typed in by hand. SkyMP reads a cell with no ":plugin"
+  // ('0x162e2') as a nonexistent server-generated cell and freezes whoever is
+  // teleported there, so it is resolved to "id:plugin" first.
+  const cellId = toCellDesc(rows[0].prison_cell_id,
+    typeof mp !== 'undefined' && typeof mp.getDescFromId === 'function' ? (id) => mp.getDescFromId(id) : null);
+  if (!cellId) {
+    console.error(`[governance] cities.prison_cell_id '${rows[0].prison_cell_id}' is not a cell FormDesc (expected e.g. '162e2:Skyrim.esm'); using the default prison.`);
+    return { cellId: DEFAULT_PRISON_CELL, pos: [35, -165, -189] };
   }
   return {
-    cellId: rows[0].prison_cell_id,
+    cellId,
     pos: [rows[0].prison_pos_x || 35, rows[0].prison_pos_y || -165, rows[0].prison_pos_z || -189]
   };
 }
@@ -1479,5 +1492,6 @@ module.exports = {
   arrestTarget,
   setTax,
   registerShop,
-  createEvent
+  createEvent,
+  _getDefaultPrison: getDefaultPrison
 };
