@@ -19,6 +19,11 @@
       "from": "build-resources",
       "to": "vendor",
       "filter": ["voice-helper.exe"]
+    },
+    {
+      "from": "node_modules/7zip-bin/win/x64",
+      "to": "vendor",
+      "filter": ["7za.exe"]
     }
   ],
   "extraMetadata": {

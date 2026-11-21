@@ -23,6 +23,12 @@ test('o pacote inclui o voice-helper.exe como recurso vendor (opcional)', () => 
   assert.ok(fs.existsSync(stagingDir), `${entry.from}/ tem que existir no repo`);
 });
 
+test('the package ships 7za.exe for Nexus archives', () => {
+  const entry = config.extraResources.find((e) => e.to === 'vendor' && e.filter.includes('7za.exe'));
+  assert.ok(entry, 'missing extraResources entry for 7za.exe');
+  assert.ok(fs.existsSync(path.join(launcherDir, entry.from, '7za.exe')), `${entry.from}/7za.exe must exist (npm install)`);
+});
+
 test('o build stagea o voice-helper antes de empacotar', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(launcherDir, 'package.json'), 'utf8'));
   assert.match(pkg.scripts.build, /stage-voice-helper\.mjs.*electron-builder/s);

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AuthData, LaunchGameResult, ServerModsCheck } from '../types/electron';
+import type { AuthData, LaunchGameResult, NexusAccount, ServerModsCheck } from '../types/electron';
 import { Play, Settings as SettingsIcon, LogOut, FolderOpen, RefreshCw } from 'lucide-react';
 import heroBg from '../assets/launcher-bg.png';
 
@@ -39,18 +39,41 @@ export function Home({ auth, setAuth }: HomeProps) {
   const [updateResult, setUpdateResult] = useState<string>('');
   // Server-hosted mods prompt (SkyUI, RaceMenu...): shown when the server
   // requires files the player does not have; resolves true on "Download".
-  const [modPrompt, setModPrompt] = useState<{ check: ServerModsCheck; resolve: (accepted: boolean) => void } | null>(null);
+  // 'nexus' = Nexus mods from Nexus, the rest from the server;
+  // 'server' = everything from the game server; null = not now.
+  type ModChoice = 'nexus' | 'server' | null;
+  const [modPrompt, setModPrompt] = useState<{ check: ServerModsCheck; resolve: (choice: ModChoice) => void } | null>(null);
+  const [nexusAccount, setNexusAccount] = useState<NexusAccount | null>(null);
+  const [nexusKeyInput, setNexusKeyInput] = useState('');
+  const [nexusBusy, setNexusBusy] = useState(false);
+  // Free Nexus accounts: the launcher waits for the "Mod Manager Download" click.
+  const [nexusWait, setNexusWait] = useState<{ name: string; index: number; count: number; wrongFile?: boolean } | null>(null);
 
   const askToInstallServerMods = (check: ServerModsCheck) =>
-    new Promise<boolean>((resolve) => {
+    new Promise<ModChoice>((resolve) => {
+      setNexusAccount(check.nexusAccount || null);
       setModPrompt({
         check,
-        resolve: (accepted) => {
+        resolve: (choice) => {
           setModPrompt(null);
-          resolve(accepted);
+          resolve(choice);
         }
       });
     });
+
+  const connectNexus = async () => {
+    setNexusBusy(true);
+    try {
+      setNexusAccount(await window.electronAPI.nexusSetApiKey(nexusKeyInput));
+      setNexusKeyInput('');
+    } finally {
+      setNexusBusy(false);
+    }
+  };
+
+  const forgetNexus = async () => {
+    setNexusAccount(await window.electronAPI.nexusForget());
+  };
 
   const formatMb = (bytes: number) => bytes >= 1073741824
     ? `${(bytes / 1073741824).toFixed(1)} GB`
@@ -258,20 +281,41 @@ export function Home({ auth, setAuth }: HomeProps) {
         return;
       }
       if (serverMods.missing && serverMods.missing.length > 0) {
-        const accepted = await askToInstallServerMods(serverMods);
-        if (!accepted) {
+        const choice = await askToInstallServerMods(serverMods);
+        if (!choice) {
           setStatus('This server requires its mods to play. Click PLAY again when you want to install them.');
           return;
         }
         window.electronAPI.onServerModsProgress((p) => {
-          const pct = p.bytesTotal > 0 ? Math.floor((p.bytesDone / p.bytesTotal) * 100) : 100;
-          setStatus(`Downloading server mods (${p.index + 1}/${p.count}): ${p.file} — ${pct}%`);
+          const pct = p.bytesTotal ? Math.floor(((p.bytesDone || 0) / p.bytesTotal) * 100) : null;
+          const step = p.count ? ` (${(p.index || 0) + 1}/${p.count})` : '';
+          if (p.phase === 'nexus-wait') {
+            setNexusWait({ name: p.name || '', index: p.index || 0, count: p.count || 0 });
+            setStatus(`Waiting for you on Nexus Mods${step}: ${p.name}`);
+            return;
+          }
+          if (p.phase === 'nexus-wrong-file') {
+            setNexusWait((w) => (w ? { ...w, wrongFile: true } : w));
+            return;
+          }
+          setNexusWait(null);
+          if (p.phase === 'nexus-download') {
+            setStatus(`Downloading from Nexus Mods${step}: ${p.name}${pct === null ? '' : ` — ${pct}%`}`);
+          } else if (p.phase === 'nexus-extract') {
+            setStatus(`Unpacking${step}: ${p.name}`);
+          } else {
+            setStatus(`Downloading from the OATHBOUND server${step}: ${p.file}${pct === null ? '' : ` — ${pct}%`}`);
+          }
         });
         setStatus('Downloading server mods...');
-        const installed = await window.electronAPI.installServerMods(gamePath);
+        const installed = await window.electronAPI.installServerMods(gamePath, { useNexus: choice === 'nexus' });
+        setNexusWait(null);
         if (!installed.ok) {
           setStatus(`Server mods download failed: ${installed.error || 'unknown error'}`);
           return;
+        }
+        if (installed.warnings && installed.warnings.length > 0) {
+          console.warn('[mods]', installed.warnings.join('\n'));
         }
       } else {
         // Files already present: still make sure the plugins are enabled.
@@ -453,9 +497,88 @@ export function Home({ auth, setAuth }: HomeProps) {
                 </li>
               ))}
             </ul>
+            {(() => {
+              const nexus = modPrompt.check.nexus;
+              if (!nexus || nexus.archives.length === 0) {
+                return (
+                  <div className="mods-prompt-actions">
+                    <button className="maintenance-btn" onClick={() => modPrompt.resolve(null)}>Not now</button>
+                    <button className="btn-primary" onClick={() => modPrompt.resolve('server')}>Download and play</button>
+                  </div>
+                );
+              }
+              const connected = !!nexusAccount?.connected;
+              return (
+                <>
+                  <div className="nexus-box">
+                    <div className="nexus-split">
+                      <span>From Nexus Mods: <strong>{nexus.archives.length} mod{nexus.archives.length === 1 ? '' : 's'}</strong></span>
+                      <span>{formatMb(nexus.nexusBytes)}</span>
+                    </div>
+                    <div className="nexus-split">
+                      <span>From the OATHBOUND server: <strong>{nexus.serverFiles} file{nexus.serverFiles === 1 ? '' : 's'}</strong></span>
+                      <span>{formatMb(nexus.serverBytes)}</span>
+                    </div>
+                    {connected ? (
+                      <p className="nexus-note">
+                        Nexus account: <strong>{nexusAccount?.name}</strong> ({nexusAccount?.isPremium ? 'Premium: downloads start on their own' : 'free'}).{' '}
+                        <button className="link-btn" onClick={forgetNexus}>Use another key</button>
+                        {!nexusAccount?.isPremium && (
+                          <><br />For each mod, its Nexus page opens in your browser. Click <strong>Mod Manager Download</strong> (then <strong>Slow download</strong>), and the launcher takes it from there.</>
+                        )}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="nexus-note">
+                          Most of these mods come from Nexus Mods, so they download fast and the authors get the credit.
+                          Paste your personal Nexus API key (free account is fine).{' '}
+                          <button className="link-btn" onClick={() => window.electronAPI.nexusOpenKeyPage()}>Get my API key</button>
+                        </p>
+                        <div className="nexus-key-row">
+                          <input
+                            type="password"
+                            className="nexus-key-input"
+                            placeholder="Nexus Mods API key"
+                            value={nexusKeyInput}
+                            onChange={(e) => setNexusKeyInput(e.target.value)}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                          <button className="maintenance-btn" onClick={connectNexus} disabled={nexusBusy || nexusKeyInput.trim() === ''}>
+                            {nexusBusy ? 'Checking...' : 'Connect'}
+                          </button>
+                        </div>
+                        {nexusAccount?.error && <p className="nexus-error">{nexusAccount.error}</p>}
+                      </>
+                    )}
+                  </div>
+                  <div className="mods-prompt-actions">
+                    <button className="link-btn" onClick={() => modPrompt.resolve('server')}>Everything from the server instead (slower)</button>
+                    <button className="maintenance-btn" onClick={() => modPrompt.resolve(null)}>Not now</button>
+                    <button className="btn-primary" onClick={() => modPrompt.resolve('nexus')} disabled={!connected}>Download and play</button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {nexusWait && (
+        <div className="mods-prompt-overlay" role="dialog" aria-modal="true" aria-labelledby="nexus-wait-title">
+          <div className="mods-prompt hud-panel">
+            <h2 id="nexus-wait-title" className="mods-prompt-title">Download on Nexus Mods</h2>
+            <p className="mods-prompt-text">
+              Mod {nexusWait.index + 1} of {nexusWait.count}: <strong>{nexusWait.name}</strong>.
+              Its page is open in your browser. Click <strong>Mod Manager Download</strong>, then <strong>Slow download</strong>.
+              If the browser asks to open the OATHBOUND launcher, allow it.
+            </p>
+            {nexusWait.wrongFile && (
+              <p className="nexus-error">That link was for a different file. Use the button on the page that just opened.</p>
+            )}
             <div className="mods-prompt-actions">
-              <button className="maintenance-btn" onClick={() => modPrompt.resolve(false)}>Not now</button>
-              <button className="btn-primary" onClick={() => modPrompt.resolve(true)}>Download and play</button>
+              <button className="link-btn" onClick={() => window.electronAPI.nexusSkipCurrent()}>Skip: get it from the server</button>
+              <button className="maintenance-btn" onClick={() => window.electronAPI.nexusReopenPage()}>Open the page again</button>
             </div>
           </div>
         </div>

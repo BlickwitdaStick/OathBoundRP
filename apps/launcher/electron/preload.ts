@@ -21,7 +21,13 @@ const api = {
   getLocalPlugins: (folderPath: string) => ipcRenderer.invoke('get-local-plugins', folderPath),
   verifyMods: (folderPath: string) => ipcRenderer.invoke('verify-mods', folderPath),
   checkServerMods: (folderPath: string) => ipcRenderer.invoke('check-server-mods', folderPath),
-  installServerMods: (folderPath: string) => ipcRenderer.invoke('install-server-mods', folderPath),
+  installServerMods: (folderPath: string, opts?: { useNexus?: boolean }) => ipcRenderer.invoke('install-server-mods', folderPath, opts),
+  nexusGetAccount: () => ipcRenderer.invoke('nexus-get-account'),
+  nexusSetApiKey: (key: string) => ipcRenderer.invoke('nexus-set-api-key', key),
+  nexusForget: () => ipcRenderer.invoke('nexus-forget'),
+  nexusOpenKeyPage: () => ipcRenderer.invoke('nexus-open-key-page'),
+  nexusReopenPage: () => ipcRenderer.invoke('nexus-reopen-page'),
+  nexusSkipCurrent: () => ipcRenderer.invoke('nexus-skip-current'),
   enableServerPlugins: (folderPath: string) => ipcRenderer.invoke('enable-server-plugins', folderPath),
   onServerModsProgress: (callback: (value: any) => void) => {
     ipcRenderer.removeAllListeners('server-mods-progress');

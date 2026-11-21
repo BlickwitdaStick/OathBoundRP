@@ -49,7 +49,7 @@ test('PLAY instala/habilita os mods do servidor ANTES da verificacao de paridade
   const play = home.slice(home.indexOf('const handlePlay = async'));
   const checkAt = play.indexOf('checkServerMods(gamePath)');
   const askAt = play.indexOf('askToInstallServerMods(');
-  const installAt = play.indexOf('installServerMods(gamePath)');
+  const installAt = play.indexOf('installServerMods(gamePath');
   const verifyAt = play.indexOf('verifyMods(gamePath)');
   const queueAt = play.indexOf('joinQueue()');
   assert.ok(checkAt > 0 && askAt > checkAt && installAt > askAt, 'checa, pergunta, so entao baixa');

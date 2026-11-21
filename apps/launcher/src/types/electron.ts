@@ -23,14 +23,34 @@ export interface ServerModsCheck {
   /** Base-game plugins (Creation Club) the server needs and the player lacks. */
   missingBase?: string[];
   bytesNeeded?: number;
+  /** How the missing files split between Nexus Mods and the game server. */
+  nexus?: {
+    archives: Array<{ name: string; version: string; size: number; files: number }>;
+    nexusBytes: number;
+    serverBytes: number;
+    serverFiles: number;
+  };
+  nexusAccount?: NexusAccount | null;
+}
+
+export interface NexusAccount {
+  connected: boolean;
+  name?: string;
+  isPremium?: boolean;
+  error?: string;
+  apiKeyPage: string;
 }
 
 export interface ServerModsProgress {
-  file: string;
-  index: number;
-  count: number;
-  bytesDone: number;
-  bytesTotal: number;
+  /** server = game-server download; nexus-* = Nexus Mods steps. */
+  phase?: 'server' | 'nexus-wait' | 'nexus-download' | 'nexus-extract' | 'nexus-wrong-file';
+  file?: string;
+  name?: string;
+  page?: string;
+  index?: number;
+  count?: number;
+  bytesDone?: number;
+  bytesTotal?: number;
 }
 
 export interface ElectronAPI {
@@ -54,7 +74,13 @@ export interface ElectronAPI {
   getLocalPlugins: (folderPath: string) => Promise<any>;
   verifyMods: (folderPath: string) => Promise<{ success: boolean; error?: string; loadOrder?: string[] }>;
   checkServerMods: (folderPath: string) => Promise<ServerModsCheck>;
-  installServerMods: (folderPath: string) => Promise<{ ok: boolean; installed?: string[]; pluginsChanged?: boolean; code?: string; error?: string }>;
+  installServerMods: (folderPath: string, opts?: { useNexus?: boolean }) => Promise<{ ok: boolean; installed?: string[]; nexusInstalled?: number; warnings?: string[]; pluginsChanged?: boolean; code?: string; error?: string }>;
+  nexusGetAccount: () => Promise<NexusAccount>;
+  nexusSetApiKey: (key: string) => Promise<NexusAccount>;
+  nexusForget: () => Promise<NexusAccount>;
+  nexusOpenKeyPage: () => Promise<void>;
+  nexusReopenPage: () => Promise<void>;
+  nexusSkipCurrent: () => Promise<void>;
   enableServerPlugins: (folderPath: string) => Promise<{ ok: boolean; changed?: boolean; error?: string }>;
   onServerModsProgress: (callback: (value: ServerModsProgress) => void) => void;
   analyzePlugins: (folderPath: string, serverLoadOrder?: string[]) => Promise<{ ok: boolean; problems: string[]; plugins: any[] }>;

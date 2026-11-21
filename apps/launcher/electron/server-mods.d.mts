@@ -44,3 +44,4 @@ export function installServerMods(input: {
   maxAttempts?: number;
 }): Promise<{ installed: string[] }>;
 export function enableServerPlugins(input: { gamePath: string; plugins: string[] }): { changed: boolean };
+export function dataPathOf(gamePath: string, rel: string): string;

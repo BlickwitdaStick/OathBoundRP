@@ -31,6 +31,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { buildClientModsManifest } = require('../clientMods');
+const { attachNexusSources, readNexusRecipe } = require('../nexusSources');
 
 const GAME_API_DIR = path.resolve(__dirname, '..');
 const REPO_DIR = path.resolve(GAME_API_DIR, '..', '..');
@@ -39,7 +40,10 @@ const DEFAULTS = {
   clientModsDir: process.env.CLIENT_MODS_DIR || path.join(REPO_DIR, 'skymp', 'client-mods'),
   serverSettingsPath: path.join(REPO_DIR, 'skymp', 'server', 'server-settings.json'),
   modsJsonPath: process.env.MODS_MANIFEST_PATH || path.join(GAME_API_DIR, 'mods.json'),
-  manifestOutPath: process.env.CLIENT_MODS_MANIFEST_PATH || path.join(GAME_API_DIR, 'client-mods-manifest.json')
+  manifestOutPath: process.env.CLIENT_MODS_MANIFEST_PATH || path.join(GAME_API_DIR, 'client-mods-manifest.json'),
+  // Which Nexus archive holds which client-mods file: the launcher downloads
+  // those from Nexus instead of this server. Optional.
+  nexusRecipePath: process.env.NEXUS_SOURCES_PATH || path.join(REPO_DIR, 'skymp', 'config', 'nexus-sources.json')
 };
 
 function sha256File(filePath) {
@@ -117,6 +121,14 @@ async function syncClientMods(opts) {
     serverSupportsLightPlugins: lightSupported
   });
   log(`[client-mods] ${manifest.files.length} file(s), ${manifest.plugins.length} plugin(s), ${(manifest.totalBytes / 1048576).toFixed(1)} MB, version ${manifest.version}`);
+  const nexus = attachNexusSources(o.nexusRecipePath ? readNexusRecipe(o.nexusRecipePath) : null, manifest);
+  manifest.nexus = nexus.sources;
+  if (nexus.sources.length > 0) {
+    const covered = new Set(nexus.sources.flatMap(s => s.provides.map(p => p.path)));
+    const coveredBytes = manifest.files.filter(f => covered.has(f.path)).reduce((sum, f) => sum + f.size, 0);
+    log(`[client-mods] Nexus: ${nexus.sources.length} archive(s) provide ${covered.size} file(s), ${(coveredBytes / 1048576).toFixed(1)} MB; the rest is served from here`);
+  }
+  for (const d of nexus.dropped) log(`[client-mods] Nexus source skipped: ${d}`);
   if (manifest.basePlugins.length > 0) {
     log(`[client-mods] base-game plugins required (not distributed; every player has them): ${manifest.basePlugins.map(b => b.name).join(', ')}`);
   }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, screen, shell, safeStorage } from 'electron';
 import path from 'path';
 import { exec, spawn } from 'child_process';
 import fs from 'fs';
@@ -18,6 +18,16 @@ import {
   planServerModSync,
   validateManifest
 } from './server-mods.mjs';
+import {
+  NEXUS_API_KEY_PAGE,
+  createNexusApi,
+  downloadArchive,
+  extractProvided,
+  nexusFilePageUrl,
+  nexusSourcesOf,
+  parseNxmUrl,
+  planNexusDownloads
+} from './nexus-mods.mjs';
 import { iniciarProcessoJogo } from './game-process.mjs';
 import { iniciarVoiceHelper, killVoiceHelper } from './voice-process.mjs';
 import { createVoiceHandoffServer, VOICE_HANDOFF_PORT } from './voice-handoff.mjs';
@@ -255,7 +265,23 @@ function createWindow() {
   });
 }
 
+// One launcher at a time. Also how nxm:// links reach us: Windows starts a
+// second launcher with the link in argv, which hands it to this one and quits.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    handleNxmArgs(argv);
+  });
+}
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   restoreSharedLoadOrderFiles();
   createWindow();
 });
@@ -270,6 +296,7 @@ app.on('will-quit', () => {
   if (voiceWatchdog) clearInterval(voiceWatchdog);
   if (loadOrderRestoreWatchdog) clearInterval(loadOrderRestoreWatchdog);
   restoreSharedLoadOrderFiles();
+  releaseNxmHandlerSync();
   killVoiceHelper();
   voiceHandoff?.close().catch(() => {});
 });
@@ -1373,6 +1400,163 @@ async function fetchServerModsManifest() {
   return validateManifest(await res.json());
 }
 
+// ─── Nexus Mods ───
+// Hosted mods that are on Nexus come from Nexus (electron/nexus-mods.mjs);
+// the game server only sends what Nexus cannot (OATHBOUND's own files,
+// patched files, anything a player skips).
+
+const NEXUS_ACCOUNT_FILE = path.join(app.getPath('userData'), 'nexus-account.json');
+const NEXUS_APP_NAME = 'OATHBOUND RP Launcher';
+const NXM_COMMAND_KEY = 'HKCU\\Software\\Classes\\nxm\\shell\\open\\command';
+let nexusSessionKey: string | null = null;
+
+function sevenZipPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'vendor', '7za.exe')
+    : path.resolve(__dirname, '../node_modules/7zip-bin/win/x64/7za.exe');
+}
+
+function readNexusApiKey(): string | null {
+  if (nexusSessionKey) return nexusSessionKey;
+  try {
+    const saved = JSON.parse(fs.readFileSync(NEXUS_ACCOUNT_FILE, 'utf8'));
+    if (saved?.encryptedKey && safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(Buffer.from(saved.encryptedKey, 'base64'));
+    }
+  } catch { /* no saved key */ }
+  return null;
+}
+
+function saveNexusApiKey(key: string) {
+  nexusSessionKey = key;
+  // Never written in plain text: without OS encryption the key lives only
+  // for this session.
+  if (!safeStorage.isEncryptionAvailable()) return;
+  fs.writeFileSync(NEXUS_ACCOUNT_FILE, JSON.stringify({
+    encryptedKey: safeStorage.encryptString(key).toString('base64')
+  }));
+}
+
+function nexusApi(key: string) {
+  return createNexusApi({ apiKey: key, appName: NEXUS_APP_NAME, appVersion: app.getVersion() });
+}
+
+async function nexusAccount() {
+  const key = readNexusApiKey();
+  if (!key) return { connected: false, apiKeyPage: NEXUS_API_KEY_PAGE };
+  try {
+    const user = await nexusApi(key).validate();
+    return { connected: true, name: user.name, isPremium: user.isPremium, apiKeyPage: NEXUS_API_KEY_PAGE };
+  } catch (e: any) {
+    return { connected: false, error: e?.message || String(e), apiKeyPage: NEXUS_API_KEY_PAGE };
+  }
+}
+
+ipcMain.handle('nexus-get-account', () => nexusAccount());
+
+ipcMain.handle('nexus-set-api-key', async (_event, rawKey) => {
+  const key = typeof rawKey === 'string' ? rawKey.trim() : '';
+  if (!/^[A-Za-z0-9+/=_\-.]{20,400}$/.test(key)) return { connected: false, error: 'That does not look like a Nexus Mods API key.', apiKeyPage: NEXUS_API_KEY_PAGE };
+  try {
+    const user = await nexusApi(key).validate();
+    saveNexusApiKey(key);
+    return { connected: true, name: user.name, isPremium: user.isPremium, apiKeyPage: NEXUS_API_KEY_PAGE };
+  } catch (e: any) {
+    return { connected: false, error: e?.message || String(e), apiKeyPage: NEXUS_API_KEY_PAGE };
+  }
+});
+
+ipcMain.handle('nexus-forget', () => {
+  nexusSessionKey = null;
+  try { fs.rmSync(NEXUS_ACCOUNT_FILE, { force: true }); } catch { /* already gone */ }
+  return { connected: false, apiKeyPage: NEXUS_API_KEY_PAGE };
+});
+
+ipcMain.handle('nexus-open-key-page', () => shell.openExternal(NEXUS_API_KEY_PAGE));
+
+// nxm:// handling. Free Nexus accounts only get a download link through the
+// "Mod Manager Download" button, which opens an nxm:// link. The launcher
+// takes over the nxm handler while it waits and gives it back afterwards
+// (Vortex / Mod Organizer keep working).
+type NxmWaiter = { modId: number; fileId: number; page: string; resolve: (n: any) => void; reject: (e: any) => void };
+let nxmWaiter: NxmWaiter | null = null;
+let previousNxmCommand: string | null | undefined;
+
+function handleNxmArgs(argv: string[]) {
+  const raw = argv.find(a => typeof a === 'string' && a.toLowerCase().startsWith('nxm://'));
+  if (!raw) return;
+  const link = parseNxmUrl(raw);
+  if (!link || !nxmWaiter) return;
+  if (link.modId === nxmWaiter.modId && link.fileId === nxmWaiter.fileId) {
+    const w = nxmWaiter;
+    nxmWaiter = null;
+    w.resolve(link);
+  } else if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('server-mods-progress', { phase: 'nexus-wrong-file' });
+  }
+}
+
+function regQueryDefault(key: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    exec(`reg query "${key}" /ve`, { windowsHide: true }, (err, stdout) => {
+      if (err) return resolve(null);
+      const m = /REG_(?:EXPAND_)?SZ\s+(.*)$/m.exec(stdout);
+      resolve(m ? m[1].trim() : null);
+    });
+  });
+}
+
+async function claimNxmHandler() {
+  if (previousNxmCommand !== undefined) return;
+  const prev = await regQueryDefault(NXM_COMMAND_KEY);
+  previousNxmCommand = prev && !prev.toLowerCase().includes(process.execPath.toLowerCase()) ? prev : null;
+  if (app.isPackaged) app.setAsDefaultProtocolClient('nxm');
+  else app.setAsDefaultProtocolClient('nxm', process.execPath, [path.resolve(process.argv[1] || '.')]);
+}
+
+function releaseNxmHandlerSync() {
+  if (previousNxmCommand === undefined) return;
+  const prev = previousNxmCommand;
+  previousNxmCommand = undefined;
+  try {
+    if (prev) {
+      spawn('reg', ['add', NXM_COMMAND_KEY, '/ve', '/d', prev, '/f'], { windowsHide: true, stdio: 'ignore' });
+    } else if (app.isPackaged) {
+      app.removeAsDefaultProtocolClient('nxm');
+    } else {
+      app.removeAsDefaultProtocolClient('nxm', process.execPath, [path.resolve(process.argv[1] || '.')]);
+    }
+  } catch { /* best effort */ }
+}
+
+function waitForNxm(source: any, timeoutMs = 20 * 60 * 1000) {
+  return new Promise<any>((resolve, reject) => {
+    const page = nexusFilePageUrl(source);
+    const timer = setTimeout(() => {
+      if (nxmWaiter?.page === page) nxmWaiter = null;
+      reject(Object.assign(new Error('Timed out waiting for the Nexus download button.'), { code: 'SKIPPED' }));
+    }, timeoutMs);
+    nxmWaiter = {
+      modId: source.modId,
+      fileId: source.fileId,
+      page,
+      resolve: (n) => { clearTimeout(timer); resolve(n); },
+      reject: (e) => { clearTimeout(timer); reject(e); }
+    };
+    shell.openExternal(page).catch(() => {});
+  });
+}
+
+ipcMain.handle('nexus-reopen-page', () => {
+  if (nxmWaiter) shell.openExternal(nxmWaiter.page).catch(() => {});
+});
+
+ipcMain.handle('nexus-skip-current', () => {
+  const w = nxmWaiter;
+  nxmWaiter = null;
+  w?.reject(Object.assign(new Error('Skipped'), { code: 'SKIPPED' }));
+});
+
 ipcMain.handle('check-server-mods', async (_event, gamePath) => {
   if (!gamePath) return { ok: false, error: 'Invalid game path.' };
   try {
@@ -1380,6 +1564,7 @@ ipcMain.handle('check-server-mods', async (_event, gamePath) => {
     const cache = serverModsHashCache();
     const plan = await planServerModSync({ manifest, gamePath, hashCache: cache });
     cache.save();
+    const nexusPlan = planNexusDownloads({ sources: nexusSourcesOf(manifest), toDownload: plan.toDownload });
     return {
       ok: true,
       version: manifest.version,
@@ -1387,41 +1572,110 @@ ipcMain.handle('check-server-mods', async (_event, gamePath) => {
       totalFiles: manifest.files.length,
       missing: plan.toDownload.map(f => ({ path: f.path, size: f.size })),
       missingBase: plan.missingBase,
-      bytesNeeded: plan.totalBytes
+      bytesNeeded: plan.totalBytes,
+      nexus: {
+        archives: nexusPlan.archives.map(a => ({
+          name: a.source.name, version: a.source.version, size: a.source.size, files: a.provides.length
+        })),
+        nexusBytes: nexusPlan.nexusBytes,
+        serverBytes: nexusPlan.serverBytes,
+        serverFiles: nexusPlan.remaining.length
+      },
+      nexusAccount: nexusPlan.archives.length > 0 ? await nexusAccount() : null
     };
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) };
   }
 });
 
-ipcMain.handle('install-server-mods', async (_event, gamePath) => {
+ipcMain.handle('install-server-mods', async (_event, gamePath, opts) => {
   if (!gamePath) return { ok: false, error: 'Invalid game path.' };
   if (await isGameRunning()) return { ok: false, error: 'Close Skyrim before installing server mods.' };
+  const useNexus = opts?.useNexus !== false;
   const send = (value: any) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('server-mods-progress', value);
   };
+  const warnings: string[] = [];
   try {
     const manifest = await fetchServerModsManifest();
     const cache = serverModsHashCache();
-    const plan = await planServerModSync({ manifest, gamePath, hashCache: cache });
-    const space = checarEspacoParaBaixar(path.join(gamePath, 'Data', '.space-check'), gamePath, plan.totalBytes);
+    let plan = await planServerModSync({ manifest, gamePath, hashCache: cache });
+    const nexusPlan = planNexusDownloads({ sources: nexusSourcesOf(manifest), toDownload: plan.toDownload });
+    const nexusKey = useNexus && nexusPlan.archives.length > 0 ? readNexusApiKey() : null;
+
+    // Room for the biggest archive plus everything it unpacks into Data/.
+    const biggestArchive = nexusKey ? Math.max(0, ...nexusPlan.archives.map(a => a.source.size || a.bytes)) : 0;
+    const space = checarEspacoParaBaixar(path.join(gamePath, 'Data', '.space-check'), gamePath, plan.totalBytes + biggestArchive);
     if (!space.ok) return { ok: false, error: space.error };
+
+    let nexusInstalled = 0;
+    if (nexusKey) {
+      const api = nexusApi(nexusKey);
+      const downloadsDir = path.join(gamePath, 'OATHBOUND_Downloads');
+      try {
+        const user = await api.validate();
+        const count = nexusPlan.archives.length;
+        for (let index = 0; index < count; index++) {
+          const { source, provides } = nexusPlan.archives[index];
+          const base = { name: source.name, index, count };
+          try {
+            const archivePath = path.join(downloadsDir, source.fileName);
+            const haveArchive = source.size > 0 && fs.existsSync(archivePath) && fs.statSync(archivePath).size === source.size;
+            if (!haveArchive) {
+              let link = null;
+              if (!user.isPremium) {
+                await claimNxmHandler();
+                send({ phase: 'nexus-wait', ...base, page: nexusFilePageUrl(source) });
+                link = await waitForNxm(source);
+              }
+              send({ phase: 'nexus-download', ...base, bytesDone: 0, bytesTotal: source.size });
+              const url = await api.downloadLink(source, link);
+              await downloadArchive({
+                url, dest: archivePath, expectedSize: source.size,
+                onProgress: (bytesDone: number, bytesTotal: number) => send({ phase: 'nexus-download', ...base, bytesDone, bytesTotal })
+              });
+            }
+            send({ phase: 'nexus-extract', ...base });
+            const result = await extractProvided({
+              sevenZipPath: sevenZipPath(), archivePath, provides, gamePath,
+              workDir: path.join(downloadsDir, `extract-${source.fileId}`)
+            });
+            nexusInstalled += result.installed.length;
+            if (result.mismatched.length > 0) {
+              warnings.push(`${source.name}: ${result.mismatched.length} file(s) differ from the server's copy and come from the server.`);
+            }
+            try { fs.rmSync(archivePath, { force: true }); } catch { /* disk space only */ }
+          } catch (e: any) {
+            if (e?.code === 'SKIPPED') warnings.push(`${source.name}: skipped on Nexus, downloaded from the server.`);
+            else if (e?.code === 'BAD_KEY' || e?.code === 'RATE_LIMITED') throw e;
+            else warnings.push(`${source.name}: ${e?.message || e} Downloaded from the server instead.`);
+          }
+        }
+      } catch (e: any) {
+        warnings.push(`Nexus Mods: ${e?.message || e} The rest comes from the server.`);
+      } finally {
+        nxmWaiter = null;
+        releaseNxmHandlerSync();
+      }
+      plan = await planServerModSync({ manifest, gamePath, hashCache: cache });
+    }
 
     const result = await installServerMods({
       gamePath,
       baseUrl: gameApiBaseUrl(),
       toDownload: plan.toDownload,
-      onProgress: send
+      onProgress: (p: any) => send({ phase: 'server', ...p })
     });
     // Rehash what was just written so the next check is instant.
     await planServerModSync({ manifest, gamePath, hashCache: cache });
     cache.save();
     const plugins = enableServerPlugins({ gamePath, plugins: manifest.plugins });
-    console.info(`[launcher] server mods: installed ${result.installed.length} file(s); plugin lists ${plugins.changed ? 'updated' : 'unchanged'}.`);
-    return { ok: true, installed: result.installed, pluginsChanged: plugins.changed };
+    console.info(`[launcher] server mods: ${nexusInstalled} file(s) from Nexus, ${result.installed.length} from the server; plugin lists ${plugins.changed ? 'updated' : 'unchanged'}.`);
+    for (const w of warnings) console.warn(`[launcher] ${w}`);
+    return { ok: true, installed: result.installed, nexusInstalled, warnings, pluginsChanged: plugins.changed };
   } catch (e: any) {
     console.error('[launcher] server mods install failed:', e);
-    return { ok: false, code: e?.code, error: e?.message || String(e) };
+    return { ok: false, code: e?.code, error: e?.message || String(e), warnings };
   }
 });
 

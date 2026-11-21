@@ -105,7 +105,7 @@ function sha256File(filePath) {
   });
 }
 
-function dataPathOf(gamePath, rel) {
+export function dataPathOf(gamePath, rel) {
   const dataDir = path.resolve(gamePath, 'Data');
   const full = path.resolve(dataDir, ...rel.split('/'));
   if (!full.startsWith(dataDir + path.sep)) {
