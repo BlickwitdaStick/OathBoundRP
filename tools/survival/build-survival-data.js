@@ -26,7 +26,11 @@ const path = require('path');
 const zlib = require('zlib');
 
 const DATA = process.argv[2] || process.env.SKYRIM_DATA || 'E:\\SkyrimRP\\Skyrim Special Edition\\Data';
-const OUT = path.resolve(__dirname, '..', '..', 'skymp', 'gamemode', 'data', 'survival-data.json');
+const REPO = path.resolve(__dirname, '..', '..');
+const OUT = path.join(REPO, 'skymp', 'gamemode', 'data', 'survival-data.json');
+/** Hosted mods (Gourmet etc.): their foods count too, in the game's load order. */
+const CLIENT_MODS = path.join(REPO, 'skymp', 'client-mods');
+const CLIENT_MANIFEST = path.join(REPO, 'apps', 'game-api', 'client-mods-manifest.json');
 const LOAD = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
 const SURVIVAL = 'ccQDRSSE001-SurvivalMode.esl';
 
@@ -54,8 +58,38 @@ const FOOD_EFFECTS = {
 
 // ── plugin reading ───────────────────────────────────────────────────────────
 
+/** A plugin file: hosted mods first, then the game's Data folder. */
+function pluginPath(name) {
+  const hosted = path.join(CLIENT_MODS, name);
+  return fs.existsSync(hosted) ? hosted : path.join(DATA, name);
+}
+
+/** Plugin names spelled as in the server's load order (masters are often lower-cased). */
+const SERVER_SETTINGS = path.join(REPO, 'skymp', 'server', 'server-settings.json');
+const _canonical = new Map((() => {
+  try { return JSON.parse(fs.readFileSync(SERVER_SETTINGS, 'utf8')).loadOrder || []; } catch { return []; }
+})().map((n) => [String(n).toLowerCase(), String(n)]));
+const canonical = (name) => _canonical.get(String(name).toLowerCase()) || name;
+
+const _lightCache = new Map();
+function isLight(name) {
+  const key = name.toLowerCase();
+  if (!_lightCache.has(key)) {
+    let light = /.esl$/i.test(name);
+    try {
+      const head = Buffer.alloc(12);
+      const fd = fs.openSync(pluginPath(name), 'r');
+      fs.readSync(fd, head, 0, 12, 0);
+      fs.closeSync(fd);
+      light = light || Boolean(head.readUInt32LE(8) & 0x200);
+    } catch { /* not found: treat as full */ }
+    _lightCache.set(key, light);
+  }
+  return _lightCache.get(key);
+}
+
 function readPlugin(name) {
-  const buf = fs.readFileSync(path.join(DATA, name));
+  const buf = fs.readFileSync(pluginPath(name));
   const headSize = buf.readUInt32LE(4);
   const masters = fieldsOf(buf.subarray(24, 24 + headSize)).filter((f) => f.type === 'MAST').map((f) => zstr(f.data));
   const selfIndex = name === SURVIVAL ? 0xfe : LOAD.findIndex((n) => n.toLowerCase() === name.toLowerCase());
@@ -70,7 +104,19 @@ function readPlugin(name) {
     }
     return selfIndex === 0xfe ? null : ((selfIndex << 24) | low) >>> 0;
   };
-  return { name, buf, headSize, masters, toGlobal };
+  /**
+   * plugin-local FormID → key for the server: "0x…" for the five base masters
+   * (fixed indexes), else a FormDesc "id:Plugin.esp" the server resolves with
+   * mp.getIdFromDesc (light plugins keep 12 bits of id, full ones 24).
+   */
+  const keyOf = (local) => {
+    const id = toGlobal(local);
+    if (id !== null) return `0x${id.toString(16)}`;
+    const hi = local >>> 24;
+    const owner = hi < masters.length ? masters[hi] : name;
+    return `${(local & (isLight(owner) ? 0xfff : 0xffffff)).toString(16)}:${canonical(owner)}`;
+  };
+  return { name, buf, headSize, masters, toGlobal, keyOf };
 }
 
 function zstr(d) {
@@ -166,18 +212,16 @@ function effectNames() {
 function readFoods() {
   const effects = effectNames();
   const foods = {};
-  // Update.esm first, then Survival Mode's edits override.
-  for (const name of ['Update.esm', SURVIVAL]) {
+  // Update.esm, then Survival Mode, then every hosted mod in the game's load
+  // order (Gourmet's survival module gives its foods the same effects). Foods
+  // in light or modded plugins are keyed by FormDesc (see keyOf). A later
+  // plugin that edits a food WITHOUT survival effects (WACCF, for one) does
+  // not erase it: the table keeps the last survival values it saw.
+  const hosted = fs.existsSync(CLIENT_MANIFEST) ? (JSON.parse(fs.readFileSync(CLIENT_MANIFEST, 'utf8')).plugins || []) : [];
+  for (const name of ['Update.esm', SURVIVAL, ...hosted.filter((p) => fs.existsSync(path.join(CLIENT_MODS, p)))]) {
     const plugin = readPlugin(name);
     eachRecord(plugin, 'ALCH', (r) => {
-      const id = plugin.toGlobal(r.id);
-      // Survival Mode's own foods (the hot soups and stews) live in a light
-      // plugin, whose ids depend on the load order: written as a FormDesc and
-      // resolved by the server (mp.getIdFromDesc).
-      const key = id !== null
-        ? `0x${id.toString(16)}`
-        : (name === SURVIVAL && (r.id >>> 24) === plugin.masters.length ? `${(r.id & 0xfff).toString(16)}:${SURVIVAL}` : null);
-      if (key === null) return;
+      const key = plugin.keyOf(r.id);
       const entry = { editorId: r.edid };
       for (const f of r.fields) {
         if (f.type !== 'EFID') continue;

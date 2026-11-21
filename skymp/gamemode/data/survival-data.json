@@ -2568,243 +2568,243 @@
  },
  "foods": {
   "0x403cf72": {
-   "editorId": "DLC2FoodBoarMeatCooked",
+   "editorId": "MAG_FoodBoarMeatCooked",
    "hunger": "medium"
   },
   "0x64b43": {
-   "editorId": "FoodPie",
-   "hunger": "medium"
+   "editorId": "MAG_FoodApplePie",
+   "hunger": "large"
   },
   "0x722c7": {
-   "editorId": "FoodPheasantCooked",
+   "editorId": "MAG_FoodPheasantCooked",
    "hunger": "medium"
   },
   "0xe8947": {
-   "editorId": "FoodChickenCooked",
+   "editorId": "MAG_FoodChickenCooked",
    "hunger": "medium"
   },
   "0x300353b": {
-   "editorId": "BYOHFoodSnowberryCrostata",
-   "hunger": "medium"
+   "editorId": "MAG_FoodSnowberryCrostata",
+   "hunger": "large"
   },
   "0x3003541": {
-   "editorId": "BYOHFoodSalmonCooked02",
+   "editorId": "MAG_FoodSalmonCooked02",
    "hunger": "medium"
   },
   "0x30009dc": {
-   "editorId": "BYOHFoodGarlicBread01",
-   "hunger": "medium"
+   "editorId": "MAG_FoodGarlicBread01",
+   "hunger": "large"
   },
   "0x3003537": {
-   "editorId": "BYOHFoodPotatoBread01A",
-   "hunger": "medium"
+   "editorId": "MAG_FoodPotatoBread",
+   "hunger": "large"
   },
   "0x300353f": {
-   "editorId": "BYOHFoodMudcrabLegsCooked",
+   "editorId": "MAG_FoodMudcrabLegsCooked",
    "hunger": "medium"
   },
   "0x3011801": {
-   "editorId": "BYOHFoodLavenderDumpling01",
+   "editorId": "MAG_FoodSnowberryDumpling",
    "hunger": "medium"
   },
   "0x3003539": {
-   "editorId": "BYOHFoodJuniperBerryCrostata",
+   "editorId": "MAG_FoodJuniperBerryCrostata",
    "hunger": "medium"
   },
   "0x300353a": {
-   "editorId": "BYOHFoodJazbayCrostata",
-   "hunger": "medium"
+   "editorId": "MAG_FoodJazbayCrostata",
+   "hunger": "large"
   },
   "0x30117ff": {
-   "editorId": "BYOHFoodChickenDumpling01",
+   "editorId": "MAG_FoodJazbayDumpling",
    "hunger": "medium"
   },
   "0x30009db": {
-   "editorId": "BYOHFoodBraidedBread01",
-   "hunger": "medium"
+   "editorId": "MAG_FoodBraidedBread01",
+   "hunger": "large"
   },
   "0x3003533": {
-   "editorId": "BYOHFoodAppleDumpling01",
+   "editorId": "MAG_FoodAppleDumpling",
    "hunger": "medium"
   },
   "0x669a2": {
-   "editorId": "FoodVenison",
+   "editorId": "MAG_FoodVenison",
    "hunger": "small"
   },
   "0x65c99": {
-   "editorId": "FoodBeef",
+   "editorId": "MAG_FoodBeef",
    "hunger": "small"
   },
   "0x669a4": {
-   "editorId": "FoodMammothMeat",
+   "editorId": "MAG_FoodMammothMeat",
    "hunger": "small"
   },
   "0x10211a": {
-   "editorId": "DA03FoodMammothMeat",
+   "editorId": "MAG_FoodMammothMeatAlt",
    "hunger": "small"
   },
   "0x64b36": {
-   "editorId": "FoodCheeseWheel02B",
-   "hunger": "small"
+   "editorId": "MAG_FoodCheeseWheelEidar01",
+   "hunger": "medium"
   },
   "0x64b34": {
-   "editorId": "FoodCheeseWheel02A",
-   "hunger": "small"
+   "editorId": "MAG_FoodCheeseWheelEidar02",
+   "hunger": "medium"
   },
   "0x64b35": {
-   "editorId": "FoodCheeseWheel01B",
-   "hunger": "small"
+   "editorId": "MAG_FoodCheeseWheelGoat01",
+   "hunger": "medium"
   },
   "0x64b33": {
-   "editorId": "FoodCheeseWheel01A",
-   "hunger": "small"
+   "editorId": "MAG_FoodCheeseWheelGoat02",
+   "hunger": "medium"
   },
   "0x64b3c": {
-   "editorId": "FoodSlaughterfishCooked",
+   "editorId": "MAG_FoodSlaughterfishCooked",
    "hunger": "medium"
   },
   "0x64b3a": {
-   "editorId": "FoodPotatoesBaked",
-   "hunger": "small"
+   "editorId": "MAG_FoodPotatoBaked",
+   "hunger": "medium"
   },
   "0x669a3": {
-   "editorId": "FoodMammothCheeseBowl",
+   "editorId": "MAG_FoodMammothCheeseBowl",
    "hunger": "small"
   },
   "0x65c9b": {
-   "editorId": "FoodHorkerMeat",
+   "editorId": "MAG_FoodHorkerMeat",
    "hunger": "small"
   },
   "0x10394d": {
-   "editorId": "FoodHoney",
-   "hunger": "small"
+   "editorId": "MAG_FoodHoney",
+   "hunger": "verySmall"
   },
   "0x65c9a": {
-   "editorId": "FoodGoatMeat",
+   "editorId": "MAG_FoodGoatMeat",
    "hunger": "small"
   },
   "0x403bd14": {
-   "editorId": "DLC2FoodBoarMeat",
+   "editorId": "MAG_FoodBoarMeat",
    "hunger": "small"
   },
   "0x403bd15": {
-   "editorId": "DLC2FoodAshHopperMeat",
+   "editorId": "MAG_FoodAshHopperMeat",
    "hunger": "small"
   },
   "0x403d125": {
-   "editorId": "DLC2FoodAshHopperLeg",
+   "editorId": "MAG_FoodAshHopperLeg",
    "hunger": "small"
   },
   "0xe8448": {
-   "editorId": "FoodCharredSkeeverMeat",
+   "editorId": "MAG_FoodSkeeverCooked",
    "hunger": "medium"
   },
   "0x64b42": {
-   "editorId": "FoodTomato",
-   "hunger": "small"
+   "editorId": "MAG_FoodTomato",
+   "hunger": "verySmall"
   },
   "0x64b3d": {
-   "editorId": "FoodSweetroll",
-   "hunger": "small"
+   "editorId": "MAG_FoodSweetroll",
+   "hunger": "medium"
   },
   "0x65c9f": {
-   "editorId": "FoodSalmon",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodSalmon",
+   "hunger": "small"
   },
   "0x65c9e": {
-   "editorId": "FoodRabbit",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodRabbit",
+   "hunger": "small"
   },
   "0x64b41": {
-   "editorId": "FoodPotato",
+   "editorId": "MAG_FoodPotato",
    "hunger": "verySmall"
   },
   "0x65c9d": {
-   "editorId": "FoodPheasant",
-   "hunger": "verySmall"
-  },
-  "0x64b39": {
-   "editorId": "FoodLongTaffyTreat",
-   "hunger": "verySmall"
-  },
-  "0x64b3e": {
-   "editorId": "FoodLeeksGrilled",
+   "editorId": "MAG_FoodPheasant",
    "hunger": "small"
   },
+  "0x64b39": {
+   "editorId": "MAG_FoodLongTaffyTreat",
+   "hunger": "medium"
+  },
+  "0x64b3e": {
+   "editorId": "MAG_FoodLeekCooked",
+   "hunger": "medium"
+  },
   "0x669a5": {
-   "editorId": "FoodLeek",
+   "editorId": "MAG_FoodLeek",
    "hunger": "verySmall"
   },
   "0x64b38": {
-   "editorId": "FoodHoneyNutTreat",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodHoneyNutTreat",
+   "hunger": "medium"
   },
   "0x10d666": {
-   "editorId": "FoodGourd",
+   "editorId": "MAG_FoodGourd",
    "hunger": "verySmall"
   },
   "0xedb2e": {
-   "editorId": "FoodDogMeat",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodDogMeat",
+   "hunger": "small"
   },
   "0xf2011": {
-   "editorId": "FoodChicken",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodChicken",
+   "hunger": "small"
   },
   "0x64b32": {
-   "editorId": "FoodCheeseWedge02",
+   "editorId": "MAG_FoodCheeseWedgeEidar",
    "hunger": "verySmall"
   },
   "0x64b31": {
-   "editorId": "FoodCheeseWedge01",
+   "editorId": "MAG_FoodCheeseWedgeGoat",
    "hunger": "verySmall"
   },
   "0x64b40": {
-   "editorId": "FoodCarrot",
+   "editorId": "MAG_FoodCarrot",
    "hunger": "verySmall"
   },
   "0x64b3f": {
-   "editorId": "FoodCabbage",
+   "editorId": "MAG_FoodCabbage",
    "hunger": "verySmall"
   },
   "0x65c98": {
-   "editorId": "FoodBread01B",
+   "editorId": "MAG_FoodBread",
    "hunger": "verySmall"
   },
   "0x65c97": {
-   "editorId": "FoodBread01A",
-   "hunger": "small"
+   "editorId": "MAG_FoodBreadLoaf",
+   "hunger": "medium"
   },
   "0x64b30": {
-   "editorId": "FoodBoiledCremeTreat",
-   "hunger": "small"
+   "editorId": "MAG_FoodBoiledCremeTreat",
+   "hunger": "medium"
   },
   "0x64b2f": {
-   "editorId": "FoodApple02",
-   "hunger": "small"
+   "editorId": "MAG_FoodApple02",
+   "hunger": "verySmall"
   },
   "0x64b2e": {
-   "editorId": "FoodApple",
-   "hunger": "small"
+   "editorId": "MAG_FoodApple",
+   "hunger": "verySmall"
   },
   "0x40206e7": {
-   "editorId": "DLC2FoodAshYam",
+   "editorId": "MAG_FoodAshYam",
    "hunger": "verySmall"
   },
   "0x3003540": {
-   "editorId": "BYOHFoodMudcrabLegs",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodMudcrabLegs",
+   "hunger": "small"
   },
   "0x3003534": {
-   "editorId": "BYOHFoodMilk",
+   "editorId": "MAG_FoodMilk",
    "hunger": "verySmall"
   },
   "0x3003538": {
-   "editorId": "BYOHFoodFlour",
+   "editorId": "MAG_FoodFlour",
    "hunger": "verySmall"
   },
   "0x300353c": {
-   "editorId": "BYOHFoodButter",
+   "editorId": "MAG_FoodButter",
    "hunger": "verySmall"
   },
   "0x4024e0b": {
@@ -2852,8 +2852,8 @@
    "hunger": "verySmall"
   },
   "0xeba03": {
-   "editorId": "FoodClamMeat",
-   "hunger": "verySmall"
+   "editorId": "MAG_FoodClamMeat",
+   "hunger": "small"
   },
   "9e2:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "Survival_FoodHotPotatoSoup",
@@ -2880,11 +2880,11 @@
    "hunger": "large"
   },
   "0x403cd5b": {
-   "editorId": "DLC2FoodHorkerAshYamStew",
-   "hunger": "large"
+   "editorId": "MAG_FoodAshYamSoup",
+   "hunger": "medium"
   },
   "0x300353e": {
-   "editorId": "BYOHFoodClamChowder",
+   "editorId": "MAG_FoodClamChowder",
    "hunger": "large"
   },
   "0x3003536": {
@@ -2892,7 +2892,7 @@
    "hunger": "verySmall"
   },
   "0xf4320": {
-   "editorId": "FoodElsweyrFondue",
+   "editorId": "MAG_FoodCheeseFondueGoat",
    "hunger": "large"
   },
   "9e3:ccQDRSSE001-SurvivalMode.esl": {
@@ -2908,16 +2908,16 @@
    "hunger": "large"
   },
   "9e5:ccQDRSSE001-SurvivalMode.esl": {
-   "editorId": "Survival_DLC2FoodHotHorkerAshYamStew",
+   "editorId": "MAG_FoodBoarStewHot",
+   "hunger": "large",
    "warmth": true,
-   "cold": true,
-   "hunger": "large"
+   "cold": true
   },
   "9e7:ccQDRSSE001-SurvivalMode.esl": {
-   "editorId": "Survival_FoodHotBeefStew",
+   "editorId": "MAG_FoodBeefStewHot",
+   "hunger": "large",
    "warmth": true,
-   "cold": true,
-   "hunger": "large"
+   "cold": true
   },
   "9e6:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "Survival_FoodHotAppleCabbageStew",
@@ -2926,41 +2926,41 @@
    "hunger": "large"
   },
   "9e8:ccQDRSSE001-SurvivalMode.esl": {
-   "editorId": "Survival_FoodHotHorkerStew",
+   "editorId": "MAG_FoodHorkerStewHot",
+   "hunger": "large",
    "warmth": true,
-   "cold": true,
-   "hunger": "large"
+   "cold": true
   },
   "9e9:ccQDRSSE001-SurvivalMode.esl": {
-   "editorId": "Survival_FoodHotVenisonStew",
+   "editorId": "MAG_FoodVenisonStewHot",
+   "hunger": "large",
    "warmth": true,
-   "cold": true,
-   "hunger": "large"
+   "cold": true
   },
   "9ea:ccQDRSSE001-SurvivalMode.esl": {
-   "editorId": "Survival_BYOHFoodHotClamChowder",
+   "editorId": "MAG_FoodClamChowderHot",
+   "hunger": "large",
    "warmth": true,
-   "cold": true,
-   "hunger": "large"
+   "cold": true
   },
   "0xeba01": {
-   "editorId": "FoodAppleCabbageStew",
+   "editorId": "MAG_FoodCabbageTomatoSoup",
    "hunger": "large"
   },
   "0xeba02": {
-   "editorId": "FoodCabbageSoup",
-   "hunger": "large"
+   "editorId": "MAG_FoodCabbageSoup",
+   "hunger": "medium"
   },
   "0xf4314": {
-   "editorId": "FoodBeefStew",
+   "editorId": "MAG_FoodBeefStew",
    "hunger": "large"
   },
   "0xf4315": {
-   "editorId": "FoodHorkerStew",
+   "editorId": "MAG_FoodHorkerStew",
    "hunger": "large"
   },
   "0xf431b": {
-   "editorId": "FoodCabbagePotatoSoup",
+   "editorId": "MAG_FoodCabbagePotatoSoup",
    "hunger": "large"
   },
   "0x3133b": {
@@ -3000,7 +3000,7 @@
    "hunger": "verySmall"
   },
   "0xf431e": {
-   "editorId": "FoodVegetableSoup",
+   "editorId": "MAG_FoodVegetableSoup",
    "hunger": "large"
   },
   "0xb91d7": {
@@ -3016,7 +3016,7 @@
    "hunger": "verySmall"
   },
   "0xf431d": {
-   "editorId": "FoodVenisonStew",
+   "editorId": "MAG_FoodVenisonStew",
    "hunger": "large"
   },
   "0xf693f": {
@@ -3024,59 +3024,59 @@
    "hunger": "verySmall"
   },
   "0x555e8": {
-   "editorId": "FreeformDragonBridgeMead",
+   "editorId": "MAG_FreeformDragonBridgeMead",
    "hunger": "verySmall"
   },
   "0xf431c": {
-   "editorId": "FoodTomatoSoup",
-   "hunger": "large"
+   "editorId": "MAG_FoodTomatoSoup",
+   "hunger": "medium"
   },
   "0x300353d": {
-   "editorId": "FoodPotatoSoup",
-   "hunger": "large"
+   "editorId": "MAG_FoodPotatoSoup",
+   "hunger": "medium"
   },
   "0x722b0": {
-   "editorId": "FoodHorseMeatCooked",
-   "hunger": "large"
+   "editorId": "MAG_FoodHorseMeatCooked",
+   "hunger": "medium"
   },
   "0x65c9c": {
-   "editorId": "FoodHorseMeat",
+   "editorId": "MAG_FoodHorseMeat",
    "hunger": "small"
   },
   "0xcd614": {
-   "editorId": "FoodMarriageMeal",
+   "editorId": "MAG_FoodMarriageMeal",
    "hunger": "large"
   },
   "0x722bd": {
-   "editorId": "FoodVenisonCooked",
-   "hunger": "large"
+   "editorId": "MAG_FoodVenisonCooked",
+   "hunger": "medium"
   },
   "0x722bb": {
-   "editorId": "FoodMammothMeatCooked",
-   "hunger": "large"
+   "editorId": "MAG_FoodMammothMeatCooked",
+   "hunger": "medium"
   },
   "0x7224c": {
-   "editorId": "FoodGoatMeatCooked",
+   "editorId": "MAG_FoodGoatMeatCooked",
    "hunger": "medium"
   },
   "0x7224e": {
-   "editorId": "FoodHorkerMeatCooked",
-   "hunger": "large"
+   "editorId": "MAG_FoodHorkerMeatCooked",
+   "hunger": "medium"
   },
   "0x721e8": {
-   "editorId": "FoodBeefCooked",
-   "hunger": "large"
+   "editorId": "MAG_FoodBeefCooked",
+   "hunger": "medium"
   },
   "0xcadfb": {
-   "editorId": "FavorFoodMarkarthSpicedBeef",
-   "hunger": "large"
+   "editorId": "MAG_FoodMarkarthSpicedBeef",
+   "hunger": "medium"
   },
   "0x64b3b": {
-   "editorId": "FoodSalmonCooked01",
+   "editorId": "MAG_FoodSalmonCooked01",
    "hunger": "medium"
   },
   "0x722c2": {
-   "editorId": "FoodRabbitCooked",
+   "editorId": "MAG_FoodRabbitCooked",
    "hunger": "medium"
   },
   "0x40248ce": {
@@ -3094,6 +3094,912 @@
   "0x40207e5": {
    "editorId": "DLC2Flin",
    "hunger": "verySmall"
+  },
+  "0xff000801": {
+   "editorId": "MAG_FoodHorkerPie",
+   "hunger": "large"
+  },
+  "0xff001ae7": {
+   "editorId": "BSKFoodHam",
+   "hunger": "small"
+  },
+  "0xff010366": {
+   "editorId": "BSKFoodHamCooked",
+   "hunger": "large"
+  },
+  "0xff010367": {
+   "editorId": "BSKFoodRatMeatCooked",
+   "hunger": "verySmall"
+  },
+  "0xff0530f8": {
+   "editorId": "BSKFoodCornFlour",
+   "hunger": "verySmall"
+  },
+  "0xff05323d": {
+   "editorId": "BSKFoodRiceFlour",
+   "hunger": "verySmall"
+  },
+  "0xff05dcf3": {
+   "editorId": "BSKFoodSalmonRoeBread01",
+   "hunger": "small"
+  },
+  "0xff05e34e": {
+   "editorId": "BSKFoodTurkey",
+   "hunger": "verySmall"
+  },
+  "0xff05e34f": {
+   "editorId": "BSKFoodTurkeyCooked",
+   "hunger": "medium"
+  },
+  "0xff153479": {
+   "editorId": "BSKFoodDurzogMeatCooked",
+   "hunger": "large"
+  },
+  "0xff33ca5a": {
+   "editorId": "BSKFoodFishSoup",
+   "hunger": "large"
+  },
+  "0xff3e3655": {
+   "editorId": "BSKFoodMudcrabStew",
+   "hunger": "large"
+  },
+  "0xff3f74de": {
+   "editorId": "BSKFoodRiceBreadB",
+   "hunger": "verySmall"
+  },
+  "0xff601911": {
+   "editorId": "BSKFoodWatermelon",
+   "hunger": "small"
+  },
+  "0xff601fb8": {
+   "editorId": "BSKFoodParsnip",
+   "hunger": "verySmall"
+  },
+  "0xff601fc8": {
+   "editorId": "BSKFoodPumpkin",
+   "hunger": "verySmall"
+  },
+  "0xff601fca": {
+   "editorId": "BSKFoodGrapes",
+   "hunger": "small"
+  },
+  "0xff60202d": {
+   "editorId": "BSKFoodSteamedRice",
+   "hunger": "large"
+  },
+  "0xff602078": {
+   "editorId": "BSKFoodPear",
+   "hunger": "small"
+  },
+  "0xff602079": {
+   "editorId": "BSKFoodPeach",
+   "hunger": "small"
+  },
+  "0xff6020ac": {
+   "editorId": "BSKFoodLettuce",
+   "hunger": "verySmall"
+  },
+  "0xff6020ad": {
+   "editorId": "BSKFoodRatMeat",
+   "hunger": "verySmall"
+  },
+  "0xff60280a": {
+   "editorId": "BSKFoodJugofCream01",
+   "hunger": "verySmall"
+  },
+  "0xff60280b": {
+   "editorId": "BSKFoodOrange",
+   "hunger": "small"
+  },
+  "0xff60280e": {
+   "editorId": "BSKFoodEggBoiled",
+   "hunger": "small"
+  },
+  "0xff60280f": {
+   "editorId": "BSKFoodFlapjack",
+   "hunger": "small"
+  },
+  "0xff602810": {
+   "editorId": "BSKFoodJugofCream02",
+   "hunger": "verySmall"
+  },
+  "0xff602812": {
+   "editorId": "BSKFoodRadish",
+   "hunger": "verySmall"
+  },
+  "0xff602839": {
+   "editorId": "BSKFoodStrawberry",
+   "hunger": "small"
+  },
+  "0xff60283a": {
+   "editorId": "BSKFoodBanana",
+   "hunger": "small"
+  },
+  "0xff60283c": {
+   "editorId": "BSKFoodCorn",
+   "hunger": "verySmall"
+  },
+  "0xff6028c6": {
+   "editorId": "BSKFoodMuttonLegCooked",
+   "hunger": "medium"
+  },
+  "0xff6028d8": {
+   "editorId": "BSKFoodMuttonLeg",
+   "hunger": "small"
+  },
+  "0xff602945": {
+   "editorId": "BSKFoodEyebread",
+   "hunger": "small"
+  },
+  "0xff60298b": {
+   "editorId": "BSKFoodCoffeePouch01",
+   "hunger": "verySmall"
+  },
+  "0xff60298c": {
+   "editorId": "BSKFoodCoffeeTankard",
+   "hunger": "verySmall"
+  },
+  "0xff60298d": {
+   "editorId": "BSKFoodCoffeePouch02Green",
+   "hunger": "verySmall"
+  },
+  "0xff602991": {
+   "editorId": "BSKFoodCherry",
+   "hunger": "small"
+  },
+  "0xff602b07": {
+   "editorId": "BSKFoodBeet",
+   "hunger": "verySmall"
+  },
+  "0xff602eac": {
+   "editorId": "BSKFoodLemon",
+   "hunger": "small"
+  },
+  "0xff603012": {
+   "editorId": "BSKFoodFriedRice",
+   "hunger": "large"
+  },
+  "0xff6030f0": {
+   "editorId": "BSKFoodTurnip",
+   "hunger": "verySmall"
+  },
+  "0xff603666": {
+   "editorId": "BSKFoodBanana02Cluster",
+   "hunger": "small"
+  },
+  "0xff603e61": {
+   "editorId": "BSKFoodBlueCheeseWedge01",
+   "hunger": "verySmall"
+  },
+  "0xff603e63": {
+   "editorId": "BSKFoodBlueCheeseWheel01B",
+   "hunger": "small"
+  },
+  "0xff741e12": {
+   "editorId": "BSKFoodCornChowder",
+   "hunger": "medium"
+  },
+  "0xff8322cf": {
+   "editorId": "BSKFoodCornBreadA",
+   "hunger": "small"
+  },
+  "0xffa70a39": {
+   "editorId": "BSKFoodRiceBreadA",
+   "hunger": "small"
+  },
+  "0xffcb995b": {
+   "editorId": "BSKFoodJuggedRabbit",
+   "hunger": "medium"
+  },
+  "0xffe96d9f": {
+   "editorId": "BSKFoodCornBreadB",
+   "hunger": "verySmall"
+  },
+  "0xfff0e016": {
+   "editorId": "BSKFoodDurzogMeat",
+   "hunger": "small"
+  },
+  "0xff21c94c": {
+   "editorId": "CYRFoodWhitegrapeWine",
+   "hunger": "verySmall"
+  },
+  "0xff21c94d": {
+   "editorId": "CYRFoodImperialCypressWine",
+   "hunger": "verySmall"
+  },
+  "0xff23b905": {
+   "editorId": "CYRFoodFlinFancy",
+   "hunger": "verySmall"
+  },
+  "0xff2454e4": {
+   "editorId": "CYRStoneridgeMineFF01ApplewatchJack",
+   "hunger": "verySmall"
+  },
+  "0xff001d7f": {
+   "editorId": "CYRFoodApplewatchPie",
+   "hunger": "medium"
+  },
+  "0xff049320": {
+   "editorId": "CYRFoodTrout",
+   "hunger": "verySmall"
+  },
+  "0xff05f064": {
+   "editorId": "CYRFoodVenisonPasty",
+   "hunger": "medium"
+  },
+  "0xff05f068": {
+   "editorId": "CYRFoodMead",
+   "hunger": "verySmall"
+  },
+  "0xff05f06a": {
+   "editorId": "CYRFoodBeefPasty",
+   "hunger": "medium"
+  },
+  "0xff05f06b": {
+   "editorId": "CYRFoodApplewatchCider",
+   "hunger": "verySmall"
+  },
+  "0xff05f06f": {
+   "editorId": "CYRFoodGreenwoodMead",
+   "hunger": "verySmall"
+  },
+  "0xff062713": {
+   "editorId": "CYRFoodShepherdsPie",
+   "hunger": "large"
+  },
+  "0xff062715": {
+   "editorId": "CYRFoodShadowbanishWine",
+   "hunger": "verySmall"
+  },
+  "0xff062716": {
+   "editorId": "CYRFoodColovianBattlecryWine",
+   "hunger": "verySmall"
+  },
+  "0xff071a13": {
+   "editorId": "CYRFoodWatermelonSalad",
+   "hunger": "medium"
+  },
+  "0xff071a14": {
+   "editorId": "CYRFoodGarlicCarrots",
+   "hunger": "small"
+  },
+  "0xff0721c6": {
+   "editorId": "CYRFoodImperialCityStew",
+   "hunger": "large"
+  },
+  "0xff0721c8": {
+   "editorId": "CYRFoodTroutCooked",
+   "hunger": "medium"
+  },
+  "0xff0721c9": {
+   "editorId": "CYRFoodSlaughterfishPie",
+   "hunger": "large"
+  },
+  "0xff0ac0e2": {
+   "editorId": "CYRFoodPumpkinFritters01",
+   "hunger": "small"
+  },
+  "0xff0b6c52": {
+   "editorId": "CYRFoodColovianBeefStew",
+   "hunger": "large"
+  },
+  "0xff0b6c53": {
+   "editorId": "CYRFoodLollipop",
+   "hunger": "verySmall"
+  },
+  "0xff0b6c54": {
+   "editorId": "CYRFoodCandyBunnies",
+   "hunger": "verySmall"
+  },
+  "0xff0b6c55": {
+   "editorId": "CYRFoodBeefSkewer",
+   "hunger": "small"
+  },
+  "0xff0b6c56": {
+   "editorId": "CYRFoodAppleBaked",
+   "hunger": "small"
+  },
+  "0xff0b6c58": {
+   "editorId": "CYRFoodJamApple",
+   "hunger": "verySmall"
+  },
+  "0xff0b6c59": {
+   "editorId": "CYRFoodJamGrape",
+   "hunger": "verySmall"
+  },
+  "0xff0b6c5a": {
+   "editorId": "CYRFoodCheeseCurds01",
+   "hunger": "verySmall"
+  },
+  "0xff0b6c5b": {
+   "editorId": "CYRFoodColovianBreadWreath",
+   "hunger": "small"
+  },
+  "0xff0cc27f": {
+   "editorId": "CYRFoodCheeseOlroyWedge01",
+   "hunger": "verySmall"
+  },
+  "0xff0d2f3d": {
+   "editorId": "CYRFoodSweetcake",
+   "hunger": "small"
+  },
+  "0xff0defa5": {
+   "editorId": "CYRFoodServantsPie",
+   "hunger": "medium"
+  },
+  "0xff0defab": {
+   "editorId": "CYRFoodStrawberryCrostata",
+   "hunger": "medium"
+  },
+  "0xff0df0db": {
+   "editorId": "CYRFoodColovianBrandy",
+   "hunger": "verySmall"
+  },
+  "0xff0f6725": {
+   "editorId": "CYRFoodCarrotCake",
+   "hunger": "small"
+  },
+  "0xff0f6726": {
+   "editorId": "CYRFoodCarrotCakeSlice",
+   "hunger": "verySmall"
+  },
+  "0xff105240": {
+   "editorId": "CYRFoodWine01",
+   "hunger": "verySmall"
+  },
+  "0xff105242": {
+   "editorId": "CYRFoodSurilieVintageWine",
+   "hunger": "verySmall"
+  },
+  "0xff105245": {
+   "editorId": "CYRAle",
+   "hunger": "verySmall"
+  },
+  "0xff105248": {
+   "editorId": "CYRBeer",
+   "hunger": "verySmall"
+  },
+  "0xff10524a": {
+   "editorId": "CYRFoodFrostdewBlancWine",
+   "hunger": "verySmall"
+  },
+  "0xff10885b": {
+   "editorId": "CYRFoodSpicedWine",
+   "hunger": "verySmall"
+  },
+  "0xff10c7c1": {
+   "editorId": "CYRFoodCheeseCheddarWheel01B",
+   "hunger": "small"
+  },
+  "0xff10c7c3": {
+   "editorId": "CYRFoodCheeseMarbleWedge01",
+   "hunger": "verySmall"
+  },
+  "0xff10c7c4": {
+   "editorId": "CYRFoodCheeseMarbleWheel01A",
+   "hunger": "small"
+  },
+  "0xff10c7c5": {
+   "editorId": "CYRFoodCheeseMarbleWheel01B",
+   "hunger": "small"
+  },
+  "0xff10c7c6": {
+   "editorId": "CYRFoodCheeseCheddarWedge01",
+   "hunger": "verySmall"
+  },
+  "0xff10e464": {
+   "editorId": "CYRFoodMysteryMeat",
+   "hunger": "small"
+  },
+  "0xff123da9": {
+   "editorId": "CYRFoodKvetchi",
+   "hunger": "verySmall"
+  },
+  "0xff123dab": {
+   "editorId": "CYRFoodSherry",
+   "hunger": "verySmall"
+  },
+  "0xff123dad": {
+   "editorId": "CYRFoodMulberryPie",
+   "hunger": "medium"
+  },
+  "0xff123daf": {
+   "editorId": "CYRFoodHerringCooked",
+   "hunger": "medium"
+  },
+  "0xff123db6": {
+   "editorId": "CYRFoodSheepStew",
+   "hunger": "large"
+  },
+  "0xff123db9": {
+   "editorId": "CYRFoodCheeseSheepWheel01A",
+   "hunger": "small"
+  },
+  "0xff123dba": {
+   "editorId": "CYRFoodCheeseSheepWheel01B",
+   "hunger": "small"
+  },
+  "0xff123dbf": {
+   "editorId": "CYRFoodCatfish",
+   "hunger": "verySmall"
+  },
+  "0xff123dc0": {
+   "editorId": "CYRFoodCatfishCooked",
+   "hunger": "medium"
+  },
+  "0xff166a0a": {
+   "editorId": "CYRFoodBrandyAlovFamilyVintage188",
+   "hunger": "verySmall"
+  },
+  "0xff166a13": {
+   "editorId": "CYRFoodBrandyAlovFamilyVintage151",
+   "hunger": "verySmall"
+  },
+  "0xff199126": {
+   "editorId": "CYRFoodWine02",
+   "hunger": "verySmall"
+  },
+  "0xff1b413c": {
+   "editorId": "CYRFoodHeartlandsSpicedWine",
+   "hunger": "verySmall"
+  },
+  "0xff20c549": {
+   "editorId": "CYRFoodPumpkinPie",
+   "hunger": "medium"
+  },
+  "0xff001878": {
+   "editorId": "BSMFoodWineJulianosFirebelly",
+   "hunger": "verySmall"
+  },
+  "0xff001879": {
+   "editorId": "BSMFoodShadowbanishWine",
+   "hunger": "verySmall"
+  },
+  "0xff00187b": {
+   "editorId": "BSMFoodSunejBiscuit",
+   "hunger": "verySmall"
+  },
+  "0xff00187d": {
+   "editorId": "BSMFoodMooncake",
+   "hunger": "small"
+  },
+  "0xff00187f": {
+   "editorId": "BSMFoodFishySticks",
+   "hunger": "small"
+  },
+  "0xff00188e": {
+   "editorId": "BSMFoodSaltrice",
+   "hunger": "medium"
+  },
+  "0xff00188f": {
+   "editorId": "BSMFoodSaltriceNoodles",
+   "hunger": "medium"
+  },
+  "0xff001891": {
+   "editorId": "BSMFoodSaltricePottage",
+   "hunger": "large"
+  },
+  "0xff001893": {
+   "editorId": "BSMFoodVverm",
+   "hunger": "small"
+  },
+  "0xff000981": {
+   "editorId": "MAG_FoodJellyDumpling",
+   "hunger": "medium"
+  },
+  "0xff0009df": {
+   "editorId": "MAG_FoodHotGoatStew",
+   "hunger": "large"
+  },
+  "0xff0009e0": {
+   "editorId": "MAG_FoodHotMammothStew",
+   "hunger": "large"
+  },
+  "0xff0009e1": {
+   "editorId": "MAG_FoodHotPheasantStew",
+   "hunger": "large"
+  },
+  "0xff0009e2": {
+   "editorId": "MAG_FoodHotRabbitStew",
+   "hunger": "large"
+  },
+  "0xff0009e3": {
+   "editorId": "MAG_FoodHotMushroomStew01",
+   "hunger": "large"
+  },
+  "0xff0009e4": {
+   "editorId": "MAG_FoodHotMushroomStew02",
+   "hunger": "large"
+  },
+  "0xff0009e5": {
+   "editorId": "MAG_FoodHotMushroomStew03",
+   "hunger": "large"
+  },
+  "0xff0009e6": {
+   "editorId": "MAG_FoodHotAshHopperStew",
+   "hunger": "large"
+  },
+  "0xff00080d": {
+   "editorId": "MAG_FoodJuniperDumpling",
+   "hunger": "medium"
+  },
+  "0xff000810": {
+   "editorId": "MAG_FoodHorkerPieHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "0xff000815": {
+   "editorId": "MAG_FoodCheeseFondueEidar",
+   "hunger": "large"
+  },
+  "0xff000816": {
+   "editorId": "MAG_FoodAshHopperStew",
+   "hunger": "large"
+  },
+  "0xff000817": {
+   "editorId": "MAG_FoodBoarStew",
+   "hunger": "large"
+  },
+  "0xff000818": {
+   "editorId": "MAG_FoodMammothStew",
+   "hunger": "large"
+  },
+  "0xff00081c": {
+   "editorId": "MAG_FoodGoatStew",
+   "hunger": "large"
+  },
+  "0xff0008aa": {
+   "editorId": "MAG_FoodDogCooked",
+   "hunger": "medium"
+  },
+  "0xff0008ac": {
+   "editorId": "MAG_FoodSkeever",
+   "hunger": "small"
+  },
+  "0xff0008ae": {
+   "editorId": "MAG_FoodSlaughterfishMeat",
+   "hunger": "small"
+  },
+  "0xff0008b1": {
+   "editorId": "MAG_FoodGourdSoup",
+   "hunger": "medium"
+  },
+  "0xff0008b3": {
+   "editorId": "MAG_FoodCarrotSoup",
+   "hunger": "medium"
+  },
+  "0xff0008e2": {
+   "editorId": "MAG_FoodCarrotCooked",
+   "hunger": "medium"
+  },
+  "0xff0008e4": {
+   "editorId": "MAG_FoodAshYamCooked",
+   "hunger": "medium"
+  },
+  "0xff0008ea": {
+   "editorId": "MAG_FoodRabbitStew",
+   "hunger": "large"
+  },
+  "0xff0008eb": {
+   "editorId": "MAG_FoodPheasantStew",
+   "hunger": "large"
+  },
+  "0xff0008f5": {
+   "editorId": "MAG_FoodMushroomStew01",
+   "hunger": "large"
+  },
+  "0xff0008f6": {
+   "editorId": "MAG_FoodMushroomStew02",
+   "hunger": "large"
+  },
+  "0xff0008f7": {
+   "editorId": "MAG_FoodMushroomStew03",
+   "hunger": "large"
+  },
+  "0xff000901": {
+   "editorId": "MAG_FoodMushroomsCooked01",
+   "hunger": "medium"
+  },
+  "0xff000902": {
+   "editorId": "MAG_FoodMushroomsCooked02",
+   "hunger": "medium"
+  },
+  "0xff000903": {
+   "editorId": "MAG_FoodMushroomsCooked03",
+   "hunger": "medium"
+  },
+  "801:unofficial skyrim special edition patch.esp": {
+   "editorId": "MAG_FoodBeefPie",
+   "hunger": "large"
+  },
+  "0xff000800": {
+   "editorId": "MAG_FoodChickenPie",
+   "hunger": "large"
+  },
+  "0xff00080e": {
+   "editorId": "MAG_FoodBeefPieHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "0xff00080f": {
+   "editorId": "MAG_FoodChickenPieHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "882:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodGlassCatfishCooked",
+   "hunger": "medium"
+  },
+  "883:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodGoldfishCooked",
+   "hunger": "medium"
+  },
+  "87a:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAtlanticCodCooked",
+   "hunger": "medium"
+  },
+  "87b:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAustrolebiasCooked",
+   "hunger": "medium"
+  },
+  "87c:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodBucketFishCooked",
+   "hunger": "medium"
+  },
+  "87d:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCabezonCooked",
+   "hunger": "medium"
+  },
+  "87e:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCarpCooked",
+   "hunger": "medium"
+  },
+  "87f:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCuckooCatfishCooked",
+   "hunger": "medium"
+  },
+  "880:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodDragonfishCooked",
+   "hunger": "medium"
+  },
+  "881:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodFlameAngelfishCooked",
+   "hunger": "medium"
+  },
+  "89c:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodBucketFish",
+   "hunger": "small"
+  },
+  "89e:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodTripodFish",
+   "hunger": "small"
+  },
+  "884:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodLyretailAnthiasCooked",
+   "hunger": "medium"
+  },
+  "885:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodPygmySunfishCooked",
+   "hunger": "medium"
+  },
+  "886:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodPinnateSpadefishCooked",
+   "hunger": "medium"
+  },
+  "887:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodTripodFishCooked",
+   "hunger": "medium"
+  },
+  "888:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodVampireFishCooked",
+   "hunger": "medium"
+  },
+  "88a:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodTunaSalmonCooked",
+   "hunger": "medium"
+  },
+  "88b:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodVampireFish",
+   "hunger": "small"
+  },
+  "88c:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodArcticGraylingCooked",
+   "hunger": "medium"
+  },
+  "88d:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodArcticCharCooked",
+   "hunger": "medium"
+  },
+  "88e:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAnglerLarvaeCooked",
+   "hunger": "medium"
+  },
+  "88f:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAsiaticGlassfishCooked",
+   "hunger": "medium"
+  },
+  "890:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAngler",
+   "hunger": "small"
+  },
+  "891:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodTunaSalmon",
+   "hunger": "small"
+  },
+  "896:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodDragonfish",
+   "hunger": "small"
+  },
+  "897:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCuckooCatfish",
+   "hunger": "small"
+  },
+  "898:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCarp",
+   "hunger": "small"
+  },
+  "89a:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FIshFoodJuvenileMudcrabCooked",
+   "hunger": "medium"
+  },
+  "89b:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSalmon",
+   "hunger": "small"
+  },
+  "f77:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupCrabStewHOT",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "f78:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCrabCakes",
+   "hunger": "large"
+  },
+  "8a0:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodGlassCatfish",
+   "hunger": "small"
+  },
+  "8a1:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCabezon",
+   "hunger": "small"
+  },
+  "8a2:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAtlanticCod",
+   "hunger": "small"
+  },
+  "8a3:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodArcticGrayling",
+   "hunger": "small"
+  },
+  "8a4:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodArcticChar",
+   "hunger": "small"
+  },
+  "8a5:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodAnglerCooked",
+   "hunger": "medium"
+  },
+  "efe:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodCrabMeat",
+   "hunger": "small"
+  },
+  "f02:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupCrabBisque",
+   "hunger": "large"
+  },
+  "f04:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupTomatoCrabBisque",
+   "hunger": "large"
+  },
+  "f06:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupPotatoCrabBisque",
+   "hunger": "large"
+  },
+  "f0a:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupCrabBisqueHOT",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "f0b:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupPotatoCrabBisqueHOT",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "f0c:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupTomatoCrabBisqueHOT",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "f25:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSlaughterfish",
+   "hunger": "small"
+  },
+  "f76:ccbgssse001-fish.esm": {
+   "editorId": "MAG_FishFoodSoupCrabStew",
+   "hunger": "large"
+  },
+  "9df:Gourmet.esp": {
+   "editorId": "MAG_FoodGoatStewHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e0:Gourmet.esp": {
+   "editorId": "MAG_FoodMammothStewHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e5:Gourmet.esp": {
+   "editorId": "MAG_FoodMushroomStew03Hot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e6:Gourmet.esp": {
+   "editorId": "MAG_FoodAshHopperStewHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e1:Gourmet.esp": {
+   "editorId": "MAG_FoodPheasantStewHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e2:Gourmet.esp": {
+   "editorId": "MAG_FoodRabbitStewHot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e3:Gourmet.esp": {
+   "editorId": "MAG_FoodMushroomStew01Hot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "9e4:Gourmet.esp": {
+   "editorId": "MAG_FoodMushroomStew02Hot",
+   "hunger": "large",
+   "warmth": true,
+   "cold": true
+  },
+  "187b:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMSunejBiscuit",
+   "hunger": "small"
+  },
+  "187d:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMMooncake",
+   "hunger": "large"
+  },
+  "187f:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFishySticks",
+   "hunger": "small"
+  },
+  "188e:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFoodSaltrice",
+   "hunger": "medium"
+  },
+  "188f:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFoodSaltriceNoodles",
+   "hunger": "large"
+  },
+  "1891:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFoodSaltricePottage",
+   "hunger": "large"
+  },
+  "1893:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFoodVverm",
+   "hunger": "small"
   }
  },
  "rawMeat": [

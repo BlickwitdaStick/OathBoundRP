@@ -109,11 +109,13 @@ describe('survival-needs: the real map (data/survival-data.json)', () => {
     assert.ok(freezing);
   });
 
-  it('has the vanilla foods with Survival Mode meal sizes, and the hot dishes', () => {
-    assert.equal(data.foods['0x64b43'].hunger, 'medium', 'FoodPie');
-    assert.equal(data.foods['0xf4315'].hunger, 'large', 'FoodHorkerStew');
-    const hot = Object.values(data.foods).filter((f) => f.cold && f.warmth);
+  it("has the vanilla foods with a meal size, and Survival Mode's hot dishes", () => {
+    // Sizes can be re-balanced by hosted mods (Gourmet's survival module), so
+    // only check they are known sizes.
+    for (const id of ['0x64b43', '0xf4315']) assert.ok(n.FOOD_HUNGER[data.foods[id].hunger], id);
+    const hot = Object.entries(data.foods).filter(([k, f]) => f.cold && f.warmth && /SurvivalMode\.esl$/i.test(k));
     assert.equal(hot.length, 12);
+    for (const key of Object.keys(data.foods)) assert.match(key, /^(0x[0-9a-f]+|[0-9a-f]+:.+\.(esm|esp|esl))$/i, key);
   });
 });
 

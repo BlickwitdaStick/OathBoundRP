@@ -194,13 +194,14 @@ describe('survival-service: cold', () => {
 });
 
 describe('survival-service: eating and resting', () => {
-  it('vanilla food restores hunger by its Survival Mode size; unknown items do nothing', async () => {
+  it('vanilla food restores hunger by its meal size from the data; unknown items do nothing', async () => {
+    const data = require('./data/survival-data.json');
+    const restore = require('./core/survival-needs').FOOD_HUNGER[data.foods['0x64b43'].hunger]; // FoodPie
     await login({ hunger: 500, exhaustion: 0, cold: 0 });
-    service.handleEat(ACTOR, 0x64b43); // FoodPie: medium, 220
+    service.handleEat(ACTOR, 0x64b43);
     service.handleEat(ACTOR, 0x123456);
     const s = await service.update(ACTOR);
-    assert.equal(s.needs.hunger, 280);
-    assert.equal(lastNote(), 'You are getting peckish.');
+    assert.equal(s.needs.hunger, Math.max(0, 500 - restore));
   });
 
   it('pressing E on a bed rests you while you stay next to it', async () => {
