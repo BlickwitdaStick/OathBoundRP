@@ -1,6 +1,12 @@
 -- Schema de Banco de Dados para SkyMP Heavy RP (MySQL/MariaDB)
 
 CREATE DATABASE IF NOT EXISTS `skymp_rp` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- If the database already existed (created by hand, e.g. in HeidiSQL), it may
+-- have the server's default collation (utf8mb4_uca1400_ai_ci on MariaDB 11+).
+-- Tables below inherit the database default, and later migrations declare
+-- utf8mb4_unicode_ci explicitly; mixing the two makes foreign keys between
+-- them fail (character_depots.hold_id -> holds.id, "incorrectly formed").
+ALTER DATABASE `skymp_rp` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `skymp_rp`;
 
 -- 1. Contas de Jogadores (com suporte a VIP e Monetizacao)
