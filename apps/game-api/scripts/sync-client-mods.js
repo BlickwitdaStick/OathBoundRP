@@ -79,8 +79,11 @@ function readLocalConfig() {
 }
 
 function resolveBaseDataDir() {
-  if (process.env.BASE_GAME_DATA_DIR) return process.env.BASE_GAME_DATA_DIR;
-  return readLocalConfig().baseGameDataDir || null;
+  const dir = process.env.BASE_GAME_DATA_DIR || readLocalConfig().baseGameDataDir || null;
+  // A relative path is relative to the repository, so a hosted server with no
+  // Skyrim install can point at its own data folder ("skymp/data"), which
+  // already holds the base-game masters the mods need.
+  return dir && !path.isAbsolute(dir) ? path.resolve(REPO_DIR, dir) : dir;
 }
 
 /**
