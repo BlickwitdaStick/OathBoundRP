@@ -409,12 +409,14 @@ describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
   const HOLDSTONE_BASE = 0xfe000800;
   let placed;
   let sets;
+  let placedBy;
   let destroyed;
   let nextRef;
 
   beforeEach(async () => {
     setup();
     placed = new Map(); // refId → baseId
+    placedBy = new Map(); // refId → Papyrus self it was placed at
     sets = [];
     destroyed = [];
     nextRef = 0xff000100;
@@ -432,8 +434,22 @@ describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
         if (prop === 'locationalData' && id === STAFF) return { pos: [1000, 2000, 50], rot: [0, 0, 90], cellOrWorldDesc: '3c:Skyrim.esm' };
         return base.get(id, prop);
       },
-      place: (baseId) => { const id = nextRef++; placed.set(id, baseId); return id; },
-      set: (id, prop, value) => sets.push({ id, prop, value }),
+      // SkyMP's server-side Papyrus PlaceAtMe: a new reference at the caller's
+      // position, returned as {type:'form', desc}.
+      callPapyrusFunction: (kind, cls, fn, self, args) => {
+        if (fn !== 'PlaceAtMe') throw new Error(`unexpected Papyrus ${fn}`);
+        assert.equal(args[0].type, 'espm', 'the base goes as baseRef');
+        const id = nextRef++;
+        placed.set(id, global.mp.getIdFromDesc(args[0].desc));
+        placedBy.set(id, self);
+        return { type: 'form', desc: global.mp.getDescFromId(id) };
+      },
+      place: () => { throw new Error('mp.place leaves the reference at 0,0,0; use PlaceAtMe'); },
+      // Real SkyMP refuses this for non-actors ("can only change 'locationalData' for actors").
+      set: (id, prop, value) => {
+        if (prop === 'locationalData' && placed.has(id)) throw new Error("mp.set can only change 'locationalData' for actors, not for refrs");
+        sets.push({ id, prop, value });
+      },
       destroyActor: (id) => { destroyed.push(id); placed.delete(id); }
     };
     service.registerPhysicalAnchors();
@@ -441,16 +457,16 @@ describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
   });
   afterEach(() => { delete global.mp; });
 
-  it('/holdstone spawn puts the stone in front of staff, facing them, and binds it', async () => {
+  /** A holdstone already in the world that no hold owns. */
+  const newStone = () => { const id = nextRef++; placed.set(id, HOLDSTONE_BASE); return id; };
+
+  it('/holdstone spawn puts the stone where staff stands (Papyrus PlaceAtMe) and binds it', async () => {
     await service.handleHoldstoneCommand(STAFF, 'spawn whiterun');
-    assert.match(lastNote(STAFF), /Whiterun holdstone placed in front of you/);
+    assert.match(lastNote(STAFF), /Whiterun holdstone placed where you stand/);
     const [ref] = placed.keys();
     assert.equal(placed.get(ref), HOLDSTONE_BASE);
-    const loc = sets.find((s) => s.id === ref && s.prop === 'locationalData').value;
-    // facing 90° (east): 180 units further along +X, rune face turned back toward the player
-    assert.deepEqual(loc.pos.map(Math.round), [1180, 2000, 50]);
-    assert.deepEqual(loc.rot, [0, 0, 90]);
-    assert.equal(loc.cellOrWorldDesc, '3c:Skyrim.esm');
+    assert.deepEqual(placedBy.get(ref), { type: 'form', desc: global.mp.getDescFromId(STAFF) }, 'placed at the staff member');
+    assert.deepEqual(sets, [], 'no attempt to move a reference with mp.set');
     assert.deepEqual(db.tables.holdstones, [{ hold_id: 'whiterun', object_id: '100' }]);
     assert.equal(service.getIndex().holdstoneById.get(ref), 'whiterun');
     assert.equal(physicalAnchorRegistry.has(ref), true, 'pressing E on it opens the hold menu');
@@ -477,7 +493,7 @@ describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
   });
 
   it('an unbound holdstone tells the player it belongs to no hold, and staff how to bind it', async () => {
-    const ref = global.mp.place(HOLDSTONE_BASE);
+    const ref = newStone();
     assert.equal(service.handleActivation(ref, ANA), false);
     assert.match(lastNote(ANA), /belongs to no hold yet/);
     assert.equal(service.handleActivation(ref, STAFF), false);
@@ -485,7 +501,7 @@ describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
   });
 
   it('/holdstone place works on a spawned stone; a typed desc without its plugin is still refused', async () => {
-    const ref = global.mp.place(HOLDSTONE_BASE);
+    const ref = newStone();
     await service.handleHoldstoneCommand(STAFF, 'place riften');
     service.handleActivation(ref, STAFF);
     await new Promise((r) => setImmediate(r));

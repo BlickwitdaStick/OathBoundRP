@@ -38,6 +38,7 @@ const interactionRegistry = require('./core/interaction-registry');
 const physicalAnchorRegistry = require('./core/physical-anchor-registry');
 const { parseFormId } = require('./core/interaction-targets');
 const espm = require('./core/espm');
+const { actorRef, baseRef } = require('./core/papyrus');
 
 const MODULE_ID = 'holdstones';
 const ACTIVATION_SUBSCRIBER = 'holdstones';
@@ -57,8 +58,6 @@ const FORM_DESC_PATTERN = /^[0-9a-f]{1,8}:[^\s:]+\.(esm|esp|esl)$/i;
 const DYNAMIC_DESC_PATTERN = /^[0-9a-f]{1,6}$/;
 /** The holdstone activator in tools/holdstone/dist/OathboundHoldstone.esp. */
 const HOLDSTONE_BASE_DESC = '800:OathboundHoldstone.esp';
-/** Placed this far in front of the staff member who spawns it (~2.5 m). */
-const HOLDSTONE_SPAWN_DISTANCE = 180;
 
 let _index = parcelLocks.EMPTY_INDEX;
 /** actorId → { parcelId } | { placeHoldId } */
@@ -317,16 +316,16 @@ function _removeSpawnedStone(desc) {
 }
 
 /**
- * Staff: puts a new holdstone in the world in front of `actorId`, facing
- * them, and makes it `holdId`'s stone. The hold's previous stone, if it was
- * spawned this way, is removed. The stone is a server reference, saved with
- * the world like any other, so it stays after restarts.
+ * Staff: puts a new holdstone in the world where `actorId` stands, and makes
+ * it `holdId`'s stone. The hold's previous stone, if it was spawned this way,
+ * is removed. The stone is a server reference, saved with the world like any
+ * other, so it stays after restarts.
  */
 async function spawnHoldstone(actorId, holdId) {
   if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
   const api = _mp();
-  if (!api || typeof api.place !== 'function' || typeof api.set !== 'function') {
-    return no('This server build cannot place objects (no mp.place).');
+  if (!api || typeof api.callPapyrusFunction !== 'function' || typeof api.getDescFromId !== 'function') {
+    return no('This server build cannot place objects (no Papyrus PlaceAtMe).');
   }
   let baseId;
   try {
@@ -336,22 +335,24 @@ async function spawnHoldstone(actorId, holdId) {
   }
   if (!Number.isInteger(baseId)) return no('OathboundHoldstone.esp is not loaded on the server.');
 
-  const loc = api.get(actorId, 'locationalData');
-  if (!loc || !Array.isArray(loc.pos)) return no('Could not read your position.');
-  const angle = Array.isArray(loc.rot) ? Number(loc.rot[2]) || 0 : 0;
-  const rad = (angle * Math.PI) / 180;
-  const pos = [
-    loc.pos[0] + Math.sin(rad) * HOLDSTONE_SPAWN_DISTANCE,
-    loc.pos[1] + Math.cos(rad) * HOLDSTONE_SPAWN_DISTANCE,
-    loc.pos[2]
-  ];
+  let loc = null;
+  try { loc = api.get(actorId, 'locationalData'); } catch { loc = null; }
+  const where = loc && Array.isArray(loc.pos)
+    ? `${loc.cellOrWorldDesc} at ${loc.pos.map((v) => Math.round(v)).join(',')}`
+    : 'unknown position';
 
+  // Papyrus PlaceAtMe on the staff member: SkyMP creates the reference at their
+  // position, cell and facing, and saves it with the world. A server reference
+  // cannot be moved afterwards: mp.set('locationalData') is refused for
+  // non-actors, and SetPosition does not save. So the stone goes where the
+  // staff member stands; they step out of it. (Runes are on both faces.)
   let formId;
   try {
-    formId = api.place(baseId);
-    if (!Number.isInteger(formId)) throw new Error('mp.place returned no form id');
-    // The rune face is the stone's -Y side; turn it toward the staff member.
-    api.set(formId, 'locationalData', { pos, rot: [0, 0, angle % 360], cellOrWorldDesc: loc.cellOrWorldDesc });
+    const placed = api.callPapyrusFunction('method', 'ObjectReference', 'PlaceAtMe', actorRef(actorId), [baseRef(baseId), 1, true, false]);
+    formId = placed && typeof placed === 'object' && typeof placed.desc === 'string'
+      ? api.getIdFromDesc(placed.desc)
+      : placed;
+    if (!Number.isInteger(formId) || formId <= 0) throw new Error('PlaceAtMe returned no reference');
   } catch (err) {
     deps().logger.error('[holdstones] spawn failed:', err.message);
     return no(`Could not place the holdstone: ${err.message}`);
@@ -365,8 +366,8 @@ async function spawnHoldstone(actorId, holdId) {
     return result;
   }
   const replaced = previous && previous !== desc ? _removeSpawnedStone(previous) : false;
-  deps().logger.log(`[holdstones] ${actorId.toString(16)} placed the ${holdId} holdstone as ${desc} in ${loc.cellOrWorldDesc} at ${pos.map((v) => Math.round(v)).join(',')}`);
-  return ok(`${_holdName(holdId)} holdstone placed in front of you.${replaced ? ' The old one was removed.' : ''}`, { formId, desc });
+  deps().logger.log(`[holdstones] ${actorId.toString(16)} placed the ${holdId} holdstone as ${desc} in ${where}`);
+  return ok(`${_holdName(holdId)} holdstone placed where you stand: step out of it.${replaced ? ' The old one was removed.' : ''}`, { formId, desc });
 }
 
 async function addRank(holdId, key, position, isLeader, name) {
@@ -1003,7 +1004,7 @@ function _characterFromActorArg(word) {
 }
 
 const HOLDSTONE_HELP =
-  '/holdstone list · /holdstone spawn <hold> (puts a holdstone in front of you) · ' +
+  '/holdstone list · /holdstone spawn <hold> (puts a holdstone where you stand) · ' +
   '/holdstone place <hold> (then press E on an existing object) · /holdstone set <hold> <formDesc> · ' +
   '/holdstone clear <hold> · /holdstone ranks <hold> · /holdstone addrank <hold> <key> <position> <leader|member> <name> · ' +
   '/holdstone delrank <hold> <key> · /holdrank <hold> <player#> <rank|none>';
