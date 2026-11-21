@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createPositionPersistence, loadStartPoints, normalizeCell, toCellDesc, loginLocation, MIN_MOVE, WRITE_MS } = require('./position-persistence');
+const { createPositionPersistence, loadStartPoints, normalizeCell, toCellDesc, loginLocation, cellCheckerFor, MIN_MOVE, WRITE_MS } = require('./position-persistence');
 
 const START = { pos: [35, -165, -189], cell: '162e2' };
 
@@ -173,5 +173,21 @@ describe('position persistence: cell descriptors for the login teleport', () => 
     assert.equal(loginLocation({ ...row, cell_id: 'garbage' }), null);
     assert.equal(loginLocation({ ...row, pos_x: null }), null);
     assert.deepEqual(loginLocation({ ...row, angle_z: null }).rot, [0, 0, 0]);
+  });
+
+  it('refuses a saved cell that is not a CELL or WRLD record', () => {
+    const records = { 0x162e2: {}, 0x1605e: { record: { type: 'CELL' } }, 0x3c: { record: { type: 'WRLD' } } };
+    const mpApi = {
+      getIdFromDesc: (desc) => parseInt(desc.split(':')[0], 16),
+      lookupEspmRecordById: (id) => records[id] || {}
+    };
+    const isCell = cellCheckerFor(mpApi);
+    const row = { pos_x: 1, pos_y: 2, pos_z: 3, angle_z: 0, cell_id: '162e2:Skyrim.esm' };
+    assert.equal(loginLocation(row, null, isCell), null, '162e2 is an object in the Blue Palace, not a cell');
+    assert.equal(loginLocation({ ...row, cell_id: '1605e:Skyrim.esm' }, null, isCell).cellOrWorldDesc, '1605e:Skyrim.esm');
+    assert.equal(loginLocation({ ...row, cell_id: '3c:Skyrim.esm' }, null, isCell).cellOrWorldDesc, '3c:Skyrim.esm');
+    assert.equal(cellCheckerFor({ getIdFromDesc: () => { throw new Error('x'); }, lookupEspmRecordById: () => ({}) })('1:Skyrim.esm'), true,
+      'a failed lookup must not strand the player');
+    assert.equal(cellCheckerFor(undefined), null);
   });
 });

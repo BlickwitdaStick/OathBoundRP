@@ -34,7 +34,9 @@ const { actorRef } = require('./core/papyrus');
 const skymp = require('./core/skymp-adapter');
 const interactionRegistry = require('./core/interaction-registry');
 
-const RESPAWN_POS = [-150, -100, -200]; // Coordenadas ficticias do Templo de Kynareth
+// Temple of Kynareth, Whiterun (cell 0x165a7), on the floor near the healers.
+// Checked against Skyrim.esm on 2026-11-21.
+const RESPAWN_POS = [-14, -123, 70];
 
 // FormID da celula de respawn (Templo de Kynareth).
 //
@@ -49,8 +51,11 @@ const RESPAWN_POS = [-150, -100, -200]; // Coordenadas ficticias do Templo de Ky
 // O numero em si continua **nao verificado in-game** — veio herdado e ninguem
 // abriu o ESM para conferir que 0x162e2 e o Templo. O que esta rodada conserta e
 // o formato, que era um defeito certo; o valor e observacao da Fase 0.
-const RESPAWN_CELL_FORM_ID = 0x162e2;
-const RESPAWN_CELL_FALLBACK = '162e2:Skyrim.esm';
+// 0x162e2 was never a cell: in Skyrim.esm it is an object placed in the Blue
+// Palace, so respawned players landed in a cell that does not exist. The
+// Temple of Kynareth is CELL 0x165a7 (WhiterunTempleofKynareth).
+const RESPAWN_CELL_FORM_ID = 0x165a7;
+const RESPAWN_CELL_FALLBACK = '165a7:Skyrim.esm';
 
 /**
  * A celula de respawn como `FormDesc`.

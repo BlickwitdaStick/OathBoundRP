@@ -23,7 +23,7 @@ after(() => { delete global.mp; });
 describe('prison cell for the arrest teleport', () => {
   it('no city prison configured: the default, as id:plugin', async () => {
     cityRows = [];
-    assert.deepEqual(await governance._getDefaultPrison(), { cellId: '162e2:Skyrim.esm', pos: [35, -165, -189] });
+    assert.deepEqual(await governance._getDefaultPrison(), { cellId: '580a2:Skyrim.esm', pos: [2995, 1002, 7220] });
   });
 
   it('a hand-typed bare id is resolved to id:plugin', async () => {
@@ -47,7 +47,7 @@ describe('prison cell for the arrest teleport', () => {
     const origError = console.error;
     console.error = (...a) => errors.push(a.join(' '));
     try {
-      assert.deepEqual(await governance._getDefaultPrison(), { cellId: '162e2:Skyrim.esm', pos: [35, -165, -189] });
+      assert.deepEqual(await governance._getDefaultPrison(), { cellId: '580a2:Skyrim.esm', pos: [2995, 1002, 7220] });
     } finally {
       console.error = origError;
     }

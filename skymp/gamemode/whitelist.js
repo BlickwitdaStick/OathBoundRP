@@ -167,18 +167,18 @@ async function checkWhitelist(userId, profileId, actorId) {
         console.log(`[whitelist] Auto-creating approved character: ${firstName} ${lastName}...`);
         const insertChar = await db.query(
           `INSERT INTO characters (account_id, first_name, last_name, status, pos_x, pos_y, pos_z, angle_z, cell_id) 
-           VALUES (?, ?, ?, 'approved', 35, -165, -189, 180, '162e2:Skyrim.esm')`,
+           VALUES (?, ?, ?, 'approved', -71, -86, 70, 178, '1605e:Skyrim.esm')`,
           [account.id, firstName, lastName]
         );
         character = {
           id: insertChar.insertId,
           first_name: firstName,
           last_name: lastName,
-          pos_x: 35,
-          pos_y: -165,
-          pos_z: -189,
-          angle_z: 180,
-          cell_id: '162e2:Skyrim.esm'
+          pos_x: -71,
+          pos_y: -86,
+          pos_z: 70,
+          angle_z: 178,
+          cell_id: '1605e:Skyrim.esm'
         };
       } else {
         console.log(`[whitelist] User ${userId} has no approved characters. Kicking...`);
@@ -238,7 +238,8 @@ async function checkWhitelist(userId, profileId, actorId) {
       // nonexistent server-generated cell and freezes the actor there
       // (see core/position-persistence.js).
       const locData = positionPersistence.loginLocation(character,
-        typeof mp.getDescFromId === 'function' ? (id) => mp.getDescFromId(id) : null);
+        typeof mp.getDescFromId === 'function' ? (id) => mp.getDescFromId(id) : null,
+        positionPersistence.cellCheckerFor(mp));
 
       try {
         if (locData) {

@@ -30,7 +30,10 @@ const { actorRef } = require('./core/papyrus');
 const { toCellDesc } = require('./core/position-persistence');
 
 /** The Bannered Mare, used when no city has a usable prison configured. */
-const DEFAULT_PRISON_CELL = '162e2:Skyrim.esm';
+// WhiterunJail02 (CELL 0x580a2) in Skyrim.esm. It was '162e2', which is not a
+// cell (an object in the Blue Palace) and froze whoever was sent there.
+const DEFAULT_PRISON_CELL = '580a2:Skyrim.esm';
+const DEFAULT_PRISON_POS = [2995, 1002, 7220];
 // Tarefa 13: a Revista Institucional aprende a reconhecer proveniencia suja, e
 // o confisco aprende a rebaixar 'hot' -> 'stolen'. `crime` e modulo `lab`
 // (pode estar desligado); toda chamada abaixo passa por
@@ -984,7 +987,7 @@ async function getDefaultPrison() {
      LIMIT 1`
   );
   if (rows.length === 0) {
-    return { cellId: DEFAULT_PRISON_CELL, pos: [35, -165, -189] };
+    return { cellId: DEFAULT_PRISON_CELL, pos: DEFAULT_PRISON_POS.slice() };
   }
   // prison_cell_id is typed in by hand. SkyMP reads a cell with no ":plugin"
   // ('0x162e2') as a nonexistent server-generated cell and freezes whoever is
@@ -993,11 +996,11 @@ async function getDefaultPrison() {
     typeof mp !== 'undefined' && typeof mp.getDescFromId === 'function' ? (id) => mp.getDescFromId(id) : null);
   if (!cellId) {
     console.error(`[governance] cities.prison_cell_id '${rows[0].prison_cell_id}' is not a cell FormDesc (expected e.g. '162e2:Skyrim.esm'); using the default prison.`);
-    return { cellId: DEFAULT_PRISON_CELL, pos: [35, -165, -189] };
+    return { cellId: DEFAULT_PRISON_CELL, pos: DEFAULT_PRISON_POS.slice() };
   }
   return {
     cellId,
-    pos: [rows[0].prison_pos_x || 35, rows[0].prison_pos_y || -165, rows[0].prison_pos_z || -189]
+    pos: [rows[0].prison_pos_x || 0, rows[0].prison_pos_y || 0, rows[0].prison_pos_z || 0]
   };
 }
 

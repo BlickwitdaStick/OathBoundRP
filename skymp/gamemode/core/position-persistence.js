@@ -82,14 +82,37 @@ function toCellDesc(raw, getDescFromId) {
  * The locationalData to apply at login for a characters row, or null when the
  * row holds no usable location (the actor then stays where SkyMP put it).
  */
-function loginLocation(character, getDescFromId) {
+function loginLocation(character, getDescFromId, isCellOrWorld) {
   if (!character) return null;
   const pos = [character.pos_x, character.pos_y, character.pos_z];
   if (!pos.every((v) => v !== null && v !== '' && Number.isFinite(Number(v)))) return null;
   const cellOrWorldDesc = toCellDesc(character.cell_id, getDescFromId);
   if (!cellOrWorldDesc) return null;
+  // A well-formed desc can still name something that is not a cell: the old
+  // default '162e2' is an object in the Blue Palace. Teleporting there freezes
+  // the actor exactly like a nonexistent cell does.
+  if (typeof isCellOrWorld === 'function' && !isCellOrWorld(cellOrWorldDesc)) return null;
   const angle = Number(character.angle_z);
   return { pos: pos.map(Number), rot: [0, 0, Number.isFinite(angle) ? angle : 0], cellOrWorldDesc };
+}
+
+/**
+ * isCellOrWorld for loginLocation, backed by the SkyMP API. True when the desc
+ * names a CELL or WRLD record; false when the plugins say it is something else
+ * or nothing at all; true when it cannot be checked (no API, lookup failed),
+ * so a broken lookup never strands players.
+ */
+function cellCheckerFor(mpApi) {
+  if (!mpApi || typeof mpApi.getIdFromDesc !== 'function' || typeof mpApi.lookupEspmRecordById !== 'function') return null;
+  return (desc) => {
+    try {
+      const r = mpApi.lookupEspmRecordById(mpApi.getIdFromDesc(desc));
+      const type = r && r.record && r.record.type;
+      return type === 'CELL' || type === 'WRLD';
+    } catch {
+      return true;
+    }
+  };
 }
 
 /** SkyMP start points from server-settings.json, as [{pos:[x,y,z], cell}]. */
@@ -243,6 +266,7 @@ function getInstance() {
 }
 
 module.exports = {
+  cellCheckerFor,
   createPositionPersistence, getInstance, loadStartPoints, normalizeCell, toCellDesc, loginLocation,
   TICK_MS, WRITE_MS, MIN_MOVE, START_POINT_RADIUS
 };
