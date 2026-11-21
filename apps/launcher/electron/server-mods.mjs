@@ -3,7 +3,7 @@
  * /client-mods/manifest.json). Before PLAY the launcher:
  *
  *   1. fetches the manifest and validates it (paths stay inside Data/, never
- *      touch the SkyMP client files or base game masters);
+ *      touch the base game masters);
  *   2. compares every listed file against the player's Data/ by SHA-256
  *      (with a size+mtime cache so big BSAs are not re-hashed every launch);
  *   3. after the player agrees, downloads what is missing/different to a temp
@@ -30,16 +30,10 @@ export class ServerModsError extends Error {
 const PLUGIN_EXTENSIONS = new Set(['.esm', '.esp', '.esl']);
 const BASE_MASTERS = new Set(['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm']);
 
-/**
- * Paths a server mod may never write: the SkyMP client the launcher itself
- * manages, and the SKSE plugins that make it run.
- */
-const PROTECTED_PREFIXES = ['platform/'];
-const PROTECTED_FILES = new Set([
-  'skse/plugins/mpclientplugin.dll',
-  'skse/plugins/skyrimplatform.dll',
-  'skse/plugins/skyrimplatform.ini'
-]);
+// The SkyMP client (Platform/, MpClientPlugin.dll, SkyrimPlatform.dll) comes
+// from the server's mod list too: the launcher has no other way to install it,
+// and the server's patched client must match the server. Only the base-game
+// masters are never replaced.
 
 export function isSafeRelativePath(rel) {
   if (typeof rel !== 'string' || rel.length === 0 || rel.length > 400) return false;
@@ -70,7 +64,7 @@ export function validateManifest(manifest) {
     const lower = f.path.toLowerCase();
     if (seen.has(lower)) throw new ServerModsError('INVALID_MANIFEST', `Duplicate file in the server mods manifest: ${f.path}`);
     seen.add(lower);
-    if (PROTECTED_PREFIXES.some(p => lower.startsWith(p)) || PROTECTED_FILES.has(lower) || BASE_MASTERS.has(lower)) {
+    if (BASE_MASTERS.has(lower)) {
       throw new ServerModsError('PROTECTED_PATH', `The server tried to replace a protected file: ${f.path}`);
     }
   }

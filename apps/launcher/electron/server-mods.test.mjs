@@ -65,11 +65,17 @@ describe('validateManifest', () => {
     assert.ok(validateManifest(manifestOf()));
   });
 
-  test('refuses anything that could escape Data/ or clobber the SkyMP client', () => {
+  test('refuses anything that could escape Data/ or replace a base-game master', () => {
     const bad = (p) => () => validateManifest(manifestOf({ [p]: 'x' }, []));
-    for (const p of ['../evil.dll', 'Platform/Plugins/skymp5-client.js', 'SKSE/Plugins/MpClientPlugin.dll',
-      'SKSE/Plugins/SkyrimPlatform.dll', 'Skyrim.esm', 'C:/Windows/x.dll', 'a\\b.esp']) {
+    for (const p of ['../evil.dll', 'Skyrim.esm', 'Dawnguard.esm', 'C:/Windows/x.dll', 'a\\b.esp']) {
       assert.throws(bad(p), ServerModsError, p);
+    }
+  });
+
+  test('accepts the SkyMP client files the server ships', () => {
+    for (const p of ['Platform/Distribution/CEF/chrome_100_percent.pak', 'Platform/Plugins/skymp5-client.js',
+      'SKSE/Plugins/MpClientPlugin.dll', 'SKSE/Plugins/SkyrimPlatform.dll']) {
+      assert.ok(validateManifest(manifestOf({ [p]: 'x' }, [])), p);
     }
   });
 
