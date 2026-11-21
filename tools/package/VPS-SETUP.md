@@ -41,8 +41,28 @@ FLUSH PRIVILEGES;
 exit
 ```
 
-Load the data (creates the `skymp_rp` database with every account,
-character, hold and gold balance):
+Then create the tables. Which one depends on how the archive was built:
+
+**A fresh server** (no `database\` folder in the archive; built with
+`--fresh`). PowerShell, in `skymp\gamemode\`:
+
+```powershell
+npm run migrate:clean
+```
+
+That builds the empty `skymp_rp` database from `schema.sql` and every
+migration (it refuses to run on a database that already has tables). Then add
+the crafting recipes:
+
+```
+mariadb -u root -p skymp_rp < skymp\packages\database\seed-forging.sql
+```
+
+The world starts empty too (`skymp\world\` has no save): nobody exists yet,
+the holds have no holdstones, and staff spawn them again with
+`/holdstone spawn <hold>`.
+
+**A copy of the owner's server** (archive has `database\skymp_rp.sql`):
 
 ```
 mariadb -u root -p < database\skymp_rp.sql
@@ -55,8 +75,10 @@ them).
 
 ## 3. Change the addresses
 
-The server listens on every network interface already; these are the
-settings that still name the owner's PC (`127.0.0.1` / `localhost`):
+If the archive was built with `--public-host <ADDRESS>`, `PANEL_PUBLIC_URL` and
+`DISCORD_CALLBACK_URL` are already set; check them and skip to the Discord
+step. The server listens on every network interface already; these are the
+settings that otherwise still name the owner's PC (`127.0.0.1` / `localhost`):
 
 | File | Setting | Set to |
 |------|---------|--------|
@@ -121,6 +143,20 @@ To restart only the game server: close its window, then
   `Boot concluído: 19 ativos, 10 desativados, 0 com falha` (19 modules on).
 - Then build the launcher with the new address (the second archive,
   `LAUNCHER-BUILD.md`) and connect.
+
+## 7. Make yourself owner (fresh database only)
+
+A fresh database has no staff. Sign in once through the launcher (Discord),
+so your account exists, then in `mariadb -u root -p`:
+
+```sql
+USE skymp_rp;
+SELECT account_id, username FROM discord_identities;      -- find your account_id
+INSERT INTO staff_roles (account_id, role, notes) VALUES (<your account_id>, 'owner', 'server owner');
+```
+
+Log out and back in (or reconnect) so the server reads the role. From there,
+staff are managed in game and in the panel as before.
 
 ## Notes
 

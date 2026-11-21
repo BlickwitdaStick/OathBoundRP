@@ -35,7 +35,16 @@ const REPO = path.resolve(__dirname, '..', '..');
 const args = process.argv.slice(2);
 const what = args[0];
 const OUT = args.includes('--out') ? args[args.indexOf('--out') + 1] : 'E:\\SkyrimRP\\share';
-const WITH_DB = !args.includes('--no-db');
+/**
+ * --fresh: a new server with an empty database. Leaves out the database dump
+ * AND the saved world (skymp/world): SkyMP keys each player's body (position,
+ * inventory, gold) by account number, so an old world on a new database hands
+ * the first new accounts somebody else's character.
+ */
+const FRESH = args.includes('--fresh');
+const WITH_DB = !args.includes('--no-db') && !FRESH;
+/** --public-host <ip or name>: the VPS address, written into the packaged apps/web/.env. */
+const PUBLIC_HOST = args.includes('--public-host') ? args[args.indexOf('--public-host') + 1] : null;
 const BSDTAR = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
 const STAMP = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
@@ -50,7 +59,7 @@ const SERVER_PATHS = [
   'skymp/packages', 'skymp/client-mods',
   'apps/web', 'apps/game-api', 'apps/bot-discord', 'apps/shared',
   'scripts', 'patches/manifest.json'
-];
+].filter((p) => !(FRESH && p === 'skymp/world'));
 const SERVER_EXCLUDE = [
   'skymp/server/logs',
   'apps/web/crash-reports', 'apps/game-api/client-mods-hash-cache.json'
@@ -102,8 +111,41 @@ function configFiles() {
   const dir = path.join(REPO, 'skymp', 'config');
   return fs.readdirSync(dir)
     .filter((n) => n !== 'client-mods.local.json' && fs.statSync(path.join(dir, n)).isFile())
-    .filter((n) => !/.(bak|before-|removed-)/i.test(n))
+    .filter((n) => !/\.(bak|before-|removed-)/i.test(n))
     .map((n) => `skymp/config/${n}`);
+}
+
+/** A folder's top-level entries except `skip` (same reason as configFiles). */
+function listWithout(dirRel, skip) {
+  return fs.readdirSync(path.join(REPO, dirRel)).filter((n) => !skip.includes(n)).map((n) => `${dirRel}/${n}`);
+}
+
+/** Server paths, with apps/web listed entry by entry when its .env is replaced. */
+function serverPaths() {
+  const paths = [...SERVER_PATHS, ...configFiles()];
+  if (!PUBLIC_HOST) return paths;
+  return paths.flatMap((p) => (p === 'apps/web' ? listWithout('apps/web', ['.env']) : [p]));
+}
+
+/** apps/web/.env with the panel's public address and Discord callback set to the VPS. */
+function stageWebEnv(stage) {
+  const src = fs.readFileSync(path.join(REPO, 'apps', 'web', '.env'), 'utf8');
+  const nl = src.includes('\r\n') ? '\r\n' : '\n';
+  const url = `http://${PUBLIC_HOST}:3001`;
+  let callbackWritten = false;
+  const lines = src.split(/\r?\n/).flatMap((line) => {
+    if (/^PANEL_PUBLIC_URL=/.test(line)) return [`PANEL_PUBLIC_URL=${url}`];
+    if (/^DISCORD_CALLBACK_URL=/.test(line)) {
+      if (callbackWritten) return [];
+      callbackWritten = true;
+      return [`DISCORD_CALLBACK_URL=${url}/api/auth/discord/callback`];
+    }
+    return [line];
+  });
+  const out = path.join(stage, 'apps', 'web', '.env');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, lines.join(nl));
+  log(`apps/web/.env: panel and Discord callback set to ${url}`);
 }
 
 function stageServerExtras(stage) {
@@ -116,6 +158,9 @@ function stageServerExtras(stage) {
   fs.writeFileSync(out, JSON.stringify(cfg, null, 2) + '\n');
   fs.copyFileSync(path.join(__dirname, 'VPS-SETUP.md'), path.join(stage, 'VPS-SETUP.md'));
   if (WITH_DB) dumpDatabase(stage);
+  // An empty world folder: SkyMP starts a new world in it.
+  if (FRESH) fs.mkdirSync(path.join(stage, 'skymp', 'world'), { recursive: true });
+  if (PUBLIC_HOST) stageWebEnv(stage);
 }
 
 function stageLauncherExtras(stage) {
@@ -145,7 +190,7 @@ function zip(name, paths, exclude, stage) {
 
 function main() {
   if (!['server', 'launcher', 'both'].includes(what)) {
-    console.error('usage: node tools/package/package-oathbound.js server|launcher|both [--out dir] [--no-db]');
+    console.error('usage: node tools/package/package-oathbound.js server|launcher|both [--out dir] [--no-db] [--fresh] [--public-host <ip>]');
     process.exit(2);
   }
   if (!fs.existsSync(BSDTAR)) throw new Error(`${BSDTAR} not found`);
@@ -157,7 +202,7 @@ function main() {
   if (what === 'server' || what === 'both') {
     const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'oathbound-server-'));
     stageServerExtras(stage);
-    made.push(zip('OATHBOUND-Server', [...SERVER_PATHS, ...configFiles()], SERVER_EXCLUDE, stage));
+    made.push(zip('OATHBOUND-Server', serverPaths(), SERVER_EXCLUDE, stage));
     fs.rmSync(stage, { recursive: true, force: true });
   }
   if (what === 'launcher' || what === 'both') {
