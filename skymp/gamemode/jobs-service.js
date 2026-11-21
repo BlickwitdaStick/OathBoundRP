@@ -40,6 +40,7 @@
 const commands = require('./commands');
 const transactionService = require('./core/transaction-service');
 const { actorRef, baseRef } = require('./core/papyrus');
+const skillActivity = require('./core/skill-activity');
 
 const MODULE = 'jobs';
 
@@ -135,8 +136,15 @@ async function _finishGather(actorId, characterId, baseId, count, reason) {
     notify('A coleta se perdeu antes de chegar na sua mochila.');
     return false;
   }
+  // Skills EXP (skills-service.js); only counts if the character owns the skill.
+  const skill = GATHER_SKILL[reason];
+  if (skill) skillActivity.report({ characterId, skill, amount: GATHER_EXP * Math.max(1, Number(count) || 1), source: `jobs_${reason}` });
   return true;
 }
+
+/** Gathering reason → skill that practises it, and EXP per item gathered. */
+const GATHER_SKILL = Object.freeze({ woodcutting: 'carpenter', mining: 'prospector', fishing: 'hunter' });
+const GATHER_EXP = 8;
 
 function chopWood(actorId) {
   const sessao = _beginGather(actorId, ITEM_WOODCUTTER_AXE, 'um Machado de Lenhador');

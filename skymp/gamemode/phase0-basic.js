@@ -77,6 +77,7 @@ const corpseProbe   = require(path.join(gamemodeDir, 'corpse-probe'));
 const tradeService  = require(path.join(gamemodeDir, 'trade-service'));
 const depotService  = require(path.join(gamemodeDir, 'core', 'depot-service'));
 const holdstoneService = require(path.join(gamemodeDir, 'holdstone-service'));
+const skillsService = require(path.join(gamemodeDir, 'skills-service'));
 const survivalService = require(path.join(gamemodeDir, 'survival-service'));
 const crimeService  = require(path.join(gamemodeDir, 'core', 'crime-service'));
 const interactionPromptService = require(path.join(gamemodeDir, 'core', 'interaction-prompt-service'));
@@ -668,6 +669,28 @@ moduleRegistry.register({
   shutdown: async () => {
     uiEventRouter.unregister('holdstone');
     holdstoneService.shutdown();
+  }
+});
+
+// Skills, attributes and soul level (migration-v36-skills-progression.sql).
+// Tiers Novice 1-19 … Master 80-99, Legendary 100 staff-only; F3 menu;
+// re-applies perks, skill levels and mirrored mod perks/spells (Mundus,
+// Pilgrim — SKILLS_TRACKED_PLUGINS) on the player's client at every login.
+// See skills-service.js and core/skills.js.
+moduleRegistry.register({
+  id: skillsService.MODULE_ID,
+  enabledBy: skillsService.FLAG,
+  phase: 'lab',
+  version: '1.0.0',
+  dependencies: [],
+  commands: skillsService.commandDefs(),
+  initialize: async () => {
+    await skillsService.initialize();
+    uiEventRouter.register('skills', skillsService.handleUiEvent);
+  },
+  shutdown: async () => {
+    uiEventRouter.unregister('skills');
+    skillsService.shutdown();
   }
 });
 

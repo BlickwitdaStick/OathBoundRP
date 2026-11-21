@@ -9,7 +9,7 @@ describe('aplicador de migrations para banco vazio', () => {
   it('monta plano com schema primeiro e migrations em ordem numérica até a mais recente', () => {
     const plan = buildMigrationPlan(databaseDir);
     assert.equal(plan[0].filename, 'schema.sql');
-    assert.equal(plan.at(-1).filename, 'migration-v35-survival-needs.sql');
+    assert.equal(plan.at(-1).filename, 'migration-v36-skills-progression.sql');
     const versions = plan.slice(1).map(file => Number(file.filename.match(/^migration-v(\d+)/)[1]));
     assert.deepEqual(versions, [...versions].sort((a, b) => a - b));
     assert.ok(plan.every(file => file.statements.length > 0));

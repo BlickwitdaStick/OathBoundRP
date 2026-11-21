@@ -22,7 +22,8 @@
     { id: 'voice.cycleMode', label: 'Cycle voice mode', hint: 'Whisper → Normal → Shout' },
     { id: 'voice.toggleMute', label: 'Mute / unmute', hint: 'Optional; unbound by default' },
     { id: 'chat.open', label: 'Open chat', hint: 'Type, Enter to send, Esc to cancel' },
-    { id: 'admin.open', label: 'Open admin panel', hint: 'Staff only; does nothing for players' }
+    { id: 'admin.open', label: 'Open admin panel', hint: 'Staff only; does nothing for players' },
+    { id: 'skills.open', label: 'Open skills menu', hint: 'Profession, skills, trees and attributes' }
   ];
 
   /**
@@ -101,7 +102,7 @@
   }
 
   /** Same as the server defaults (core/keybinds.js); a test keeps them equal. */
-  const DEFAULT_BINDINGS = { 'panel.open': 60, 'voice.pushToTalk': 47, 'voice.cycleMode': 87, 'voice.toggleMute': null, 'chat.open': 28, 'admin.open': 66 };
+  const DEFAULT_BINDINGS = { 'panel.open': 60, 'voice.pushToTalk': 47, 'voice.cycleMode': 87, 'voice.toggleMute': null, 'chat.open': 28, 'admin.open': 66, 'skills.open': 61 };
 
   return { ACTIONS, DEFAULT_BINDINGS, DOM_KEYS, keyLabel, scanCodeFromDomCode, labelOf, assignKey, sameBindings };
 });

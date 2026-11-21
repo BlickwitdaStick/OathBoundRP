@@ -218,15 +218,15 @@ function parsePluginBuffer(buf, selfName, loadIndex, types = INDEXED_TYPES) {
   while (off + HEADER_SIZE <= buf.length) {
     const size = buf.readUInt32LE(off + 4);
     const label = buf.toString('latin1', off + 8, off + 12);
-    if (types.has(label)) collect(buf.subarray(off, off + size), header, selfName, loadIndex, out);
+    if (types.has(label)) collect(buf.subarray(off, off + size), header, selfName, loadIndex, out, types);
     off += size;
   }
   return out;
 }
 
-function collect(group, header, selfName, loadIndex, out) {
+function collect(group, header, selfName, loadIndex, out, types = INDEXED_TYPES) {
   walkGroup(group, (rec) => {
-    if (!INDEXED_TYPES.has(rec.type) || rec.deleted) return;
+    if (!types.has(rec.type) || rec.deleted) return;
     const id = toGlobalId(rec.formId, header.masters, selfName, loadIndex);
     if (id === null) return;
     let name = null;
@@ -235,7 +235,11 @@ function collect(group, header, selfName, loadIndex, out) {
       if (header.localized) nameStringId = rec.full.length >= 4 ? rec.full.readUInt32LE(0) : null;
       else name = zstring(rec.full) || null;
     }
-    out.push({ id, type: rec.type, editorId: rec.editorId, name, nameStringId, plugin: selfName });
+    // `origin` = the plugin that created the record (one of its masters, or
+    // itself); with `localId` it names the form independently of load order.
+    const hi = rec.formId >>> 24;
+    const origin = hi < header.masters.length ? header.masters[hi] : selfName;
+    out.push({ id, type: rec.type, editorId: rec.editorId, name, nameStringId, plugin: selfName, origin, localId: rec.formId & 0x00ffffff });
   });
 }
 
@@ -266,7 +270,7 @@ async function parsePluginFile(filePath, selfName, loadIndex, types = INDEXED_TY
       if (types.has(label)) {
         const group = Buffer.alloc(size);
         await fh.read(group, 0, size, off);
-        collect(group, header, selfName, loadIndex, out);
+        collect(group, header, selfName, loadIndex, out, types);
       }
       off += size;
     }

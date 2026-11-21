@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="admin-panel.css">
   <link rel="stylesheet" href="depot-panel.css">
   <link rel="stylesheet" href="holdstone-panel.css">
+  <link rel="stylesheet" href="skills-panel.css">
   <link rel="stylesheet" href="interaction-prompt.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -653,6 +654,9 @@
     <div class="dp-hint">Stored at this depot only — what you leave in Whiterun is not available in Solitude.</div>
   </div>
 </div>
+
+<!-- Skills menu, F3 (gamemode/skills-service.js; built by skills-panel.js) -->
+<div id="skills-panel" aria-hidden="true"></div>
 
 <!-- Holdstone: hold menu (gamemode/holdstone-service.js) -->
 <div id="holdstone-panel" aria-hidden="true">
@@ -2142,6 +2146,11 @@
       else sendUiEvent('admin:open', {});
       return;
     }
+    if (action === 'skills:open') {
+      if (typeof window.openSkillsPanel === 'function') window.openSkillsPanel();
+      else sendUiEvent('skills:open', {});
+      return;
+    }
     if (action !== 'panel:open') return;
     if (typeof window.openPlayerPanel === 'function') window.openPlayerPanel();
     else sendUiEvent('panel:open', {});
@@ -2214,6 +2223,7 @@
 <script src="admin-panel.js"></script>
 <script src="depot-panel.js"></script>
 <script src="holdstone-panel.js"></script>
+<script src="skills-panel.js"></script>
 <script src="interaction-prompt.js"></script>
 </body>
 </html>

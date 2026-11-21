@@ -107,8 +107,15 @@ const SIGN_CATALOG = Object.freeze({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * **Marks are progression.** There are no levels; there is only what
- * has been left behind in you.
+ * **Marks are narrative progression**: what has been left behind in you.
+ *
+ * Since 21/11/2026 the soul ALSO has a level on the shared skill scale
+ * (Novice 1-19 … Master 80-99, Legendary 100 by staff only), kept by
+ * skills-service.js in character_progression.soul_exp. This service does not
+ * store it: skills-service listens to the events emitted here
+ * (soul.sign.revealed, soul.resolved, soul.mark.created, soul.path.advanced)
+ * and turns them into soul EXP. The affinities and bands stay hidden — the
+ * level says how far a soul has grown, never what it is attuned to.
  *
  * `visivel` (visible) works with `identity-service`: hiding a visible mark
  * is a legitimate reason to wear a hood.

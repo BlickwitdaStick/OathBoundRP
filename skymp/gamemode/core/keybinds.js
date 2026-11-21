@@ -26,7 +26,9 @@ const ACTIONS = Object.freeze([
   Object.freeze({ id: 'chat.open', defaultCode: 28 }),        // Enter
   // Staff only: the client snippet opens the F8 admin panel only for players
   // the server marked as staff; for everyone else the key does nothing.
-  Object.freeze({ id: 'admin.open', defaultCode: 66 })        // F8
+  Object.freeze({ id: 'admin.open', defaultCode: 66 }),       // F8
+  // Skills menu (skills-service.js): profession/combat/armor choice, trees, attributes.
+  Object.freeze({ id: 'skills.open', defaultCode: 61 })       // F3
 ]);
 
 const ACTION_IDS = Object.freeze(ACTIONS.map(a => a.id));

@@ -67,6 +67,9 @@ const skymp = require('./core/skymp-adapter');
 // este projeto uma permissão a mais para justificar sem que ninguém tivesse
 // pedido, e as duas ferramentas rodam na mesma sessão, pela mesma pessoa.
 //
+// `manage_skills` (21/11/2026) is skills-service.js: grant skill/soul EXP, set
+// levels, Legendary (100 is admin-only by design), attributes, resets.
+//
 // `spawn_npc` (19/11/2026) is for the Creatures tab of the F8 admin panel
 // (admin-panel-service.js): placing an NPC or creature in front of the staff
 // member. Not `add_item` — a creature is not a gift to one player, it is a
@@ -75,8 +78,8 @@ const skymp = require('./core/skymp-adapter');
 // world, it does not police it.
 const ROLE_PERMISSIONS = {
   moderator: ['kick', 'teleport', 'view_audit', 'manage_whitelist'],
-  admin:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe', 'spawn_npc'],
-  owner:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'manage_staff', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe', 'spawn_npc']
+  admin:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe', 'spawn_npc', 'manage_skills'],
+  owner:     ['kick', 'teleport', 'view_audit', 'manage_whitelist', 'ban', 'add_item', 'set_gold', 'manage_staff', 'retire_character', 'manage_recipes', 'reveal_identity', 'run_world_probe', 'spawn_npc', 'manage_skills']
 };
 
 // Cache em memória: actorId → { role, permissions: Set<string> }

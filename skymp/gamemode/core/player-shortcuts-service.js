@@ -79,7 +79,7 @@ const SNIPPET_DO_CLIENTE = `
     // on the client, without waiting for the server to flip browserFocused.
     ctx.sp.on('browserMessage', function (e) {
       var m = e && e.arguments && e.arguments[0];
-      if (m && typeof m === 'object' && (m.type === 'panel:close' || m.type === 'chat:close' || m.type === 'admin:close') && ctx.sp.browser && ctx.sp.browser.setFocused) {
+      if (m && typeof m === 'object' && (m.type === 'panel:close' || m.type === 'chat:close' || m.type === 'admin:close' || m.type === 'skills:close') && ctx.sp.browser && ctx.sp.browser.setFocused) {
         ctx.sp.browser.setFocused(false);
       }
     });
@@ -120,6 +120,10 @@ const SNIPPET_DO_CLIENTE = `
         if (br.setVisible) br.setVisible(true);
         if (br.setFocused) br.setFocused(true);
         br.executeJavaScript('window.openChat && window.openChat()');
+      } else if (code === b['skills.open']) {
+        if (br.setVisible) br.setVisible(true);
+        if (br.setFocused) br.setFocused(true);
+        br.executeJavaScript('window.handlePlayerShortcutKey && window.handlePlayerShortcutKey("skills:open")');
       } else if (code === b['admin.open']) {
         // Staff only. For everyone else this key does nothing at all.
         if (!kb.staff) return;
