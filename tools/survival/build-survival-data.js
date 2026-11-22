@@ -56,6 +56,26 @@ const FOOD_EFFECTS = {
   Survival_FoodFortifyWarmth: 'warmth'
 };
 
+/**
+ * Thirst (ours; Survival Mode has none). Brewer keeps drinks apart from food,
+ * so every ALCH whose editor id names a drink restores thirst. Vanilla drinks
+ * carry no keyword of their own, so the name is the only signal that covers
+ * vanilla, Gourmet, Brewer and Wares of Tamriel alike.
+ */
+const NOT_A_DRINK = /Potion|Poison|Skooma|WaterBreathing|Waterbreathing|WaterWalking|Salt|Sleeping|Ingredient|Bread|Cheese|Dummy|^DA[0-9]/;
+const DRINKS = [
+  ['large', /Water|Milk|Juice|Tea(?![a-z])|Cider|Lemonade|Coffee/],
+  ['medium', /Mead|Ale(?![a-z])|Beer|Wine|Lager|Stout|Porter/],
+  ['small', /Whiske?y|Gin(?![a-z])|Vodka|Rum(?![a-z])|Brandy|Sujamma|Flin(?![a-z])|Shein|Mazte|Matze|Liquor|Spirits?(?![a-z])|Moonshine/],
+  ['small', /Soup|Stew|Broth/]
+];
+
+function thirstOf(editorId) {
+  if (!editorId || NOT_A_DRINK.test(editorId)) return null;
+  for (const [size, re] of DRINKS) if (re.test(editorId)) return size;
+  return null;
+}
+
 // ── plugin reading ───────────────────────────────────────────────────────────
 
 /** A plugin file: hosted mods first, then the game's Data folder. */
@@ -218,7 +238,9 @@ function readFoods() {
   // plugin that edits a food WITHOUT survival effects (WACCF, for one) does
   // not erase it: the table keeps the last survival values it saw.
   const hosted = fs.existsSync(CLIENT_MANIFEST) ? (JSON.parse(fs.readFileSync(CLIENT_MANIFEST, 'utf8')).plugins || []) : [];
-  for (const name of ['Update.esm', SURVIVAL, ...hosted.filter((p) => fs.existsSync(path.join(CLIENT_MODS, p)))]) {
+  // The base game first, for its drinks (ale, mead, milk): they have no
+  // survival effects, only a thirst value from their name.
+  for (const name of ['Skyrim.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', 'Update.esm', SURVIVAL, ...hosted.filter((p) => fs.existsSync(path.join(CLIENT_MODS, p)))]) {
     const plugin = readPlugin(name);
     eachRecord(plugin, 'ALCH', (r) => {
       const key = plugin.keyOf(r.id);
@@ -230,7 +252,9 @@ function readFoods() {
         if (kind.startsWith('hunger:')) entry.hunger = kind.slice(7);
         else entry[kind] = true;
       }
-      if (entry.hunger || entry.cold || entry.warmth) foods[key] = entry;
+      const thirst = thirstOf(r.edid);
+      if (thirst) entry.thirst = thirst;
+      if (entry.hunger || entry.cold || entry.warmth || entry.thirst) foods[key] = { ...(foods[key] || {}), ...entry };
     });
   }
   return foods;

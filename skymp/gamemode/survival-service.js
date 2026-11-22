@@ -212,17 +212,18 @@ function _distance(a, b) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _load(characterId) {
-  const rows = await deps().db.query('SELECT hunger, exhaustion, cold FROM character_needs WHERE character_id = ?', [characterId]);
-  if (!rows.length) return { hunger: 0, exhaustion: 0, cold: 0 };
-  return { hunger: Number(rows[0].hunger) || 0, exhaustion: Number(rows[0].exhaustion) || 0, cold: Number(rows[0].cold) || 0 };
+  const rows = await deps().db.query('SELECT hunger, thirst, exhaustion, cold FROM character_needs WHERE character_id = ?', [characterId]);
+  if (!rows.length) return { hunger: 0, thirst: 0, exhaustion: 0, cold: 0 };
+  return { hunger: Number(rows[0].hunger) || 0, thirst: Number(rows[0].thirst) || 0, exhaustion: Number(rows[0].exhaustion) || 0, cold: Number(rows[0].cold) || 0 };
 }
 
 async function _save(s) {
   const { hunger, exhaustion, cold } = s.needs;
+  const thirst = Number(s.needs.thirst) || 0;
   await deps().db.query(
-    `INSERT INTO character_needs (character_id, hunger, exhaustion, cold) VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE hunger = VALUES(hunger), exhaustion = VALUES(exhaustion), cold = VALUES(cold)`,
-    [s.characterId, hunger, exhaustion, cold]
+    `INSERT INTO character_needs (character_id, hunger, thirst, exhaustion, cold) VALUES (?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE hunger = VALUES(hunger), thirst = VALUES(thirst), exhaustion = VALUES(exhaustion), cold = VALUES(cold)`,
+    [s.characterId, hunger, thirst, exhaustion, cold]
   );
   s.savedAt = deps().now();
 }
@@ -238,9 +239,9 @@ function _notify(actorId, text) {
 /** Tells the player about every need whose stage changed. @returns {boolean} any changed */
 function _announce(actorId, before, after) {
   let changed = false;
-  for (const need of ['hunger', 'exhaustion', 'cold']) {
-    const a = needsRules.stageOf(need, before[need]);
-    const b = needsRules.stageOf(need, after[need]);
+  for (const need of ['hunger', 'thirst', 'exhaustion', 'cold']) {
+    const a = needsRules.stageOf(need, Number(before[need]) || 0);
+    const b = needsRules.stageOf(need, Number(after[need]) || 0);
     if (a !== b) {
       changed = true;
       _notify(actorId, needsRules.describe(need, after[need]).message);
@@ -249,14 +250,53 @@ function _announce(actorId, before, after) {
   return changed;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HUD — three Nordic-style meters next to the health/magicka/stamina bars
+// (skymp/ui/index.html, window.handleSurvivalHud). Sent only when something
+// the player would see changed (1 % steps, stage, area, resting).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HUD_PROPERTY = 'survivalHud';
+
+const HUD_UPDATE_OWNER = `
+  ctx.state.survivalHudKey = ctx.state.survivalHudKey || null;
+  if (ctx.value && ctx.value.key !== ctx.state.survivalHudKey && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+    ctx.state.survivalHudKey = ctx.value.key;
+    ctx.sp.browser.executeJavaScript('window.handleSurvivalHud && window.handleSurvivalHud(' + JSON.stringify(ctx.value) + ')');
+  }
+`;
+
+function hudPayload(s) {
+  const needs = {};
+  for (const need of ['hunger', 'thirst', 'exhaustion', 'cold']) {
+    const value = Number(s.needs[need]) || 0;
+    const d = needsRules.describe(need, value);
+    // Full meter = fine, empty = at the worst stage, like the game's own bars.
+    const fill = Math.max(0, Math.min(100, Math.round(100 - (100 * value) / needsRules.NEEDS[need].max)));
+    needs[need] = { fill, stage: d.stage, name: d.name };
+  }
+  const area = needsRules.AREAS[s.area] ? needsRules.AREAS[s.area].label : null;
+  const payload = { needs, area, resting: Boolean(s.resting) };
+  return { ...payload, key: JSON.stringify(payload) };
+}
+
+function _publishHud(actorId, s) {
+  const api = deps().mp;
+  if (!api || !s) return;
+  const payload = hudPayload(s);
+  if (s.hudKey === payload.key) return;
+  s.hudKey = payload.key;
+  try { api.set(actorId, HUD_PROPERTY, payload); } catch { /* player gone */ }
+}
+
 function summary(s) {
   const line = (need, label) => {
-    const d = needsRules.describe(need, s.needs[need]);
-    return `${label}: ${d.name} (${Math.round(s.needs[need])}/${needsRules.NEEDS[need].max})`;
+    const d = needsRules.describe(need, Number(s.needs[need]) || 0);
+    return `${label}: ${d.name} (${Math.round(Number(s.needs[need]) || 0)}/${needsRules.NEEDS[need].max})`;
   };
   const where = needsRules.AREAS[s.area] ? needsRules.AREAS[s.area].label : 'somewhere';
   const rest = s.resting ? ' · resting' : '';
-  return `${line('hunger', 'Hunger')} · ${line('exhaustion', 'Exhaustion')} · ${line('cold', 'Cold')} · You are in ${where}${rest}.`;
+  return `${line('hunger', 'Hunger')} · ${line('thirst', 'Thirst')} · ${line('exhaustion', 'Exhaustion')} · ${line('cold', 'Cold')} · You are in ${where}${rest}.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,6 +309,7 @@ async function onLogin(actorId, characterId) {
   _online.set(actorId, {
     characterId, needs, lastHours: deps().gameHours(), resting: null, warmUntil: 0, area: 'temperate', savedAt: deps().now()
   });
+  _publishHud(actorId, _online.get(actorId));
 }
 
 async function onDisconnect(actorId) {
@@ -303,6 +344,7 @@ async function update(actorId) {
     _notify(actorId, s.resting.floor > 0 ? 'You have rested as well as a bedroll allows.' : 'You are fully rested.');
   }
   if (stageChanged || deps().now() - s.savedAt >= SAVE_EVERY_MS) await _save(s);
+  _publishHud(actorId, s);
   return s;
 }
 
@@ -329,6 +371,7 @@ function handleEat(actorId, baseId) {
     s.warmUntil = deps().gameHours() + result.warmthHours;
     _notify(actorId, 'The hot meal warms you.');
   }
+  _publishHud(actorId, s);
   if (_announce(actorId, before, s.needs)) {
     _save(s).catch((err) => deps().logger.error(`[survival] save after eating failed: ${err.message}`));
   }
@@ -376,20 +419,21 @@ async function handleNeedsCommand(actorId) {
   _notify(actorId, s ? `[Needs] ${summary(s)}` : '[Needs] Not available right now.');
 }
 
-/** /setneed <player#> <hunger|exhaustion|cold> <value> */
+/** /setneed <player#> <hunger|thirst|exhaustion|cold> <value> */
 async function handleSetNeedCommand(actorId, args) {
   if (!deps().isStaff(actorId)) return _notify(actorId, 'Staff only.');
   const [target, need, raw] = String(args || '').trim().split(/\s+/);
   const targetId = /^0x[0-9a-f]+$/i.test(target || '') ? Number.parseInt(target.slice(2), 16) : null;
   const s = targetId === null ? null : _online.get(targetId);
-  if (!s) return _notify(actorId, 'Usage: /setneed <player#> <hunger|exhaustion|cold> <value> (player online)');
-  if (!needsRules.NEEDS[need]) return _notify(actorId, 'Need must be hunger, exhaustion or cold.');
+  if (!s) return _notify(actorId, 'Usage: /setneed <player#> <hunger|thirst|exhaustion|cold> <value> (player online)');
+  if (!needsRules.NEEDS[need]) return _notify(actorId, 'Need must be hunger, thirst, exhaustion or cold.');
   const value = Number(raw);
   const max = needsRules.NEEDS[need].max;
   if (!Number.isFinite(value) || value < 0 || value > max) return _notify(actorId, `Value must be 0-${max}.`);
   const before = s.needs;
   s.needs = { ...before, [need]: value };
   _announce(targetId, before, s.needs);
+  _publishHud(targetId, s);
   await _save(s);
   _notify(actorId, `[Needs] ${need} set to ${value}: ${needsRules.describe(need, value).name}.`);
 }
@@ -400,8 +444,8 @@ function commandDefs() {
     _notify(actorId, 'Could not complete that. Check the server log.');
   });
   return [
-    { name: '/needs', handler: wrap(handleNeedsCommand), description: 'Show your hunger, exhaustion and cold', usage: '/needs' },
-    { name: '/setneed', handler: wrap(handleSetNeedCommand), description: '[Staff] Set a player\'s hunger, exhaustion or cold', usage: '/setneed <player#> <hunger|exhaustion|cold> <value>' }
+    { name: '/needs', handler: wrap(handleNeedsCommand), description: 'Show your hunger, thirst, exhaustion and cold', usage: '/needs' },
+    { name: '/setneed', handler: wrap(handleSetNeedCommand), description: '[Staff] Set a player\'s hunger, exhaustion or cold', usage: '/setneed <player#> <hunger|thirst|exhaustion|cold> <value>' }
   ];
 }
 
@@ -413,6 +457,9 @@ async function initialize(overrides = {}) {
   configure(overrides);
   loadData();
   const d = deps();
+  if (d.mp && typeof d.mp.makeProperty === 'function') {
+    d.mp.makeProperty(HUD_PROPERTY, { isVisibleByOwner: true, isVisibleByNeighbors: false, updateOwner: HUD_UPDATE_OWNER, updateNeighbor: '' });
+  }
   activationEvents.subscribe(ACTIVATION_SUBSCRIBER, handleActivation);
   if (d.mp) {
     if (typeof d.mp.onEatItem === 'function') {
@@ -471,6 +518,9 @@ module.exports = {
   placeOf,
   wornOf,
   summary,
+  hudPayload,
+  HUD_PROPERTY,
+  HUD_UPDATE_OWNER,
   isOnline,
   _resetForTest
 };

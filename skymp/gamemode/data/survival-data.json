@@ -2567,6 +2567,191 @@
   }
  },
  "foods": {
+  "0x107a8a": {
+   "editorId": "MAG_MQ101JuniperMead",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0xf693f": {
+   "editorId": "MAG_DrinkBlackBriarMeadPrivateReserve",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0xf431e": {
+   "editorId": "MAG_FoodVegetableSoup",
+   "thirst": "small",
+   "hunger": "large"
+  },
+  "0xf431d": {
+   "editorId": "MAG_FoodVenisonStew",
+   "thirst": "small",
+   "hunger": "large"
+  },
+  "0xf431c": {
+   "editorId": "MAG_FoodTomatoSoup",
+   "thirst": "small",
+   "hunger": "medium"
+  },
+  "0xf431b": {
+   "editorId": "MAG_FoodCabbagePotatoSoup",
+   "thirst": "small",
+   "hunger": "large"
+  },
+  "0xf4315": {
+   "editorId": "MAG_FoodHorkerStew",
+   "thirst": "small",
+   "hunger": "large"
+  },
+  "0xf4314": {
+   "editorId": "MAG_FoodBeefStew",
+   "thirst": "small",
+   "hunger": "large"
+  },
+  "0xf257e": {
+   "editorId": "MAG_MS14WineAltoA",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0xeba02": {
+   "editorId": "MAG_FoodCabbageSoup",
+   "thirst": "small",
+   "hunger": "medium"
+  },
+  "0xeba01": {
+   "editorId": "MAG_FoodCabbageTomatoSoup",
+   "thirst": "small",
+   "hunger": "large"
+  },
+  "0xd055e": {
+   "editorId": "MAG_DrinkFavorRum",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
+  "0xb91d7": {
+   "editorId": "MAG_DrinkColovianBrandy02",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
+  "0x85368": {
+   "editorId": "MAG_DrinkWineSpiced",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x555e8": {
+   "editorId": "MAG_FreeformDragonBridgeMead",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0xc5349": {
+   "editorId": "MAG_DrinkWineFruit",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0xc5348": {
+   "editorId": "MAG_DrinkWineRed",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x9380d": {
+   "editorId": "MAG_DrinkAleWhiterunQuest",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x508ca": {
+   "editorId": "MAG_DrinkHonningbrewMead",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x3133c": {
+   "editorId": "MAG_DrinkWineWhite",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x3133b": {
+   "editorId": "MAG_DrinkWineAlto",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x34c5e": {
+   "editorId": "MAG_DrinkAle",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x34c5d": {
+   "editorId": "MAG_DrinkMead",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x1895f": {
+   "editorId": "MAG_DrinkFirebrandWine",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x2c35a": {
+   "editorId": "MAG_DrinkBlackBriarMead",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x300353d": {
+   "editorId": "MAG_FoodPotatoSoup",
+   "thirst": "small",
+   "hunger": "medium"
+  },
+  "0x3003536": {
+   "editorId": "MAG_DrinkSurilieBrothersWine",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x3003535": {
+   "editorId": "BYOHFoodWineBottle04",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x3003534": {
+   "editorId": "MAG_FoodMilk",
+   "thirst": "large",
+   "hunger": "verySmall"
+  },
+  "0x403cd5b": {
+   "editorId": "MAG_FoodAshYamSoup",
+   "thirst": "small",
+   "hunger": "medium"
+  },
+  "0x403572f": {
+   "editorId": "MAG_DrinkAshfireMead",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x40320df": {
+   "editorId": "MAG_DrinkRRFavor01EmberbrandWine",
+   "thirst": "medium",
+   "hunger": "verySmall"
+  },
+  "0x4024e0b": {
+   "editorId": "MAG_DrinkRRF04Sujamma",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
+  "0x40248ce": {
+   "editorId": "MAG_DrinkMazte",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
+  "0x40248cc": {
+   "editorId": "MAG_DrinkShein",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
+  "0x40207e6": {
+   "editorId": "MAG_DrinkSujamma",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
+  "0x40207e5": {
+   "editorId": "MAG_DrinkFlin",
+   "thirst": "small",
+   "hunger": "verySmall"
+  },
   "0x403cf72": {
    "editorId": "MAG_FoodBoarMeatCooked",
    "hunger": "medium"
@@ -2795,32 +2980,12 @@
    "editorId": "MAG_FoodMudcrabLegs",
    "hunger": "small"
   },
-  "0x3003534": {
-   "editorId": "MAG_FoodMilk",
-   "hunger": "verySmall"
-  },
   "0x3003538": {
    "editorId": "MAG_FoodFlour",
    "hunger": "verySmall"
   },
   "0x300353c": {
    "editorId": "MAG_FoodButter",
-   "hunger": "verySmall"
-  },
-  "0x4024e0b": {
-   "editorId": "DLC2RRF04Sujamma",
-   "hunger": "verySmall"
-  },
-  "0x40320df": {
-   "editorId": "DLC2RRFavor01EmberbrandWine",
-   "hunger": "verySmall"
-  },
-  "0x1895f": {
-   "editorId": "FirebrandWine",
-   "hunger": "verySmall"
-  },
-  "0xd055e": {
-   "editorId": "FavorSorexRum",
    "hunger": "verySmall"
   },
   "0x65c39": {
@@ -2835,21 +3000,10 @@
    "editorId": "RiftenSpecial01",
    "hunger": "verySmall"
   },
-  "0x9380d": {
-   "editorId": "AleWhiterunQuest",
-   "hunger": "verySmall"
-  },
-  "0x34c5e": {
-   "editorId": "Ale",
-   "hunger": "verySmall"
-  },
   "0x36d53": {
-   "editorId": "MQ201Drink",
-   "hunger": "verySmall"
-  },
-  "0x3003535": {
-   "editorId": "BYOHFoodWineBottle04",
-   "hunger": "verySmall"
+   "editorId": "MAG_DrinkColovianBrandy01",
+   "hunger": "verySmall",
+   "thirst": "small"
   },
   "0xeba03": {
    "editorId": "MAG_FoodClamMeat",
@@ -2859,7 +3013,8 @@
    "editorId": "Survival_FoodHotPotatoSoup",
    "warmth": true,
    "cold": true,
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "a08:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "Survival_FoodHotElsweyrFondue",
@@ -2871,25 +3026,19 @@
    "editorId": "Survival_FoodHotCabbageSoup",
    "warmth": true,
    "cold": true,
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e0:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "Survival_FoodHotCabbagePotatoSoup",
    "warmth": true,
    "cold": true,
-   "hunger": "large"
-  },
-  "0x403cd5b": {
-   "editorId": "MAG_FoodAshYamSoup",
-   "hunger": "medium"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0x300353e": {
    "editorId": "MAG_FoodClamChowder",
    "hunger": "large"
-  },
-  "0x3003536": {
-   "editorId": "BYOHFoodWineBottle03",
-   "hunger": "verySmall"
   },
   "0xf4320": {
    "editorId": "MAG_FoodCheeseFondueGoat",
@@ -2899,141 +3048,56 @@
    "editorId": "Survival_FoodHotTomatoSoup",
    "warmth": true,
    "cold": true,
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e4:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "Survival_FoodHotVegetableSoup",
    "warmth": true,
    "cold": true,
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e5:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "MAG_FoodBoarStewHot",
-   "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e7:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "MAG_FoodBeefStewHot",
-   "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e6:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "Survival_FoodHotAppleCabbageStew",
    "warmth": true,
    "cold": true,
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e8:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "MAG_FoodHorkerStewHot",
-   "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "hunger": "large",
+   "thirst": "small"
   },
   "9e9:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "MAG_FoodVenisonStewHot",
-   "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "hunger": "large",
+   "thirst": "small"
   },
   "9ea:ccQDRSSE001-SurvivalMode.esl": {
    "editorId": "MAG_FoodClamChowderHot",
-   "hunger": "large",
    "warmth": true,
-   "cold": true
-  },
-  "0xeba01": {
-   "editorId": "MAG_FoodCabbageTomatoSoup",
+   "cold": true,
    "hunger": "large"
-  },
-  "0xeba02": {
-   "editorId": "MAG_FoodCabbageSoup",
-   "hunger": "medium"
-  },
-  "0xf4314": {
-   "editorId": "MAG_FoodBeefStew",
-   "hunger": "large"
-  },
-  "0xf4315": {
-   "editorId": "MAG_FoodHorkerStew",
-   "hunger": "large"
-  },
-  "0xf431b": {
-   "editorId": "MAG_FoodCabbagePotatoSoup",
-   "hunger": "large"
-  },
-  "0x3133b": {
-   "editorId": "FoodWineAlto",
-   "hunger": "verySmall"
-  },
-  "0x403572f": {
-   "editorId": "DLC2FoodAshfireMead",
-   "hunger": "verySmall"
-  },
-  "0xf257e": {
-   "editorId": "MS14WineAltoA",
-   "hunger": "verySmall"
-  },
-  "0x2c35a": {
-   "editorId": "FoodBlackBriarMead",
-   "hunger": "verySmall"
-  },
-  "0xc5349": {
-   "editorId": "FoodWineAltoA",
-   "hunger": "verySmall"
-  },
-  "0x3133c": {
-   "editorId": "FoodWineBottle02",
-   "hunger": "verySmall"
-  },
-  "0xc5348": {
-   "editorId": "FoodWineBottle02A",
-   "hunger": "verySmall"
-  },
-  "0x34c5d": {
-   "editorId": "FoodMead",
-   "hunger": "verySmall"
-  },
-  "0x508ca": {
-   "editorId": "FoodHonningbrewMead",
-   "hunger": "verySmall"
-  },
-  "0xf431e": {
-   "editorId": "MAG_FoodVegetableSoup",
-   "hunger": "large"
-  },
-  "0xb91d7": {
-   "editorId": "WEDL03CyrodilicBrandy",
-   "hunger": "verySmall"
-  },
-  "0x85368": {
-   "editorId": "FoodSolitudeSpicedWine",
-   "hunger": "verySmall"
-  },
-  "0x107a8a": {
-   "editorId": "MQ101JuniperMead",
-   "hunger": "verySmall"
-  },
-  "0xf431d": {
-   "editorId": "MAG_FoodVenisonStew",
-   "hunger": "large"
-  },
-  "0xf693f": {
-   "editorId": "FoodBlackBriarMeadPrivateReserve",
-   "hunger": "verySmall"
-  },
-  "0x555e8": {
-   "editorId": "MAG_FreeformDragonBridgeMead",
-   "hunger": "verySmall"
-  },
-  "0xf431c": {
-   "editorId": "MAG_FoodTomatoSoup",
-   "hunger": "medium"
-  },
-  "0x300353d": {
-   "editorId": "MAG_FoodPotatoSoup",
-   "hunger": "medium"
   },
   "0x722b0": {
    "editorId": "MAG_FoodHorseMeatCooked",
@@ -3079,33 +3143,51 @@
    "editorId": "MAG_FoodRabbitCooked",
    "hunger": "medium"
   },
-  "0x40248ce": {
-   "editorId": "DLC2Matze",
-   "hunger": "verySmall"
-  },
-  "0x40248cc": {
-   "editorId": "DLC2Shein",
-   "hunger": "verySmall"
-  },
-  "0x40207e6": {
-   "editorId": "DLC2Sujamma",
-   "hunger": "verySmall"
-  },
-  "0x40207e5": {
-   "editorId": "DLC2Flin",
-   "hunger": "verySmall"
-  },
   "0xff000801": {
    "editorId": "MAG_FoodHorkerPie",
    "hunger": "large"
   },
+  "0xff01f388": {
+   "editorId": "GN_FoodCider",
+   "thirst": "large"
+  },
+  "0xff01f39d": {
+   "editorId": "GN_FoodVodka",
+   "thirst": "small"
+  },
+  "0xff01f3a0": {
+   "editorId": "GN_FoodWhiskey",
+   "thirst": "small"
+  },
+  "0xff01f3a3": {
+   "editorId": "GN_FoodGin",
+   "thirst": "small"
+  },
+  "0xff0388c4": {
+   "editorId": "GN_FoodVodkaStrawberry",
+   "thirst": "small"
+  },
+  "0xff0388c9": {
+   "editorId": "GN_FoodCyrodilicGin",
+   "thirst": "small"
+  },
+  "0xff0388cf": {
+   "editorId": "GN_FoodValunstradVodka",
+   "thirst": "small"
+  },
+  "0xff0388d1": {
+   "editorId": "GN_FoodWulfharthGin",
+   "thirst": "small"
+  },
   "0xff001878": {
    "editorId": "BSMFoodWineJulianosFirebelly",
-   "hunger": "verySmall"
+   "hunger": "verySmall",
+   "thirst": "medium"
   },
   "0xff001879": {
    "editorId": "BSMFoodShadowbanishWine",
-   "hunger": "verySmall"
+   "hunger": "verySmall",
+   "thirst": "medium"
   },
   "0xff00187b": {
    "editorId": "BSMFoodSunejBiscuit",
@@ -3141,35 +3223,43 @@
   },
   "0xff0009df": {
    "editorId": "MAG_FoodHotGoatStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e0": {
    "editorId": "MAG_FoodHotMammothStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e1": {
    "editorId": "MAG_FoodHotPheasantStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e2": {
    "editorId": "MAG_FoodHotRabbitStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e3": {
    "editorId": "MAG_FoodHotMushroomStew01",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e4": {
    "editorId": "MAG_FoodHotMushroomStew02",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e5": {
    "editorId": "MAG_FoodHotMushroomStew03",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0009e6": {
    "editorId": "MAG_FoodHotAshHopperStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff00080d": {
    "editorId": "MAG_FoodJuniperDumpling",
@@ -3187,19 +3277,27 @@
   },
   "0xff000816": {
    "editorId": "MAG_FoodAshHopperStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff000817": {
    "editorId": "MAG_FoodBoarStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff000818": {
    "editorId": "MAG_FoodMammothStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff00081c": {
    "editorId": "MAG_FoodGoatStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
+  },
+  "0xff000821": {
+   "editorId": "MAG_DrinkWrothgarianRum",
+   "thirst": "small"
   },
   "0xff0008aa": {
    "editorId": "MAG_FoodDogCooked",
@@ -3215,11 +3313,13 @@
   },
   "0xff0008b1": {
    "editorId": "MAG_FoodGourdSoup",
-   "hunger": "medium"
+   "hunger": "medium",
+   "thirst": "small"
   },
   "0xff0008b3": {
    "editorId": "MAG_FoodCarrotSoup",
-   "hunger": "medium"
+   "hunger": "medium",
+   "thirst": "small"
   },
   "0xff0008e2": {
    "editorId": "MAG_FoodCarrotCooked",
@@ -3231,23 +3331,28 @@
   },
   "0xff0008ea": {
    "editorId": "MAG_FoodRabbitStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0008eb": {
    "editorId": "MAG_FoodPheasantStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0008f5": {
    "editorId": "MAG_FoodMushroomStew01",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0008f6": {
    "editorId": "MAG_FoodMushroomStew02",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff0008f7": {
    "editorId": "MAG_FoodMushroomStew03",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "0xff000901": {
    "editorId": "MAG_FoodMushroomsCooked01",
@@ -3260,6 +3365,18 @@
   "0xff000903": {
    "editorId": "MAG_FoodMushroomsCooked03",
    "hunger": "medium"
+  },
+  "0xff000919": {
+   "editorId": "MAG_DrinkHonningbrewMeadLimited",
+   "thirst": "medium"
+  },
+  "0xff00091c": {
+   "editorId": "MAG_DrinkHonningbrewMeadSpecial",
+   "thirst": "medium"
+  },
+  "0xff00091d": {
+   "editorId": "MAG_DrinkBlackBriarMeadSpecial",
+   "thirst": "medium"
   },
   "801:unofficial skyrim special edition patch.esp": {
    "editorId": "MAG_FoodBeefPie",
@@ -3405,7 +3522,8 @@
    "editorId": "MAG_FishFoodSoupCrabStewHOT",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "f78:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodCrabCakes",
@@ -3441,33 +3559,39 @@
   },
   "f02:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupCrabBisque",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "f04:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupTomatoCrabBisque",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "f06:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupPotatoCrabBisque",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "f0a:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupCrabBisqueHOT",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "f0b:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupPotatoCrabBisqueHOT",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "f0c:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupTomatoCrabBisqueHOT",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "f25:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSlaughterfish",
@@ -3475,55 +3599,72 @@
   },
   "f76:ccbgssse001-fish.esm": {
    "editorId": "MAG_FishFoodSoupCrabStew",
-   "hunger": "large"
+   "hunger": "large",
+   "thirst": "small"
   },
   "9df:Gourmet.esp": {
    "editorId": "MAG_FoodGoatStewHot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e0:Gourmet.esp": {
    "editorId": "MAG_FoodMammothStewHot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e5:Gourmet.esp": {
    "editorId": "MAG_FoodMushroomStew03Hot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e6:Gourmet.esp": {
    "editorId": "MAG_FoodAshHopperStewHot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e1:Gourmet.esp": {
    "editorId": "MAG_FoodPheasantStewHot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e2:Gourmet.esp": {
    "editorId": "MAG_FoodRabbitStewHot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e3:Gourmet.esp": {
    "editorId": "MAG_FoodMushroomStew01Hot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
   },
   "9e4:Gourmet.esp": {
    "editorId": "MAG_FoodMushroomStew02Hot",
    "hunger": "large",
    "warmth": true,
-   "cold": true
+   "cold": true,
+   "thirst": "small"
+  },
+  "1878:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFoodWineJulianosFirebelly",
+   "thirst": "medium"
+  },
+  "1879:BeyondSkyrimMerchant.esp": {
+   "editorId": "BSMFoodShadowbanishWine",
+   "thirst": "medium"
   },
   "187b:BeyondSkyrimMerchant.esp": {
    "editorId": "BSMSunejBiscuit",

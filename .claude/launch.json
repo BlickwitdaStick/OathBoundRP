@@ -8,6 +8,12 @@
       "port": 8791
     },
     {
+      "name": "ui-static-node",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "const h=require('http'),f=require('fs'),p=require('path');const r=p.resolve('skymp/ui');h.createServer((q,s)=>{const u=decodeURIComponent(q.url.split('?')[0]);const fp=p.join(r,u==='/'?'index.html':u);if(!fp.startsWith(r)||!f.existsSync(fp)){s.writeHead(404);return s.end();}const t={'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml'}[p.extname(fp)]||'application/octet-stream';s.writeHead(200,{'content-type':t});f.createReadStream(fp).pipe(s);}).listen(8792,'127.0.0.1')"],
+      "port": 8792
+    },
+    {
       "name": "launcher-renderer",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "apps/launcher"],

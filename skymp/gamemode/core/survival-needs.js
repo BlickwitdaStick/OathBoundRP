@@ -31,6 +31,18 @@ const NEEDS = Object.freeze({
       'You are hungry.', 'You are ravenous.', 'You are starving.'
     ]
   },
+  // Ours: Survival Mode has no thirst. Drinks are apart from food (Brewer),
+  // and you get thirsty a little faster than hungry.
+  thirst: {
+    max: 1000,
+    perGameHour: 10,
+    stages: [80, 160, 340, 520, 770],
+    names: ['Quenched', 'Refreshed', 'Thirsty', 'Parched', 'Dehydrated', 'Desiccated'],
+    messages: [
+      'Your thirst is quenched.', 'You feel refreshed.', 'You are thirsty.',
+      'You are parched.', 'You are dehydrated.', 'You are desperate for a drink.'
+    ]
+  },
   exhaustion: {
     max: 960,                                  // Survival_ExhaustionNeedMaxValue
     perGameHour: 9,                            // Survival_ExhaustionNeedRate
@@ -54,6 +66,8 @@ const NEEDS = Object.freeze({
 
 /** Hunger restored per meal size (Survival_HungerRestore*Amount). */
 const FOOD_HUNGER = Object.freeze({ verySmall: 2, small: 18, medium: 220, large: 380 });
+/** Thirst removed per drink size (ours; see tools/survival thirstOf). */
+const DRINK_THIRST = Object.freeze({ small: 90, medium: 220, large: 350 });
 /** Cold removed by a hot meal (Survival_ColdRestoreMediumAmount). */
 const HOT_FOOD_COLD = 200;
 /** How long a hot meal keeps you warmer, in game hours (ours). */
@@ -242,6 +256,7 @@ function advance(needs, hours, ctx) {
   const next = { ...needs };
 
   next.hunger = clamp('hunger', needs.hunger + NEEDS.hunger.perGameHour * h * (resting ? REST_HUNGER_MULT : 1));
+  next.thirst = clamp('thirst', (Number(needs.thirst) || 0) + NEEDS.thirst.perGameHour * h * (resting ? REST_HUNGER_MULT : 1));
 
   if (resting) {
     const floor = Math.max(0, resting.floor || 0);
@@ -272,6 +287,7 @@ function eat(needs, food) {
   if (!food) return null;
   const next = { ...needs };
   if (food.hunger && FOOD_HUNGER[food.hunger]) next.hunger = clamp('hunger', needs.hunger - FOOD_HUNGER[food.hunger]);
+  if (food.thirst && DRINK_THIRST[food.thirst]) next.thirst = clamp('thirst', (Number(needs.thirst) || 0) - DRINK_THIRST[food.thirst]);
   if (food.cold) next.cold = clamp('cold', needs.cold - HOT_FOOD_COLD);
   return { needs: next, warmthHours: food.warmth ? HOT_FOOD_WARMTH_HOURS : 0 };
 }
@@ -281,6 +297,7 @@ module.exports = {
   AREAS,
   AREA_RULES,
   FOOD_HUNGER,
+  DRINK_THIRST,
   HOT_FOOD_COLD,
   HOT_FOOD_WARMTH_HOURS,
   REST_PER_GAME_HOUR,

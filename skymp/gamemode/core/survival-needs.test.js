@@ -131,7 +131,7 @@ describe('survival-needs: time passing', () => {
 
   it('needs stop at their maximum', () => {
     const after = n.advance(start, 1000, { area: 'freezing' });
-    assert.deepEqual(after, { hunger: 1000, exhaustion: 960, cold: 1000 });
+    assert.deepEqual(after, { hunger: 1000, thirst: 1000, exhaustion: 960, cold: 1000 });
   });
 
   it('a freezing area numbs you in about 1.33 game hours; warm clothes slow it', () => {
@@ -172,5 +172,24 @@ describe('survival-needs: food and warmth', () => {
     assert.equal(n.warmthOf([{ kind: 'warm', bodyOrHead: true }, { kind: 'normal', bodyOrHead: false }]), 0.25);
     assert.equal(n.warmthOf([{ kind: 'cold', bodyOrHead: true }], { torch: true, hotMeal: true }), 0.28);
     assert.equal(n.warmthOf(Array(20).fill({ kind: 'warm', bodyOrHead: true })), 0.8);
+  });
+});
+
+describe('survival-needs: thirst', () => {
+  it('thirst grows faster than hunger; drinks restore it by size', () => {
+    const n2 = require('./survival-needs');
+    const after = n2.advance({ hunger: 0, thirst: 0, exhaustion: 0, cold: 0 }, 2, { area: 'indoors' });
+    assert.equal(after.thirst, 20);
+    assert.ok(after.thirst > after.hunger);
+    const drunk = n2.eat({ hunger: 100, thirst: 500, exhaustion: 0, cold: 0 }, { thirst: 'medium' });
+    assert.equal(drunk.needs.thirst, 280);
+    assert.equal(drunk.needs.hunger, 100);
+    assert.equal(n2.describe('thirst', 600).name, 'Dehydrated');
+  });
+
+  it('characters saved before thirst existed start at 0', () => {
+    const n2 = require('./survival-needs');
+    const after = n2.advance({ hunger: 0, exhaustion: 0, cold: 0 }, 1, { area: 'indoors' });
+    assert.equal(after.thirst, 10);
   });
 });

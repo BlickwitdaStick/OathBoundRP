@@ -72,9 +72,9 @@ function fakeDb() {
   return {
     async query(sql, p) {
       const s = sql.replace(/\s+/g, ' ').trim();
-      if (s.startsWith('SELECT hunger, exhaustion, cold FROM character_needs')) return rows.has(p[0]) ? [rows.get(p[0])] : [];
+      if (s.startsWith('SELECT hunger, thirst, exhaustion, cold FROM character_needs')) return rows.has(p[0]) ? [rows.get(p[0])] : [];
       if (s.startsWith('INSERT INTO character_needs')) {
-        rows.set(p[0], { hunger: p[1], exhaustion: p[2], cold: p[3] });
+        rows.set(p[0], { hunger: p[1], thirst: p[2], exhaustion: p[3], cold: p[4] });
         return {};
       }
       throw new Error(`unexpected SQL: ${s}`);
@@ -118,7 +118,7 @@ describe('survival-service: sessions', () => {
     hours += 0.5;
     await service.update(ACTOR);
     await service.onDisconnect(ACTOR);
-    assert.deepEqual(needs(), { hunger: 3.75, exhaustion: 4.5, cold: 0 });
+    assert.deepEqual(needs(), { hunger: 3.75, thirst: 5, exhaustion: 4.5, cold: 0 });
   });
 
   it('needs carry over between sessions; time offline does not count', async () => {
@@ -129,7 +129,7 @@ describe('survival-service: sessions', () => {
     await service.update(ACTOR);
     assert.equal(service.isOnline(ACTOR), true);
     await service.onDisconnect(ACTOR);
-    assert.deepEqual(needs(), { hunger: 500, exhaustion: 100, cold: 0 });
+    assert.deepEqual(needs(), { hunger: 500, thirst: 0, exhaustion: 100, cold: 0 });
   });
 
   it('one tick never moves more than one game hour', async () => {
@@ -240,17 +240,41 @@ describe('survival-service: commands', () => {
   it('/needs shows every need with its stage and where you are', async () => {
     await login({ hunger: 400, exhaustion: 50, cold: 0 });
     await cmd('/needs')(ACTOR, '');
-    assert.match(lastNote(), /Hunger: Hungry \(400\/1000\) · Exhaustion: Well Rested \(50\/960\) · Cold: Warm \(0\/1000\) · You are in indoors/);
+    assert.match(lastNote(), /Hunger: Hungry \(400\/1000\) · Thirst: Quenched \(0\/1000\) · Exhaustion: Well Rested \(50\/960\) · Cold: Warm \(0\/1000\) · You are in indoors/);
   });
 
   it('/setneed is staff only and validates input', async () => {
     await login();
     await cmd('/setneed')(ACTOR, `0x${ACTOR.toString(16)} hunger 900`);
     assert.equal(lastNote(), 'Staff only.');
-    await cmd('/setneed')(STAFF, `0x${ACTOR.toString(16)} thirst 10`);
-    assert.match(lastNote(), /hunger, exhaustion or cold/);
+    await cmd('/setneed')(STAFF, `0x${ACTOR.toString(16)} mana 10`);
+    assert.match(lastNote(), /hunger, thirst, exhaustion or cold/);
     await cmd('/setneed')(STAFF, `0x${ACTOR.toString(16)} hunger 900`);
     assert.match(lastNote(), /hunger set to 900: Starving/);
     assert.equal(needs().hunger, 900);
   });
+});
+
+it('HUD payload: full meters when fine, empty at the worst, stage names', () => {
+  const svc = require('./survival-service');
+  const p = svc.hudPayload({ needs: { hunger: 0, exhaustion: 960, cold: 400 }, area: 'temperate', resting: null });
+  assert.equal(p.needs.hunger.fill, 100);
+  assert.equal(p.needs.hunger.name, 'Well Fed');
+  assert.equal(p.needs.exhaustion.fill, 0);
+  assert.equal(p.needs.exhaustion.name, 'Debilitated');
+  assert.equal(p.needs.cold.fill, 60);
+  assert.equal(p.needs.cold.name, 'Very Cold');
+  assert.equal(typeof p.key, 'string');
+});
+
+it('HUD client snippet is valid and forwards each new value once', () => {
+  const svc = require('./survival-service');
+  const calls = [];
+  const ctx = { state: {}, value: { key: 'a', needs: {} }, sp: { browser: { executeJavaScript: (s) => calls.push(s) } } };
+  const run = new Function('ctx', svc.HUD_UPDATE_OWNER);
+  run(ctx); run(ctx);
+  assert.equal(calls.length, 1);
+  ctx.value = { key: 'b', needs: {} };
+  run(ctx);
+  assert.equal(calls.length, 2);
 });

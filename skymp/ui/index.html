@@ -413,7 +413,7 @@
     /* Bottom left, above the health/magicka/stamina bars (TrueHUD Nordic-ish
        puts the player's stats in the bottom-left corner). --chat-bottom moves
        the whole chat up or down if a HUD sits differently. */
-    :root { --chat-bottom: 190px; }
+    :root { --chat-bottom: 232px; --needs-bottom: 158px; }
     .chat-log {
       position: fixed;
       left: 24px;
@@ -421,7 +421,10 @@
       width: min(520px, calc(100vw - 48px));
       max-height: 40vh;
       display: flex;
-      flex-direction: column-reverse;
+      /* Newest line at the bottom; when the box is full the OLDEST lines are
+         clipped at the top (column + flex-end overflows upward). */
+      flex-direction: column;
+      justify-content: flex-end;
       gap: 4px;
       overflow: hidden;
       pointer-events: none;
@@ -621,6 +624,79 @@
       transition: opacity 0.2s;
     }
     .group-marker.center span { opacity: 1; }
+
+    /* Survival needs (gamemode/survival-service.js): three Nordic UI diamonds
+       above the health/magicka/stamina bars. Full = fine, drains as the need
+       grows; the stage name shows once it is no longer fine. */
+    .needs-hud {
+      position: fixed;
+      left: 30px;
+      bottom: var(--needs-bottom);
+      display: none;
+      gap: 14px;
+      pointer-events: none;
+      z-index: 230;
+    }
+    .needs-hud.show { display: flex; }
+    .need { display: flex; flex-direction: column; align-items: center; width: 64px; }
+    .need-gem {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      margin: 2px 0 3px;
+      clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+      background: linear-gradient(135deg, #f2dc9c, #b8914a 55%, #6e5224);
+      filter: drop-shadow(0 0 4px rgba(217,183,110,0.35));
+    }
+    .need-gem .inner {
+      position: absolute;
+      inset: 2px;
+      clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+      background: rgba(12,10,8,0.9);
+      overflow: hidden;
+    }
+    .need-gem .fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      transition: height 0.6s ease;
+      opacity: 0.85;
+    }
+    .need-gem svg {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 17px;
+      height: 17px;
+      transform: translate(-50%, -50%);
+      fill: none;
+      stroke: #f6ead0;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .need.hunger .fill { background: linear-gradient(0deg, #8a5a1c, #d79b45); }
+    .need.thirst .fill { background: linear-gradient(0deg, #1f4f86, #5fa2e0); }
+    .need.exhaustion .fill { background: linear-gradient(0deg, #3b4a63, #8296b8); }
+    .need.cold .fill { background: linear-gradient(0deg, #2d6377, #9fd6e6); }
+    .need-name {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #e9d9ae;
+      text-align: center;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.95);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .need.bad .need-name { opacity: 1; }
+    .need.dire .need-gem { animation: need-pulse 1.6s ease-in-out infinite; }
+    @keyframes need-pulse {
+      0%, 100% { filter: drop-shadow(0 0 3px rgba(230,110,70,0.4)); }
+      50% { filter: drop-shadow(0 0 10px rgba(240,90,60,0.95)); }
+    }
   </style>
 </head>
 <body>
@@ -697,6 +773,7 @@
 </div>
 <div id="chat-log" class="chat-log" aria-live="polite"></div>
 <div id="look-keys" class="look-keys"></div>
+<div id="needs-hud" class="needs-hud"></div>
 <div id="group-compass" class="group-compass"></div>
 <!-- Chat input: opened by the "Open chat" key (Enter by default, see core/player-shortcuts-service.js). -->
 <form id="chat-input-wrap" class="chat-input-wrap" autocomplete="off" aria-hidden="true">
@@ -2343,6 +2420,33 @@
         html += '<div class="group-marker' + center + '" style="left:' + left.toFixed(1) + 'px"><i></i><span>' + esc(m.name) + ' · ' + Math.round((m.dist || 0) / 70) + ' m</span></div>';
       });
       root.innerHTML = html;
+    };
+  })();
+</script>
+
+<script>
+  // Survival needs HUD (gamemode/survival-service.js -> survivalHud property).
+  (function () {
+    var ICONS = {
+      hunger: '<svg viewBox="0 0 24 24"><path d="M4 12h16a8 8 0 0 1-16 0z"/><path d="M8 8c0-2 2-2 2-4M12 8c0-2 2-2 2-4M16 8c0-2 2-2 2-4"/></svg>',
+      thirst: '<svg viewBox="0 0 24 24"><path d="M12 3c3 4.2 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 3-6.8 6-11z"/><path d="M9.2 14.5a2.8 2.8 0 0 0 2.8 2.8"/></svg>',
+      exhaustion: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
+      cold: '<svg viewBox="0 0 24 24"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9 4l3 2 3-2M9 20l3-2 3 2"/></svg>'
+    };
+    var TITLES = { hunger: 'Hunger', thirst: 'Thirst', exhaustion: 'Fatigue', cold: 'Cold' };
+    window.handleSurvivalHud = function (p) {
+      var root = document.getElementById('needs-hud');
+      if (!root) return;
+      if (!p || !p.needs) { root.classList.remove('show'); return; }
+      root.innerHTML = ['hunger', 'thirst', 'exhaustion', 'cold'].map(function (n) {
+        var v = p.needs[n] || { fill: 100, stage: 0, name: '' };
+        var cls = 'need ' + n + (v.stage >= 2 ? ' bad' : '') + (v.stage >= 4 ? ' dire' : '');
+        var h = Math.max(0, Math.min(100, Number(v.fill) || 0));
+        return '<div class="' + cls + '" title="' + TITLES[n] + '">' +
+          '<div class="need-gem"><div class="inner"><div class="fill" style="height:' + h + '%"></div>' + ICONS[n] + '</div></div>' +
+          '<div class="need-name">' + String(v.name || '').replace(/[<>&]/g, '') + '</div></div>';
+      }).join('');
+      root.classList.add('show');
     };
   })();
 </script>
