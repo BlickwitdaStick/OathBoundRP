@@ -1,4 +1,5 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { describeGamePathProblem } from '../gamePathProblem';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AuthData, LaunchGameResult, NexusAccount, ServerModsCheck } from '../types/electron';
 import { Play, Settings as SettingsIcon, LogOut, FolderOpen, RefreshCw } from 'lucide-react';
@@ -227,14 +228,14 @@ export function Home({ auth, setAuth }: HomeProps) {
       const gamePath = config.gamePath;
       if (!gamePath) {
         setStatus('Configure the Skyrim directory before playing.');
-        navigate('/settings');
+        navigate('/settings', { state: { notice: describeGamePathProblem('empty') } });
         return;
       }
 
       const pathOk = await window.electronAPI.checkGamePath(gamePath);
       if (!pathOk.ok) {
         setStatus(`Invalid game directory: ${pathOk.reason}`);
-        navigate('/settings');
+        navigate('/settings', { state: { notice: describeGamePathProblem(pathOk.reason) } });
         return;
       }
 
@@ -260,7 +261,7 @@ export function Home({ auth, setAuth }: HomeProps) {
       }
       if (clientUpdate.updateAvailable) {
         setStatus(`Required client update: ${clientUpdate.version}. Install it from Settings.`);
-        navigate('/settings');
+        navigate('/settings', { state: { notice: `A client update (${clientUpdate.version}) is required: click Update Client below.` } });
         return;
       }
 

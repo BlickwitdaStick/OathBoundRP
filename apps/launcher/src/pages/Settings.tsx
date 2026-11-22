@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { describeGamePathProblem } from '../gamePathProblem';
 import { ArrowLeft, Bug, Download, FolderOpen, RefreshCw, Search, Wrench } from 'lucide-react';
 
 export function Settings() {
@@ -35,9 +36,16 @@ export function Settings() {
     }
   };
 
+  const location = useLocation();
   useEffect(() => {
-    window.electronAPI.getLauncherConfig().then((config) => {
-      if (config.gamePath) setGamePath(config.gamePath);
+    // Sent here by PLAY: say why, instead of leaving the player guessing.
+    const notice = (location.state as { notice?: string } | null)?.notice;
+    if (notice) setError(notice);
+    window.electronAPI.getLauncherConfig().then(async (config) => {
+      if (!config.gamePath) { if (!notice) setError(describeGamePathProblem('empty')); return; }
+      setGamePath(config.gamePath);
+      const check = await window.electronAPI.checkGamePath(config.gamePath);
+      if (!check.ok && !notice) setError(describeGamePathProblem(check.reason));
     });
     window.electronAPI.onUpdateProgress((value) => setReport(`Client: ${value.phase} ${value.percent}%`));
     window.electronAPI.onModsUpdateProgress((value) => setReport(`Mods: ${value.phase} ${value.percent}%`));
@@ -68,7 +76,7 @@ export function Settings() {
         setGamePath(selected);
         setSuccess('Directory validated and saved successfully.');
       } else {
-        setError(`Invalid directory: ${valid.reason}`);
+        setError(describeGamePathProblem(valid.reason));
       }
     } catch (e: any) {
       setError(e.message || 'Failed to select directory.');
