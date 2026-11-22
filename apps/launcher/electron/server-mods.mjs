@@ -28,7 +28,8 @@ export class ServerModsError extends Error {
 }
 
 const PLUGIN_EXTENSIONS = new Set(['.esm', '.esp', '.esl']);
-const BASE_MASTERS = new Set(['skyrim.esm', 'update.esm', 'dawnguard.esm', 'hearthfires.esm', 'dragonborn.esm']);
+const BASE_MASTER_ORDER = Object.freeze(['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm']);
+const BASE_MASTERS = new Set(BASE_MASTER_ORDER.map(p => p.toLowerCase()));
 
 // The SkyMP client (Platform/, MpClientPlugin.dll, SkyrimPlatform.dll) comes
 // from the server's mod list too: the launcher has no other way to install it,
@@ -252,10 +253,10 @@ export function enableServerPlugins({ gamePath, plugins }) {
   let changed = false;
 
   const rewrite = (file, render) => {
-    // No list = the OATHBOUND install is not set up; creating one with only
-    // the server plugins would drop the base masters. Launch reports it.
-    if (!fs.existsSync(file)) return;
-    const lines = readLines(file);
+    // A fresh install has no OATHBOUND list yet: start it with the five base
+    // masters (the game's own order), then the server's plugins below. Without
+    // this, PLAY failed with "OATHBOUND plugin list not found" for new players.
+    const lines = fs.existsSync(file) ? readLines(file) : BASE_MASTER_ORDER.map(render);
     const kept = lines.filter(l => !lowerPlugins.has(l.replace(/^\*/, '').trim().toLowerCase()));
     const next = kept.concat(plugins.map(render));
     if (JSON.stringify(next) === JSON.stringify(lines)) return;

@@ -210,9 +210,13 @@ describe('enableServerPlugins', () => {
     assert.equal(enableServerPlugins({ gamePath, plugins: ['SkyUI_SE.esp'] }).changed, false);
   });
 
-  test('does nothing when the OATHBOUND lists do not exist', () => {
-    assert.equal(enableServerPlugins({ gamePath, plugins: ['SkyUI_SE.esp'] }).changed, false);
-    assert.ok(!fs.existsSync(path.join(gamePath, 'OATHBOUND_plugins.txt')));
+  test('a fresh install gets both lists: the five base masters, then the server plugins', () => {
+    assert.equal(enableServerPlugins({ gamePath, plugins: ['_ResourcePack.esl', 'SkyUI_SE.esp'] }).changed, true);
+    assert.deepEqual(read('OATHBOUND_plugins.txt'),
+      ['*Skyrim.esm', '*Update.esm', '*Dawnguard.esm', '*HearthFires.esm', '*Dragonborn.esm', '*_ResourcePack.esl', '*SkyUI_SE.esp']);
+    assert.deepEqual(read('OATHBOUND_loadorder.txt'),
+      ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', '_ResourcePack.esl', 'SkyUI_SE.esp']);
+    assert.equal(enableServerPlugins({ gamePath, plugins: ['_ResourcePack.esl', 'SkyUI_SE.esp'] }).changed, false, 'second run changes nothing');
   });
 });
 
