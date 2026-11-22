@@ -1,7 +1,7 @@
 {
   "name": "launcher-temp",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.5",
   "main": "dist-electron/main.mjs",
   "type": "module",
   "scripts": {
