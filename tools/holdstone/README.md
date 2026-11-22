@@ -11,24 +11,27 @@ the plinth, with collision.
 
 | File | What it is |
 |------|------------|
-| `OathboundHoldstone.esp` | ESL-flagged plugin, one activator: `OBHoldstone` "Holdstone" (`800:OathboundHoldstone.esp`) |
-| `meshes/oathbound/holdstone.nif` | the model |
+| `Oathbound_Holdstone.esp` | ESL-flagged plugin: one activator per stone listed in `skymp/gamemode/data/holdstones.json` ("Whiterun Holdstone" `801`, "High Hrothgar Holdstone" `80B`…), plus the old generic "Holdstone" (`800`), which belongs to no one |
+| `meshes/oathbound/holdstone.nif` | the model (shared by every stone) |
 | `textures/oathbound/holdstone/*.dds` | rune colour, glow and normal maps |
 
 The stone and plinth use vanilla Windhelm stone textures, so players need
 nothing extra for those.
 
-## In game
+## Placing stones (Creation Kit only)
 
-`/holdstone spawn <hold>` places one in front of you and binds it to the hold
-(see `docs/gameplay/HOLDSTONES_AND_PARCELS.md`). Pressing **E** on it opens the
-hold menu. The activator has no Papyrus script: the server catches the
-activation (`holdstone-service.js`).
+Load `Oathbound_Holdstone.esp` (and your placement plugin, e.g.
+`Oathbound_Core.esp`), find the stone under **Activators** (filter `OBHoldstone`),
+drag it into the cell and save. That is all: the server knows a "Whiterun
+Holdstone" belongs to Whiterun from its activator. Pressing **E** on it opens
+that organization's menu. Several references of one activator are all that
+organization's stone.
 
-To place stones by hand in the Creation Kit instead, load
-`OathboundHoldstone.esp`, find `OBHoldstone` under Activators, drop it in the
-world, and bind it in game with `/holdstone place <hold>` + **E**. A stone
-placed this way must be saved in a plugin that every player loads.
+**Adding a stone** (a thanedom, a faction): append an entry to
+`holdstones.json` with a new, never-used `formId`, rebuild the plugin
+(`node tools/holdstone/build-plugin.js`), place it in the Creation Kit, and
+restart the server (it creates the organization with the default ladder of its
+kind). Never change or reuse a `formId`: placed stones point at it.
 
 ## Rebuilding
 

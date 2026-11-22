@@ -27,7 +27,7 @@ const CLIENT_MODS = path.join(REPO, 'skymp', 'client-mods');
 
 /** Our own files, relative to Data/. Vanilla textures the model uses are not shipped. */
 const SHIPPED = [
-  'OathboundHoldstone.esp',
+  require('./build-plugin').PLUGIN,
   'meshes/oathbound/holdstone.nif',
   'textures/oathbound/holdstone/holdstonerune.dds',
   'textures/oathbound/holdstone/holdstonerune_g.dds',
@@ -79,7 +79,7 @@ function main() {
   for (const f of fs.readdirSync(path.join(build, 'textures', 'oathbound', 'holdstone')).filter((f) => f.endsWith('.dds'))) {
     fs.copyFileSync(path.join(build, 'textures', 'oathbound', 'holdstone', f), path.join(texOut, f));
   }
-  node('build-plugin.js', path.join(DIST, 'OathboundHoldstone.esp'));
+  node('build-plugin.js', path.join(DIST, require('./build-plugin').PLUGIN));
 
   if (process.argv.includes('--install')) {
     for (const rel of SHIPPED) {

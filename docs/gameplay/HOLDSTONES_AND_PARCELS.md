@@ -1,13 +1,24 @@
 # Holdstones and parcels
 
-A **holdstone** is one world object per hold that opens the hold menu. Each
-hold has an ordered **rank ladder** and a list of **members**. A **parcel**
-is a building or plot: a set of doors and containers with an **owner** and a
-**minimum rank**. When a parcel is locked, its doors and containers open only
-for:
+Every **holdstone** is the seat of an **organization**: a hold (Whiterun), a
+town (Riverwood), a faction (the Imperial Legion; High Hrothgar, where staff
+hold in-character meetings), a thanedom, or a council. Each organization has
+its own ordered **rank ladder** and **members**, and a character can be tied to
+several at once: a citizen of Solitude can also be a Legion soldier. Solitude
+can therefore have two stones, the Solitude stone and the Imperial Legion's.
+
+An organization can **answer to a parent**: Riverwood answers to Whiterun.
+The parent's leaders (Whiterun's Jarl and Stewards) also lead the child:
+they set Riverwood's ranks, manage its members and parcels, as if they stood
+above its whole ladder. Opening locked doors is not inherited: a Jarl unlocks
+a Riverwood parcel (or is given a Riverwood rank) rather than walking in.
+
+A **parcel** is a building or plot controlled by an organization: a set of
+doors and containers with an **owner** and a **minimum rank**. When a parcel is
+locked, its doors and containers open only for:
 
 - the owner,
-- members of that hold at or above the parcel's minimum rank,
+- members of **that organization** at or above the parcel's minimum rank,
 - staff.
 
 Everyone else sees **"It's locked."** and nothing opens.
@@ -17,30 +28,85 @@ holdstones, but no code was taken from it).
 
 | Piece | Where |
 |---|---|
-| Tables | `skymp/packages/database/migration-v33-holdstones-parcels.sql` |
+| Stone list (one line per stone) | `skymp/gamemode/data/holdstones.json` |
+| Stone activators + model | `Oathbound_Holdstone.esp`, built by `tools/holdstone/` |
+| Tables | `migration-v33-holdstones-parcels.sql`, `migration-v41-stone-organizations.sql` |
 | Rules (pure, tested) | `skymp/gamemode/core/parcel-locks.js` |
 | Service, menu, tool, commands | `skymp/gamemode/holdstone-service.js` |
-| Hold panel | `skymp/ui/holdstone-panel.js` / `.css`, markup in `index.html` |
+| Stone panel | `skymp/ui/holdstone-panel.js` / `.css`, markup in `index.html` |
 | Flag | `ENABLE_HOLDSTONES` (default `true` in `.env.example`) |
 
-The holdstone menu and the parceling tool also need
+The stone menu and the parceling tool also need
 `ENABLE_INTERACTION_FRAMEWORK=true` and `ENABLE_INTERACTION_PROMPT=true`. The
 locks work without them.
 
 ---
 
-## The rank ladder
+## Stones are placed in the Creation Kit, nothing in game
 
-Every hold starts with four ranks (the migration seeds them for every hold):
+Each stone is its **own activator** in `Oathbound_Holdstone.esp`, all with the
+same runed-monolith model:
 
-| Position | Key | Name | Leader? |
+| Activator | Editor ID | FormID | Organization |
 |---|---|---|---|
-| 10 | `citizen` | Citizen | no |
-| 20 | `guard` | Guard | no |
-| 30 | `steward` | Steward | yes |
-| 40 | `jarl` | Jarl | yes |
+| Whiterun Holdstone | `OBHoldstoneWhiterun` | `801` | `whiterun` (hold) |
+| Solitude Holdstone | `OBHoldstoneSolitude` | `802` | `solitude` (hold) |
+| Riften Holdstone | `OBHoldstoneRiften` | `803` | `riften` (hold) |
+| Windhelm Holdstone | `OBHoldstoneWindhelm` | `804` | `windhelm` (hold) |
+| Markarth Holdstone | `OBHoldstoneMarkarth` | `805` | `markarth` (hold) |
+| Falkreath Holdstone | `OBHoldstoneFalkreath` | `806` | `falkreath` (hold) |
+| Morthal Holdstone | `OBHoldstoneMorthal` | `807` | `morthal` (hold) |
+| Dawnstar Holdstone | `OBHoldstoneDawnstar` | `808` | `dawnstar` (hold) |
+| Winterhold Holdstone | `OBHoldstoneWinterhold` | `809` | `winterhold` (hold) |
+| Riverwood Holdstone | `OBHoldstoneRiverwood` | `80A` | `riverwood` (town, answers to Whiterun) |
+| High Hrothgar Holdstone | `OBHoldstoneHighHrothgar` | `80B` | `high_hrothgar` (faction) |
+| Imperial Legion Holdstone | `OBHoldstoneImperialLegion` | `80C` | `imperial_legion` (faction) |
 
-Higher position = more authority. **Leaders** can:
+`800` "Holdstone" is the old generic stone; it belongs to no one.
+
+**To place one:** in the Creation Kit load `Oathbound_Holdstone.esp` with your
+placement plugin (e.g. `Oathbound_Core.esp`), filter Activators by
+`OBHoldstone`, drag the right stone into the cell, save. The server recognizes
+it by its activator: pressing **E** on a "High Hrothgar Holdstone" opens High
+Hrothgar's menu wherever it stands. Only stones from `Oathbound_Holdstone.esp`
+work; the old `OathboundHoldstone.esp` is gone. Placing two of the same activator gives
+that organization two stones.
+
+The placement plugin must be loaded by the server and by every player, after
+`Oathbound_Holdstone.esp`.
+
+**To add a stone** (each thanedom, another faction):
+
+1. Append an entry to `skymp/gamemode/data/holdstones.json`: a short `id`
+   (`thane_rorikstead`), `name`, `kind` (`hold`, `town`, `faction`,
+   `thanedom`, `council`), `hold` (where it sits, or `null`), optionally
+   `parent` (the organization it answers to), the next unused `formId` and an
+   `editorId`. Never change or reuse a `formId`.
+2. `node tools/holdstone/build-plugin.js` rebuilds `Oathbound_Holdstone.esp`
+   (in `tools/holdstone/dist/`).
+3. Place it in the Creation Kit.
+4. Ship the new plugin to the server and the players, upload the new
+   `holdstones.json`, restart. On boot the server creates the organization with
+   the default ladder of its kind.
+
+---
+
+## Rank ladders
+
+New organizations start with the ladder of their kind (higher = more
+authority; ★ = leader):
+
+| Kind | Ladder |
+|---|---|
+| hold | Citizen < Guard < Steward★ < Jarl★ |
+| town | Resident < Guard < Reeve★ |
+| faction | Recruit < Member < Officer★ < Leader★ |
+| thanedom | Retainer < Housecarl < Thane★ |
+| council | Councilor < Elder★ |
+
+Holds keep the ranks and members they already had before migration v41.
+
+**Leaders** can, in their own organization only:
 
 - set the rank of a player whose rank is **below** theirs, to a rank **below**
   theirs (a Steward can make a Guard, but cannot make or remove a Jarl);
@@ -48,15 +114,15 @@ Higher position = more authority. **Leaders** can:
   unlock them, and use the parceling tool.
 
 Parcel **owners** (any rank) can lock and unlock their own parcels at the stone.
-Staff can do everything.
+Staff can do everything everywhere.
 
-Staff can change the ladder per hold:
+Staff change a ladder with commands:
 
 ```
-/holdstone ranks riften
-/holdstone addrank riften thane 35 leader Thane
-/holdstone addrank riften citizen 10 member Citizen of Riften   (renames an existing key)
-/holdstone delrank riften steward
+/holdstone ranks high_hrothgar
+/holdstone addrank high_hrothgar greybeard 50 leader Greybeard
+/holdstone addrank imperial_legion leader 40 leader Legate      (renames an existing key)
+/holdstone delrank riverwood guard
 ```
 
 Deleting a rank removes it from everyone who held it, and parcels that used it
@@ -64,44 +130,33 @@ as minimum rank become owner-only.
 
 ---
 
-## Staff: setting up a hold
+## Staff: running a stone
 
-1. **Place the holdstone.** Stand where it should go, face that way and type
-   `/holdstone spawn whiterun`. The holdstone model (a runed monolith from
-   `OathboundHoldstone.esp`, built by `tools/holdstone/`) appears about 2.5 m
-   in front of you with its runes facing you, already bound to the hold. It
-   is saved with the world, so it stays after restarts. Spawning again moves
-   the hold to the new stone and removes the old one; `/holdstone clear`
-   removes a spawned stone too.
-
-   To use an object that is already in the world instead (any object: a
-   standing stone, a banner, a table, or a holdstone placed in the Creation
-   Kit), type `/holdstone place whiterun`, then press **E** on it. The server
-   stores it by FormDesc (`hex:Plugin.esm`, never a numeric FormID).
-   Fallback: `/holdstone set whiterun 1a2b3:Skyrim.esm`.
-   One stone per hold — placing a new one replaces the old one. A holdstone
-   model that no hold owns says so when someone presses E on it.
-2. **Appoint the leaders.** `/holdrank whiterun 12 jarl` (12 = the player's
-   character number, see `/nearby`). The player must be online for the
-   command; at the stone, leaders can use any number, online or not.
-3. **Create parcels** (or let the Jarl do it at the stone):
-   `/parcel create whiterun Dragonsreach Barracks`, then
-   `/parcel rank <id> guard`.
+1. **Place the stone** in the Creation Kit (above).
+2. **Appoint the leaders:** `/holdrank whiterun 12 jarl`,
+   `/holdrank high_hrothgar 12 leader` (12 = the player's character number, see
+   `/nearby`). The player must be online for the command; at the stone,
+   leaders can use any number, online or not.
+3. **Create parcels** (or let the leaders do it at the stone):
+   `/parcel create imperial_legion Castle Dour Barracks`, then
+   `/parcel rank <id> member`. The parcel is located in the organization's
+   hold (none for a council).
 4. **Assign doors and containers** with the parceling tool (below), or
    `/parcel add <id> <formDesc> <door|container>`.
 5. **Give it to someone:** `/parcelowner <id> 12`, or "Transfer a parcel" at
    the stone.
 
-`/holdstone list` shows every hold with its stone, members and parcel count.
-`/parcel list whiterun` and `/parcel info <id>` show parcels and their objects.
+`/holdstone list` shows every organization, its kind, whether it has a stone,
+its members and parcels. `/parcel list <stone>` and `/parcel info <id>` show
+parcels and their objects.
 
-All staff commands:
+All staff commands (`<stone>` is the organization id: `whiterun`,
+`high_hrothgar`, `imperial_legion`…):
 
 ```
-/holdstone list | spawn <hold> | place <hold> | set <hold> <formDesc> | clear <hold>
-/holdstone ranks <hold> | addrank <hold> <key> <position> <leader|member> <name> | delrank <hold> <key>
-/holdrank <hold> <player#> <rank|none>
-/parcel list <hold> | info <id> | create <hold> <name> | rename <id> <name> | delete <id>
+/holdstone list | ranks <stone> | addrank <stone> <key> <position> <leader|member> <name> | delrank <stone> <key>
+/holdrank <stone> <player#> <rank|none>
+/parcel list <stone> | info <id> | create <stone> <name> | rename <id> <name> | delete <id>
 /parcel rank <id> <rank|none> | lock <id> | unlock <id> | disown <id>
 /parcel add <id> <formDesc> <door|container> | remove <formDesc> | tool <id|off>
 /parcelowner <id> <player#>
@@ -111,9 +166,9 @@ All staff commands:
 
 ## The parceling tool (no commands)
 
-1. At the holdstone, a leader (or staff) opens the menu and picks
+1. At the stone, a leader (or staff) opens the menu and picks
    **Parceling tool**, entering the parcel number — or clicks **Parcel tool**
-   next to the parcel in the hold panel.
+   next to the parcel in the stone panel.
 2. Walk to a door or container and press **E**. Instead of opening, the menu
    shows:
    - **Add to parcel…** — adds it to the selected parcel;
@@ -123,9 +178,9 @@ All staff commands:
 3. When done, pick **Stop parceling tool** (or `/parcel tool off`). Doors open
    normally again. The tool also turns off on logout.
 
-An object belongs to at most one parcel. Holdstones cannot be part of a
-parcel. Only doors (`DOOR`) and containers (`CONT`) can be added; anything
-else answers "Only doors and containers can be part of a parcel."
+An object belongs to at most one parcel. Stones cannot be part of a parcel.
+Only doors (`DOOR`) and containers (`CONT`) can be added; anything else
+answers "Only doors and containers can be part of a parcel."
 
 ### Load doors (both sides)
 
@@ -141,11 +196,13 @@ and add it by hand with the tool, then decide whether it locks.
 
 ---
 
-## Players: using the holdstone
+## Players: using a stone
 
-Press **E** on the holdstone and pick **Hold**. The panel shows:
+Press **E** on a stone and pick **Open the stone**. The panel shows:
 
-- the hold and **your rank** (or that you are not a member);
+- the organization, its kind and the hold it sits in;
+- **your rank** there (or that you are not tied to it);
+- **your allegiances**: every organization you are tied to, with your rank;
 - the rank ladder, lowest to highest (leader ranks are highlighted);
 - the members and their ranks;
 - every parcel: number, owner, who can open it, how many doors and
@@ -153,51 +210,51 @@ Press **E** on the holdstone and pick **Hold**. The panel shows:
 
 Owners see **Lock / Unlock** on their own parcels. Leaders also see the
 leadership forms (set a rank by player number, create a parcel) and the
-**Parcel tool** button. Rename, transfer and minimum rank are in the
-holdstone's E menu.
-
-To unlock a shop for opening hours, the owner clicks **Unlock**; anyone can
-then open its doors and containers until it is locked again.
+**Parcel tool** button. Rename, transfer and minimum rank are in the stone's
+E menu.
 
 ---
 
 ## What to verify in game
 
-Nothing below has been run on a live server yet. Apply the migration first
-(the main session applies migrations; this branch does not touch the live
-database).
+Nothing below has been run on a live server yet.
 
-1. **Boot:** the log shows `[holdstones] N holdstones, N parcels, N locked
-   objects loaded.` and no errors from `activation-events`.
-2. **Place a stone:** `/holdstone place whiterun`, E on an object → "[Holdstone]
-   Whiterun holdstone set to …". Press E again on it → the menu shows **Hold**.
-3. **Hold panel:** opens with the ladder Citizen < Guard < Steward < Jarl;
-   Esc and × close it.
-4. **Ranks:** `/holdrank whiterun <your#> jarl`; reopen the panel → "Your rank:
-   Jarl" and the Leadership section. Set a second player to Guard from the
-   panel; they get "[Hold] … is now Guard of Whiterun."
-5. **Parcel + tool:** create "Test House" with minimum rank `guard`; start the
-   tool; E on the house's front door → the parcel menu opens (the door does
-   not). Add it. Check the message says whether the inside door was added as
-   an exit. Add a chest inside. Stop the tool.
-6. **Locks:** a player with no rank presses E on the front door → "It's
-   locked." and the door stays shut; on the chest → "It's locked." and no
-   container menu. The Guard opens both. Staff opens both. The owner (after
-   **Transfer**) opens both.
-7. **Exit side:** the rankless player, if teleported inside, can still leave
-   through the inside door.
-8. **Unlock:** the owner clicks Unlock → the rankless player can open the door;
-   Lock again → blocked.
-9. **Restart persistence:** after a server restart the locks still apply (the
-   index is rebuilt from the database on boot).
+1. **Boot:** the log shows `[holdstones] N organizations (N with a stone), …`
+   and no errors from `activation-events` or `holdstones.json`.
+2. **A Creation Kit stone works untouched:** E on the High Hrothgar Holdstone
+   placed in the Creation Kit opens the High Hrothgar panel (kind Faction). The
+   E prompt shows "Open the stone" when you look at it.
+3. **Two stones in one city:** the Solitude and Imperial Legion stones open
+   different panels with different ladders.
+4. **Ranks:** `/holdrank high_hrothgar <your#> leader`; reopen the panel →
+   "Your rank: Leader", the Leadership section, and High Hrothgar under "Your
+   allegiances". Add a Whiterun rank too; both appear at any stone.
+   **Riverwood answers to Whiterun:** the Riverwood panel says "answers to
+   Whiterun"; a Whiterun Jarl sees Riverwood's leadership actions and can name
+   its Reeve; the Whiterun panel says "over Riverwood".
+5. **Parcel + tool:** create "Test House" with minimum rank `guard` at the
+   Whiterun stone; start the tool; E on the house's front door → the parcel
+   menu opens (the door does not). Add it; check whether the inside door was
+   added as an exit. Add a chest inside. Stop the tool.
+6. **Locks:** a player with no Whiterun rank presses E on the front door →
+   "It's locked." and the door stays shut; on the chest → "It's locked." and no
+   container menu. A Whiterun Guard opens both; a Legion Leader with no
+   Whiterun rank does not. Staff open both. The owner (after **Transfer**)
+   opens both.
+7. **Exit side:** a rankless player inside can still leave through the inside
+   door.
+8. **Unlock:** the owner clicks Unlock → anyone can open; Lock again → blocked.
+9. **Restart persistence:** after a restart the locks and ranks still apply.
 
 Unverified assumptions to watch:
 
+- `mp.get(ref, 'baseDesc')` returning the activator of a stone placed in a
+  plugin as `801:Oathbound_Holdstone.esp` (light plugin, local FormID). If E
+  on a placed stone does nothing, check the server log line for that stone's
+  base desc.
 - Reading the other side of a load door from the `XTEL` field of
-  `mp.lookupEspmRecordById` (format of `fields[].data` and
-  `toGlobalRecordId`). If it never finds the partner, add inside doors by hand.
-- `mp.get(ref, 'baseDesc')` returning the base record for world doors and
-  containers (used to tell doors from containers).
+  `mp.lookupEspmRecordById`. If it never finds the partner, add inside doors by
+  hand.
 - Blocking a container through `mp.onActivate` stops the container menu from
   opening, the same way it stops doors.
 - NPC activations are never blocked (only characters are checked).

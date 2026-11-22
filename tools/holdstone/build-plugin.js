@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * Writes OathboundHoldstone.esp: one activator, "Holdstone", using
- * meshes/oathbound/holdstone.nif. ESL-flagged (no full plugin slot used);
- * the patched server reads light plugins (patches/skymp/light-plugins.patch).
+ * Writes Oathbound_Holdstone.esp: one activator per holdstone listed in
+ * skymp/gamemode/data/holdstones.json ("Whiterun Holdstone", "High Hrothgar
+ * Holdstone"...), all using meshes/oathbound/holdstone.nif, plus the old
+ * generic "Holdstone" (800) so stones already in the world keep working.
+ * ESL-flagged (no full plugin slot used); the patched server reads light
+ * plugins (patches/skymp/light-plugins.patch).
  *
- * The activator has no Papyrus script on purpose: the server sees every
- * activation through mp.onActivate, and holdstone-service.js opens the hold
- * menu for any reference registered as a holdstone.
+ * The activators have no Papyrus script on purpose: the server sees every
+ * activation through mp.onActivate, and holdstone-service.js knows which
+ * organization a stone belongs to from its activator (base record), so a
+ * stone placed in the Creation Kit needs nothing in game.
  *
  * Usage: node build-plugin.js <out.esp>
  */
@@ -15,11 +19,28 @@
 const fs = require('fs');
 const path = require('path');
 
-const PLUGIN = 'OathboundHoldstone.esp';
+const STONES_FILE = path.join(__dirname, '..', '..', 'skymp', 'gamemode', 'data', 'holdstones.json');
+const STONES = JSON.parse(fs.readFileSync(STONES_FILE, 'utf8'));
+const PLUGIN = STONES.plugin;
 /** Own records start at 0x800 (required for light plugins); index 01 = after the one master. */
 const HOLDSTONE_FORM_ID = 0x01000800;
 const EDITOR_ID = 'OBHoldstone';
 const NAME = 'Holdstone';
+
+/** Every activator: the generic one, then one per stone (formId from holdstones.json). */
+function activators() {
+  const list = [{ formId: HOLDSTONE_FORM_ID, editorId: EDITOR_ID, name: NAME }];
+  const seen = new Set([0x800]);
+  for (const stone of STONES.stones) {
+    const local = parseInt(stone.formId, 16);
+    if (!(local > 0x800 && local <= 0xfff) || seen.has(local)) {
+      throw new Error(`holdstones.json: ${stone.id} has a bad or repeated formId ${stone.formId}`);
+    }
+    seen.add(local);
+    list.push({ formId: 0x01000000 | local, editorId: stone.editorId, name: `${stone.name} Holdstone` });
+  }
+  return list;
+}
 const MODEL = 'oathbound\\holdstone.nif';
 /** Bounds of the mesh in game units: plinth 152 wide, top of the stone at 204. */
 const BOUNDS = [-76, -76, -14, 76, 76, 204];
@@ -62,30 +83,32 @@ function group(label, records) {
 function build() {
   const hedr = Buffer.alloc(12);
   hedr.writeFloatLE(1.71, 0);
-  hedr.writeUInt32LE(1, 4);                              // records in the plugin
-  hedr.writeUInt32LE((HOLDSTONE_FORM_ID & 0xfff) + 1, 8); // next object id
+  const all = activators();
+  const maxLocal = Math.max(...all.map((a) => a.formId & 0xfff));
+  hedr.writeUInt32LE(all.length, 4);   // records in the plugin
+  hedr.writeUInt32LE(maxLocal + 1, 8); // next object id
   const tes4 = record('TES4', FLAG_MASTER_LIGHT, 0, [
     field('HEDR', hedr),
     field('CNAM', zstring('OATHBOUND')),
-    field('SNAM', zstring('Holdstone activator for the OATHBOUND holdstone system.')),
+    field('SNAM', zstring('Holdstone activators for the OATHBOUND holdstone system, one per stone.')),
     field('MAST', zstring('Skyrim.esm')),
     field('DATA', Buffer.alloc(8))
   ]);
 
   const obnd = Buffer.alloc(12);
   BOUNDS.forEach((v, i) => obnd.writeInt16LE(v, i * 2));
-  const acti = record('ACTI', 0, HOLDSTONE_FORM_ID, [
-    field('EDID', zstring(EDITOR_ID)),
+  const records = all.map((a) => record('ACTI', 0, a.formId, [
+    field('EDID', zstring(a.editorId)),
     field('OBND', obnd),
-    field('FULL', zstring(NAME)),
+    field('FULL', zstring(a.name)),
     field('MODL', zstring(MODEL)),
     field('RNAM', zstring('Open'))
-  ]);
+  ]));
 
-  return Buffer.concat([tes4, group('ACTI', [acti])]);
+  return Buffer.concat([tes4, group('ACTI', records)]);
 }
 
-module.exports = { build, PLUGIN, HOLDSTONE_FORM_ID, EDITOR_ID, MODEL };
+module.exports = { build, activators, PLUGIN, HOLDSTONE_FORM_ID, EDITOR_ID, MODEL };
 
 if (require.main === module) {
   const out = process.argv[2] || path.join(__dirname, 'dist', PLUGIN);

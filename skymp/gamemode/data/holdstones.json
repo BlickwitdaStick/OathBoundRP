@@ -1,0 +1,27 @@
+{
+  "//": [
+    "Every holdstone in the world. One activator per stone in Oathbound_Holdstone.esp",
+    "(built by tools/holdstone/build-plugin.js from this file). Place them in the",
+    "Creation Kit; the server knows which organization a stone belongs to from its",
+    "activator, so nothing is bound in game.",
+    "Append only: never change or reuse a formId (placed stones point at it).",
+    "kind: hold | town | faction | thanedom | council. hold: where it sits (holds.id) or null.",
+    "parent (optional): the organization it answers to; that organization's leaders also lead this one.",
+    "On boot the server creates missing organizations with the default ladder of their kind."
+  ],
+  "plugin": "Oathbound_Holdstone.esp",
+  "stones": [
+    { "id": "whiterun",        "name": "Whiterun",        "kind": "hold",    "hold": "whiterun",   "formId": "801", "editorId": "OBHoldstoneWhiterun" },
+    { "id": "solitude",        "name": "Solitude",        "kind": "hold",    "hold": "solitude",   "formId": "802", "editorId": "OBHoldstoneSolitude" },
+    { "id": "riften",          "name": "Riften",          "kind": "hold",    "hold": "riften",     "formId": "803", "editorId": "OBHoldstoneRiften" },
+    { "id": "windhelm",        "name": "Windhelm",        "kind": "hold",    "hold": "windhelm",   "formId": "804", "editorId": "OBHoldstoneWindhelm" },
+    { "id": "markarth",        "name": "Markarth",        "kind": "hold",    "hold": "markarth",   "formId": "805", "editorId": "OBHoldstoneMarkarth" },
+    { "id": "falkreath",       "name": "Falkreath",       "kind": "hold",    "hold": "falkreath",  "formId": "806", "editorId": "OBHoldstoneFalkreath" },
+    { "id": "morthal",         "name": "Morthal",         "kind": "hold",    "hold": "morthal",    "formId": "807", "editorId": "OBHoldstoneMorthal" },
+    { "id": "dawnstar",        "name": "Dawnstar",        "kind": "hold",    "hold": "dawnstar",   "formId": "808", "editorId": "OBHoldstoneDawnstar" },
+    { "id": "winterhold",      "name": "Winterhold",      "kind": "hold",    "hold": "winterhold", "formId": "809", "editorId": "OBHoldstoneWinterhold" },
+    { "id": "riverwood",       "name": "Riverwood",       "kind": "town",    "hold": "whiterun",   "formId": "80a", "editorId": "OBHoldstoneRiverwood", "parent": "whiterun" },
+    { "id": "high_hrothgar",   "name": "High Hrothgar",   "kind": "faction", "hold": null,         "formId": "80b", "editorId": "OBHoldstoneHighHrothgar" },
+    { "id": "imperial_legion", "name": "Imperial Legion", "kind": "faction", "hold": "solitude",   "formId": "80c", "editorId": "OBHoldstoneImperialLegion" }
+  ]
+}
