@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AuthData, LaunchGameResult, NexusAccount, ServerModsCheck } from '../types/electron';
-import { Play, Settings as SettingsIcon, LogOut, FolderOpen, RefreshCw } from 'lucide-react';
+import { Play, Settings as SettingsIcon, LogOut, FolderOpen } from 'lucide-react';
 import heroBg from '../assets/launcher-bg.png';
 
 interface HomeProps {
@@ -36,8 +36,6 @@ export function Home({ auth, setAuth }: HomeProps) {
   // mesmo com o apps/game-api fora do ar.
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
-  const [updateResult, setUpdateResult] = useState<string>('');
   // Server-hosted mods prompt (SkyUI, RaceMenu...): shown when the server
   // requires files the player does not have; resolves true on "Download".
   // 'nexus' = Nexus mods from Nexus, the rest from the server;
@@ -194,30 +192,6 @@ export function Home({ auth, setAuth }: HomeProps) {
     if (!selected) return;
     const valid = await window.electronAPI.saveGamePath(selected);
     if (valid.ok) loadAppInfo();
-  };
-
-  // Mesma checagem que Configuracoes ja fazia (handleCheckUpdates) — so
-  // reexposta aqui pra nao obrigar o jogador a sair da Home pra saber se ha
-  // atualizacao. A instalacao em si continua so em Configuracoes.
-  const handleCheckUpdates = async () => {
-    if (!appInfo?.gamePath) {
-      navigate('/settings');
-      return;
-    }
-    setCheckingUpdates(true);
-    setUpdateResult('');
-    try {
-      const client = await window.electronAPI.checkClientUpdate(appInfo.gamePath);
-      const mods = await window.electronAPI.checkModsUpdate(appInfo.gamePath);
-      const parts: string[] = [];
-      if (client.updateAvailable) parts.push(`client ${client.version}`);
-      if (mods.updateAvailable) parts.push(`mods ${mods.version}`);
-      setUpdateResult(parts.length > 0 ? `Update available: ${parts.join(', ')}.` : 'Everything is up to date.');
-    } catch (e: any) {
-      setUpdateResult(`Erro: ${e.message}`);
-    } finally {
-      setCheckingUpdates(false);
-    }
   };
 
   const handlePlay = async () => {
@@ -424,14 +398,6 @@ export function Home({ auth, setAuth }: HomeProps) {
               <span className="info-row-label">Launcher</span>
               <span className="info-row-value">v{appInfo?.launcherVersion ?? '—'}</span>
             </div>
-            <div className="info-row">
-              <span className="info-row-label">Client</span>
-              <span className="info-row-value">{appInfo?.clientVersion ?? '—'}</span>
-            </div>
-            <div className="info-row">
-              <span className="info-row-label">Mods</span>
-              <span className="info-row-value">{appInfo?.modsVersion ?? '—'}</span>
-            </div>
           </div>
 
           <div>
@@ -447,16 +413,10 @@ export function Home({ auth, setAuth }: HomeProps) {
           <div>
             <div className="info-section-title">Maintenance</div>
             <div className="maintenance-list">
-              <button className="maintenance-btn" onClick={handleCheckUpdates} disabled={checkingUpdates}>
-                <RefreshCw size={14} /> {checkingUpdates ? 'Checking...' : 'Check for Updates'}
-              </button>
               <button className="maintenance-btn" onClick={() => navigate('/settings')}>
                 <SettingsIcon size={14} /> Advanced Settings
               </button>
             </div>
-            {updateResult && (
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '10px' }}>{updateResult}</p>
-            )}
           </div>
         </aside>
 
@@ -498,9 +458,15 @@ export function Home({ auth, setAuth }: HomeProps) {
               {modPrompt.check.missing?.length} file{modPrompt.check.missing?.length === 1 ? '' : 's'} to download
               ({formatMb(modPrompt.check.bytesNeeded || 0)}) into your Skyrim Data folder.
               {modPrompt.check.plugins && modPrompt.check.plugins.length > 0 && (
-                <> Plugins that will be enabled: <strong>{modPrompt.check.plugins.join(', ')}</strong>.</>
+                <> {modPrompt.check.plugins.length} plugins will be enabled.</>
               )}
             </p>
+            {modPrompt.check.plugins && modPrompt.check.plugins.length > 0 && (
+              <details className="mods-prompt-plugins">
+                <summary>Show plugins</summary>
+                <div>{modPrompt.check.plugins.join(', ')}</div>
+              </details>
+            )}
             <ul className="mods-prompt-list">
               {groupMissingFiles(modPrompt.check.missing || []).map((g) => (
                 <li key={g.label}>

@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { describeGamePathProblem } from '../gamePathProblem';
-import { ArrowLeft, Bug, Download, FolderOpen, RefreshCw, Search, Wrench } from 'lucide-react';
+import { ArrowLeft, Bug, FolderOpen, RefreshCw, Search, Wrench } from 'lucide-react';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -47,8 +47,6 @@ export function Settings() {
       const check = await window.electronAPI.checkGamePath(config.gamePath);
       if (!check.ok && !notice) setError(describeGamePathProblem(check.reason));
     });
-    window.electronAPI.onUpdateProgress((value) => setReport(`Client: ${value.phase} ${value.percent}%`));
-    window.electronAPI.onModsUpdateProgress((value) => setReport(`Mods: ${value.phase} ${value.percent}%`));
   }, []);
 
   const resetMessages = () => {
@@ -136,53 +134,6 @@ export function Settings() {
     }
   };
 
-  const handleCheckUpdates = async () => {
-    if (!requirePath()) return;
-    setBusy('check-updates');
-    try {
-      const client = await window.electronAPI.checkClientUpdate(gamePath);
-      const mods = await window.electronAPI.checkModsUpdate(gamePath);
-      setReport([
-        `Client: ${client.error || (client.updateAvailable ? `update ${client.installedVersion || 'none'} -> ${client.version}` : `current ${client.installedVersion || client.version || 'unknown'}`)}`,
-        `Mods: ${mods.error || (mods.updateAvailable ? `update ${mods.installedVersion || 'none'} -> ${mods.version}` : `current ${mods.installedVersion || mods.version || 'unknown'}`)}`
-      ].join('\n'));
-    } catch (e: any) {
-      setError(e.message || 'Failed to check for updates.');
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const handleInstallClient = async () => {
-    if (!requirePath()) return;
-    if (!confirm('Update the SkyMP client now? Close the game before continuing.')) return;
-    setBusy('client-update');
-    try {
-      const result = await window.electronAPI.installClientUpdate(gamePath);
-      if (result.success) setSuccess(`Client updated to ${result.version}.`);
-      else setError(result.error || 'Failed to update client.');
-    } catch (e: any) {
-      setError(e.message || 'Failed to update client.');
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const handleInstallMods = async () => {
-    if (!requirePath()) return;
-    if (!confirm('Update the modpack now? Close the game before continuing.')) return;
-    setBusy('mods-update');
-    try {
-      const result = await window.electronAPI.installModsUpdate(gamePath, false);
-      if (result.success) setSuccess(`Mods updated to ${result.version}.`);
-      else setError(result.error || 'Failed to update mods.');
-    } catch (e: any) {
-      setError(e.message || 'Failed to update mods.');
-    } finally {
-      setBusy('');
-    }
-  };
-
   const handleReportCrashes = async () => {
     resetMessages();
     setBusy('crash-report');
@@ -251,15 +202,6 @@ export function Settings() {
           </button>
           <button className="btn-secondary" onClick={handleAnalyze} disabled={!!busy}>
             <Search size={18} /> Analyze Mods
-          </button>
-          <button className="btn-secondary" onClick={handleCheckUpdates} disabled={!!busy}>
-            <Download size={18} /> Check for Updates
-          </button>
-          <button className="btn-secondary" onClick={handleInstallClient} disabled={!!busy}>
-            <Download size={18} /> Update Client
-          </button>
-          <button className="btn-secondary" onClick={handleInstallMods} disabled={!!busy}>
-            <Download size={18} /> Update Mods
           </button>
           <button className="btn-secondary" onClick={handleReportCrashes} disabled={!!busy}>
             <Bug size={18} /> Send Crash Report

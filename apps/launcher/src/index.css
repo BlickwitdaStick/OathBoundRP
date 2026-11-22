@@ -716,3 +716,9 @@ body {
 .nexus-note .link-btn {
   margin-right: 0;
 }
+
+/* Required-mods window: the plugin names fold away; the file list scrolls. */
+.mods-prompt-list { max-height: 180px; }
+.mods-prompt-plugins { font-size: 12px; color: var(--text-muted); }
+.mods-prompt-plugins summary { cursor: pointer; color: var(--accent-gold); }
+.mods-prompt-plugins div { margin-top: 6px; max-height: 120px; overflow-y: auto; line-height: 1.5; }
