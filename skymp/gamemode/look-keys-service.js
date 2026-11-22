@@ -90,6 +90,15 @@ const SOURCE_SNIPPET = `
   };
   ctx.sp.once('update', function () { send(blocked() ? 0 : current()); });
   ctx.sp.on('crosshairRefChanged', function () { send(blocked() ? 0 : current()); });
+  // Safety net: crosshair events can be lost around load doors and loading
+  // screens, which left the keys dead until the next look change. A cheap
+  // re-check 4 times a second (send() ignores an unchanged target).
+  ctx.sp.on('update', function () {
+    var now = Date.now();
+    if (now - (st.lastPoll || 0) < 250) return;
+    st.lastPoll = now;
+    send(blocked() ? 0 : current());
+  });
   ctx.sp.on('menuOpen', function (e) {
     // I opens Skyrim's inventory; while looking at a player it means Introduce.
     if (e && e.name === 'InventoryMenu' && Date.now() < st.closeInventoryUntil) {

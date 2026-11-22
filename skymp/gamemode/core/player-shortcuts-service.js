@@ -84,6 +84,18 @@ const SNIPPET_DO_CLIENTE = `
       }
     });
 
+    // Hide the OATHBOUND HUD (chat, needs, keys, compass) on loading screens.
+    ctx.sp.on('menuOpen', function (e) {
+      if (e && e.name === 'Loading Menu' && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+        ctx.sp.browser.executeJavaScript('document.body && document.body.classList.add("ob-loading")');
+      }
+    });
+    ctx.sp.on('menuClose', function (e) {
+      if (e && e.name === 'Loading Menu' && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
+        ctx.sp.browser.executeJavaScript('document.body && document.body.classList.remove("ob-loading")');
+      }
+    });
+
     ctx.sp.on('buttonEvent', function (e) {
       if (!e || e.device !== ${KEYBOARD_DEVICE}) return;
       var br = ctx.sp.browser;

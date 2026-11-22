@@ -5,6 +5,13 @@ const api = {
   windowClose: () => ipcRenderer.send('window-close'),
   getLauncherConfig: () => ipcRenderer.invoke('get-launcher-config'),
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  checkLauncherUpdate: () => ipcRenderer.invoke('launcher-update-check'),
+  installLauncherUpdate: () => ipcRenderer.invoke('launcher-update-install'),
+  onLauncherUpdateProgress: (cb: (p: { done: number; total: number }) => void) => {
+    const h = (_e: unknown, p: { done: number; total: number }) => cb(p);
+    ipcRenderer.on('launcher-update-progress', h);
+    return () => { ipcRenderer.removeListener('launcher-update-progress', h); };
+  },
   saveGamePath: (folderPath: string) => ipcRenderer.invoke('save-game-path', folderPath),
   selectGamePath: () => ipcRenderer.invoke('select-game-path'),
   checkGamePath: (folderPath: string) => ipcRenderer.invoke('check-game-path', folderPath),

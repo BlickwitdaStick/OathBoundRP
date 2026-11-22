@@ -202,7 +202,7 @@ describe('player-shortcuts-service: eventos da aba Controls', () => {
 
 describe('player-shortcuts-service: snippet de cliente', () => {
   // Só os eventos que Data/Platform/Modules/skyrimPlatform.ts declara.
-  const EVENTOS_REAIS = new Set(['buttonEvent', 'browserMessage']);
+  const EVENTOS_REAIS = new Set(['buttonEvent', 'browserMessage', 'menuOpen', 'menuClose']);
 
   function ctxFalso({ bindings = DEFAULTS, focused = false, semValor = false, staff = undefined } = {}) {
     const handlers = {};
@@ -352,5 +352,29 @@ describe('player-shortcuts-service: snippet de cliente', () => {
     c.run();
     c.run();
     assert.strictEqual(c.handlers.buttonEvent.length, 1);
+  });
+});
+
+describe('player-shortcuts-service: loading screens', () => {
+  it('hides the OATHBOUND HUD while the Loading Menu is open', () => {
+    const svc = require('./player-shortcuts-service');
+    const handlers = {};
+    const js = [];
+    const ctx = {
+      state: {},
+      value: { sentAt: 1, bindings: {}, staff: false },
+      sp: {
+        on: (n, fn) => { handlers[n] = fn; },
+        browser: { executeJavaScript: (s) => js.push(s), isFocused: () => false }
+      }
+    };
+    new Function('ctx', svc.SNIPPET_DO_CLIENTE)(ctx);
+    handlers.menuOpen({ name: 'Loading Menu' });
+    assert.ok(js.some((s) => s.includes('classList.add("ob-loading")')));
+    handlers.menuClose({ name: 'Loading Menu' });
+    assert.ok(js.some((s) => s.includes('classList.remove("ob-loading")')));
+    js.length = 0;
+    handlers.menuOpen({ name: 'InventoryMenu' });
+    assert.ok(!js.some((s) => s.includes('ob-loading')));
   });
 });

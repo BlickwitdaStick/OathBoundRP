@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bug, Download, FolderOpen, Search, Wrench } from 'lucide-react';
+import { ArrowLeft, Bug, Download, FolderOpen, RefreshCw, Search, Wrench } from 'lucide-react';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -9,6 +9,31 @@ export function Settings() {
   const [success, setSuccess] = useState<string>('');
   const [busy, setBusy] = useState<string>('');
   const [report, setReport] = useState<string>('');
+  const [launcherUpdate, setLauncherUpdate] = useState<string>('');
+
+  // Launcher self-update from the OATHBOUND GitHub releases: check, confirm,
+  // then download the installer, run it and close the launcher.
+  const handleLauncherUpdate = async () => {
+    setError(''); setSuccess('');
+    setBusy('Checking for a launcher update');
+    try {
+      const r = await window.electronAPI.checkLauncherUpdate();
+      if (!r.ok) { setError(r.error || 'Could not check for a launcher update.'); return; }
+      if (!r.available || !r.latest) { setSuccess(`The launcher is up to date (v${r.current}).`); return; }
+      const latest = r.latest;
+      if (!window.confirm(`Launcher v${latest.version} is available (you have v${r.current}). Download and install it now? The launcher will close.`)) return;
+      const off = window.electronAPI.onLauncherUpdateProgress((p) => {
+        setLauncherUpdate(p.total ? `Downloading v${latest.version}: ${Math.floor((100 * p.done) / p.total)}%` : 'Downloading...');
+      });
+      setBusy(`Updating the launcher to v${latest.version}`);
+      const done = await window.electronAPI.installLauncherUpdate();
+      off();
+      if (!done.ok) setError(done.error || 'The launcher update failed.');
+      else setSuccess(`Installing v${done.version}. The launcher will close and the installer will open.`);
+    } finally {
+      setBusy('');
+    }
+  };
 
   useEffect(() => {
     window.electronAPI.getLauncherConfig().then((config) => {
@@ -231,8 +256,12 @@ export function Settings() {
           <button className="btn-secondary" onClick={handleReportCrashes} disabled={!!busy}>
             <Bug size={18} /> Send Crash Report
           </button>
+          <button className="btn-secondary" onClick={handleLauncherUpdate} disabled={!!busy}>
+            <RefreshCw size={18} /> Update Launcher
+          </button>
         </div>
-        {busy && <p style={{ color: 'var(--accent-gold)', marginTop: '12px' }}>Executando: {busy}</p>}
+        {busy && <p style={{ color: 'var(--accent-gold)', marginTop: '12px' }}>Working: {busy}</p>}
+        {launcherUpdate && <p style={{ color: 'var(--accent-gold)', marginTop: '6px' }}>{launcherUpdate}</p>}
         {report && (
           <pre style={{
             whiteSpace: 'pre-wrap',

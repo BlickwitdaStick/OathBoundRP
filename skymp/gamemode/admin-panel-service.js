@@ -43,7 +43,14 @@ const MAX_LIVE_SPAWNS = 50;
 const SPAWN_DISTANCE = 150;
 
 /** Client snippet for the property: forward each NEW value to the page once. */
+// The property keeps its last value with the character, so at login the
+// client would see the last session's panel as "new" and open it. The first
+// run only records what is already there; later values open the panel.
 const UPDATE_OWNER_SNIPPET = `
+  if (!ctx.state.adminPanelSeen) {
+    ctx.state.adminPanelSeen = true;
+    if (ctx.value) { ctx.state.adminPanelSentAt = ctx.value.sentAt; return; }
+  }
   if (ctx.value && ctx.value.sentAt !== ctx.state.adminPanelSentAt && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
     ctx.state.adminPanelSentAt = ctx.value.sentAt;
     ctx.sp.browser.executeJavaScript('window.handleAdminPanelData && window.handleAdminPanelData(' + JSON.stringify(ctx.value) + ')');

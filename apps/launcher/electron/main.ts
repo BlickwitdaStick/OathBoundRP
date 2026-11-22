@@ -18,6 +18,7 @@ import {
   planServerModSync,
   validateManifest
 } from './server-mods.mjs';
+import { checkLauncherUpdate, downloadInstaller } from './launcher-update.mjs';
 import {
   NEXUS_API_KEY_PAGE,
   createNexusApi,
@@ -318,6 +319,37 @@ ipcMain.on('window-close', () => { if (mainWindow) mainWindow.close(); });
 // report-recent-crashes; `clientVersion`/`modsVersion` já eram lidos via
 // readStamp() pelos handlers de update. Sem chamada de rede: os stamps são
 // arquivos locais gravados na última instalação/atualização bem-sucedida.
+// Launcher self-update from the OATHBOUND GitHub fork (launcher-update.mjs).
+let pendingLauncherUpdate: any = null;
+ipcMain.handle('launcher-update-check', async () => {
+  try {
+    const r = await checkLauncherUpdate({ currentVersion: app.getVersion() });
+    pendingLauncherUpdate = r.available ? r.latest : null;
+    return { ok: true, ...r };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e), current: app.getVersion() };
+  }
+});
+ipcMain.handle('launcher-update-install', async (event) => {
+  if (!pendingLauncherUpdate) return { ok: false, error: 'Check for a launcher update first.' };
+  try {
+    const dir = path.join(app.getPath('temp'), 'oathbound-launcher-update');
+    const file = await downloadInstaller({
+      latest: pendingLauncherUpdate,
+      dir,
+      onProgress: (p: { done: number; total: number }) => {
+        try { event.sender.send('launcher-update-progress', p); } catch { /* window closed */ }
+      }
+    });
+    // The installer replaces this launcher, so it must run after we quit.
+    spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
+    setTimeout(() => app.quit(), 500);
+    return { ok: true, version: pendingLauncherUpdate.version };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+});
+
 ipcMain.handle('get-app-info', async () => {
   const config = readLauncherConfig();
   const gamePath = config.gamePath || null;

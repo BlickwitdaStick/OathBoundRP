@@ -916,8 +916,14 @@ if (typeof mp !== "undefined") {
     isVisibleByNeighbors: false,
     // Só repassa valores NOVOS (sentAt): reenviar o mesmo valor reabria o
     // painel logo depois de o jogador fechá-lo (handlePanelData abre a casca).
+    // First run after login: the stored value is the last session's panel,
+    // recorded but not opened (it opened by itself at every login).
     updateOwner: `
       ctx.state.panelDataSentAt = ctx.state.panelDataSentAt || null;
+      if (!ctx.state.panelDataSeen) {
+        ctx.state.panelDataSeen = true;
+        if (ctx.value) { ctx.state.panelDataSentAt = ctx.value.sentAt; return; }
+      }
       if (ctx.value && ctx.value.sentAt !== ctx.state.panelDataSentAt && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
         ctx.state.panelDataSentAt = ctx.value.sentAt;
         const payload = JSON.stringify(ctx.value);

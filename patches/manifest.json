@@ -121,6 +121,23 @@
       "upstream_pr": null,
       "added": "2026-11-21",
       "notes": "Applied after client-oathbound-calendar.patch by scripts/skymp-build/Build-PatchedSkyMP.ps1 (server-only)."
+    },
+    {
+      "id": "client-real-actor-health",
+      "target": "skymp",
+      "file": "skymp/client-real-actor-health.patch",
+      "upstream_commit": "d85f18d808f877401c4e20484d2c2f6f73cf9caa",
+      "reason": "Stock SkyMP sets every synced actor's health and magicka to 1000000 on the client so it never dies locally. HUD mods (TrueHUD) then show that number, so a wolf had a billion health and hits did millions of damage.",
+      "files_touched": [
+        "skymp5-client/src/view/formView.ts"
+      ],
+      "impact": "Remote actors keep their real base health; startDeferredKill alone still stops the local copy dying before the server says so, and health follows the server's healthPercentage. Client-only: players get the rebuilt skymp5-client.js through skymp/client-mods.",
+      "test": "Bundle built with webpack; the 1000000 setActorValue calls are gone. In-game check pending.",
+      "loss_condition": "A stock skymp5-client.js brings the fake health back.",
+      "removal_strategy": "Keep while HUD mods read actor health.",
+      "upstream_pr": null,
+      "added": "2026-11-21",
+      "notes": "Applied after server-playable-race-npcs.patch."
     }
   ]
 }

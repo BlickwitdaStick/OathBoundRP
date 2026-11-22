@@ -1,0 +1,19 @@
+diff --git a/skymp5-client/src/view/formView.ts b/skymp5-client/src/view/formView.ts
+index 82a2c498..50cc9e26 100644
+--- a/skymp5-client/src/view/formView.ts
++++ b/skymp5-client/src/view/formView.ts
+@@ -298,9 +298,12 @@ export class FormView {
+     if (refr) {
+       const actor = Actor.from(refr);
+       if (actor && !this.localImmortal) {
++        // OATHBOUND: the deferred kill alone keeps the local copy from dying
++        // before the server says so. Stock SkyMP also set health/magicka to
++        // 1000000, which HUD mods (TrueHUD) then show as the actor's health
++        // and damage. Health keeps the actor's real base value and follows
++        // the server's healthPercentage (movementApply.ts).
+         actor.startDeferredKill();
+-        actor.setActorValue("health", 1000000);
+-        actor.setActorValue("magicka", 1000000);
+         this.localImmortal = true;
+       }
+       this.applyAll(refr, model);

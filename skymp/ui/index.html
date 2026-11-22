@@ -472,6 +472,15 @@
     .chat-input::placeholder { color: rgba(245, 241, 232, 0.45); }
     body.chat-typing .chat-log { bottom: calc(var(--chat-bottom) + 50px); }
     body.chat-typing .chat-line.fade { opacity: 1; }
+    /* Faded lines take no room until the chat is opened. */
+    .chat-line.fade { display: none; }
+    body.chat-typing .chat-line.fade { display: block; }
+    /* Loading screens: none of the OATHBOUND HUD (body.ob-loading is set by
+       gamemode/core/player-shortcuts-service.js while "Loading Menu" is open). */
+    body.ob-loading .chat-log,
+    body.ob-loading .look-keys,
+    body.ob-loading .needs-hud,
+    body.ob-loading .group-compass { display: none !important; }
 
     @media (max-width: 720px) {
       .interaction-shell {
@@ -1160,11 +1169,11 @@
   // e a terceira virou a interação `identity.introduce`. Sem chamador, a função
   // era uma segunda porta de entrada para o chat esperando alguém usá-la.
 
-  // Lines stay on screen for an hour (owner's request); the oldest beyond
-  // CHAT_LOG_MAX_LINES are dropped and the box clips at its max height.
+  // A line fades from view after 5 s but stays in the log for an hour:
+  // opening the chat (Enter) shows every kept line again (CSS: body.chat-typing).
   const CHAT_LOG_MAX_LINES = 60;
-  const CHAT_LOG_FADE_AFTER_MS = 60 * 60 * 1000;
-  const CHAT_LOG_REMOVE_AFTER_MS = 1200;
+  const CHAT_LOG_FADE_AFTER_MS = 5000;
+  const CHAT_LOG_KEEP_MS = 60 * 60 * 1000;
 
   function showInteractionToast(message) {
     const log = document.getElementById('chat-log');
@@ -1179,10 +1188,8 @@
       log.removeChild(log.firstChild);
     }
 
-    setTimeout(() => {
-      line.classList.add('fade');
-      setTimeout(() => line.remove(), CHAT_LOG_REMOVE_AFTER_MS);
-    }, CHAT_LOG_FADE_AFTER_MS);
+    setTimeout(() => line.classList.add('fade'), CHAT_LOG_FADE_AFTER_MS);
+    setTimeout(() => line.remove(), CHAT_LOG_KEEP_MS);
   }
 
   // ── WebSocket Signaling ───────────────────────────────────────────────────

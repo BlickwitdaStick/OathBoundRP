@@ -514,3 +514,20 @@ describe('admin panel: flag and plumbing', () => {
     assert.strictEqual(await panel.handleUiEvent(STAFF, { type: 'panel:open' }), false);
   });
 });
+
+require('node:test').test('login does not reopen the panel left over from the last session', () => {
+  const { UPDATE_OWNER_SNIPPET } = require('./admin-panel-service');
+  const run = new Function('ctx', UPDATE_OWNER_SNIPPET);
+  const calls = [];
+  const ctx = { state: {}, value: { sentAt: 1 }, sp: { browser: { executeJavaScript: (s) => calls.push(s) } } };
+  run(ctx); run(ctx);
+  assert.equal(calls.length, 0, 'the stored value from before login is not opened');
+  ctx.value = { sentAt: 2 };
+  run(ctx);
+  assert.equal(calls.length, 1, 'a new value opens the panel');
+  const fresh = { state: {}, value: undefined, sp: { browser: { executeJavaScript: (s) => calls.push(s) } } };
+  run(fresh);
+  fresh.value = { sentAt: 5 };
+  run(fresh);
+  assert.equal(calls.length, 2, 'with nothing stored, the first F8 still opens');
+});

@@ -58,6 +58,9 @@ export interface ElectronAPI {
   windowClose: () => void;
   getLauncherConfig: () => Promise<{ gamePath?: string; display?: { width?: number; height?: number; mode?: string } }>;
   getAppInfo: () => Promise<{ launcherVersion: string; clientVersion: string | null; modsVersion: string | null; gamePath: string | null }>;
+  checkLauncherUpdate: () => Promise<{ ok: boolean; error?: string; current: string; available?: boolean; latest?: { version: string; size: number; release: string; notes: string } | null }>;
+  installLauncherUpdate: () => Promise<{ ok: boolean; error?: string; version?: string }>;
+  onLauncherUpdateProgress: (cb: (p: { done: number; total: number }) => void) => () => void;
   saveGamePath: (folderPath: string) => Promise<{ ok: boolean; reason?: string }>;
   selectGamePath: () => Promise<string | null>;
   checkGamePath: (folderPath: string) => Promise<{ ok: boolean; reason: string }>;
