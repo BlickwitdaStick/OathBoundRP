@@ -349,20 +349,39 @@ async function buildIndex(files, opts = {}) {
  * @param {{query?: string, types?: string[]|Set<string>, limit?: number}} q
  */
 function search(entries, q = {}) {
-  const types = q.types ? new Set(q.types) : null;
+  return searchPage(entries, q).results;
+}
+
+/**
+ * One page of matches plus the total, so the panel can page through
+ * thousands of results (`offset` = index of the first result; clamped to the
+ * last page).
+ * @returns {{results: object[], total: number, offset: number, limit: number}}
+ */
+function searchPage(entries, q = {}) {
   const limit = Math.min(Math.max(Number(q.limit) || MAX_RESULTS, 1), MAX_RESULTS);
+  const all = matchAll(entries, q);
+  const lastPage = all.length === 0 ? 0 : Math.floor((all.length - 1) / limit) * limit;
+  const wanted = Number.isSafeInteger(Number(q.offset)) && Number(q.offset) > 0 ? Number(q.offset) : 0;
+  const offset = Math.min(wanted, lastPage);
+  return { results: all.slice(offset, offset + limit).map(publicEntry), total: all.length, offset, limit };
+}
+
+/** Every matching entry, best first. */
+function matchAll(entries, q = {}) {
+  const types = q.types ? new Set(q.types) : null;
   const query = String(q.query || '').trim().toLowerCase().slice(0, 64);
   const pool = types ? entries.filter((e) => types.has(e.type)) : entries;
 
   const hex = /^(0x)?([0-9a-f]{1,8})$/.exec(query);
   if (hex && (hex[1] || /[a-f]/.test(hex[2]))) {
     const id = parseInt(hex[2], 16);
-    return pool.filter((e) => e.id === id).slice(0, limit).map(publicEntry);
+    return pool.filter((e) => e.id === id);
   }
 
   const words = query.split(/\s+/).filter(Boolean);
   if (words.length === 0) {
-    return pool.filter((e) => e.name).sort(byName).slice(0, limit).map(publicEntry);
+    return pool.filter((e) => e.name).sort(byName);
   }
   const scored = [];
   for (const e of pool) {
@@ -376,7 +395,7 @@ function search(entries, q = {}) {
     scored.push({ e, score });
   }
   scored.sort((a, b) => a.score - b.score || byName(a.e, b.e));
-  return scored.slice(0, limit).map((s) => publicEntry(s.e));
+  return scored.map((s) => s.e);
 }
 
 function byName(a, b) {
@@ -441,6 +460,10 @@ function createRecordIndex({ mpApi = () => (typeof mp !== 'undefined' ? mp : nul
       const index = await get();
       return index ? search(index.entries, q) : null;
     },
+    async searchPage(q) {
+      const index = await get();
+      return index ? searchPage(index.entries, q) : null;
+    },
     async findById(id) {
       const index = await get();
       if (!index) return null;
@@ -465,5 +488,6 @@ module.exports = {
   pluginsFromServerSettings,
   buildIndex,
   search,
+  searchPage,
   createRecordIndex
 };

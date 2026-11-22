@@ -39,7 +39,8 @@
     selectedItem: null,
     selectedCreature: null,
     resultTimer: null,
-    giveInFlight: null       // timer while a give waits for the server's answer
+    giveInFlight: null,      // timer while a give waits for the server's answer
+    itemType: ''             // '' = all item types
   };
 
   const $ = (id) => document.getElementById(id);
@@ -116,12 +117,45 @@
     });
   }
 
-  function searchItems() {
-    send('admin:items:search', { query: $('ap-item-query').value, type: $('ap-item-type').value || undefined });
+  function searchItems(offset) {
+    send('admin:items:search', { query: $('ap-item-query').value, type: st.itemType || undefined, offset: Number(offset) || 0 });
   }
 
-  function searchCreatures() {
-    send('admin:creatures:search', { query: $('ap-creature-query').value });
+  function searchCreatures(offset) {
+    send('admin:creatures:search', { query: $('ap-creature-query').value, offset: Number(offset) || 0 });
+  }
+
+  function renderTypeChips() {
+    const el = $('ap-item-types');
+    el.innerHTML = ITEM_TYPES.map(([v, l]) =>
+      `<button type="button" class="ap-type${v === st.itemType ? ' active' : ''}" data-type="${v}">${esc(l)}</button>`).join('');
+    for (const btn of el.querySelectorAll('[data-type]')) {
+      btn.addEventListener('click', () => {
+        st.itemType = btn.dataset.type;
+        st.selectedItem = null;
+        renderTypeChips();
+        searchItems(0);
+      });
+    }
+  }
+
+  /** "1–50 of 4,860" with Previous/Next; asks the server for the other page. */
+  function renderPager(el, data, onPage) {
+    if (!data || !data.total || data.total <= data.pageSize) { el.innerHTML = ''; return; }
+    const from = data.offset + 1;
+    const to = Math.min(data.offset + data.pageSize, data.total);
+    const fmt = (n) => Number(n).toLocaleString('en-US');
+    el.innerHTML = `
+      <button type="button" class="ap-btn" data-page="prev" ${data.offset <= 0 ? 'disabled' : ''}>‹ Previous</button>
+      <span>${fmt(from)}–${fmt(to)} of ${fmt(data.total)}</span>
+      <button type="button" class="ap-btn" data-page="next" ${to >= data.total ? 'disabled' : ''}>Next ›</button>`;
+    el.querySelector('[data-page="prev"]').addEventListener('click', () => onPage(Math.max(0, data.offset - data.pageSize)));
+    el.querySelector('[data-page="next"]').addEventListener('click', () => onPage(data.offset + data.pageSize));
+  }
+
+  function scrollBodyTop() {
+    const body = document.querySelector('#admin-panel .pp-body');
+    if (body) body.scrollTop = 0;
   }
 
   // ── rendering ────────────────────────────────────────────────────────────
@@ -244,8 +278,9 @@
       bar.style.display = 'none';
       return;
     }
-    if (!data) { waiting(list); bar.style.display = 'none'; return; }
+    if (!data) { waiting(list); bar.style.display = 'none'; $('ap-item-pager').innerHTML = ''; return; }
     list.innerHTML = indexNotice(data) + recordRows(data.results, st.selectedItem, 'item');
+    renderPager($('ap-item-pager'), data, (offset) => { scrollBodyTop(); searchItems(offset); });
     for (const row of list.querySelectorAll('[data-item]')) {
       row.addEventListener('click', () => {
         st.selectedItem = data.results.find((r) => String(r.baseId) === row.dataset.item) || null;
@@ -274,9 +309,11 @@
     if (!data) {
       list.innerHTML = `${unavailable}<div class="pp-empty">Waiting for the server…</div>`;
       bar.style.display = 'none';
+      $('ap-creature-pager').innerHTML = '';
     }
     else {
       list.innerHTML = unavailable + indexNotice(data) + recordRows(data.results, st.selectedCreature, 'creature');
+      renderPager($('ap-creature-pager'), data, (offset) => { scrollBodyTop(); searchCreatures(offset); });
       for (const row of list.querySelectorAll('[data-creature]')) {
         row.addEventListener('click', () => {
           st.selectedCreature = data.results.find((r) => String(r.baseId) === row.dataset.creature) || null;
@@ -398,13 +435,13 @@
   }
   $('ap-close').addEventListener('click', closeAdminPanel);
 
-  $('ap-item-type').innerHTML = ITEM_TYPES.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join('');
+  renderTypeChips();
 
   $('ap-char-query').addEventListener('input', debounce(searchCharacters, SEARCH_DEBOUNCE_MS));
   $('ap-char-retired').addEventListener('change', searchCharacters);
-  $('ap-item-query').addEventListener('input', debounce(searchItems, SEARCH_DEBOUNCE_MS));
-  $('ap-item-type').addEventListener('change', searchItems);
-  $('ap-creature-query').addEventListener('input', debounce(searchCreatures, SEARCH_DEBOUNCE_MS));
+  // A new query always starts again at page 1.
+  $('ap-item-query').addEventListener('input', debounce(() => searchItems(0), SEARCH_DEBOUNCE_MS));
+  $('ap-creature-query').addEventListener('input', debounce(() => searchCreatures(0), SEARCH_DEBOUNCE_MS));
   $('ap-players-refresh').addEventListener('click', () => send('admin:players:refresh'));
 
   // One give at a time: a held Enter/Space on the focused button clicks it on

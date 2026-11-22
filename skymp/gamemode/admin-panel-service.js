@@ -294,7 +294,9 @@ function createAdminPanel(deps) {
     const query = cleanText(data && data.query, MAX_QUERY_LENGTH);
     const allTypes = kind === 'items' ? require('./core/plugin-record-index').ITEM_TYPES : require('./core/plugin-record-index').NPC_TYPES;
     const wanted = data && typeof data.type === 'string' && allTypes.includes(data.type) ? [data.type] : allTypes;
-    let results = await recordIndex.search({ query, types: wanted });
+    const offset = Number.isSafeInteger(Number(data && data.offset)) && Number(data.offset) > 0 ? Number(data.offset) : 0;
+    const page = await recordIndex.searchPage({ query, types: wanted, offset });
+    let results = page ? page.results : null;
     let note = null;
     if (results === null) {
       // No index (plugins unreadable): a hex FormID still works through espm.
@@ -310,7 +312,15 @@ function createAdminPanel(deps) {
         }
       }
     }
-    send(actorId, kind, { query, type: wanted.length === 1 ? wanted[0] : 'all', results, note });
+    send(actorId, kind, {
+      query,
+      type: wanted.length === 1 ? wanted[0] : 'all',
+      results,
+      total: page ? page.total : results.length,
+      offset: page ? page.offset : 0,
+      pageSize: page ? page.limit : Math.max(results.length, 1),
+      note
+    });
     return true;
   }
 

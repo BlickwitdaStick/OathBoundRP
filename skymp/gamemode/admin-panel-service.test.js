@@ -111,6 +111,12 @@ function fakeIndex({ available = true } = {}) {
       if (!available) return null;
       return RECORDS.filter((r) => q.types.includes(r.type) && r.name.toLowerCase().includes(String(q.query).toLowerCase()));
     },
+    searchPage: async (q) => {
+      calls.push(q);
+      if (!available) return null;
+      const all = RECORDS.filter((r) => q.types.includes(r.type) && r.name.toLowerCase().includes(String(q.query).toLowerCase()));
+      return { results: all, total: all.length, offset: q.offset || 0, limit: 50 };
+    },
     findById: async (id) => (available ? RECORDS.find((r) => r.baseId === id) || null : null)
   };
 }
@@ -338,6 +344,20 @@ describe('admin panel: item search and give', () => {
     assert.deepStrictEqual(channelsOf(mp, STAFF).items.results.map((r) => r.name), ['Iron Sword']);
     await panel.handleUiEvent(STAFF, { type: 'admin:items:search', data: { query: 'wolf' } });
     assert.deepStrictEqual(channelsOf(mp, STAFF).items.results, []);
+  });
+
+  it('a category narrows the search to that type; the page offset reaches the index', async () => {
+    const { panel, mp, index } = makePanel();
+    await panel.handleUiEvent(STAFF, { type: 'admin:items:search', data: { query: '', type: 'ARMO', offset: 100 } });
+    assert.deepStrictEqual(index.calls[0].types, ['ARMO']);
+    assert.strictEqual(index.calls[0].offset, 100);
+    const items = channelsOf(mp, STAFF).items;
+    assert.strictEqual(items.type, 'ARMO');
+    assert.strictEqual(items.offset, 100);
+    assert.strictEqual(items.pageSize, 50);
+    assert.strictEqual(typeof items.total, 'number');
+    await panel.handleUiEvent(STAFF, { type: 'admin:items:search', data: { query: '', offset: -5 } });
+    assert.strictEqual(index.calls[1].offset, 0, 'junk offsets become page 1');
   });
 
   it('an unknown type filter falls back to all item types', async () => {

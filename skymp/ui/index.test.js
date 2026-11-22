@@ -72,8 +72,11 @@ test('index.html wires the F8 admin panel (markup, styles, script after the play
   assert.ok(pp !== -1 && ap > pp, 'admin-panel.js reuses the player panel styles and must load after it.');
   const handler = html.slice(html.indexOf('window.handlePlayerShortcutKey = (action) => {'));
   assert.ok(handler.slice(0, 600).includes("action === 'admin:open'"), 'the F8 action must reach the admin panel.');
-  for (const id of ['ap-char-query', 'ap-char-retired', 'ap-item-query', 'ap-item-type', 'ap-item-count', 'ap-item-target', 'ap-item-give',
+  for (const id of ['ap-char-query', 'ap-char-retired', 'ap-item-query', 'ap-item-types', 'ap-item-pager', 'ap-creature-pager','ap-item-count', 'ap-item-target', 'ap-item-give',
     'ap-creature-query', 'ap-creature-spawn', 'ap-players-refresh', 'ap-close', 'ap-result']) {
     assert.ok(html.includes(`id="${id}"`), `admin-panel.js needs #${id}`);
   }
+  // In-game CEF does not draw <select> popups: a dropdown there looks fine and does nothing.
+  const panel = html.slice(html.indexOf('<div id="admin-panel"'), html.indexOf('<script src="auth-widgets.js">'));
+  assert.ok(!panel.includes('<select'), 'no <select> in the admin panel; use buttons.');
 });

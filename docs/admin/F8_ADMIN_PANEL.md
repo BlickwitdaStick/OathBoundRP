@@ -43,7 +43,10 @@ hides buttons a role cannot use, as a courtesy only.
 ### Spawn items
 - Searches the item records of the plugins the server loaded (weapons, armor,
   misc, potions/food, ammo, books, ingredients, keys, soul gems, scrolls,
-  torches), by name, editor id or FormID (`0x00012eb7`). Filter by type.
+  torches), by name, editor id or FormID (`0x00012eb7`). Filter by type with
+  the category buttons (buttons, not a dropdown: the in-game browser does not
+  draw dropdown popups). Results come 50 per page; Previous/Next above the
+  list page through all of them ("51–100 of 4,860"). Creatures page the same way.
 - The index is built from the plugin files in `server-settings.json`
   (`dataDir` + `loadOrder`) the first time the panel opens (≈0.3 s for this
   server's 34 plugins, ~19 000 records) and cached until restart. Names in

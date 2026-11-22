@@ -968,8 +968,10 @@
       <div id="ap-section-items" class="pp-section">
         <div class="ap-toolbar">
           <input id="ap-item-query" class="ap-input grow" type="search" maxlength="64" placeholder="Search items, e.g. iron sword, or a FormID 0x00012eb7">
-          <select id="ap-item-type" class="ap-select" aria-label="Item type"></select>
         </div>
+        <!-- Buttons, not a dropdown: the in-game browser does not draw dropdown popups. -->
+        <div id="ap-item-types" class="ap-chips" role="group" aria-label="Item type"></div>
+        <div id="ap-item-pager" class="ap-pager"></div>
         <div id="ap-item-list" class="ap-list"></div>
         <div id="ap-item-bar" class="ap-bar" style="display:none">
           <span>Give <strong id="ap-item-selected"></strong></span>
@@ -983,6 +985,7 @@
         <div class="ap-toolbar">
           <input id="ap-creature-query" class="ap-input grow" type="search" maxlength="64" placeholder="Search NPCs and creatures, e.g. wolf, bandit">
         </div>
+        <div id="ap-creature-pager" class="ap-pager"></div>
         <div id="ap-creature-list" class="ap-list"></div>
         <div id="ap-creature-bar" class="ap-bar" style="display:none">
           <span>Spawn <strong id="ap-creature-selected"></strong> in front of you</span>

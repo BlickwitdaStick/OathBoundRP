@@ -186,6 +186,19 @@ describe('plugin-record-index: search', () => {
     assert.strictEqual(idx.search(many, { query: 'thing', limit: 5 }).length, 5);
   });
 
+  it('pages: every result is reachable, with the total; offsets past the end land on the last page', () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, type: 'ARMO', editorId: `Armor${i}`, name: `Armor ${String(i).padStart(3, '0')}`, search: `armor ${i}` }))
+      .concat([{ id: 999, type: 'WEAP', editorId: 'Sword', name: 'Armor Sword', search: 'armor sword sword' }]);
+    const p1 = idx.searchPage(many, { query: '', types: ['ARMO'] });
+    assert.deepStrictEqual([p1.total, p1.offset, p1.limit, p1.results.length], [120, 0, 50, 50]);
+    const p3 = idx.searchPage(many, { query: '', types: ['ARMO'], offset: 100 });
+    assert.deepStrictEqual([p3.offset, p3.results.length, p3.results[19].name], [100, 20, 'Armor 119']);
+    const seen = new Set([...p1.results, ...idx.searchPage(many, { types: ['ARMO'], offset: 50 }).results, ...p3.results].map((r) => r.baseId));
+    assert.strictEqual(seen.size, 120, 'no result is skipped or repeated across pages');
+    assert.strictEqual(idx.searchPage(many, { types: ['ARMO'], offset: 9999 }).offset, 100);
+    assert.ok(!idx.searchPage(many, { query: 'armor', types: ['ARMO'] }).results.some((r) => r.type === 'WEAP'), 'type filter holds');
+  });
+
   it('createRecordIndex without plugin settings reports unavailable (search returns null)', async () => {
     const ri = idx.createRecordIndex({ mpApi: () => null, log: () => {} });
     assert.strictEqual(await ri.search({ query: 'iron' }), null);
