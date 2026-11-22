@@ -213,7 +213,7 @@ async function main() {
   // ── 3. Invalid token is rejected ───────────────────────────────────────────
   console.log('\n3. Forged token');
   const forged = lkToken.mintAccessToken({
-    apiKey: API_KEY, apiSecret: 'secret_errado_forjado', room: ROOM,
+    apiKey: API_KEY, apiSecret: 'wrong_forged_secret', room: ROOM,
     identity: lkToken.participantIdentity(0xdeadbeef)
   });
   let forgedRejected = false;

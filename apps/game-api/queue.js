@@ -1,23 +1,23 @@
 /**
  * queue.js
  *
- * Fila de entrada do servidor, sem dependência de rede nem de banco — tudo
- * aqui é pura manipulação de estado em memória, pra que dê pra testar a
- * política de admissão sem subir nada.
+ * The server's entry queue, with no network or database dependency — everything
+ * here is pure in-memory state manipulation, so the admission policy can be
+ * tested without spinning anything up.
  *
- * Modelo: capacidade fixa de slots. Quem chega e encontra slot livre entra
- * direto; quem não encontra fica numa fila FIFO e é promovido quando um slot
- * vaga. Um slot vaga quando o jogador desconecta (o gamemode avisa) ou quando
- * a reserva expira sem ele ter aparecido no jogo.
+ * Model: fixed slot capacity. Whoever arrives and finds a free slot gets in
+ * directly; whoever doesn't waits in a FIFO queue and is promoted when a slot
+ * frees up. A slot frees up when the player disconnects (the gamemode reports
+ * it) or when the reservation expires without them showing up in game.
  *
- * A expiração de reserva é o que impede a fila de travar: sem ela, um jogador
- * que fecha o launcher depois de ser admitido seguraria o slot pra sempre e a
- * fila inteira ficaria parada atrás dele.
+ * Reservation expiry is what keeps the queue from getting stuck: without it, a
+ * player who closes the launcher after being admitted would hold the slot
+ * forever and the whole queue would be stuck behind them.
  */
 
-// Quanto tempo um jogador admitido tem pra efetivamente entrar no jogo antes
-// de o slot voltar pra fila. Precisa cobrir o boot do Skyrim + SKSE, que não é
-// rápido — daí o valor generoso.
+// How long an admitted player has to actually enter the game before the slot
+// goes back to the queue. It has to cover the Skyrim + SKSE boot, which is not
+// fast — hence the generous value.
 const DEFAULT_RESERVATION_TTL_MS = 3 * 60 * 1000;
 
 function createQueue(options = {}) {
@@ -27,13 +27,13 @@ function createQueue(options = {}) {
 
   // accountId -> { accountId, discordId, sessionTicket, reservedAt, connected }
   const _admitted = new Map();
-  // Lista ordenada de { accountId, discordId, joinedAt }
+  // Ordered list of { accountId, discordId, joinedAt }
   let _waiting = [];
 
   /**
-   * Devolve slots cujas reservas expiraram sem o jogador ter conectado.
-   * Chamado no início de toda operação — é mais simples e mais confiável que
-   * manter um timer por reserva.
+   * Frees slots whose reservations expired without the player connecting.
+   * Called at the start of every operation — simpler and more reliable than
+   * keeping a timer per reservation.
    */
   function _reapExpired() {
     const t = now();
@@ -59,9 +59,9 @@ function createQueue(options = {}) {
   }
 
   /**
-   * Pede entrada. Idempotente por conta: chamar duas vezes não cria duas
-   * posições nem dois slots — o launcher faz polling, então repetição é o caso
-   * normal, não a exceção.
+   * Requests entry. Idempotent per account: calling twice creates neither two
+   * positions nor two slots — the launcher polls, so repetition is the normal
+   * case, not the exception.
    *
    * @returns {{status:'success', ticket:string} | {status:'queued', position:number}}
    */
@@ -90,9 +90,9 @@ function createQueue(options = {}) {
   }
 
   /**
-   * Consulta sem efeito colateral de entrada — mas ainda promove quem estiver
-   * esperando, porque o polling é o único momento em que descobrimos que uma
-   * reserva expirou.
+   * Lookup with no join side effect — but it still promotes whoever is
+   * waiting, because polling is the only moment we find out a reservation
+   * expired.
    */
   function status(accountId, makeTicket) {
     _reapExpired();
@@ -107,7 +107,7 @@ function createQueue(options = {}) {
     return { status: 'not_queued' };
   }
 
-  /** O gamemode confirma que o jogador entrou: a reserva vira ocupação real. */
+  /** The gamemode confirms the player entered: the reservation becomes real occupancy. */
   function markConnected(accountId) {
     const entry = _admitted.get(accountId);
     if (!entry) return false;
@@ -115,7 +115,7 @@ function createQueue(options = {}) {
     return true;
   }
 
-  /** O gamemode avisa que o jogador saiu: o slot volta pra fila. */
+  /** The gamemode reports the player left: the slot goes back to the queue. */
   function release(accountId, makeTicket) {
     const removed = _admitted.delete(accountId);
     _waiting = _waiting.filter((e) => e.accountId !== accountId);
@@ -123,7 +123,7 @@ function createQueue(options = {}) {
     return removed;
   }
 
-  /** Valida um ticket de sessão. Usado pelo gamemode ao aceitar a conexão. */
+  /** Validates a session ticket. Used by the gamemode when accepting the connection. */
   function resolveSessionTicket(ticket) {
     if (!ticket) return null;
     for (const entry of _admitted.values()) {

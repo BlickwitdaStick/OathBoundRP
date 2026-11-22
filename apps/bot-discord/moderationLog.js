@@ -1,155 +1,157 @@
 /**
  * moderationLog.js
  *
- * Envio de eventos de moderação para um canal do Discord.
+ * Sends moderation events to a Discord channel.
  *
- * `docs/ARCHITECTURE.md` 1.3 registrava isto como a intenção original do bot e
- * anotava que **nunca foi implementado** — até aqui o bot só expunha o sync de
- * cargo e os comandos de voz.
+ * `docs/ARCHITECTURE.md` 1.3 recorded this as the bot's original intent and
+ * noted it was **never implemented** — until now the bot only exposed the role
+ * sync and the voice commands.
  *
- * ─── O canal do Discord não é o registro ────────────────────────────────────
+ * ─── The Discord channel is not the record ──────────────────────────────────
  *
- * O registro de moderação é `audit_logs`, escrito pelo gamemode e pelo painel
- * no mesmo fluxo da ação. Este canal é **notificação**: serve pra staff ver
- * acontecendo, no celular, sem abrir o painel.
+ * The moderation record is `audit_logs`, written by the gamemode and the panel
+ * in the same flow as the action. This channel is a **notification**: it lets
+ * staff see things happen, on their phone, without opening the panel.
  *
- * A distinção decide o comportamento em falha: se o Discord estiver fora, a
- * ação de moderação **acontece do mesmo jeito** e nada é desfeito. Quem produz
- * o evento manda e esquece; ninguém espera resposta daqui, e um `/permakill`
- * nunca falha porque o bot caiu.
+ * That distinction decides the failure behavior: if Discord is down, the
+ * moderation action **happens anyway** and nothing is undone. Whoever produces
+ * the event fires and forgets; nobody waits for a reply from here, and a
+ * `/permakill` never fails because the bot went down.
  *
- * ─── Por que push e não polling de audit_logs ───────────────────────────────
+ * ─── Why push and not polling audit_logs ────────────────────────────────────
  *
- * A alternativa era o bot ler `audit_logs` de tempos em tempos — ele até já tem
- * `mysql2` em `dependencies` (sem usar). Foi descartada: daria credencial de
- * banco a um terceiro processo pra ler uma tabela que ele não escreve, em troca
- * de latência de polling. O push manda de onde a ação acontece, no instante em
- * que acontece, e o único segredo que atravessa é o `INTERNAL_API_SECRET` que o
- * painel já usa pra falar com este bot.
+ * The alternative was for the bot to read `audit_logs` periodically — it even
+ * already has `mysql2` in `dependencies` (unused). It was discarded: it would
+ * hand database credentials to a third process to read a table it doesn't
+ * write, in exchange for polling latency. Push sends from where the action
+ * happens, the moment it happens, and the only secret that crosses over is the
+ * `INTERNAL_API_SECRET` the panel already uses to talk to this bot.
  */
 
 const { EmbedBuilder } = require('discord.js');
 
 /**
- * Os eventos que este canal cobre.
+ * The events this channel covers.
  *
- * `ban` está aqui e **não tem produtor nenhum hoje**: `ban` é uma permissão que
- * os cargos `admin` e `owner` concedem em `admin-service.js` e que nenhum
- * comando consome — não existe `/ban` no gamemode nem no painel. Deixar o tipo
- * declarado é o que faz o dia em que o comando existir custar uma linha, e o
- * teste abaixo trava o formato para que ele não nasça diferente dos outros.
+ * `ban` is here and **has no producer today**: `ban` is a permission the
+ * `admin` and `owner` roles grant in `admin-service.js` and that no command
+ * consumes — there is no `/ban` in the gamemode or the panel. Keeping the type
+ * declared is what makes the day that command exists cost one line, and the
+ * test below locks the format so it isn't born different from the others.
  */
 const EVENT_KINDS = Object.freeze({
-  ban:                { titulo: 'Banimento',            cor: 0x992d22, icone: '⛔' },
-  kick:               { titulo: 'Expulsão',             cor: 0xe67e22, icone: '👢' },
-  permakill:          { titulo: 'Permakill',            cor: 0x71368a, icone: '⚰️' },
-  whitelist_approve:  { titulo: 'Whitelist aprovada',   cor: 0x2ecc71, icone: '✅' },
-  whitelist_reject:   { titulo: 'Whitelist recusada',   cor: 0xe74c3c, icone: '❌' },
-  whitelist_reset:    { titulo: 'Whitelist revertida',  cor: 0x95a5a6, icone: '↩️' }
+  ban:                { title: 'Ban',                  color: 0x992d22, icon: '⛔' },
+  kick:               { title: 'Kick',                 color: 0xe67e22, icon: '👢' },
+  permakill:          { title: 'Permakill',            color: 0x71368a, icon: '⚰️' },
+  whitelist_approve:  { title: 'Whitelist approved',   color: 0x2ecc71, icon: '✅' },
+  whitelist_reject:   { title: 'Whitelist rejected',   color: 0xe74c3c, icon: '❌' },
+  whitelist_reset:    { title: 'Whitelist reverted',   color: 0x95a5a6, icon: '↩️' }
 });
 
-/** Corta e limpa texto que veio de fora antes de virar mensagem no Discord. */
-function sanitize(texto, max = 512) {
-  if (typeof texto !== 'string') return null;
-  return texto
-    // Zera mencao em massa: um motivo de kick com `@everyone` viraria ping pra
-    // guild inteira, e quem escreve o motivo e staff digitando em jogo. O
-    // separador e um zero-width space ESCAPADO — a versao com o caractere cru
-    // deixou este arquivo binario pro `grep`, que e o mesmo defeito que o
-    // `core/soul.js` levou a corrigir: quem lesse a linha veria `'@$1'` e
-    // concluiria que ela nao faz nada.
+/** Trims and cleans text from outside before it becomes a Discord message. */
+function sanitize(text, max = 512) {
+  if (typeof text !== 'string') return null;
+  return text
+    // Defuse mass mentions: a kick reason with `@everyone` would ping the whole
+    // guild, and whoever writes the reason is staff typing in game. The
+    // separator is an ESCAPED zero-width space — the version with the raw
+    // character made this file binary to `grep`, the same defect `core/soul.js`
+    // had to fix: anyone reading the line would see `'@$1'` and conclude it
+    // does nothing.
     .replace(/@(everyone|here)/gi, '@\u200b$1')
-    // Caracteres de controle viram espaco. Quebra de linha injetada num motivo
-    // desmontaria o embed.
+    // Control characters become spaces. A line break injected into a reason
+    // would break the embed apart.
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .trim()
     .slice(0, max) || null;
 }
 
 /**
- * Valida o evento recebido. Devolve `{ ok: true, evento }` ou `{ ok: false, erro }`.
+ * Validates the incoming event. Returns `{ ok: true, event }` or `{ ok: false, error }`.
  *
- * Separado do envio de propósito: é a parte que decide, e precisa ser
- * exercitável sem Discord nenhum.
+ * Kept separate from sending on purpose: it's the part that decides, and it has
+ * to be exercisable without any Discord at all.
  */
-function parseEvent(bruto) {
-  if (!bruto || typeof bruto !== 'object') return { ok: false, erro: 'corpo ausente' };
+function parseEvent(raw) {
+  if (!raw || typeof raw !== 'object') return { ok: false, error: 'missing body' };
 
-  const kind = bruto.kind;
+  const kind = raw.kind;
   if (!EVENT_KINDS[kind]) {
-    return { ok: false, erro: `tipo de evento desconhecido: ${JSON.stringify(kind)}` };
+    return { ok: false, error: `unknown event kind: ${JSON.stringify(kind)}` };
   }
 
-  const alvo = sanitize(bruto.target, 128);
-  if (!alvo) return { ok: false, erro: 'target obrigatorio' };
+  const target = sanitize(raw.target, 128);
+  if (!target) return { ok: false, error: 'target is required' };
 
   return {
     ok: true,
-    evento: {
+    event: {
       kind,
-      target: alvo,
-      // `moderator` é opcional porque nem todo evento tem pessoa por trás — uma
-      // reversão automática de whitelist, por exemplo.
-      moderator: sanitize(bruto.moderator, 128),
-      reason: sanitize(bruto.reason),
-      source: sanitize(bruto.source, 32) || 'desconhecido',
-      at: typeof bruto.at === 'string' ? bruto.at : new Date().toISOString()
+      target,
+      // `moderator` is optional because not every event has a person behind it
+      // — an automatic whitelist reversal, for example.
+      moderator: sanitize(raw.moderator, 128),
+      reason: sanitize(raw.reason),
+      source: sanitize(raw.source, 32) || 'unknown',
+      at: typeof raw.at === 'string' ? raw.at : new Date().toISOString()
     }
   };
 }
 
 /**
- * Monta o embed. Função pura — o teste confere o conteúdo sem tocar no Discord.
+ * Builds the embed. Pure function — the test checks the content without touching Discord.
  */
-function buildEmbed(evento) {
-  const meta = EVENT_KINDS[evento.kind];
+function buildEmbed(event) {
+  const meta = EVENT_KINDS[event.kind];
 
   const embed = new EmbedBuilder()
-    .setTitle(`${meta.icone} ${meta.titulo}`)
-    .setColor(meta.cor)
-    .setTimestamp(new Date(evento.at))
-    // De onde veio importa numa arbitragem: `gamemode` é um comando em jogo,
-    // `painel` é alguém logado na web. São responsabilidades diferentes.
-    .setFooter({ text: `origem: ${evento.source}` });
+    .setTitle(`${meta.icon} ${meta.title}`)
+    .setColor(meta.color)
+    .setTimestamp(new Date(event.at))
+    // Where it came from matters in a dispute: `gamemode` is an in-game
+    // command, `panel` is someone logged into the web. Different responsibilities.
+    .setFooter({ text: `source: ${event.source}` });
 
-  const campos = [{ name: 'Alvo', value: evento.target, inline: true }];
-  if (evento.moderator) campos.push({ name: 'Staff', value: evento.moderator, inline: true });
-  // Motivo é o campo que decide se o log serve pra alguma coisa. Sem ele a
-  // linha diz que algo aconteceu e não diz por quê, que é o que a staff precisa
-  // quando alguém contesta semanas depois.
-  campos.push({ name: 'Motivo', value: evento.reason || '_não informado_', inline: false });
+  const fields = [{ name: 'Target', value: event.target, inline: true }];
+  if (event.moderator) fields.push({ name: 'Staff', value: event.moderator, inline: true });
+  // The reason is the field that decides whether the log is good for anything.
+  // Without it the line says something happened but not why, which is what
+  // staff need when someone disputes it weeks later.
+  fields.push({ name: 'Reason', value: event.reason || '_not provided_', inline: false });
 
-  embed.addFields(campos);
+  embed.addFields(fields);
   return embed;
 }
 
 /**
- * Entrega o evento no canal configurado.
+ * Delivers the event to the configured channel.
  *
- * **Nunca lança.** Devolve `{ sent: boolean, erro?: string }` — quem chama é um
- * endpoint que já respondeu, ou uma ação de moderação que já aconteceu.
+ * **Never throws.** Returns `{ sent: boolean, error?: string }` — the caller is
+ * an endpoint that has already responded, or a moderation action that has
+ * already happened.
  *
- * @param {object} client   cliente discord.js
- * @param {object} evento   saída de `parseEvent`
+ * @param {object} client   discord.js client
+ * @param {object} event    output of `parseEvent`
  * @param {string} channelId
  */
-async function sendModerationLog(client, evento, channelId) {
+async function sendModerationLog(client, event, channelId) {
   if (!channelId) {
-    // Silêncio proposital: canal não configurado é "esta função está desligada",
-    // não erro. Gritar a cada kick num servidor que não quer o log seria ruído.
-    return { sent: false, erro: 'canal nao configurado' };
+    // Deliberate silence: an unconfigured channel means "this feature is off",
+    // not an error. Shouting on every kick on a server that doesn't want the
+    // log would be noise.
+    return { sent: false, error: 'channel not configured' };
   }
 
   try {
-    const canal = await client.channels.fetch(channelId);
-    if (!canal || typeof canal.send !== 'function') {
-      return { sent: false, erro: `canal ${channelId} nao existe ou nao aceita mensagem` };
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || typeof channel.send !== 'function') {
+      return { sent: false, error: `channel ${channelId} does not exist or does not accept messages` };
     }
-    await canal.send({ embeds: [buildEmbed(evento)] });
+    await channel.send({ embeds: [buildEmbed(event)] });
     return { sent: true };
   } catch (err) {
-    console.error('[moderation-log] Falha ao enviar evento:', err.message);
-    return { sent: false, erro: err.message };
+    console.error('[moderation-log] Failed to send event:', err.message);
+    return { sent: false, error: err.message };
   }
 }
 

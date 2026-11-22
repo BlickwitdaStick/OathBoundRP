@@ -8,11 +8,11 @@ function positiveInteger(value, fallback) {
 }
 
 /**
- * Rate limiter de janela fixa com memória estritamente limitada.
+ * Fixed-window rate limiter with strictly bounded memory.
  *
- * O limite antigo guardava para sempre cada chave já vista e continuava
- * acrescentando timestamps mesmo depois de bloquear. Bastava variar o IP (ou
- * insistir a partir de um só) para fazer o processo crescer sem teto.
+ * The old limiter kept every key it had ever seen forever and kept appending
+ * timestamps even after blocking. Varying the IP (or hammering from a single
+ * one) was enough to make the process grow without bound.
  */
 function createMemoryRateLimiter({ now = Date.now, maxBuckets = DEFAULT_MAX_BUCKETS } = {}) {
   const buckets = new Map();
@@ -36,8 +36,8 @@ function createMemoryRateLimiter({ now = Date.now, maxBuckets = DEFAULT_MAX_BUCK
     let bucket = buckets.get(key);
     if (!bucket || timestamp - bucket.startedAt >= bucket.windowMs) {
       if (!bucket && buckets.size >= bucketLimit) {
-        // Map preserva ordem de inserção. Remover o mais antigo mantém o custo
-        // O(1) mesmo sob uma enxurrada de chaves diferentes.
+        // Map preserves insertion order. Evicting the oldest keeps the cost
+        // O(1) even under a flood of distinct keys.
         buckets.delete(buckets.keys().next().value);
       }
       bucket = { startedAt: timestamp, count: 0, windowMs: resolvedWindowMs };

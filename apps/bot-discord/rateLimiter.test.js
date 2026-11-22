@@ -3,7 +3,7 @@ const { describe, it } = require('node:test');
 const { createMemoryRateLimiter } = require('./rateLimiter');
 
 describe('memory rate limiter', () => {
-    it('permite ate o limite e bloqueia sem prolongar a janela', () => {
+    it('allows up to the limit and blocks without extending the window', () => {
         let timestamp = 1_000;
         const limiter = createMemoryRateLimiter({ now: () => timestamp });
 
@@ -14,13 +14,13 @@ describe('memory rate limiter', () => {
         assert.equal(limiter.isRateLimited('ip:1', 2, 100), false);
     });
 
-    it('mantem quantidade de buckets limitada sob chaves adversariais', () => {
+    it('keeps the bucket count bounded under adversarial keys', () => {
         const limiter = createMemoryRateLimiter({ maxBuckets: 3, now: () => 1_000 });
         for (let i = 0; i < 100; i++) limiter.isRateLimited(`ip:${i}`, 1, 60_000);
         assert.equal(limiter.size(), 3);
     });
 
-    it('uma origem bloqueada nao cria entradas adicionais', () => {
+    it('a blocked source does not create extra entries', () => {
         const limiter = createMemoryRateLimiter({ now: () => 1_000 });
         for (let i = 0; i < 100_000; i++) limiter.isRateLimited('ip:1', 1, 60_000);
         assert.equal(limiter.size(), 1);

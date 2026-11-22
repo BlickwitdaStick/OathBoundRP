@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -114,7 +114,7 @@ async function doLogout() {
 // ── Clock ──────────────────────────────────────────────────────────────────
 function startClock() {
   const el = document.getElementById('server-time');
-  const tick = () => el.textContent = new Date().toLocaleTimeString('pt-BR');
+  const tick = () => el.textContent = new Date().toLocaleTimeString('en-GB');
   tick(); setInterval(tick, 1000);
 }
 
@@ -149,7 +149,7 @@ async function renderPage(page) {
       case 'audit':       await renderAudit(el);      break;
     }
   } catch(err) {
-    el.innerHTML = `<div class="empty">Erro ao carregar: ${err.message}</div>`;
+    el.innerHTML = `<div class="empty">Failed to load: ${err.message}</div>`;
   }
 }
 
@@ -211,7 +211,7 @@ async function renderWhitelist(el) {
   if (pending > 0) { badge.textContent=pending; badge.style.display=''; }
   else badge.style.display='none';
 
-  window._whitelistRows = rows; // cache pra toggleAppDetails/saveExtraReviewNotes sem re-fetch
+  window._whitelistRows = rows; // cache for toggleAppDetails/saveExtraReviewNotes without re-fetching
   el.innerHTML = `<div class="card">
     <div class="card-header">Whitelist Application <span style="color:var(--muted);font-weight:400">${rows.length} total</span></div>
     <table>
@@ -426,7 +426,7 @@ function escapeHtml(value) {
 
 function fmt(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 </script>
 </body>

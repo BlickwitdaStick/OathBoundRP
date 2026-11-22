@@ -1,8 +1,9 @@
 /**
- * Testes do registro de slash commands.
+ * Tests for slash command registration.
  *
- * Não tocam a API do Discord: cobrem a validação de ambiente e o contrato de
- * retorno, que é o que decide se uma falha derruba o bot ou só loga.
+ * They don't touch the Discord API: they cover environment validation and the
+ * return contract, which is what decides whether a failure brings the bot down
+ * or just gets logged.
  */
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -25,49 +26,49 @@ afterEach(() => {
 });
 
 describe('collectCommands', () => {
-  test('devolve os comandos de voz em formato serializado', () => {
+  test('returns the voice commands in serialized form', () => {
     const commands = collectCommands();
     assert.ok(commands.length >= 2);
     const names = commands.map((c) => c.name);
-    assert.ok(names.includes('voz-criar'));
-    assert.ok(names.includes('voz-fechar'));
+    assert.ok(names.includes('voice-create'));
+    assert.ok(names.includes('voice-close'));
   });
 
-  test('todo comando tem nome e descrição', () => {
+  test('every command has a name and a description', () => {
     for (const c of collectCommands()) {
-      assert.ok(c.name, 'comando sem nome');
-      assert.ok(c.description, `comando ${c.name} sem descrição`);
+      assert.ok(c.name, 'command without a name');
+      assert.ok(c.description, `command ${c.name} has no description`);
     }
   });
 });
 
-describe('deployCommands — ambiente incompleto', () => {
-  // No boot, faltar configuração não pode derrubar o bot: o sync de whitelist
-  // é a função crítica e funciona sem os comandos de voz.
-  test('sem env, devolve erro em vez de lançar', async () => {
+describe('deployCommands — incomplete environment', () => {
+  // At boot, missing configuration must not bring the bot down: whitelist
+  // sync is the critical feature and works without the voice commands.
+  test('without env, returns an error instead of throwing', async () => {
     const result = await deployCommands();
     assert.equal(result.ok, false);
     assert.match(result.error, /DISCORD_BOT_TOKEN/);
   });
 
-  test('lista TODAS as variáveis faltando, não só a primeira', async () => {
+  test('lists ALL missing variables, not just the first', async () => {
     const result = await deployCommands();
     assert.match(result.error, /DISCORD_BOT_TOKEN/);
     assert.match(result.error, /DISCORD_CLIENT_ID/);
     assert.match(result.error, /GUILD_ID/);
   });
 
-  test('aponta só o que falta quando o resto está presente', async () => {
+  test('points out only what is missing when the rest is present', async () => {
     process.env.DISCORD_BOT_TOKEN = 'x';
     process.env.DISCORD_CLIENT_ID = 'y';
     const result = await deployCommands();
     assert.equal(result.ok, false);
     assert.match(result.error, /GUILD_ID/);
-    assert.ok(!result.error.includes('DISCORD_BOT_TOKEN'), 'não deveria acusar o que está configurado');
+    assert.ok(!result.error.includes('DISCORD_BOT_TOKEN'), 'should not flag what is configured');
   });
 
-  // No uso standalone queremos exit code != 0, então ali sim precisa lançar.
-  test('throwOnError faz lançar', async () => {
-    await assert.rejects(() => deployCommands({ throwOnError: true }), /faltando no \.env/);
+  // Standalone, we want exit code != 0, so there it does need to throw.
+  test('throwOnError makes it throw', async () => {
+    await assert.rejects(() => deployCommands({ throwOnError: true }), /missing from \.env/);
   });
 });

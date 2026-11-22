@@ -1,21 +1,22 @@
 /**
  * moderationLog.test.js
  *
- * `discord.js` é mockado no `Module._load`, como o resto dos testes do bot: a
- * interação real com a API do Discord (postar no canal de verdade) não é
- * coberta aqui e precisa de um bot e uma guild reais.
+ * `discord.js` is mocked in `Module._load`, like the rest of the bot's tests:
+ * real interaction with the Discord API (posting to the actual channel) is not
+ * covered here and needs a real bot and guild.
  *
- * O que estes testes travam:
+ * What these tests lock down:
  *
- *   1. **Evento desconhecido não vira mensagem.** O endpoint recebe corpo de
- *      fora; um `kind` que ninguém previu não pode virar um embed vazio no
- *      canal da staff.
- *   2. **`@everyone` num motivo não vira ping.** Quem escreve o motivo é staff
- *      digitando em jogo, e o texto atravessa três processos até o Discord.
- *   3. **Falha do Discord nunca lança.** A ação de moderação já aconteceu; o
- *      canal é notificação, não registro.
+ *   1. **An unknown event does not become a message.** The endpoint receives a
+ *      body from outside; a `kind` nobody anticipated must not become an empty
+ *      embed in the staff channel.
+ *   2. **`@everyone` in a reason does not become a ping.** Whoever writes the
+ *      reason is staff typing in game, and the text crosses three processes
+ *      before reaching Discord.
+ *   3. **A Discord failure never throws.** The moderation action has already
+ *      happened; the channel is a notification, not the record.
  *
- * Executa com: node --test moderationLog.test.js
+ * Run with: node --test moderationLog.test.js
  */
 
 const assert = require('assert');
@@ -25,75 +26,75 @@ const moderationLog = require('./moderationLog');
 
 const { parseEvent, buildEmbed, sendModerationLog, sanitize, EVENT_KINDS } = moderationLog;
 
-/** Lê o embed montado sem depender da forma interna do EmbedBuilder. */
+/** Reads the built embed without depending on EmbedBuilder's internal shape. */
 function json(embed) {
   return typeof embed.toJSON === 'function' ? embed.toJSON() : embed.data;
 }
 
 describe('parseEvent', () => {
-  it('aceita os eventos conhecidos', () => {
+  it('accepts the known events', () => {
     for (const kind of Object.keys(EVENT_KINDS)) {
-      const r = parseEvent({ kind, target: 'Alguem' });
-      assert.strictEqual(r.ok, true, `'${kind}' deveria ser aceito`);
-      assert.strictEqual(r.evento.kind, kind);
+      const r = parseEvent({ kind, target: 'Someone' });
+      assert.strictEqual(r.ok, true, `'${kind}' should be accepted`);
+      assert.strictEqual(r.event.kind, kind);
     }
   });
 
-  it('recusa tipo desconhecido', () => {
-    // Mutação que reprova: aceitar qualquer `kind` e cair num `EVENT_KINDS[kind]`
-    // indefinido — `buildEmbed` explodiria dentro do `.then()` do endpoint, que
-    // é onde ninguém vê.
-    const r = parseEvent({ kind: 'silenciar', target: 'Alguem' });
+  it('rejects an unknown kind', () => {
+    // Mutation this catches: accepting any `kind` and landing on an undefined
+    // `EVENT_KINDS[kind]` — `buildEmbed` would blow up inside the endpoint's
+    // `.then()`, which is where nobody sees it.
+    const r = parseEvent({ kind: 'mute', target: 'Someone' });
     assert.strictEqual(r.ok, false);
-    assert.match(r.erro, /desconhecido/);
+    assert.match(r.error, /unknown/);
   });
 
-  it('recusa corpo ausente ou sem alvo', () => {
+  it('rejects a missing body or a missing target', () => {
     assert.strictEqual(parseEvent(null).ok, false);
     assert.strictEqual(parseEvent({ kind: 'kick' }).ok, false);
     assert.strictEqual(parseEvent({ kind: 'kick', target: '   ' }).ok, false);
   });
 
-  it('moderator e reason sao opcionais', () => {
-    const r = parseEvent({ kind: 'whitelist_reset', target: 'Alguem' });
+  it('moderator and reason are optional', () => {
+    const r = parseEvent({ kind: 'whitelist_reset', target: 'Someone' });
     assert.strictEqual(r.ok, true);
-    assert.strictEqual(r.evento.moderator, null);
-    assert.strictEqual(r.evento.reason, null);
+    assert.strictEqual(r.event.moderator, null);
+    assert.strictEqual(r.event.reason, null);
   });
 
-  it('source ausente vira "desconhecido", nao string vazia', () => {
-    // De onde veio o evento importa numa arbitragem: comando em jogo e clique
-    // no painel são responsabilidades diferentes. Vazio esconderia isso.
-    assert.strictEqual(parseEvent({ kind: 'kick', target: 'X' }).evento.source, 'desconhecido');
-    assert.strictEqual(parseEvent({ kind: 'kick', target: 'X', source: 'gamemode' }).evento.source, 'gamemode');
+  it('a missing source becomes "unknown", not an empty string', () => {
+    // Where the event came from matters in a dispute: an in-game command and a
+    // click in the panel are different responsibilities. Empty would hide that.
+    assert.strictEqual(parseEvent({ kind: 'kick', target: 'X' }).event.source, 'unknown');
+    assert.strictEqual(parseEvent({ kind: 'kick', target: 'X', source: 'gamemode' }).event.source, 'gamemode');
   });
 });
 
 describe('sanitize', () => {
-  it('quebra mencao em massa sem apagar o texto', () => {
-    const limpo = sanitize('spam @everyone agora');
-    assert.strictEqual(limpo.includes('@everyone'), false, '@everyone inteiro nao pode sobreviver');
-    assert.ok(limpo.includes('everyone'), 'o texto continua legivel pra staff');
-    assert.ok(limpo.includes('spam') && limpo.includes('agora'));
+  it('breaks mass mentions without deleting the text', () => {
+    const clean = sanitize('spam @everyone now');
+    assert.strictEqual(clean.includes('@everyone'), false, 'an intact @everyone must not survive');
+    assert.ok(clean.includes('everyone'), 'the text stays readable for staff');
+    assert.ok(clean.includes('spam') && clean.includes('now'));
   });
 
-  it('quebra @here tambem, sem diferenciar maiuscula', () => {
-    assert.strictEqual(sanitize('@HERE olha isso').includes('@HERE'), false);
+  it('breaks @here too, case-insensitively', () => {
+    assert.strictEqual(sanitize('@HERE look at this').includes('@HERE'), false);
   });
 
-  it('troca caractere de controle por espaco', () => {
-    // Quebra de linha injetada num motivo desmontaria o embed.
-    const limpo = sanitize('linha um\nlinha dois\u0000fim');
-    assert.strictEqual(/[\u0000-\u001f]/.test(limpo), false);
-    assert.ok(limpo.includes('linha um') && limpo.includes('fim'));
+  it('replaces control characters with spaces', () => {
+    // A line break injected into a reason would break the embed apart.
+    const clean = sanitize('line one\nline two\u0000end');
+    assert.strictEqual(/[\u0000-\u001f]/.test(clean), false);
+    assert.ok(clean.includes('line one') && clean.includes('end'));
   });
 
-  it('corta no tamanho pedido', () => {
+  it('truncates to the requested length', () => {
     assert.strictEqual(sanitize('x'.repeat(900)).length, 512);
     assert.strictEqual(sanitize('x'.repeat(900), 128).length, 128);
   });
 
-  it('devolve null pra vazio e pra nao-string', () => {
+  it('returns null for empty and for non-strings', () => {
     assert.strictEqual(sanitize('   '), null);
     assert.strictEqual(sanitize(42), null);
     assert.strictEqual(sanitize(undefined), null);
@@ -101,134 +102,135 @@ describe('sanitize', () => {
 });
 
 describe('buildEmbed', () => {
-  it('traz titulo, alvo, staff e motivo', () => {
-    const { evento } = parseEvent({
+  it('includes title, target, staff and reason', () => {
+    const { event } = parseEvent({
       kind: 'permakill', target: 'Bjorn (0xff01)', moderator: 'Vinicius (0xff02)',
-      reason: 'RDM reincidente', source: 'gamemode'
+      reason: 'Repeat RDM', source: 'gamemode'
     });
-    const e = json(buildEmbed(evento));
+    const e = json(buildEmbed(event));
 
     assert.match(e.title, /Permakill/);
-    assert.strictEqual(e.color, EVENT_KINDS.permakill.cor);
+    assert.strictEqual(e.color, EVENT_KINDS.permakill.color);
     assert.match(e.footer.text, /gamemode/);
 
-    const campos = Object.fromEntries(e.fields.map(f => [f.name, f.value]));
-    assert.strictEqual(campos.Alvo, 'Bjorn (0xff01)');
-    assert.strictEqual(campos.Staff, 'Vinicius (0xff02)');
-    assert.strictEqual(campos.Motivo, 'RDM reincidente');
+    const fields = Object.fromEntries(e.fields.map(f => [f.name, f.value]));
+    assert.strictEqual(fields.Target, 'Bjorn (0xff01)');
+    assert.strictEqual(fields.Staff, 'Vinicius (0xff02)');
+    assert.strictEqual(fields.Reason, 'Repeat RDM');
   });
 
-  it('motivo ausente e explicito, nao um campo faltando', () => {
-    // Um embed sem o campo pareceria "motivo em branco" e um com "_não
-    // informado_" diz que ninguém escreveu. A staff precisa distinguir os dois
-    // quando alguém contesta semanas depois.
-    const { evento } = parseEvent({ kind: 'kick', target: 'Alguem' });
-    const e = json(buildEmbed(evento));
-    const motivo = e.fields.find(f => f.name === 'Motivo');
-    assert.ok(motivo);
-    assert.match(motivo.value, /não informado/);
+  it('a missing reason is explicit, not a missing field', () => {
+    // An embed without the field would look like "blank reason", while one
+    // with "_not provided_" says nobody wrote one. Staff need to tell the two
+    // apart when someone disputes it weeks later.
+    const { event } = parseEvent({ kind: 'kick', target: 'Someone' });
+    const e = json(buildEmbed(event));
+    const reason = e.fields.find(f => f.name === 'Reason');
+    assert.ok(reason);
+    assert.match(reason.value, /not provided/);
   });
 
-  it('sem moderador o campo Staff nao aparece', () => {
-    const { evento } = parseEvent({ kind: 'whitelist_reset', target: 'Alguem' });
-    const e = json(buildEmbed(evento));
+  it('without a moderator the Staff field is absent', () => {
+    const { event } = parseEvent({ kind: 'whitelist_reset', target: 'Someone' });
+    const e = json(buildEmbed(event));
     assert.strictEqual(e.fields.some(f => f.name === 'Staff'), false);
   });
 
-  it('todo tipo declarado monta embed sem explodir', () => {
-    // Inclui `ban`, que hoje nao tem produtor nenhum: nao existe /ban no
-    // gamemode nem no painel. O teste existe pra que, no dia em que o comando
-    // aparecer, ele nao precise inventar um formato novo.
+  it('every declared kind builds an embed without blowing up', () => {
+    // Includes `ban`, which has no producer today: there is no /ban in the
+    // gamemode or the panel. The test exists so that, the day that command
+    // appears, it doesn't have to invent a new format.
     for (const kind of Object.keys(EVENT_KINDS)) {
-      const { evento } = parseEvent({ kind, target: 'Alguem', reason: 'motivo' });
-      const e = json(buildEmbed(evento));
-      assert.ok(e.title, `'${kind}' sem titulo`);
-      assert.strictEqual(typeof e.color, 'number', `'${kind}' sem cor`);
+      const { event } = parseEvent({ kind, target: 'Someone', reason: 'reason' });
+      const e = json(buildEmbed(event));
+      assert.ok(e.title, `'${kind}' has no title`);
+      assert.strictEqual(typeof e.color, 'number', `'${kind}' has no color`);
     }
   });
 });
 
 describe('sendModerationLog', () => {
-  function clienteFake({ canal, erroNoFetch } = {}) {
+  function fakeClient({ channel, fetchError } = {}) {
     return {
       channels: {
         fetch: async () => {
-          if (erroNoFetch) throw new Error(erroNoFetch);
-          return canal;
+          if (fetchError) throw new Error(fetchError);
+          return channel;
         }
       }
     };
   }
 
-  it('posta o embed no canal configurado', async () => {
-    const enviados = [];
-    const canal = { send: async (payload) => enviados.push(payload) };
-    const { evento } = parseEvent({ kind: 'kick', target: 'Alguem', reason: 'motivo' });
+  it('posts the embed to the configured channel', async () => {
+    const sent = [];
+    const channel = { send: async (payload) => sent.push(payload) };
+    const { event } = parseEvent({ kind: 'kick', target: 'Someone', reason: 'reason' });
 
-    const r = await sendModerationLog(clienteFake({ canal }), evento, '123');
+    const r = await sendModerationLog(fakeClient({ channel }), event, '123');
 
     assert.strictEqual(r.sent, true);
-    assert.strictEqual(enviados.length, 1);
-    assert.strictEqual(enviados[0].embeds.length, 1);
-    assert.match(json(enviados[0].embeds[0]).title, /Expulsão/);
+    assert.strictEqual(sent.length, 1);
+    assert.strictEqual(sent[0].embeds.length, 1);
+    assert.match(json(sent[0].embeds[0]).title, /Kick/);
   });
 
-  it('canal nao configurado nao envia e nao e erro', async () => {
-    // Servidor que não quer o canal não pode ver `/permakill` reclamar.
-    const canal = { send: async () => assert.fail('nao deveria enviar') };
-    const { evento } = parseEvent({ kind: 'kick', target: 'Alguem' });
+  it('an unconfigured channel sends nothing and is not an error', async () => {
+    // A server that doesn't want the channel must not see `/permakill` complain.
+    const channel = { send: async () => assert.fail('should not send') };
+    const { event } = parseEvent({ kind: 'kick', target: 'Someone' });
 
-    const r = await sendModerationLog(clienteFake({ canal }), evento, undefined);
+    const r = await sendModerationLog(fakeClient({ channel }), event, undefined);
 
     assert.strictEqual(r.sent, false);
-    assert.strictEqual(r.erro, 'canal nao configurado');
+    assert.strictEqual(r.error, 'channel not configured');
   });
 
-  it('canal inexistente nao lanca', async () => {
-    const { evento } = parseEvent({ kind: 'ban', target: 'Alguem' });
-    const r = await sendModerationLog(clienteFake({ canal: null }), evento, '123');
+  it('a nonexistent channel does not throw', async () => {
+    const { event } = parseEvent({ kind: 'ban', target: 'Someone' });
+    const r = await sendModerationLog(fakeClient({ channel: null }), event, '123');
     assert.strictEqual(r.sent, false);
-    assert.match(r.erro, /nao existe/);
+    assert.match(r.error, /does not exist/);
   });
 
-  it('canal que nao aceita mensagem (categoria, canal de voz) nao lanca', async () => {
-    const { evento } = parseEvent({ kind: 'ban', target: 'Alguem' });
-    const r = await sendModerationLog(clienteFake({ canal: { id: '123' } }), evento, '123');
+  it('a channel that does not accept messages (category, voice channel) does not throw', async () => {
+    const { event } = parseEvent({ kind: 'ban', target: 'Someone' });
+    const r = await sendModerationLog(fakeClient({ channel: { id: '123' } }), event, '123');
     assert.strictEqual(r.sent, false);
-    assert.match(r.erro, /nao aceita mensagem/);
+    assert.match(r.error, /does not accept messages/);
   });
 
-  it('Discord fora do ar nao lanca — a moderacao ja aconteceu', async () => {
-    // Mutação que reprova: deixar o `await client.channels.fetch` sem try/catch.
-    // A rejeição subiria pro `.then()` do endpoint como unhandled rejection, e
-    // em algumas versões do Node isso derruba o processo — o bot inteiro cairia
-    // porque o Discord ficou lento durante um kick.
-    const { evento } = parseEvent({ kind: 'permakill', target: 'Alguem' });
-    const r = await sendModerationLog(clienteFake({ erroNoFetch: 'ECONNRESET' }), evento, '123');
+  it('Discord being down does not throw — the moderation already happened', async () => {
+    // Mutation this catches: leaving `await client.channels.fetch` without a
+    // try/catch. The rejection would bubble up to the endpoint's `.then()` as
+    // an unhandled rejection, and on some Node versions that kills the process
+    // — the whole bot would go down because Discord was slow during a kick.
+    const { event } = parseEvent({ kind: 'permakill', target: 'Someone' });
+    const r = await sendModerationLog(fakeClient({ fetchError: 'ECONNRESET' }), event, '123');
     assert.strictEqual(r.sent, false);
-    assert.match(r.erro, /ECONNRESET/);
+    assert.match(r.error, /ECONNRESET/);
   });
 
-  it('falha no send tambem e engolida', async () => {
-    const canal = { send: async () => { throw new Error('Missing Permissions'); } };
-    const { evento } = parseEvent({ kind: 'kick', target: 'Alguem' });
-    const r = await sendModerationLog(clienteFake({ canal }), evento, '123');
+  it('a send failure is swallowed too', async () => {
+    const channel = { send: async () => { throw new Error('Missing Permissions'); } };
+    const { event } = parseEvent({ kind: 'kick', target: 'Someone' });
+    const r = await sendModerationLog(fakeClient({ channel }), event, '123');
     assert.strictEqual(r.sent, false);
-    assert.match(r.erro, /Missing Permissions/);
+    assert.match(r.error, /Missing Permissions/);
   });
 });
 
-describe('o fonte nao guarda caractere invisivel', () => {
-  it('moderationLog.js usa escape, nao o caractere cru', () => {
-    // O `core/soul.js` já pagou por isto: um NUL cru no fonte deixava o arquivo
-    // binário pro `grep` e pro `file`, e quem lesse a linha entenderia o
-    // oposto do que ela fazia. Aqui o risco é o mesmo — o separador de menção é
-    // um zero-width space, e a classe de controle está numa regex.
-    const fonte = require('fs').readFileSync(require('path').join(__dirname, 'moderationLog.js'), 'utf8');
-    for (const ch of fonte) {
+describe('the source holds no invisible characters', () => {
+  it('moderationLog.js uses an escape, not the raw character', () => {
+    // `core/soul.js` already paid for this: a raw NUL in the source made the
+    // file binary to `grep` and `file`, and anyone reading the line would
+    // understand the opposite of what it did. The risk here is the same — the
+    // mention separator is a zero-width space, and the control class lives in
+    // a regex.
+    const source = require('fs').readFileSync(require('path').join(__dirname, 'moderationLog.js'), 'utf8');
+    for (const ch of source) {
       const o = ch.codePointAt(0);
-      const invisivel = (o < 32 && !'\n\r\t'.includes(ch)) || o === 127 || o === 0x200b || o === 0xfeff;
-      assert.strictEqual(invisivel, false, `caractere invisivel U+${o.toString(16)} no fonte — escreva como \\uXXXX`);
+      const invisible = (o < 32 && !'\n\r\t'.includes(ch)) || o === 127 || o === 0x200b || o === 0xfeff;
+      assert.strictEqual(invisible, false, `invisible character U+${o.toString(16)} in the source — write it as \\uXXXX`);
     }
   });
 });

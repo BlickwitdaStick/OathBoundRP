@@ -1,26 +1,26 @@
-# Load order de referencia da Fase 0 — SkyMP Heavy RP
+# Phase 0 reference load order — SkyMP Heavy RP
 #
-# Exatamente os cinco masters do jogo base. Nada mais.
+# Exactly the five base-game masters. Nothing else.
 #
-# Nao e escolha estetica: e o que o SERVIDOR carrega. Os dois scripts da
-# Fase 0 fixam esta mesma lista —
+# This is not an aesthetic choice: it is what the SERVER loads. Both Phase 0
+# scripts pin this same list —
 #   scripts/phase0/Install-SkyMPServerArtifact.ps1 (settings.loadOrder)
 #   scripts/phase0/Prepare-SkyMPDataDir.ps1        ($masters)
-# — entao o servidor so conhece os records destes cinco.
+# — so the server only knows the records from these five.
 #
-# Um cliente com plugin a mais ocupa um indice de load order que o servidor nao
-# tem, e o primeiro byte de todo FormID e esse indice
-# (docs/technical/MODS_AND_GAMEMODE_CONTRACT.md secao 3). O `base_id` gravado no
-# banco passaria a apontar pra outro record na tela daquele jogador — sem erro,
-# sem log: um bau com outra coisa dentro.
+# A client with an extra plugin takes a load-order index the server does not
+# have, and the first byte of every FormID is that index
+# (docs/technical/MODS_AND_GAMEMODE_CONTRACT.md section 3). The `base_id` stored
+# in the database would then point to a different record on that player's
+# screen — no error, no log: a chest with something else inside.
 #
-# TODOS os testadores precisam desta lista, exatamente nesta ordem, e nada
-# ativado alem dela. Isso inclui Creation Club, _ResourcePack.esl e USSEP:
-# uteis num servidor de verdade, irrelevantes pra validar o gamemode, e cada um
-# desloca a ordem.
+# ALL testers need this list, exactly in this order, with nothing enabled
+# beyond it. That includes Creation Club, _ResourcePack.esl and USSEP: useful
+# on a real server, irrelevant for validating the gamemode, and each one
+# shifts the order.
 #
-# Quando o modpack oficial for montado, esta lista morre e o manifesto passa a
-# ser gerado do modpack, sem `--only-load-order`.
+# Once the official modpack is assembled, this list goes away and the manifest
+# is generated from the modpack, without `--only-load-order`.
 
 *Skyrim.esm
 *Update.esm

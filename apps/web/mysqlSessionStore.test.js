@@ -13,7 +13,7 @@ function call(store, method, ...args) {
 }
 
 describe('mysql session store', () => {
-  it('grava JSON e expiração usando UPSERT parametrizado', async () => {
+  it('stores JSON and expiry using a parameterized UPSERT', async () => {
     const calls = [];
     const store = createMysqlSessionStore(sessionModule, {
       now: () => Date.parse('2026-08-24T12:00:00Z'),
@@ -27,7 +27,7 @@ describe('mysql session store', () => {
     assert.equal(calls[0].params[2].toISOString(), '2026-08-24T12:01:00.000Z');
   });
 
-  it('lê sessão válida e trata ausência sem fabricar sessão', async () => {
+  it('reads a valid session and handles absence without fabricating one', async () => {
     const rows = [[{ data_json: '{"user":{"id":7}}' }], []];
     const store = createMysqlSessionStore(sessionModule, { pruneIntervalMs: 0, execute: async () => rows });
     assert.deepEqual(await call(store, 'get', 'sid-1'), { user: { id: 7 } });
@@ -36,7 +36,7 @@ describe('mysql session store', () => {
     assert.equal(await call(empty, 'get', 'missing'), null);
   });
 
-  it('propaga JSON corrompido como erro em vez de autenticar parcialmente', async () => {
+  it('propagates corrupt JSON as an error instead of partially authenticating', async () => {
     const store = createMysqlSessionStore(sessionModule, {
       pruneIntervalMs: 0,
       execute: async () => [[{ data_json: '{broken' }], []]
@@ -44,7 +44,7 @@ describe('mysql session store', () => {
     await assert.rejects(call(store, 'get', 'sid-1'), /JSON/);
   });
 
-  it('destroy, touch e poda usam queries parametrizadas', async () => {
+  it('destroy, touch and prune use parameterized queries', async () => {
     const calls = [];
     const store = createMysqlSessionStore(sessionModule, {
       now: () => 1_000,
@@ -60,7 +60,7 @@ describe('mysql session store', () => {
     assert.ok(calls.every(entry => !entry.sql.includes('sid-1')));
   });
 
-  it('prefere expires explícito e tem TTL seguro como fallback', () => {
+  it('prefers an explicit expires and falls back to a safe TTL', () => {
     const explicit = expiryFor({ cookie: { expires: '2026-08-25T00:00:00Z' } }, () => 0, 1000);
     assert.equal(explicit.toISOString(), '2026-08-25T00:00:00.000Z');
     assert.equal(expiryFor({}, () => 1_000, 5_000).getTime(), 6_000);

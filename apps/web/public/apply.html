@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SkyMP Heavy RP - Aplicação de Whitelist</title>
+    <title>SkyMP Heavy RP - Whitelist Application</title>
     <link rel="stylesheet" href="style.css">
     <style>
         body {
@@ -89,58 +89,58 @@
 <body>
 
 <div class="container">
-    <h1>Aplicação de Whitelist</h1>
+    <h1>Whitelist Application</h1>
     
     <div id="auth-section">
-        <p>Para enviar ou verificar sua whitelist, faça login com o Discord.</p>
-        <a href="/api/auth/discord" class="discord-btn" style="color:white; padding:12px; border-radius:4px; text-align:center;">Login com Discord</a>
+        <p>To submit or check your whitelist application, log in with Discord.</p>
+        <a href="/api/auth/discord" class="discord-btn" style="color:white; padding:12px; border-radius:4px; text-align:center;">Log in with Discord</a>
     </div>
 
     <div id="status-section" class="hidden">
-        <h2>Seu Status: <span id="status-text">Carregando...</span></h2>
+        <h2>Your Status: <span id="status-text">Loading...</span></h2>
         <div id="application-status"></div>
-        <button id="logout-btn" style="background-color:#d32f2f; margin-top:15px;">Sair</button>
+        <button id="logout-btn" style="background-color:#d32f2f; margin-top:15px;">Log out</button>
     </div>
 
     <div id="form-section" class="hidden">
-        <p>Preencha os dados do seu personagem abaixo. Lembre-se das regras de Heavy RP.</p>
+        <p>Fill in your character's details below. Remember the Heavy RP rules.</p>
         <form id="apply-form">
             <div class="form-group">
-                <label for="first_name">Nome do Personagem</label>
-                <input type="text" id="first_name" name="first_name" required placeholder="Ex: Ralof">
+                <label for="first_name">Character First Name</label>
+                <input type="text" id="first_name" name="first_name" required placeholder="E.g. Ralof">
             </div>
             
             <div class="form-group">
-                <label for="last_name">Sobrenome / Apelido</label>
-                <input type="text" id="last_name" name="last_name" required placeholder="Ex: de Riverwood">
+                <label for="last_name">Last Name / Epithet</label>
+                <input type="text" id="last_name" name="last_name" required placeholder="E.g. of Riverwood">
             </div>
 
             <div class="form-group">
-                <label for="biography">Biografia</label>
-                <textarea id="biography" name="biography" required placeholder="Conte a história do seu personagem: de onde veio, o que já viveu..."></textarea>
+                <label for="biography">Biography</label>
+                <textarea id="biography" name="biography" required placeholder="Tell your character's story: where they came from, what they have lived through..."></textarea>
             </div>
 
             <div class="form-group">
-                <label for="motivations">Motivações</label>
-                <textarea id="motivations" name="motivations" required placeholder="O que seu personagem busca em jogo? Objetivos concretos, não genéricos."></textarea>
+                <label for="motivations">Motivations</label>
+                <textarea id="motivations" name="motivations" required placeholder="What does your character seek in game? Concrete goals, not generic ones."></textarea>
             </div>
 
             <div class="form-group">
-                <label for="weaknesses">Fraquezas e Limites</label>
-                <textarea id="weaknesses" name="weaknesses" required placeholder="Medos, vícios, limitações físicas ou sociais. Personagem sem fraqueza é rejeitado."></textarea>
+                <label for="weaknesses">Weaknesses and Limits</label>
+                <textarea id="weaknesses" name="weaknesses" required placeholder="Fears, vices, physical or social limitations. A character without weaknesses is rejected."></textarea>
             </div>
 
             <div class="form-group">
-                <label for="social_ties">Laços Sociais</label>
-                <textarea id="social_ties" name="social_ties" required placeholder="Que tipo de relações seu personagem pretende construir em jogo (família, facção, rivais)?"></textarea>
+                <label for="social_ties">Social Ties</label>
+                <textarea id="social_ties" name="social_ties" required placeholder="What kind of relationships does your character intend to build in game (family, faction, rivals)?"></textarea>
             </div>
 
             <p style="font-size:13px; color:#999; margin-top:-10px;">
-                Conceitos fortes (nobreza, magia poderosa, vampirismo, lycanthropia, Daedra, liderança de facção)
-                exigem aprovação extra da staff e podem demorar mais pra revisar.
+                Strong concepts (nobility, powerful magic, vampirism, lycanthropy, Daedra, faction leadership)
+                require extra staff approval and may take longer to review.
             </p>
 
-            <button type="submit">Enviar Aplicação</button>
+            <button type="submit">Submit Application</button>
         </form>
     </div>
 </div>
@@ -163,13 +163,13 @@
                     
                     if(data.application.status === 'pending') {
                         statusBox.className = 'status-pending';
-                        statusBox.textContent = 'Sua aplicação está sendo analisada pela staff. Aguarde.';
+                        statusBox.textContent = 'Your application is being reviewed by staff. Please wait.';
                     } else if (data.application.status === 'approved') {
                         statusBox.className = 'status-approved';
-                        statusBox.textContent = 'Parabéns! Sua whitelist foi aprovada.';
+                        statusBox.textContent = 'Congratulations! Your whitelist application was approved.';
                     } else if (data.application.status === 'rejected') {
                         statusBox.className = 'status-rejected';
-                        statusBox.textContent = 'Sua aplicação foi rejeitada. Verifique seu Discord para notas da staff.';
+                        statusBox.textContent = 'Your application was rejected. Check your Discord for staff notes.';
                     }
                 } else {
                     document.getElementById('form-section').classList.remove('hidden');
@@ -178,11 +178,11 @@
                     document.getElementById('logout-btn').style.display = 'block';
                 }
             } else {
-                // Não logado
+                // Not logged in
                 document.getElementById('auth-section').classList.remove('hidden');
             }
         } catch (error) {
-            console.error('Erro ao buscar status:', error);
+            console.error('Error fetching status:', error);
         }
     }
 
@@ -203,14 +203,14 @@
             });
             const result = await res.json();
             if (res.ok) {
-                alert('Aplicação enviada com sucesso!');
+                alert('Application submitted successfully!');
                 location.reload();
             } else {
-                alert('Erro: ' + result.error);
+                alert('Error: ' + result.error);
             }
         } catch (error) {
             console.error(error);
-            alert('Erro de conexão.');
+            alert('Connection error.');
         }
     });
 
