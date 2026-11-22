@@ -214,6 +214,13 @@ async function checkWhitelist(userId, profileId, actorId) {
     // Inicializar máquina de estados (carrega IMPRISONED/RESTRAINED do banco)
     await characterState.initialize(character.id);
 
+    // Came back dead or downed from before a restart/disconnect: revive before
+    // the client spawns, or it lands in Skyrim's locked black death screen.
+    if (require('./core/module-registry').isEnabled('death')) {
+      try { require('./death-service').recoverOnLogin(actorId, character.id); }
+      catch (err) { console.error(`[whitelist] Could not clear a leftover death for ${character.id}:`, err.message); }
+    }
+
     await grantStartingGold(character.id);
     await revelarPrimeiroSinal(character.id);
 

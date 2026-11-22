@@ -343,6 +343,48 @@ function pollPlayersOnce() {
  *   `0`/ausente quando não há autor (queda, veneno) ou quando a queda veio pelo
  *   polling, que não sabe quem foi.
  */
+/**
+ * Stands a character back up: alive, full health, out of the bleedout pose,
+ * state NORMAL, any pending bleed-out cancelled. Used at login and by /revive.
+ * @returns {boolean} whether there was anything to undo
+ */
+function reviveNow(actorId, characterId) {
+  let wasDead = false;
+  try { wasDead = Boolean(mp.get(actorId, 'isDead')); } catch { /* unknown */ }
+  const state = characterState.get(characterId);
+  const entry = _downedPlayers.get(characterId);
+  if (entry) {
+    clearTimeout(entry.timer);
+    clearPoseTimers(entry);
+    _downedPlayers.delete(characterId);
+  }
+  const stuck = wasDead || Boolean(entry) || state === STATES.DOWNED || state === STATES.DEAD;
+  if (!stuck) return false;
+  if (wasDead) mp.set(actorId, 'isDead', false);
+  _wasDead.set(actorId, false);
+  try { mp.set(actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 }); } catch { /* not spawned yet */ }
+  try { leaveDownedPose(actorId); } catch { /* not spawned yet */ }
+  characterState.set(characterId, STATES.NORMAL, {});
+  return true;
+}
+
+/**
+ * Login safety net. The downed timer and its revive live in memory, but SkyMP
+ * saves isDead with the character and DOWNED is a durable state: after a
+ * server restart or a disconnect while down, the player came back dead with
+ * nothing left to wake them — Skyrim's death fade, a black screen with every
+ * menu and the console locked. Clear it before the client spawns.
+ */
+function recoverOnLogin(actorId, characterId) {
+  if (typeof mp === 'undefined' || !characterId) return false;
+  const fixed = reviveNow(actorId, characterId);
+  if (fixed) {
+    console.log(`[death-service] char=${characterId} came back dead/downed from before; revived at login.`);
+    later(8000, () => commands.sendNotification(actorId, 'You wake up. Your wounds were tended while you were away.'));
+  }
+  return fixed;
+}
+
 async function handlePlayerDowned(actorId, killerId) {
   const character = commands.getActiveCharacterData(actorId);
   if (!character) return;
@@ -842,6 +884,24 @@ function cleanup(actorId) {
 function commandDefs() {
   return [
     {
+      name: ['/revive'],
+      description: '[Staff] Revive a stuck, dead or downed player where they stand',
+      usage: '/revive <player#>',
+      handler: (actorId, args) => {
+        let staff = false;
+        try { staff = Boolean(require('./admin-service').getRole(actorId)); } catch { /* no admin service */ }
+        if (!staff) return commands.sendNotification(actorId, 'Staff only.');
+        const targetActorId = Number.parseInt(String(args || '').trim().replace(/^0x/i, ''), 16);
+        const target = Number.isFinite(targetActorId) ? commands.getActiveCharacterData(targetActorId) : null;
+        if (!target) return commands.sendNotification(actorId, 'Usage: /revive <player#> (online)');
+        const fixed = reviveNow(targetActorId, target.characterId);
+        commands.sendNotification(actorId, fixed ? 'Revived.' : 'They were not dead or downed; cleared their pose anyway.');
+        if (!fixed) { try { leaveDownedPose(targetActorId); } catch { /* ignore */ } }
+        commands.sendNotification(targetActorId, 'A member of staff revived you.');
+        panelRefreshBus.requestRefresh(targetActorId, 'status');
+      }
+    },
+    {
       name: ['/rescue', '/socorrer'],
       description: 'Stabilize a downed character nearby, stopping the bleed-out',
       usage: '/rescue <player#>',
@@ -880,6 +940,8 @@ function commandDefs() {
 
 module.exports = {
   commandDefs,
+  recoverOnLogin,
+  reviveNow,
   initDeathService,
   rescueTarget,
   registerInteractions,

@@ -846,3 +846,57 @@ describe('core/temple-locator', () => {
     assert.strictEqual(skyrimIdFromDesc('0x165a7'), null);
   });
 });
+
+describe('death-service — leftover death at login', () => {
+  let sets;
+  const original = {};
+  beforeEach(() => {
+    commands.registerActiveCharacter(VICTIM_ACTOR_ID, { id: VICTIM_CHARACTER_ID, first_name: 'Vitima', last_name: 'Um' }, 1, 1);
+    deathService._downedPlayers.clear();
+    sets = [];
+    Object.assign(original, { call: mp.callPapyrusFunction, set: mp.set, get: mp.get });
+    mp.callPapyrusFunction = () => null;
+    mp.set = (id, prop, v) => { sets.push({ id, prop, v }); };
+  });
+  afterEach(() => {
+    mp.callPapyrusFunction = original.call;
+    mp.set = original.set;
+    mp.get = original.get;
+  });
+
+  it('a character still dead from before a restart is revived before spawning', () => {
+    mp.get = (id, prop) => (prop === 'isDead' ? true : original.get(id, prop));
+    characterState.set(VICTIM_CHARACTER_ID, STATES.DOWNED, {});
+    assert.strictEqual(deathService.recoverOnLogin(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID), true);
+    assert.deepStrictEqual(sets.filter((s) => s.prop === 'isDead').map((s) => s.v), [false]);
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
+  });
+
+  it('a DOWNED state with no timer left is cleared even if SkyMP has them alive', () => {
+    mp.get = (id, prop) => (prop === 'isDead' ? false : original.get(id, prop));
+    characterState.set(VICTIM_CHARACTER_ID, STATES.DOWNED, {});
+    assert.strictEqual(deathService.recoverOnLogin(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID), true);
+    assert.strictEqual(sets.some((s) => s.prop === 'isDead'), false);
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
+  });
+
+  it('a healthy character is left alone', () => {
+    mp.get = (id, prop) => (prop === 'isDead' ? false : original.get(id, prop));
+    characterState.set(VICTIM_CHARACTER_ID, STATES.NORMAL, {});
+    assert.strictEqual(deathService.recoverOnLogin(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID), false);
+    assert.deepStrictEqual(sets, []);
+  });
+
+  it('/revive is staff only', () => {
+    const notes = [];
+    const send = commands.sendNotification;
+    commands.sendNotification = (id, m) => notes.push(m);
+    try {
+      const revive = deathService.commandDefs().find((c) => c.name.includes('/revive'));
+      revive.handler(RESCUER_ACTOR_ID || 0xff000099, `0x${VICTIM_ACTOR_ID.toString(16)}`);
+      assert.ok(notes.includes('Staff only.'));
+    } finally {
+      commands.sendNotification = send;
+    }
+  });
+});
