@@ -675,6 +675,29 @@ moduleRegistry.register({
   }
 });
 
+// Look-at keys (look-keys-service.js): E trade / I introduce / G group on
+// players; E open / G lock on doors (G only with parcel access). Groups show
+// members within ~100 m on the compass.
+const lookKeysService = require(path.join(gamemodeDir, 'look-keys-service'));
+moduleRegistry.register({
+  id: 'look-keys',
+  enabledBy: 'ENABLE_LOOK_KEYS',
+  phase: 'lab',
+  version: '1.0.0',
+  dependencies: [],
+  optionalDependencies: ['holdstones', 'trade'],
+  commands: lookKeysService.commandDefs(),
+  initialize: async () => {
+    lookKeysService.configure({
+      holdstones: holdstoneService,
+      trade: tradeService,
+      isStaff: (actorId) => { try { return Boolean(require(path.join(gamemodeDir, 'admin-service')).getRole(actorId)); } catch { return false; } }
+    });
+    lookKeysService.initialize();
+  },
+  shutdown: async () => { lookKeysService.shutdown(); }
+});
+
 // Skills, attributes and soul level (migration-v36-skills-progression.sql).
 // Tiers Novice 1-19 … Master 80-99, Legendary 100 staff-only; F3 menu;
 // re-applies perks, skill levels and mirrored mod perks/spells (Mundus,

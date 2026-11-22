@@ -105,6 +105,10 @@ const SNIPPET_DA_FONTE = `
 
 `;
 
+function _lookKeysActive() {
+  try { return require('../look-keys-service').isActive(); } catch (_) { return false; }
+}
+
 let _interactionService = null;
 let _sendModal = null;
 let _initialized = false;
@@ -145,6 +149,8 @@ async function resolveExactTarget(actorId, rawTargetId, options = {}) {
   const targetType = commands.getCharacterData(targetId)
     ? TARGET_TYPES.PLAYER
     : TARGET_TYPES.OBJECT;
+  // Players get E/I/G from look-keys-service.js while it runs: no second prompt.
+  if (targetType === TARGET_TYPES.PLAYER && _lookKeysActive()) return null;
   const method = options.consumeRateLimit ? 'query' : 'peek';
   const result = await _interactionService[method](actorId, { targetType, targetId });
   const actions = _actions(result);
@@ -217,6 +223,9 @@ function handleNativeActivation(targetId, casterId) {
 
   const knownPlayer = Boolean(commands.getCharacterData(parsedTarget));
   if (!knownPlayer && !physicalAnchorRegistry.has(parsedTarget)) return undefined;
+  // E on a player is Trade (look-keys-service.js): block the native
+  // activation, open nothing here.
+  if (knownPlayer && _lookKeysActive()) return false;
 
   handleClientEvent(parsedCaster, { kind: 'inspect', targetFormId: parsedTarget }).catch(err => {
     console.error('[interaction-prompt] ativacao nativa falhou:', err.message);

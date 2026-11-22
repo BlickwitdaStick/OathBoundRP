@@ -410,12 +410,16 @@
        visual (embaixo); o excesso é cortado no topo (linhas mais antigas) por
        overflow:hidden. Substitui o antigo toast de linha única, que apagava a
        mensagem anterior antes de dar tempo de ler quando 2+ pessoas falavam. */
+    /* Bottom left, above the health/magicka/stamina bars (TrueHUD Nordic-ish
+       puts the player's stats in the bottom-left corner). --chat-bottom moves
+       the whole chat up or down if a HUD sits differently. */
+    :root { --chat-bottom: 190px; }
     .chat-log {
       position: fixed;
       left: 24px;
-      bottom: 34px;
-      width: min(480px, calc(100vw - 48px));
-      max-height: 34vh;
+      bottom: calc(var(--chat-bottom) + 10px);
+      width: min(520px, calc(100vw - 48px));
+      max-height: 40vh;
       display: flex;
       flex-direction: column-reverse;
       gap: 4px;
@@ -427,9 +431,10 @@
       padding: 6px 12px;
       border-radius: 7px;
       border: 1px solid rgba(187,161,107,0.4);
-      background: rgba(10,10,13,0.88);
-      color: #f5f1e8;
-      font-size: 13px;
+      background: rgba(10,10,13,0.94);
+      color: #fbf8f1;
+      font-size: 15px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.9);
       line-height: 1.4;
       opacity: 1;
       transition: opacity 1.1s ease;
@@ -443,8 +448,8 @@
     .chat-input-wrap {
       position: fixed;
       left: 24px;
-      bottom: 24px;
-      width: min(480px, calc(100vw - 48px));
+      bottom: var(--chat-bottom);
+      width: min(520px, calc(100vw - 48px));
       display: none;
       z-index: 270;
     }
@@ -462,7 +467,7 @@
       box-shadow: 0 0 0 3px rgba(217, 183, 110, 0.15);
     }
     .chat-input::placeholder { color: rgba(245, 241, 232, 0.45); }
-    body.chat-typing .chat-log { bottom: 70px; }
+    body.chat-typing .chat-log { bottom: calc(var(--chat-bottom) + 50px); }
     body.chat-typing .chat-line.fade { opacity: 1; }
 
     @media (max-width: 720px) {
@@ -537,6 +542,85 @@
     }
     #oathbound-auth-widgets .oa-button-primary:hover { background: #e8c886; }
     #oathbound-auth-widgets .oa-margin { margin-top: 8px; }
+
+    /* Look-at keys (gamemode/look-keys-service.js): E/I/G next to the crosshair. */
+    .look-keys {
+      position: fixed;
+      left: calc(50% + 34px);
+      top: calc(50% + 18px);
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      pointer-events: none;
+      z-index: 240;
+      font-family: inherit;
+    }
+    .look-keys.show { display: flex; }
+    .look-key {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: #f3ead6;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.8);
+    }
+    .look-key b {
+      min-width: 24px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(217,183,110,0.95);
+      border-radius: 4px;
+      background: rgba(12,10,8,0.82);
+      color: #e8c77e;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 0 8px rgba(217,183,110,0.25);
+    }
+    .look-key.muted { opacity: 0.55; }
+
+    /* Group members on the compass: gold diamonds (Nordic UI style) over the
+       game's compass at the top centre. --compass-half-width is the screen
+       distance from the centre that 90 degrees takes; tune it to the HUD. */
+    :root { --compass-top: 34px; --compass-half-width: 16vw; }
+    .group-compass {
+      position: fixed;
+      top: var(--compass-top);
+      left: 50%;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      z-index: 235;
+    }
+    .group-marker {
+      position: absolute;
+      top: 0;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: left 0.1s linear, opacity 0.2s;
+    }
+    .group-marker i {
+      width: 11px;
+      height: 11px;
+      transform: rotate(45deg);
+      background: linear-gradient(135deg, #f7e3a6 0%, #d9b76e 45%, #8a6a2c 100%);
+      border: 1px solid #fff1c4;
+      box-shadow: 0 0 6px rgba(240,200,110,0.85), 0 0 2px rgba(0,0,0,0.9);
+    }
+    .group-marker span {
+      margin-top: 7px;
+      font-size: 11px;
+      color: #f0dca4;
+      white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.95);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .group-marker.center span { opacity: 1; }
   </style>
 </head>
 <body>
@@ -612,6 +696,8 @@
   </div>
 </div>
 <div id="chat-log" class="chat-log" aria-live="polite"></div>
+<div id="look-keys" class="look-keys"></div>
+<div id="group-compass" class="group-compass"></div>
 <!-- Chat input: opened by the "Open chat" key (Enter by default, see core/player-shortcuts-service.js). -->
 <form id="chat-input-wrap" class="chat-input-wrap" autocomplete="off" aria-hidden="true">
   <input id="chat-input" class="chat-input" type="text" maxlength="400"
@@ -997,8 +1083,10 @@
   // e a terceira virou a interação `identity.introduce`. Sem chamador, a função
   // era uma segunda porta de entrada para o chat esperando alguém usá-la.
 
-  const CHAT_LOG_MAX_LINES = 40;
-  const CHAT_LOG_FADE_AFTER_MS = 18000;
+  // Lines stay on screen for an hour (owner's request); the oldest beyond
+  // CHAT_LOG_MAX_LINES are dropped and the box clips at its max height.
+  const CHAT_LOG_MAX_LINES = 60;
+  const CHAT_LOG_FADE_AFTER_MS = 60 * 60 * 1000;
   const CHAT_LOG_REMOVE_AFTER_MS = 1200;
 
   function showInteractionToast(message) {
@@ -2225,5 +2313,38 @@
 <script src="holdstone-panel.js"></script>
 <script src="skills-panel.js"></script>
 <script src="interaction-prompt.js"></script>
+
+<script>
+  // Look-at keys and the group compass (gamemode/look-keys-service.js).
+  (function () {
+    function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+    window.handleLookKeys = function (p) {
+      var box = document.getElementById('look-keys');
+      if (!box) return;
+      var keys = (p && Array.isArray(p.keys)) ? p.keys : [];
+      if (!keys.length) { box.classList.remove('show'); box.innerHTML = ''; return; }
+      box.innerHTML = keys.map(function (k) {
+        var muted = k.label === 'In your group' ? ' muted' : '';
+        return '<div class="look-key' + muted + '"><b>' + esc(k.key) + '</b>' + esc(k.label) + '</div>';
+      }).join('');
+      box.classList.add('show');
+    };
+    window.handleGroupCompass = function (list) {
+      var root = document.getElementById('group-compass');
+      if (!root) return;
+      var half = root.parentElement ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--compass-half-width')) : 16;
+      var px = (isFinite(half) ? half : 16) * window.innerWidth / 100;
+      var html = '';
+      (Array.isArray(list) ? list : []).forEach(function (m) {
+        var rel = Number(m.rel);
+        if (!isFinite(rel) || Math.abs(rel) > 90) return;
+        var left = (rel / 90) * px;
+        var center = Math.abs(rel) < 12 ? ' center' : '';
+        html += '<div class="group-marker' + center + '" style="left:' + left.toFixed(1) + 'px"><i></i><span>' + esc(m.name) + ' · ' + Math.round((m.dist || 0) / 70) + ' m</span></div>';
+      });
+      root.innerHTML = html;
+    };
+  })();
+</script>
 </body>
 </html>

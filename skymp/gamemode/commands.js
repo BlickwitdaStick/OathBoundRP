@@ -695,5 +695,8 @@ module.exports = {
   broadcastProximityMessage,
   sendNotification,
   sendChoice,
-  onCharacterRemoved
+  onCharacterRemoved,
+  // look-keys-service.js: I = introduce, names on the group compass.
+  handleIntroduceCommand,
+  getDisplayNameForObserver
 };
