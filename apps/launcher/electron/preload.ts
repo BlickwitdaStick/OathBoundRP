@@ -18,6 +18,12 @@ const api = {
   ensureSkyrimIni: (opts?: any) => ipcRenderer.invoke('ensure-skyrim-ini', opts),
   ensureSkympUi: (folderPath: string) => ipcRenderer.invoke('ensure-skymp-ui', folderPath),
   ensureVoiceHelper: (folderPath: string) => ipcRenderer.invoke('ensure-voice-helper', folderPath),
+  ensureSkse: (folderPath: string) => ipcRenderer.invoke('ensure-skse', folderPath),
+  onSkseProgress: (cb: (p: { done: number; total: number }) => void) => {
+    const h = (_e: unknown, p: { done: number; total: number }) => cb(p);
+    ipcRenderer.on('skse-progress', h);
+    return () => { ipcRenderer.removeListener('skse-progress', h); };
+  },
   getDisplaySettings: () => ipcRenderer.invoke('get-display-settings'),
   discordLogin: () => ipcRenderer.invoke('discord-login'),
   discordLogout: () => ipcRenderer.invoke('discord-logout'),

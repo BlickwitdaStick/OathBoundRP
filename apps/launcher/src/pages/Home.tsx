@@ -239,7 +239,18 @@ export function Home({ auth, setAuth }: HomeProps) {
         return;
       }
 
-      setStatus('Checking interface do jogo...');
+      setStatus('Checking SKSE...');
+      const offSkse = window.electronAPI.onSkseProgress((p) => {
+        setStatus(`Installing SKSE from skse.silverlock.org: ${p.total ? Math.floor((100 * p.done) / p.total) : 0}%`);
+      });
+      const skse = await window.electronAPI.ensureSkse(gamePath);
+      offSkse();
+      if (!skse.ok) {
+        setStatus(skse.error || 'Could not set up SKSE.');
+        return;
+      }
+
+      setStatus('Checking the game interface...');
       const ui = await window.electronAPI.ensureSkympUi(gamePath);
       if (!ui.ok) {
         setStatus(`Failed to install the interface: ${ui.error || 'bundle unavailable'}`);

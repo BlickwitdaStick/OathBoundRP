@@ -19,6 +19,7 @@ import {
   validateManifest
 } from './server-mods.mjs';
 import { checkLauncherUpdate, downloadInstaller } from './launcher-update.mjs';
+import { checkSkse, installSkse, SKSE } from './skse-install.mjs';
 import {
   NEXUS_API_KEY_PAGE,
   createNexusApi,
@@ -413,6 +414,30 @@ ipcMain.handle('select-game-path', async () => {
   });
   if (result.canceled) return null;
   return result.filePaths[0];
+});
+
+// SKSE 2.2.6 from its official site (skse-install.mjs): installed on PLAY when
+// missing, after checking the Skyrim build is the one SKSE supports.
+ipcMain.handle('ensure-skse', async (event, gamePath) => {
+  if (!gamePath) return { ok: false, error: 'Invalid game path.' };
+  try {
+    const state = await checkSkse(gamePath);
+    if (state.skyrimVersionOk === false) {
+      return { ok: false, error: 'Your Skyrim is not version 1.6.1170, the version this server uses with SKSE ' + SKSE.version + '. Downgrade Skyrim to 1.6.1170 (Steam depots) and try again.' };
+    }
+    if (state.installed) return { ok: true, installed: [] };
+    const result = await installSkse({
+      gamePath,
+      sevenZipPath: sevenZipPath(),
+      workDir: path.join(app.getPath('temp'), 'oathbound-skse'),
+      onProgress: (p: { done: number; total: number }) => {
+        try { event.sender.send('skse-progress', p); } catch { /* window closed */ }
+      }
+    });
+    return { ok: true, installed: result.installed };
+  } catch (e: any) {
+    return { ok: false, error: 'Could not install SKSE: ' + (e?.message || String(e)) };
+  }
 });
 
 ipcMain.handle('check-game-path', async (_event, folderPath) => {
