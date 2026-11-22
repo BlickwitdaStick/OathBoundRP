@@ -219,9 +219,12 @@ moduleRegistry.register({
   commands: npcSpawnFilter.commandDefs(),
   initialize: async () => {
     npcSpawnFilter.start();
+    // Dead creatures/NPCs stay dead for NPC_RESPAWN_HOURS (default 6 h).
+    require(path.join(gamemodeDir, 'core', 'npc-respawn-delay')).start();
   },
   shutdown: async () => {
     npcSpawnFilter.stop();
+    require(path.join(gamemodeDir, 'core', 'npc-respawn-delay')).stop();
   }
 });
 

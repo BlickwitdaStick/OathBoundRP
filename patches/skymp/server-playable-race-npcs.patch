@@ -1,0 +1,29 @@
+diff --git a/skymp5-server/cpp/addon/ScampServer.cpp b/skymp5-server/cpp/addon/ScampServer.cpp
+index 111325e1..5dfd8b28 100644
+--- a/skymp5-server/cpp/addon/ScampServer.cpp
++++ b/skymp5-server/cpp/addon/ScampServer.cpp
+@@ -246,6 +246,24 @@ ScampServer::ScampServer(const Napi::CallbackInfo& info)
+         "Disabling NPCs by default");
+     }
+ 
++    // OATHBOUND: stock SkyMP never loads NPCs of the 10 playable races, so
++    // bandits, necromancers and other human enemies never spawn. With
++    // "npcAllowPlayableRaces": true those races are taken off the ban list
++    // (vampire variants, children and mannequins stay banned). The gamemode
++    // decides who stays enabled (npc-spawn-filter.js keeps hostile factions).
++    if (serverSettings.find("npcAllowPlayableRaces") != serverSettings.end() &&
++        serverSettings.at("npcAllowPlayableRaces").is_boolean() &&
++        serverSettings.at("npcAllowPlayableRaces").get<bool>()) {
++      auto& banned = partOne->worldState.bannedEspmCharacterRaceIds;
++      banned.erase(std::remove_if(banned.begin(), banned.end(),
++                                  [](uint32_t raceId) {
++                                    return raceId >= 0x00013740 &&
++                                      raceId <= 0x00013749;
++                                  }),
++                   banned.end());
++      spdlog::info("NPCs of playable races are allowed (npcAllowPlayableRaces)");
++    }
++
+     if (serverSettings.find("npcSettings") != serverSettings.end()) {
+       if (serverSettings.at("npcSettings").is_object()) {
+         std::unordered_map<std::string, WorldState::NpcSettingsEntry>

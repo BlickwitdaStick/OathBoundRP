@@ -104,6 +104,23 @@
       "upstream_pr": null,
       "added": "2026-11-21",
       "notes": "Applied after client-empty-public-keys.patch by scripts/skymp-build/Build-PatchedSkyMP.ps1."
+    },
+    {
+      "id": "server-playable-race-npcs",
+      "target": "skymp",
+      "file": "skymp/server-playable-race-npcs.patch",
+      "upstream_commit": "d85f18d808f877401c4e20484d2c2f6f73cf9caa",
+      "reason": "Stock SkyMP never loads NPCs of the 10 playable races (WorldState::bannedEspmCharacterRaceIds), so bandits, Forsworn, necromancers and every other human or elf enemy never spawn; only creatures do.",
+      "files_touched": [
+        "skymp5-server/cpp/addon/ScampServer.cpp"
+      ],
+      "impact": "New server-settings option \"npcAllowPlayableRaces\" (default off). When true, races 0x13740-0x13749 (Argonian..WoodElf) leave the ban list; vampire variants, children and mannequins stay banned. Unique/essential NPCs and crime-faction members are still skipped by SkyMP, and npc-spawn-filter.js disables every remaining non-hostile NPC.",
+      "test": "Server boot with the option on, then a stand-in actor next to Embershard Mine bandits.",
+      "loss_condition": "A stock scam_native.node ignores the option and the ban returns.",
+      "removal_strategy": "OATHBOUND-specific; keep while human enemies are wanted.",
+      "upstream_pr": null,
+      "added": "2026-11-21",
+      "notes": "Applied after client-oathbound-calendar.patch by scripts/skymp-build/Build-PatchedSkyMP.ps1 (server-only)."
     }
   ]
 }
