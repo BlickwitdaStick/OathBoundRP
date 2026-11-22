@@ -23,9 +23,14 @@ function parseEnv(text) {
 
 function isPlaceholder(value) {
   const normalized = String(value || '').trim().toLowerCase();
+  // `seu_` / `seu-usuario` catch the Portuguese placeholders older .env
+  // files still carry; `your_` / `your-` / `replace-with` catch the English ones.
   return !normalized
     || normalized.includes('seu_')
     || normalized.includes('seu-usuario')
+    || normalized.includes('your_')
+    || normalized.includes('your-')
+    || normalized.includes('replace-with')
     || normalized.includes('changeme')
     || normalized.includes('change_me')
     || normalized.includes('dummy')
@@ -36,15 +41,15 @@ function auditProductionConfig(configs, { skipDb = false } = {}) {
   const issues = [];
   const add = (service, key, reason) => issues.push({ service, key, reason });
   const required = (service, env, key) => {
-    if (isPlaceholder(env[key])) add(service, key, 'ausente ou placeholder');
+    if (isPlaceholder(env[key])) add(service, key, 'missing or placeholder');
   };
   const secret = (service, env, key) => {
     required(service, env, key);
-    if (env[key] && env[key].length < 32) add(service, key, 'precisa ter pelo menos 32 caracteres');
+    if (env[key] && env[key].length < 32) add(service, key, 'must be at least 32 characters long');
   };
   const https = (service, env, key) => {
     required(service, env, key);
-    if (env[key] && !String(env[key]).startsWith('https://')) add(service, key, 'precisa usar HTTPS em produção');
+    if (env[key] && !String(env[key]).startsWith('https://')) add(service, key, 'must use HTTPS in production');
   };
 
   const web = configs.web || {};
@@ -59,8 +64,8 @@ function auditProductionConfig(configs, { skipDb = false } = {}) {
   required('web', web, 'DISCORD_CLIENT_SECRET');
   https('web', web, 'PANEL_PUBLIC_URL');
   https('web', web, 'DISCORD_CALLBACK_URL');
-  if (web.NODE_ENV !== 'production') add('web', 'NODE_ENV', 'precisa ser production');
-  if (web.TRUST_PROXY !== 'true') add('web', 'TRUST_PROXY', 'precisa ser true atrás do proxy público');
+  if (web.NODE_ENV !== 'production') add('web', 'NODE_ENV', 'must be production');
+  if (web.TRUST_PROXY !== 'true') add('web', 'TRUST_PROXY', 'must be true behind the public proxy');
 
   secret('game-api', gameApi, 'INTERNAL_API_SECRET');
   required('game-api', gameApi, 'GAME_API_BIND_HOST');
@@ -86,7 +91,7 @@ function auditProductionConfig(configs, { skipDb = false } = {}) {
   const internalSecrets = [web.INTERNAL_API_SECRET, gameApi.INTERNAL_API_SECRET, bot.INTERNAL_API_SECRET]
     .filter(value => !isPlaceholder(value));
   if (internalSecrets.length === 3 && new Set(internalSecrets).size !== 1) {
-    add('cross-service', 'INTERNAL_API_SECRET', 'precisa ser o mesmo no painel, Game API e bot');
+    add('cross-service', 'INTERNAL_API_SECRET', 'must be the same in the panel, Game API and bot');
   }
 
   return issues;
@@ -120,7 +125,7 @@ function main() {
   for (const [service, location] of Object.entries(locations)) {
     configs[service] = readEnvFile(location);
     if (!configs[service]) {
-      console.error(`[FALHA] ${service}: arquivo de ambiente ausente (${location})`);
+      console.error(`[FAIL] ${service}: environment file missing (${location})`);
       missing = true;
       configs[service] = {};
     }
@@ -128,13 +133,13 @@ function main() {
 
   const issues = auditProductionConfig(configs, { skipDb: args.skipDb });
   for (const issue of issues) {
-    console.error(`[FALHA] ${issue.service}.${issue.key}: ${issue.reason}`);
+    console.error(`[FAIL] ${issue.service}.${issue.key}: ${issue.reason}`);
   }
   if (missing || issues.length > 0) {
     process.exitCode = 1;
     return;
   }
-  console.log(`[OK] configuracao de producao aprovada${args.skipDb ? ' (campos de banco ignorados)' : ''}.`);
+  console.log(`[OK] production configuration approved${args.skipDb ? ' (database fields skipped)' : ''}.`);
 }
 
 if (require.main === module) main();

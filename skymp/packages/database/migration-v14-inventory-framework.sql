@@ -1,46 +1,46 @@
 -- =============================================================================
--- Migration v14 - Inventory Framework: dono genérico no ledger
+-- Migration v14 - Inventory Framework: generic owner in the ledger
 --
--- Aplicar depois de migration-v13-market-stall-idempotency.sql.
+-- Apply after migration-v13-market-stall-idempotency.sql.
 --
--- Motivação: docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md §2 e §8.
+-- Motivation: docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md §2 and §8.
 --
--- O ledger `inventory_transactions` só sabia falar de personagem
--- (`character_id INT NOT NULL` com FK). Item que ia para container, barraca ou
--- receita gravava só a perna do personagem — a outra ponta não tinha como ser
--- nomeada, e a soma dos deltas do servidor não batia com nada.
+-- The `inventory_transactions` ledger could only talk about characters
+-- (`character_id INT NOT NULL` with FK). An item that went into a container, stall or
+-- recipe only recorded the character leg — the other end had no way to be
+-- named, and the sum of the server's deltas did not match anything.
 --
--- Esta migração NÃO move dado de inventário. `character_inventory` e
--- `container_inventory` continuam onde estão, com a mesma forma. O que muda é
--- (a) o ledger passa a nomear os dois lados de cada movimento e (b) as duas
--- tabelas de estoque ganham a chave única que declara o invariante que o
--- código já assumia.
+-- This migration does NOT move inventory data. `character_inventory` and
+-- `container_inventory` stay where they are, with the same shape. What changes is
+-- (a) the ledger now names both sides of every movement and (b) the two
+-- stock tables get the unique key that declares the invariant the
+-- code already assumed.
 --
--- ⚠️ `MODIFY COLUMN` não é reconhecido por scripts/check-schema-drift.js — ele
--- entende CREATE TABLE, ADD COLUMN, ADD INDEX e CREATE INDEX. A mudança de
--- nulabilidade de `character_id` abaixo NÃO aparece como drift se alguém
--- esquecer de aplicar esta migração; o sintoma será um INSERT de ledger com
--- `character_id = NULL` falhando em runtime. Conferir à mão:
+-- ⚠️ `MODIFY COLUMN` is not recognized by scripts/check-schema-drift.js — it
+-- understands CREATE TABLE, ADD COLUMN, ADD INDEX and CREATE INDEX. The
+-- nullability change of `character_id` below does NOT show up as drift if someone
+-- forgets to apply this migration; the symptom will be a ledger INSERT with
+-- `character_id = NULL` failing at runtime. Check by hand:
 --     SHOW COLUMNS FROM inventory_transactions LIKE 'character_id';
 -- =============================================================================
 USE `skymp_rp`;
 
 -- -----------------------------------------------------------------------------
--- 1. Consolida duplicatas antes de declarar a chave única
+-- 1. Consolidate duplicates before declaring the unique key
 --
--- ⚠️ Só `container_inventory`. `character_inventory` **já tem** a chave única
--- `uq_char_inventory_item` (`character_id`, `base_id`) desde a
--- migration-v7-indexes.sql, com o comentário certo pelo motivo certo: ela
--- "protege contra duas linhas para o mesmo item no mesmo personagem, que e o
--- estado que o `FOR UPDATE` do transaction-service assume nao existir".
+-- ⚠️ Only `container_inventory`. `character_inventory` **already has** the unique key
+-- `uq_char_inventory_item` (`character_id`, `base_id`) since
+-- migration-v7-indexes.sql, with the right comment for the right reason: it
+-- "guards against two rows for the same item on the same character, which is
+-- the state transaction-service's `FOR UPDATE` assumes does not exist".
 --
--- O baú ficou de fora daquela rodada porque `container_inventory` não tinha
--- caminho de escrita ativo — e continua não tendo, mas passou a ter API.
+-- The chest was left out of that round because `container_inventory` had no
+-- active write path — and it still has none, but it now has an API.
 --
--- Se o invariante sempre valeu, este bloco não toca em nada. Se alguma linha
--- duplicada existir (import manual, escrita por fora do transaction-service), a
--- consolidação SOMA as contagens em vez de escolher uma — perder estoque de
--- jogador numa migração é pior que a duplicata que estamos consertando.
+-- If the invariant always held, this block touches nothing. If any duplicate
+-- row exists (manual import, a write outside transaction-service), the
+-- consolidation SUMS the counts instead of picking one — losing a player's
+-- stock in a migration is worse than the duplicate we are fixing.
 -- -----------------------------------------------------------------------------
 CREATE TEMPORARY TABLE `_coi_dupes` AS
   SELECT MIN(`id`) AS `keep_id`, `container_id`, `base_id`, SUM(`count`) AS `total`
@@ -61,60 +61,60 @@ DELETE coi FROM `container_inventory` coi
 DROP TEMPORARY TABLE `_coi_dupes`;
 
 -- -----------------------------------------------------------------------------
--- 2. O invariante vira regra do banco — para o baú também
+-- 2. The invariant becomes a database rule — for the chest too
 --
--- Auditoria §8: com a UNIQUE, uma segunda linha para o mesmo (dono, item) é um
--- erro de INSERT em vez de estoque invisível — `applyStackDelta` leria
--- `rows[0]` e ignoraria o resto.
+-- Audit §8: with the UNIQUE, a second row for the same (owner, item) is an
+-- INSERT error instead of invisible stock — `applyStackDelta` would read
+-- `rows[0]` and ignore the rest.
 -- -----------------------------------------------------------------------------
 ALTER TABLE `container_inventory`
   ADD UNIQUE INDEX IF NOT EXISTS `uq_container_inventory_owner_item` (`container_id`, `base_id`);
 
 -- -----------------------------------------------------------------------------
--- 3. O ledger passa a nomear os dois lados
+-- 3. The ledger now names both sides
 --
--- `owner_type` / `owner_ref` : de quem é esta perna do movimento.
--- `counterparty_*`           : para onde foi (ou de onde veio) a outra perna.
--- `transfer_id`              : as duas pernas de uma transferência compartilham
---                              este UUID. É o que permite reconstruir "este item
---                              saiu de X e entrou em Y" com uma query só.
+-- `owner_type` / `owner_ref` : who owns this leg of the movement.
+-- `counterparty_*`           : where the other leg went to (or came from).
+-- `transfer_id`              : both legs of a transfer share
+--                              this UUID. That is what lets you rebuild "this item
+--                              left X and entered Y" with a single query.
 --
--- `character_id` continua preenchido quando o dono é personagem — nenhuma query
--- existente muda de comportamento, e `idx_inv_tx_char_date` continua servindo o
--- extrato do jogador. Ele fica NULL quando o dono é container, barraca ou o
--- sistema, que é a razão de a coluna deixar de ser NOT NULL.
+-- `character_id` stays filled in when the owner is a character — no existing
+-- query changes behavior, and `idx_inv_tx_char_date` keeps serving the
+-- player's statement. It is NULL when the owner is a container, stall or the
+-- system, which is why the column stops being NOT NULL.
 -- -----------------------------------------------------------------------------
 ALTER TABLE `inventory_transactions`
   MODIFY COLUMN `character_id` INT NULL
-    COMMENT 'Preenchido quando owner_type = character; NULL para os demais donos';
+    COMMENT 'Set when owner_type = character; NULL for the other owners';
 
 ALTER TABLE `inventory_transactions`
   ADD COLUMN IF NOT EXISTS `owner_type` VARCHAR(16) NOT NULL DEFAULT 'character'
     COMMENT 'character, container, property, faction, corpse, market, system'
     AFTER `character_id`,
   ADD COLUMN IF NOT EXISTS `owner_ref` VARCHAR(64) NOT NULL DEFAULT '0'
-    COMMENT 'Identificador do dono dentro do tipo (ex: characters.id, containers.id)'
+    COMMENT 'Owner identifier within the type (e.g. characters.id, containers.id)'
     AFTER `owner_type`,
   ADD COLUMN IF NOT EXISTS `counterparty_type` VARCHAR(16) DEFAULT NULL
-    COMMENT 'Tipo do dono do outro lado da transferencia'
+    COMMENT 'Owner type on the other side of the transfer'
     AFTER `owner_ref`,
   ADD COLUMN IF NOT EXISTS `counterparty_ref` VARCHAR(64) DEFAULT NULL
-    COMMENT 'Identificador do dono do outro lado'
+    COMMENT 'Owner identifier on the other side'
     AFTER `counterparty_type`,
   ADD COLUMN IF NOT EXISTS `transfer_id` CHAR(36) DEFAULT NULL
-    COMMENT 'UUID compartilhado pelas duas pernas da mesma transferencia'
+    COMMENT 'UUID shared by both legs of the same transfer'
     AFTER `counterparty_ref`,
   ADD INDEX IF NOT EXISTS `idx_inv_tx_owner_date` (`owner_type`, `owner_ref`, `created_at`),
   ADD INDEX IF NOT EXISTS `idx_inv_tx_transfer` (`transfer_id`);
 
 -- -----------------------------------------------------------------------------
--- 4. Backfill dos movimentos já gravados
+-- 4. Backfill of already-recorded movements
 --
--- Tudo que existe hoje foi gravado por um caminho que só sabia falar de
--- personagem, então `owner_type = 'character'` e `owner_ref = character_id` é a
--- leitura correta do passado — não uma suposição. `counterparty_*` fica NULL de
--- propósito: aquela informação nunca foi registrada, e inventá-la agora seria
--- pior que a ausência.
+-- Everything that exists today was recorded by a path that only knew how to talk about
+-- characters, so `owner_type = 'character'` and `owner_ref = character_id` is the
+-- correct reading of the past — not an assumption. `counterparty_*` stays NULL on
+-- purpose: that information was never recorded, and inventing it now would be
+-- worse than its absence.
 -- -----------------------------------------------------------------------------
 UPDATE `inventory_transactions`
    SET `owner_ref` = CAST(`character_id` AS CHAR)
@@ -123,5 +123,5 @@ UPDATE `inventory_transactions`
    AND `character_id` IS NOT NULL;
 
 -- =============================================================================
--- FIM DA MIGRATION v14
+-- END OF MIGRATION v14
 -- =============================================================================

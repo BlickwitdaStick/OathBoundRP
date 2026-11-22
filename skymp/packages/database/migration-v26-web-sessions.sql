@@ -1,10 +1,10 @@
 -- =============================================================================
--- Migration v26 - Sessoes persistentes do painel web
--- Aplicar apos migration-v25-launcher-sessions.sql.
+-- Migration v26 - Persistent web panel sessions
+-- Apply after migration-v25-launcher-sessions.sql.
 --
--- Substitui o MemoryStore do express-session. O cookie continua contendo so o
--- identificador opaco assinado; estado de autenticacao fica no MariaDB e
--- sobrevive a restart do painel ou troca de instancia.
+-- Replaces the express-session MemoryStore. The cookie still only contains the
+-- signed opaque identifier; authentication state lives in MariaDB and
+-- survives a panel restart or an instance switch.
 -- =============================================================================
 USE `skymp_rp`;
 

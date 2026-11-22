@@ -1,25 +1,25 @@
 -- =============================================================================
 -- Migration v2 — SkyMP Heavy RP
--- Aplicar SOMENTE em bancos de dados que já rodaram o schema.sql original.
--- Para ambientes novos, basta rodar schema.sql (já inclui estas alterações).
+-- Apply ONLY to databases that already ran the original schema.sql.
+-- For new environments, just run schema.sql (it already includes these changes).
 -- =============================================================================
 USE `skymp_rp`;
 
 -- -----------------------------------------------------------------------------
--- 1. SEGURANÇA: Remover tokens OAuth em texto simples
+-- 1. SECURITY: Remove plain-text OAuth tokens
 -- -----------------------------------------------------------------------------
--- Se as colunas existirem, remover. Usar a coluna last_login_at no lugar.
+-- If the columns exist, drop them. Use the last_login_at column instead.
 ALTER TABLE `discord_identities`
   DROP COLUMN IF EXISTS `access_token`,
   DROP COLUMN IF EXISTS `refresh_token`;
 
 ALTER TABLE `discord_identities`
   ADD COLUMN IF NOT EXISTS `last_login_at` TIMESTAMP NULL DEFAULT NULL
-    COMMENT 'Ultimo login via Discord OAuth'
+    COMMENT 'Last login via Discord OAuth'
     AFTER `avatar`;
 
 -- -----------------------------------------------------------------------------
--- 2. CORREÇÃO: Nomes dos holds do universo de Skyrim
+-- 2. FIX: Hold names from the Skyrim universe
 -- -----------------------------------------------------------------------------
 UPDATE `holds` SET `name` = 'Whiterun Hold'  WHERE `id` = 'whiterun'   AND `name` != 'Whiterun Hold';
 UPDATE `holds` SET `name` = 'Haafingar'      WHERE `id` = 'solitude'   AND `name` != 'Haafingar';
@@ -32,7 +32,7 @@ UPDATE `holds` SET `name` = 'The Pale'       WHERE `id` = 'dawnstar'   AND `name
 UPDATE `holds` SET `name` = 'Winterhold'     WHERE `id` = 'winterhold' AND `name` != 'Winterhold';
 
 -- -----------------------------------------------------------------------------
--- 3. STAFF × VIP: Novas tabelas de autoridade administrativa
+-- 3. STAFF × VIP: New administrative authority tables
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `staff_roles` (
   `id`                    INT AUTO_INCREMENT PRIMARY KEY,
@@ -53,9 +53,9 @@ CREATE TABLE IF NOT EXISTS `staff_permissions` (
   CONSTRAINT `fk_perm_role` FOREIGN KEY (`staff_role_id`) REFERENCES `staff_roles` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Migrar contas que usavam vip_level como indicador de staff para a nova tabela.
--- ATENÇÃO: Verificar manualmente antes de executar. vip_level >= 10 era o critério antigo.
--- Após a migração, zerar o vip_level dessas contas para 0 (sem VIP comercial).
+-- Migrate accounts that used vip_level as a staff indicator to the new table.
+-- WARNING: Check manually before running. vip_level >= 10 was the old criterion.
+-- After the migration, reset vip_level on those accounts to 0 (no commercial VIP).
 INSERT IGNORE INTO `staff_roles` (`account_id`, `role`, `notes`)
 SELECT `id`,
   CASE
@@ -67,13 +67,13 @@ SELECT `id`,
 FROM `accounts`
 WHERE `vip_level` >= 10;
 
--- Após confirmar a migração acima, redefinir vip_level para 0 nas contas de staff
--- (separar definitivamente VIP comercial de poder administrativo).
--- DESCOMENTAR após verificar que a migração de staff_roles foi bem-sucedida:
+-- After confirming the migration above, reset vip_level to 0 on staff accounts
+-- (permanently separating commercial VIP from administrative power).
+-- UNCOMMENT after verifying the staff_roles migration succeeded:
 -- UPDATE `accounts` SET `vip_level` = 0 WHERE `vip_level` >= 10;
 
 -- -----------------------------------------------------------------------------
--- 4. LEDGER: Tabelas de transações auditáveis
+-- 4. LEDGER: Auditable transaction tables
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `inventory_transactions` (
   `transaction_id`   CHAR(36)     NOT NULL PRIMARY KEY,
@@ -103,5 +103,5 @@ CREATE TABLE IF NOT EXISTS `gold_transactions` (
 ) ENGINE=InnoDB;
 
 -- =============================================================================
--- FIM DA MIGRATION v2
+-- END OF MIGRATION v2
 -- =============================================================================

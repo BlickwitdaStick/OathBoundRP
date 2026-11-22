@@ -5,15 +5,15 @@ const { describe, it } = require('node:test');
 const { parseArgs, probe, runSoak } = require('./run-service-soak');
 
 describe('run-service-soak', () => {
-  it('valida limites, protocolo e remove credenciais da URL', () => {
+  it('validates limits and protocol, and strips credentials from the URL', () => {
     const options = parseArgs(['--url', 'http://user:pass@localhost:3001/health', '--workers', '2']);
     assert.deepEqual(options.urls, ['http://localhost:3001/health']);
     assert.equal(options.workers, 2);
-    assert.throws(() => parseArgs(['--url', 'file:///tmp/x']), /Protocolo não permitido/);
-    assert.throws(() => parseArgs(['--url', 'http://localhost', '--workers', '0']), /entre 1 e 100/);
+    assert.throws(() => parseArgs(['--url', 'file:///tmp/x']), /Protocol not allowed/);
+    assert.throws(() => parseArgs(['--url', 'http://localhost', '--workers', '0']), /between 1 and 100/);
   });
 
-  it('agrega sucesso sem armazenar corpo, IP, token ou requestId', async () => {
+  it('aggregates success without storing body, IP, token or requestId', async () => {
     const stats = {
       url: 'http://localhost/health', requests: 0, successes: 0, failures: 0, timeouts: 0,
       statusClasses: {}, errors: {}, latencyBuckets: { 25: 0, 50: 0, 100: 0, 250: 0, 500: 0, 1000: 0, 2500: 0, 5000: 0, Infinity: 0 },
@@ -29,7 +29,7 @@ describe('run-service-soak', () => {
     assert.ok(!JSON.stringify(stats).includes('x-request-id'));
   });
 
-  it('falha o gate quando a taxa de erro excede o limite', async () => {
+  it('fails the gate when the error rate exceeds the limit', async () => {
     let clock = 0;
     const report = await runSoak({
       urls: ['http://localhost/health'], durationSeconds: 1, workers: 1,

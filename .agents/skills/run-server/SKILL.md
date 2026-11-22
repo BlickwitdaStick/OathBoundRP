@@ -1,32 +1,32 @@
 ---
 name: run_skymp_server
-description: Habilidade para inicializar e testar o servidor local do SkyMP de forma segura e autônoma, analisando logs e verificando as portas de conexão.
+description: Skill for starting and testing the local SkyMP server safely and autonomously, analyzing logs and checking the connection ports.
 ---
 
-# Instruções de Inicialização e Teste do Servidor SkyMP
+# SkyMP Server Startup and Test Instructions
 
-Sempre que o usuário pedir para "testar o servidor", "iniciar o servidor" ou "verificar se o servidor está rodando", siga os passos abaixo.
+Whenever the user asks to "test the server", "start the server" or "check whether the server is running", follow the steps below.
 
-Isto assume que o setup do zero já foi feito (dependências instaladas, banco migrado, `.env` preenchidos, assets do Skyrim em `skymp/data/`, artefato do servidor instalado em `skymp/server/`). Se qualquer um desses ainda não existir — por exemplo `skymp/server/dist_back/skymp5-server.js` não existe, ou `skymp/data/*.esm` está ausente — não tente contornar: siga `docs/technical/FASE_0_SETUP_DO_ZERO.md` do começo, incluindo a seção de problemas conhecidos.
+This assumes the from-scratch setup is already done (dependencies installed, database migrated, `.env` files filled in, Skyrim assets in `skymp/data/`, server artifact installed in `skymp/server/`). If any of these does not exist yet — for example `skymp/server/dist_back/skymp5-server.js` does not exist, or `skymp/data/*.esm` is missing — do not try to work around it: follow `docs/technical/FASE_0_SETUP_DO_ZERO.md` from the beginning, including the known-issues section.
 
-1. **Garantir a Inicialização das Configurações Locais:**
-   Se os arquivos locais não existirem em `skymp/config/`, execute no terminal:
+1. **Make sure the local configuration exists:**
+   If the local files do not exist in `skymp/config/`, run in the terminal:
    `.\scripts\phase0\Initialize-LocalConfig.ps1`
 
-2. **Iniciar o Servidor em Background:**
-   Execute o script de start usando a ferramenta de linha de comando (`run_command`), seja enviando-o para o background ou rodando por X segundos (para não bloquear sua execução contínua):
+2. **Start the server in the background:**
+   Run the start script with the command-line tool (`run_command`), either sending it to the background or running it for X seconds (so it does not block your ongoing execution):
    `.\scripts\phase0\Start-Phase0Server.ps1`
-   Se precisar apenas validar o boot (teste rápido de vida), rode:
+   If you only need to validate the boot (quick liveness test), run:
    `.\scripts\phase0\Start-Phase0Server.ps1 -Seconds 15`
 
-3. **Analisar Logs de Saída:**
-   Verifique no output do terminal as seguintes strings de sucesso:
+3. **Analyze the output logs:**
+   Look in the terminal output for these success strings:
    - "Using data dir"
    - "[phase0] SkyMP Heavy RP gamemode loaded"
    - "Server resources folder is listening on 3000"
 
-4. **Verificar Conexão:**
-   Certifique-se de que a porta principal UDP `7777` está listada nos outputs do terminal.
+4. **Check the connection:**
+   Make sure the main UDP port `7777` is listed in the terminal output.
 
-5. **Relatório:**
-   Ao final, sempre resuma para o usuário de forma concisa se o servidor subiu com sucesso, quais portas abriu e se ocorreu algum erro crítico no output.
+5. **Report:**
+   At the end, always summarize for the user concisely whether the server came up successfully, which ports it opened and whether any critical error appeared in the output.

@@ -7,11 +7,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Ancorado em $PSScriptRoot, nao no diretorio de trabalho: rodar este script de
-# dentro de scripts/phase0 (ou via "Run with PowerShell" no Explorer, que abre
-# em outro cwd) fazia os caminhos relativos abaixo apontarem pro lugar errado
-# e o script falhar com "Missing local settings" mesmo com o arquivo existindo.
-# Descoberto em 21/08/2026 ajudando um fork externo a subir o servidor.
+# Anchored on $PSScriptRoot, not the working directory: running this script from
+# inside scripts/phase0 (or via "Run with PowerShell" in Explorer, which opens
+# in another cwd) made the relative paths below point to the wrong place
+# and the script fail with "Missing local settings" even though the file existed.
+# Found on 2026-08-21 while helping an external fork bring the server up.
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 if (-not [System.IO.Path]::IsPathRooted($ArtifactPath)) {

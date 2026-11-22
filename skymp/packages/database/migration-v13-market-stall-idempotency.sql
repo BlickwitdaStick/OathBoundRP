@@ -1,4 +1,4 @@
--- v13 - Idempotencia de compra em barracas de jogadores
+-- v13 - Purchase idempotency for player market stalls
 USE `skymp_rp`;
 
 ALTER TABLE `market_stall_sales`

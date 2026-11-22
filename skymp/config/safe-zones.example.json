@@ -1,32 +1,32 @@
 {
   "enabled": false,
-  "notes": "Copie para safe-zones.json. Enquanto 'zones' estiver vazia ou 'enabled' for false, NENHUMA zona existe e nada muda. Ver core/safe-zones.js e docs/CONSTITUICAO.md secao 15.",
+  "notes": "Copy to safe-zones.json. While 'zones' is empty or 'enabled' is false, NO zone exists and nothing changes. See core/safe-zones.js and docs/CONSTITUICAO.md section 15.",
 
-  "_antes_de_preencher": [
-    "Zona segura e mecanica de mundo, nao configuracao de infraestrutura. A secao 15 da Constituicao pede 15 respostas antes de mecanica nova existir; estas quatro sao as que mais mudam o desenho:",
-    "1. Cidade sob tregua e zona segura, ou tregua e acordo IC que a guarda faz cumprir? A segunda gera historia, a primeira gera regra.",
-    "2. Zona segura protege de roubo, ou so de dano?",
-    "3. Quem ja esta em combate e corre pra dentro de uma: tatica legitima ou exploit?",
-    "4. A area de spawn precisa ser permanente, ou so ate o personagem sair da primeira cena?"
+  "_before_filling_in": [
+    "A safe zone is a world mechanic, not infrastructure configuration. Section 15 of the Constitution asks for 15 answers before a new mechanic exists; these four are the ones that change the design the most:",
+    "1. Is a city under truce a safe zone, or is the truce an IC agreement the guard enforces? The second creates story, the first creates a rule.",
+    "2. Does a safe zone protect against theft, or only against damage?",
+    "3. Someone already in combat runs into one: legitimate tactic or exploit?",
+    "4. Does the spawn area need to be permanent, or only until the character leaves their first scene?"
   ],
 
-  "_sobre_blocks": "Categorias da action-policy. Validas: gameplay, combat, trade, craft, gather, move, move_world, use_item, speak_rp, sell. Categoria desconhecida e ignorada com erro no log — regra que voce acha que criou e nao criou e pior que regra ausente.",
+  "_about_blocks": "action-policy categories. Valid: gameplay, combat, trade, craft, gather, move, move_world, use_item, speak_rp, sell. An unknown category is ignored with an error in the log — a rule you think you created but did not is worse than a missing rule.",
 
-  "_sobre_cellid": "O 'cellId' e um FormDesc, NAO um hexadecimal: '<hex sem 0x>:<arquivo.esm>', por exemplo '162e2:Skyrim.esm'. E a string exata que o servidor devolve em locationalData.cellOrWorldDesc, e a zona casa por igualdade de string. Escrever '0x162e2' nao da erro em lugar nenhum — simplesmente nunca casa, e a zona fica inerte parecendo ativa. Por isso o loader agora RECUSA cellId fora do formato e grita no log: zona segura que falha em silencio falha ABERTA. Mesmo formato do 'baseDesc' em npc-policy.json. Ver core/safe-zones.js e docs/technical/SKYMP_UPSTREAM_REFERENCE.md secao 8.5.",
+  "_about_cellid": "The 'cellId' is a FormDesc, NOT a hexadecimal: '<hex without 0x>:<file.esm>', for example '162e2:Skyrim.esm'. It is the exact string the server returns in locationalData.cellOrWorldDesc, and the zone matches by string equality. Writing '0x162e2' raises no error anywhere — it simply never matches, and the zone stays inert while looking active. That is why the loader now REJECTS a cellId outside the format and shouts in the log: a safe zone that fails silently fails OPEN. Same format as 'baseDesc' in npc-policy.json. See core/safe-zones.js and docs/technical/SKYMP_UPSTREAM_REFERENCE.md section 8.5.",
 
-  "_sobre_area": "Sem 'pos' e 'radius' validos, a zona e a CELULA INTEIRA. E grosseiro de proposito: 'a taverna toda' e mais facil de acertar que um raio em unidades do Skyrim, e nao exige medir nada in-game. Use raio so quando a celula for grande demais.",
+  "_about_area": "Without valid 'pos' and 'radius', the zone is the WHOLE CELL. It is coarse on purpose: 'the whole tavern' is easier to get right than a radius in Skyrim units, and it does not require measuring anything in-game. Use a radius only when the cell is too large.",
 
-  "_sobre_os_dois_lados": "A checagem vale pro agressor E pro alvo. Proteger so o alvo deixaria alguem atirar de dentro da zona pra fora dela.",
+  "_about_both_sides": "The check applies to the attacker AND the target. Protecting only the target would let someone shoot from inside the zone out of it.",
 
   "zones": [
     {
-      "id": "exemplo-templo",
-      "label": "Templo de Kynareth",
+      "id": "example-temple",
+      "label": "Temple of Kynareth",
       "cellId": "162e2:Skyrim.esm",
       "pos": null,
       "radius": null,
       "blocks": ["combat"],
-      "_comentario": "EXEMPLO, nao ativo (enabled=false). Esta celula e o ponto de spawn e respawn atual (ver whitelist.js e death-service.js) — e o candidato obvio a primeira zona, mas a decisao nao foi tomada. ATENCAO: o numero 162e2 foi herdado e NUNCA foi conferido contra o ESM; o formato desta linha esta certo, o valor e que continua por verificar in-game."
+      "_comment": "EXAMPLE, not active (enabled=false). This cell is the current spawn and respawn point (see whitelist.js and death-service.js) — it is the obvious candidate for a first zone, but the decision has not been made. WARNING: the number 162e2 was inherited and was NEVER checked against the ESM; the format of this line is right, it is the value that still needs to be verified in-game."
     }
   ]
 }

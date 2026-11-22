@@ -40,7 +40,7 @@ if (-not (Test-Path -LiteralPath $buildInfoPath)) {
 $buildInfo = Get-Content -Raw -LiteralPath $buildInfoPath | ConvertFrom-Json
 Write-Host "SkyMP artifact: pin=$($buildInfo.declaredUpstreamPin) commitVerified=$($buildInfo.commitVerified) package=$($buildInfo.packageVersion)"
 if (-not $buildInfo.commitVerified) {
-  Write-Warning "Commit do binario nao comprovado; identidade preservada pelos hashes em BUILD_INFO.json."
+  Write-Warning "Binary commit not proven; identity preserved by the hashes in BUILD_INFO.json."
 }
 
 Push-Location $server

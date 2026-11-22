@@ -1,4 +1,4 @@
--- v29 — Trabalho Público persistente, idempotente e com piso econômico
+-- v29 — Persistent, idempotent Public Work with an economic floor
 USE `skymp_rp`;
 
 CREATE TABLE IF NOT EXISTS `public_work_runs` (
@@ -39,9 +39,9 @@ CREATE TABLE IF NOT EXISTS `public_work_runs` (
     CHECK (`status` IN ('assigned', 'in_progress', 'completed', 'cancelled', 'expired'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- A chave primária é a garantia material de uma única corrida ativa por
--- personagem. A linha nasce na mesma transação do run e some somente numa
--- transição terminal; concorrência não depende de SELECT sem lock.
+-- The primary key is the material guarantee of a single active run per
+-- character. The row is born in the same transaction as the run and only goes away on a
+-- terminal transition; concurrency does not depend on an unlocked SELECT.
 CREATE TABLE IF NOT EXISTS `public_work_active_slots` (
   `character_id` INT NOT NULL PRIMARY KEY,
   `run_id` BIGINT NOT NULL,

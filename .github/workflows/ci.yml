@@ -1,10 +1,10 @@
-# CI — roda tudo que dá pra rodar sem um Skyrim e sem um banco.
+# CI — runs everything that can run without Skyrim and without a database.
 #
-# O que ESTE workflow NÃO cobre, e é bom ter claro: nada do comportamento
-# in-game. Os testes do gamemode usam um `mp` mockado, e mock aceita qualquer
-# coisa — foi assim que 22 chamadas Papyrus com argumento errado passaram meses
-# com a suíte verde. CI verde aqui significa "não quebrou o que já era
-# verificado", não "funciona em jogo".
+# What THIS workflow does NOT cover, and it is good to be clear about it: none of
+# the in-game behavior. The gamemode tests use a mocked `mp`, and a mock accepts
+# anything — that is how 22 Papyrus calls with wrong arguments went months
+# with a green suite. Green CI here means "did not break what was already
+# verified", not "works in game".
 name: CI
 
 on:
@@ -12,40 +12,40 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Disparo manual (`gh workflow run CI --ref main` ou o botao "Run workflow"
-  # na aba Actions). Existe porque `push` e `pull_request` nem sempre disparam:
-  # quando o merge e feito pela API com um token de OAuth app, o GitHub nao
-  # cria o evento, e o commit entra na main sem nenhum check-run associado —
-  # foi o que aconteceu nos PRs #2 e #3, que entraram verificados so por
-  # execucao local. Sem este gatilho nao ha como pedir a verificacao depois,
-  # porque `workflow_dispatch` e o unico jeito de invocar um workflow a mao.
+  # Manual trigger (`gh workflow run CI --ref main` or the "Run workflow" button
+  # in the Actions tab). It exists because `push` and `pull_request` do not always fire:
+  # when the merge is done through the API with an OAuth app token, GitHub does not
+  # create the event, and the commit lands on main with no check run attached —
+  # that is what happened with PRs #2 and #3, which went in verified only by
+  # local runs. Without this trigger there is no way to ask for the check afterwards,
+  # because `workflow_dispatch` is the only way to invoke a workflow by hand.
   workflow_dispatch:
 
-# Um PR que recebe vários pushes seguidos cancela as execuções antigas em vez de
-# enfileirar — feedback mais rápido e menos minuto de runner desperdiçado.
+# A PR that gets several pushes in a row cancels the old runs instead of
+# queueing them — faster feedback and fewer wasted runner minutes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: ${{ matrix.nome }}
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
-      # Não para nos outros serviços quando um falha: é melhor ver todos os
-      # problemas de uma vez do que descobrir um por execução.
+      # Do not stop the other services when one fails: it is better to see all
+      # the problems at once than to discover one per run.
       fail-fast: false
       matrix:
         include:
-          - nome: gamemode
+          - name: gamemode
             dir: skymp/gamemode
-          - nome: painel web
+          - name: web panel
             dir: apps/web
-          - nome: api do jogo
+          - name: game api
             dir: apps/game-api
-          - nome: bot discord
+          - name: discord bot
             dir: apps/bot-discord
-          - nome: launcher
+          - name: launcher
             dir: apps/launcher
 
     steps:
@@ -57,16 +57,16 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ matrix.dir }}/package-lock.json
 
-      - name: Instalar dependências
+      - name: Install dependencies
         working-directory: ${{ matrix.dir }}
         run: npm ci
 
-      - name: Testes
+      - name: Tests
         working-directory: ${{ matrix.dir }}
         run: npm test
 
   gamemode-extras:
-    name: gamemode — checks e typecheck
+    name: gamemode — checks and typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,27 +76,27 @@ jobs:
           cache: npm
           cache-dependency-path: skymp/gamemode/package-lock.json
 
-      - name: Instalar dependências
+      - name: Install dependencies
         working-directory: skymp/gamemode
         run: npm ci
 
-      # Confere migrations, comandos obrigatórios, permissões e flags de ambiente.
-      - name: Checks de sistema
+      # Checks migrations, required commands, permissions and environment flags.
+      - name: System checks
         working-directory: skymp/gamemode
         run: npm run test:systems
 
-      # Sem banco no CI, então não dá pra comparar com o schema real. O que dá
-      # pra garantir aqui é que o parser continua entendendo as migrations: se
-      # uma migration nova usar uma forma de DDL que ele não reconhece, ele
-      # passaria a aprovar um banco incompleto — falha silenciosa, que é
-      # exatamente o que o checador existe para evitar.
-      - name: Schema declarado pelas migrations é legível
+      # No database in CI, so the real schema cannot be compared. What can be
+      # guaranteed here is that the parser still understands the migrations: if
+      # a new migration used a DDL form it does not recognize, it would
+      # start approving an incomplete database — a silent failure, which is
+      # exactly what the checker exists to prevent.
+      - name: Schema declared by the migrations is readable
         working-directory: skymp/gamemode
         run: npm run check:schema:list
 
-      # Informativo: valida o uso da API `mp` contra types/mp.d.ts. Erros vindos
-      # de dentro de node_modules/ws são ruído conhecido, por isso filtramos.
-      - name: Typecheck (informativo)
+      # Informational: validates use of the `mp` API against types/mp.d.ts. Errors coming
+      # from inside node_modules/ws are known noise, so we filter them out.
+      - name: Typecheck (informational)
         working-directory: skymp/gamemode
         continue-on-error: true
         run: |
@@ -113,18 +113,18 @@ jobs:
           cache: npm
           cache-dependency-path: apps/launcher/package-lock.json
 
-      - name: Instalar dependências
+      - name: Install dependencies
         working-directory: apps/launcher
         run: npm ci
 
-      # `tsc -b` e não `tsc`: o tsconfig.json da raiz é um solution file com
-      # `files: []`, então `tsc` sozinho não checa projeto nenhum.
+      # `tsc -b` and not `tsc`: the root tsconfig.json is a solution file with
+      # `files: []`, so `tsc` alone checks no project at all.
       - name: Typecheck
         working-directory: apps/launcher
         run: npm run typecheck
 
-  higiene:
-    name: higiene do repositório
+  hygiene:
+    name: repository hygiene
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -133,77 +133,77 @@ jobs:
         with:
           node-version: '20'
 
-      # O registro de patches ao SkyMP. Sem dependências, então roda aqui e não
-      # na matriz com `npm ci`. Um patch registrado pela metade parece controle
-      # e não é — ver patches/README.md.
-      - name: Registro de patches é válido
+      # The registry of patches to SkyMP. No dependencies, so it runs here and not
+      # in the matrix with `npm ci`. A half-registered patch looks like control
+      # and is not — see patches/README.md.
+      - name: Patch registry is valid
         run: |
           node patches/validate.js
           node --test patches/validate.test.js
 
-      # O .gitignore cobre .env, mas um arquivo já rastreado antes da regra
-      # continuaria versionado. Esta checagem é barata e o custo de errar é alto.
-      - name: Nenhum .env versionado
+      # .gitignore covers .env, but a file already tracked before the rule
+      # would stay versioned. This check is cheap and the cost of getting it wrong is high.
+      - name: No versioned .env
         run: |
           if git ls-files | grep -E '(^|/)\.env$|(^|/)\.env\.(local|production|staging)$'; then
-            echo "::error::Arquivo .env versionado. Segredos nao entram no repositorio."
+            echo "::error::Versioned .env file. Secrets do not go into the repository."
             exit 1
           fi
-          echo "OK: nenhum .env rastreado."
+          echo "OK: no tracked .env."
 
-      # Nunca redistribuímos asset da Bethesda — o jogador precisa possuir o jogo.
-      - name: Nenhum asset da Bethesda
+      # We never redistribute Bethesda assets — the player must own the game.
+      - name: No Bethesda assets
         run: |
           if git ls-files | grep -iE '\.(esm|bsa)$'; then
-            echo "::error::Master ou BSA versionado. Ver LICENSE_AND_AFFILIATION_POLICY.md."
+            echo "::error::Versioned master or BSA. See LICENSE_AND_AFFILIATION_POLICY.md."
             exit 1
           fi
-          echo "OK: nenhum asset da Bethesda."
+          echo "OK: no Bethesda assets."
 
-      - name: Auditor de configuração de produção
+      - name: Production configuration auditor
         run: node --test scripts/check-production-config.test.js scripts/run-service-soak.test.js
 
-  # Confere que todo patch registrado ainda aplica limpo sobre o commit fixado
-  # em patches/manifest.json.
+  # Checks that every registered patch still applies cleanly on top of the commit
+  # pinned in patches/manifest.json.
   #
-  # Roda em job próprio porque precisa clonar o upstream (~53 MB), e **sai cedo
-  # quando não há patch**: clonar para verificar zero diffs é queimar minuto de
-  # runner para produzir a mesma resposta todo dia. Hoje ele sempre sai cedo, e
-  # essa é a situação preferida — ver patches/README.md.
+  # Runs in its own job because it needs to clone upstream (~53 MB), and **exits early
+  # when there is no patch**: cloning to verify zero diffs burns runner minutes
+  # to produce the same answer every day. Today it always exits early, and
+  # that is the preferred situation — see patches/README.md.
   #
-  # `git apply --check` e não `git apply`: responde "aplicaria por inteiro?" sem
-  # escrever nada. É o "nunca aplicar patch silenciosamente pela metade" do
-  # briefing §12, e sai de graça.
-  patches-aplicam:
-    name: patches ainda aplicam no upstream
+  # `git apply --check` and not `git apply`: it answers "would it apply in full?" without
+  # writing anything. It is the "never silently apply half a patch" of
+  # briefing §12, and it comes for free.
+  patches-apply:
+    name: patches still apply upstream
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Há patch registrado?
+      - name: Is there a registered patch?
         id: check
         run: |
           n=$(node -e 'process.stdout.write(String(require("./patches/manifest.json").patches.length))')
           echo "count=$n" >> "$GITHUB_OUTPUT"
           echo "pin=$(node -e 'process.stdout.write(require("./patches/manifest.json").upstream.pin || "")')" >> "$GITHUB_OUTPUT"
           if [ "$n" = "0" ]; then
-            echo "Nenhum patch registrado — nada a verificar."
+            echo "No registered patch — nothing to verify."
           fi
 
-      - name: Clonar o SkyMP no commit fixado
+      - name: Clone SkyMP at the pinned commit
         if: steps.check.outputs.count != '0'
         run: |
           git clone --filter=blob:none --no-checkout \
             https://github.com/skyrim-multiplayer/skymp.git /tmp/upstream-skymp
           cd /tmp/upstream-skymp
-          # Falha aqui significa que o pin aponta para um commit que não existe
-          # mais — reescrita de histórico upstream, ou erro de digitação.
+          # A failure here means the pin points to a commit that no longer
+          # exists — upstream history rewrite, or a typo.
           git checkout --detach "${{ steps.check.outputs.pin }}"
 
-      - name: git apply --check em cada patch
+      - name: git apply --check on each patch
         if: steps.check.outputs.count != '0'
         run: |
-          falhou=0
+          failed=0
           for f in $(node -e '
             const m = require("./patches/manifest.json");
             process.stdout.write(m.patches.map(p => p.file).join("\n"));
@@ -211,8 +211,8 @@ jobs:
             if git -C /tmp/upstream-skymp apply --check "$GITHUB_WORKSPACE/patches/$f"; then
               echo "OK: $f"
             else
-              echo "::error file=patches/$f::nao aplica sobre ${{ steps.check.outputs.pin }}. Reavalie o patch antes de remendar — o upstream pode ter resolvido o problema."
-              falhou=1
+              echo "::error file=patches/$f::does not apply on ${{ steps.check.outputs.pin }}. Re-evaluate the patch before patching it up — upstream may have fixed the problem."
+              failed=1
             fi
           done
-          exit $falhou
+          exit $failed

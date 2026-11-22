@@ -1,36 +1,36 @@
--- v24 — Assinatura do Artesao (docs/design/MAKERS_MARK.md)
+-- v24 — Maker's Mark (docs/design/MAKERS_MARK.md)
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- Por que e uma tabela nova, e nao uma coluna em `item_instances`
+-- Why it is a new table, and not a column on `item_instances`
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- `item_instances` (migration-v21-crime-provenance.sql) e sobre CULPA: quem
--- roubou o que, de quem. Assinatura de artesao e sobre AUTORIA: quem fez o
--- que, para quem. Misturar as duas faria uma feature de crime carregar uma
--- responsabilidade que nao e dela — ver MAKERS_MARK.md §4 e §6.
+-- `item_instances` (migration-v21-crime-provenance.sql) is about GUILT: who
+-- stole what, from whom. A maker's mark is about AUTHORSHIP: who made
+-- what, for whom. Mixing the two would make a crime feature carry a
+-- responsibility that is not its own — see MAKERS_MARK.md §4 and §6.
 --
 -- ═══════════════════════════════════════════════════════════════════════════
--- A mesma simplificacao que o crime ja aceitou (MAKERS_MARK.md §3)
+-- The same simplification crime already accepted (MAKERS_MARK.md §3)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- `character_inventory` e puramente fungivel (UNIQUE por dono+item, so
--- contagem — migration-v14-inventory-framework.sql). Uma linha aqui nao
--- rastreia UM objeto fisico especifico dentro de uma pilha de itens
--- identicos; ela diz "existe, entre os itens deste tipo que este personagem
--- tem, pelo menos um assinado por este artesao, com esta dedicatoria". E o
--- mesmo grau de fidelidade que a revista institucional de crime ja usa para
--- proveniencia — suficiente para flavor de RP, insuficiente para provar qual
--- unidade fisica exata e a assinada.
+-- `character_inventory` is purely fungible (UNIQUE per owner+item, count
+-- only — migration-v14-inventory-framework.sql). A row here does not
+-- track ONE specific physical object inside a stack of identical
+-- items; it says "among the items of this type this character
+-- has, there is at least one signed by this maker, with this dedication". It is the
+-- same degree of fidelity the institutional crime search already uses for
+-- provenance — enough for RP flavor, not enough to prove which exact
+-- physical unit is the signed one.
 
 USE `skymp_rp`;
 
 CREATE TABLE IF NOT EXISTS `crafted_item_signatures` (
-  `id` CHAR(36) NOT NULL PRIMARY KEY COMMENT 'UUID v4, mesma convencao de item_instances.id',
-  `base_id` INT NOT NULL COMMENT 'FormID nativo do Skyrim (decimal), mesma convencao de character_inventory.base_id',
-  `recipe_id` INT NOT NULL COMMENT 'Receita que originou o item (crafting_recipes.id, migration-v23)',
-  `maker_character_id` INT NOT NULL COMMENT 'Quem craftou e assinou',
-  `owner_character_id` INT NOT NULL COMMENT 'Quem recebeu o item no craft. NAO e atualizado em troca/venda/deposito nesta rodada -- nenhum consumidor de inventario (trade/market-stall/depot) escreve aqui. Ver limitacao em MAKERS_MARK.md',
-  `signature_text` VARCHAR(64) DEFAULT NULL COMMENT 'Dedicatoria pedida pelo comprador; NULL usa so o nome do artesao',
+  `id` CHAR(36) NOT NULL PRIMARY KEY COMMENT 'UUID v4, same convention as item_instances.id',
+  `base_id` INT NOT NULL COMMENT 'Native Skyrim FormID (decimal), same convention as character_inventory.base_id',
+  `recipe_id` INT NOT NULL COMMENT 'Recipe that produced the item (crafting_recipes.id, migration-v23)',
+  `maker_character_id` INT NOT NULL COMMENT 'Who crafted and signed it',
+  `owner_character_id` INT NOT NULL COMMENT 'Who received the item when crafted. NOT updated on trade/sale/deposit in this round -- no inventory consumer (trade/market-stall/depot) writes here. See the limitation in MAKERS_MARK.md',
+  `signature_text` VARCHAR(64) DEFAULT NULL COMMENT 'Dedication requested by the buyer; NULL uses only the maker name',
   `crafted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_signature_maker` FOREIGN KEY (`maker_character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_signature_owner` FOREIGN KEY (`owner_character_id`) REFERENCES `characters` (`id`) ON DELETE CASCADE,

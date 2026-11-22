@@ -1,49 +1,49 @@
-Você está numa sessão diária automática, sem o usuário por perto. Ninguém vai
-responder perguntas nem aprovar nada durante esta sessão — não pergunte, decida
-dentro dos limites abaixo ou pare e registre o motivo.
+You are in an automatic daily session, with the user not around. Nobody will
+answer questions or approve anything during this session — do not ask; decide
+within the limits below, or stop and record why.
 
-## O que fazer
+## What to do
 
-1. Releia a memória do projeto (MEMORY.md e os arquivos linkados) para entender
-   o estado atual: o que já foi reativado, o que está PARKED, quais ADRs estão
-   congeladas, o que ficou combinado nas últimas sessões.
-2. Escolha UM item concreto que já está em andamento ou já foi decidido nas
-   memórias/ADRs (ex: um passo do plano de reativação de PARKED, um teste de
-   characterization faltando, um TODO deixado explícito numa sessão anterior).
-   Não invente escopo novo nem decida arquitetura — se o próximo passo depende
-   de uma decisão do dono do produto que ainda não foi tomada, não escolha esse
+1. Re-read the project memory (MEMORY.md and the linked files) to understand
+   the current state: what has already been reactivated, what is PARKED, which ADRs are
+   frozen, what was agreed in the last sessions.
+2. Pick ONE concrete item that is already in progress or already decided in the
+   memories/ADRs (e.g. a step of the PARKED reactivation plan, a missing
+   characterization test, a TODO left explicitly in a previous session).
+   Do not invent new scope or decide architecture — if the next step depends
+   on a product-owner decision that has not been made yet, do not pick that
    item.
-3. Trabalhe nesse item: edite código, rode os testes relevantes, confira
-   contra as convenções do projeto (mutação obrigatória, FormDesc como string
-   "célula:base", patrimônio só via transaction-service, etc — ver
-   skymp-convencoes-de-rigor na memória).
-4. NÃO rode `git commit`, `git push`, `git reset --hard`, `git clean`,
-   `git branch -D` nem `rm -rf`. Essas ações estão bloqueadas em
-   `.claude/settings.json` (deny de projeto, tem precedência sobre qualquer
-   allow global) — mas não tente contornar isso de propósito nenhuma. Deixe o
-   trabalho em arquivos modificados/não commitados para o usuário revisar.
+3. Work on that item: edit code, run the relevant tests, check
+   against the project conventions (mandatory mutation, FormDesc as a
+   "cell:base" string, wealth only through transaction-service, etc. — see
+   skymp-convencoes-de-rigor in memory).
+4. Do NOT run `git commit`, `git push`, `git reset --hard`, `git clean`,
+   `git branch -D` or `rm -rf`. These actions are blocked in
+   `.claude/settings.json` (project deny, which takes precedence over any
+   global allow) — but do not try to work around that for any purpose. Leave the
+   work as modified/uncommitted files for the user to review.
 
-## Lista de veto (nunca fazer, mesmo que pareça o próximo passo óbvio)
+## Veto list (never do, even if it looks like the obvious next step)
 
-- Qualquer afirmação sobre `schema.sql`/migrations sem rodar
-  `check:schema:list` antes.
-- Confiar em teste que usa `mp` mockado como se validasse comportamento real.
-- Decidir arquitetura do ecossistema de trabalho (Employment vs Public Work vs
-  Business) — já está congelada em ADR.
-- Afirmar que algo funciona no cliente/runtime do SkyMP sem ter rodado de
-  verdade — várias correções recentes (ex: BOUND-004) não foram validadas em
-  runtime real.
+- Any claim about `schema.sql`/migrations without running
+  `check:schema:list` first.
+- Trusting a test that uses a mocked `mp` as if it validated real behavior.
+- Deciding the architecture of the work ecosystem (Employment vs Public Work vs
+  Business) — it is already frozen in an ADR.
+- Claiming something works in the SkyMP client/runtime without having actually
+  run it — several recent fixes (e.g. BOUND-004) were not validated in
+  a real runtime.
 
-## Ao terminar (sempre, mesmo se não fez nada)
+## When you finish (always, even if you did nothing)
 
-Escreva um resumo em
-`.claude/daily-logs/AAAA-MM-DD.md` (data de hoje) com:
+Write a summary in
+`.claude/daily-logs/YYYY-MM-DD.md` (today's date) with:
 
-- Qual item você escolheu e por quê (ou por que não achou nenhum item seguro
-  para tocar sozinho).
-- O que foi alterado (lista de arquivos) e o resultado dos testes rodados.
-- O que ficou pela metade ou bloqueado, e o que falta para o usuário decidir
-  antes da próxima sessão automática.
+- Which item you picked and why (or why you found no item safe
+  to touch on your own).
+- What was changed (list of files) and the result of the tests you ran.
+- What was left half-done or blocked, and what the user needs to decide
+  before the next automatic session.
 
-Não commite esse log nem o resto do trabalho — ele fica como arquivo não
-rastreado/modificado para o usuário revisar manualmente.
+Do not commit that log or the rest of the work — it stays as an untracked/modified
+file for the user to review by hand.

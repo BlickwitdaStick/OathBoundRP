@@ -1,21 +1,21 @@
 {
   "enabled": false,
-  "notes": "Copie para npc-policy.json e preencha blockedBaseDescs. Enquanto a lista estiver vazia o servico nao remove NADA, mesmo com enabled=true. Ver docs/technical/NPC_POLICY_DECISION.md.",
+  "notes": "Copy to npc-policy.json and fill in blockedBaseDescs. While the list is empty the service removes NOTHING, even with enabled=true. See docs/technical/NPC_POLICY_DECISION.md.",
 
-  "_sobre_blockedBaseDescs": "Lista de BLOQUEIO, nao de permissao. So o que esta aqui e removido. A versao anterior deste servico usava o inverso (uma allowlist vazia removia o mundo inteiro).",
+  "_about_blockedBaseDescs": "A BLOCK list, not an allow list. Only what is listed here gets removed. The previous version of this service did the opposite (an empty allowlist removed the whole world).",
   "blockedBaseDescs": [],
 
-  "_sobre_o_formato": "Use o desc 'idHex:plugin.esm', nunca o FormID numerico. O primeiro byte de um FormID e o indice de load order, entao o mesmo numero aponta pra records diferentes em clientes com load order diferente (MODS_AND_GAMEMODE_CONTRACT.md secao 3). O desc carrega o plugin no proprio valor e sobrevive a reordenacao.",
-  "_exemplo_de_entrada": {
+  "_about_the_format": "Use the 'idHex:plugin.esm' desc, never the numeric FormID. The first byte of a FormID is the load order index, so the same number points to different records on clients with a different load order (MODS_AND_GAMEMODE_CONTRACT.md section 3). The desc carries the plugin in the value itself and survives reordering.",
+  "_example_entry": {
     "baseDesc": "1a6a0:Skyrim.esm",
-    "porque": "exemplo — substitua por records reais depois da curadoria da secao 4 do NPC_POLICY_DECISION"
+    "why": "example — replace with real records after the curation in section 4 of NPC_POLICY_DECISION"
   },
 
-  "_sobre_safeRadius": "NPC a esta distancia ou menos de um jogador conectado nao e tocado, pra que ninguem veja um ator sumir na frente. Infinity nao e aceito; use um numero.",
+  "_about_safeRadius": "An NPC at this distance or closer to a connected player is not touched, so nobody sees an actor vanish in front of them. Infinity is not accepted; use a number.",
   "safeRadius": 5000,
 
   "sweepIntervalMs": 60000,
 
-  "_sobre_mode": "'disable' desliga o ator (reversivel com enable). 'delete' NAO existe de proposito: delete numa referencia persistente nao volta, e a decisao de MVP e Spawn Seletivo, nao terra arrasada.",
+  "_about_mode": "'disable' turns the actor off (reversible with enable). 'delete' does NOT exist on purpose: deleting a persistent reference cannot be undone, and the MVP decision is Selective Spawn, not scorched earth.",
   "mode": "disable"
 }

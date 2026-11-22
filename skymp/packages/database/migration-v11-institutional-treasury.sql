@@ -1,9 +1,9 @@
 -- =============================================================================
--- v11 - Ledger de transferencias entre tesouros institucionais
+-- v11 - Ledger of transfers between institutional treasuries
 -- =============================================================================
--- Ouro de Hold e de faccao nao passa por gold_transactions, que representa
--- patrimonio de personagem. Esta tabela e gravada na mesma transacao do debito
--- e credito, e idempotency_key impede replay de uma requisicao de UI.
+-- Hold and faction gold does not go through gold_transactions, which represents
+-- character wealth. This table is written in the same transaction as the debit
+-- and credit, and idempotency_key prevents replaying a UI request.
 
 USE `skymp_rp`;
 

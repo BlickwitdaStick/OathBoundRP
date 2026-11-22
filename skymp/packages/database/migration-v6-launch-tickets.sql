@@ -1,39 +1,39 @@
 -- =============================================================================
--- Migration v6 - Tickets de lançamento (fila do launcher)
--- Aplicar apos migration-v5-character-application.sql.
+-- Migration v6 - Launch tickets (launcher queue)
+-- Apply after migration-v5-character-application.sql.
 --
--- Antes desta tabela, o launcher entrava na fila mandando o proprio
--- `discordId` como se fosse prova de identidade. `discordId` e publico:
--- qualquer pessoa que soubesse o Discord de outro jogador podia entrar na
--- fila no lugar dele. Como o servico da fila (apps/game-api) ainda nao
--- existia, isso nunca chegou a rodar — a tabela existe pra que ele ja nasca
--- com autenticacao de verdade.
+-- Before this table, the launcher joined the queue by sending its own
+-- `discordId` as if it were proof of identity. `discordId` is public:
+-- anyone who knew another player's Discord could join the queue in their
+-- place. Since the queue service (apps/game-api) did not exist yet, this
+-- never actually ran — the table exists so that the service is born with
+-- real authentication.
 --
--- Fluxo:
---   1. O launcher captura o `code` do Discord e manda pro painel
+-- Flow:
+--   1. The launcher captures the Discord `code` and sends it to the panel
 --      (POST /api/launcher/oauth/exchange).
---   2. O painel — que e quem tem o client secret e portanto e o unico que
---      pode provar que aquele Discord autenticou de fato — grava um ticket
---      aqui e devolve pro launcher.
---   3. O launcher apresenta o ticket na fila (POST /api/queue/join).
---   4. O apps/game-api valida contra esta tabela, marca `consumed_at` e so
---      entao devolve um ticket de sessao pro jogo.
+--   2. The panel — which holds the client secret and is therefore the only one
+--      that can prove that Discord account really authenticated — stores a ticket
+--      here and returns it to the launcher.
+--   3. The launcher presents the ticket to the queue (POST /api/queue/join).
+--   4. apps/game-api validates it against this table, sets `consumed_at` and only
+--      then returns a session ticket for the game.
 --
--- O ticket e de uso unico e curto de proposito: ele so precisa sobreviver do
--- clique em "Jogar" ate a entrada na fila.
+-- The ticket is single-use and short-lived on purpose: it only needs to survive
+-- from the click on "Play" until the queue entry.
 -- =============================================================================
 USE `skymp_rp`;
 
 CREATE TABLE IF NOT EXISTS `launch_tickets` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  -- SHA-256 do ticket, nunca o ticket em claro: se este banco vazar, os
-  -- tickets que estiverem em voo nao viram credencial utilizavel.
+  -- SHA-256 of the ticket, never the ticket in clear text: if this database leaks,
+  -- tickets in flight do not become usable credentials.
   `token_hash` CHAR(64) NOT NULL,
   `account_id` INT NOT NULL,
   `discord_id` VARCHAR(64) NOT NULL,
   `issued_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `expires_at` TIMESTAMP NOT NULL,
-  `consumed_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Preenchido no primeiro uso — replay falha',
+  `consumed_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Set on first use - a replay fails',
   `issued_ip` VARCHAR(64) DEFAULT NULL,
   UNIQUE KEY `uq_launch_ticket_hash` (`token_hash`),
   KEY `idx_launch_ticket_expiry` (`expires_at`),

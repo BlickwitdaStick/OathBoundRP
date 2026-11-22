@@ -1,66 +1,66 @@
-# Patches ao SkyMP e ao SkyrimPlatform
+# Patches to SkyMP and SkyrimPlatform
 
-**Hoje este diretório está vazio de patches, e essa é a situação preferida.**
+**Today this directory holds no patches, and that is the preferred situation.**
 
-Ele existe porque a hora de escrever a política é antes do primeiro patch, não depois do quinto. Todo projeto do ecossistema SkyMP que acabou mantendo um fork pesado começou com um patch sem registro — [`SKYMP_ECOSYSTEM_DEEP_DIVE.md`](../docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md) documenta os casos.
+It exists because the time to write the policy is before the first patch, not after the fifth. Every project in the SkyMP ecosystem that ended up maintaining a heavy fork started with an unrecorded patch — [`SKYMP_ECOSYSTEM_DEEP_DIVE.md`](../docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md) documents the cases.
 
-> **A decisão de *se* um patch deve existir está em [`SKYMP_PATCH_POLICY.md`](../docs/technical/SKYMP_PATCH_POLICY.md).** Este arquivo explica *como* registrar um, depois que a decisão foi tomada.
+> **The decision about *whether* a patch should exist lives in [`SKYMP_PATCH_POLICY.md`](../docs/technical/SKYMP_PATCH_POLICY.md).** This file explains *how* to register one, once that decision has been made.
 
-## A escada de decisão
+## The decision ladder
 
-Antes de escrever um patch, desça esta escada e pare no primeiro degrau que resolver. Patch é o penúltimo recurso; fork é o último.
+Before writing a patch, walk down this ladder and stop at the first rung that solves it. A patch is the second-to-last resort; a fork is the last.
 
 ```
-1. SkyMP puro          — a API atual já resolve?
-2. Adapter             — dá pra resolver do nosso lado da fronteira?
-3. Client extension    — é UI, input, animação ou detecção local?
-4. PR upstream         — é um bug ou lacuna que serve a todo mundo?
-5. Patch registrado    — precisamos disso antes do upstream aceitar?
-6. Fork                — só com ADR e justificativa escrita
+1. Plain SkyMP         — does the current API already solve it?
+2. Adapter             — can it be solved on our side of the boundary?
+3. Client extension    — is it UI, input, animation or local detection?
+4. Upstream PR         — is it a bug or gap that serves everyone?
+5. Registered patch    — do we need it before upstream accepts it?
+6. Fork                — only with an ADR and a written justification
 ```
 
-**Os degraus 1 a 3 não precisam de nada disto.** A [auditoria de 14/08](../docs/research/SKYMP_INTEGRATION_AUDIT.md) desceu esta escada para doze problemas concretos e **onze pararam ali**.
+**Rungs 1 to 3 need none of this.** The [2026-08-14 audit](../docs/research/SKYMP_INTEGRATION_AUDIT.md) walked this ladder for twelve concrete problems and **eleven stopped there**.
 
-Se você chegou ao degrau 4, abra o PR e registre o patch como ponte temporária, com o link do PR no campo `upstream_pr` — e leia antes a [§5 da política](../docs/technical/SKYMP_PATCH_POLICY.md), porque desde 18/07/2026 o upstream exige cessão de direito autoral de quem contribui.
+If you reached rung 4, open the PR and register the patch as a temporary bridge, with the PR link in the `upstream_pr` field — and first read [§5 of the policy](../docs/technical/SKYMP_PATCH_POLICY.md), because since 2026-07-18 upstream requires contributors to assign copyright.
 
-Um patch cuja intenção é virar PR e nunca vira é um fork começando devagar.
+A patch meant to become a PR that never does is a fork starting slowly.
 
-## Por que "condição de perda" é campo obrigatório
+## Why "loss condition" is a required field
 
-É a contribuição do [The Divine Comedy](https://github.com/miguelAngeloo/TheDivineComedy), o único projeto do ecossistema que documenta isso, e é o campo que quase ninguém escreve.
+It is the contribution of [The Divine Comedy](https://github.com/miguelAngeloo/TheDivineComedy), the only project in the ecosystem that documents it, and it is the field almost nobody writes.
 
-Eles anotam, no README dos próprios patches, que o patch de `spawn.ts` some num reclone do SkyMP e que o `Skyrim.ccc` esvaziado volta se o Steam verificar os arquivos do jogo. Sem esse registro, o patch desaparece e o sintoma reaparece meses depois como bug novo — e ninguém liga uma coisa à outra.
+They note, in the README of their own patches, that the `spawn.ts` patch disappears on a SkyMP reclone and that the emptied `Skyrim.ccc` comes back if Steam verifies the game files. Without that record, the patch disappears and the symptom comes back months later as a new bug — and nobody connects one to the other.
 
-**Um patch cuja perda é silenciosa é pior que patch nenhum:** você passa a confiar num comportamento que pode sumir sem aviso.
+**A patch whose loss is silent is worse than no patch:** you start relying on behavior that can vanish without warning.
 
-## Como registrar um patch
+## How to register a patch
 
-1. Salve o diff em `<alvo>/<slug>.patch` — `<alvo>` é `skymp` ou `skyrim-platform`.
-2. Confira que `upstream.pin` em [`manifest.json`](manifest.json) é o commit contra o qual o diff foi gerado. **Todos os patches apontam para o mesmo pin** — se o seu precisa de outro, o pin é que sobe, e aí todo patch é reavaliado.
-3. Acrescente uma entrada em `manifest.json`.
-4. Rode `node validate.js`. A CI roda o mesmo, mais `git apply --check` do diff contra o upstream no commit do pin.
+1. Save the diff to `<target>/<slug>.patch` — `<target>` is `skymp` or `skyrim-platform`.
+2. Check that `upstream.pin` in [`manifest.json`](manifest.json) is the commit the diff was generated against. **Every patch points to the same pin** — if yours needs a different one, the pin is what moves, and then every patch is re-evaluated.
+3. Add an entry to `manifest.json`.
+4. Run `node validate.js`. CI runs the same, plus `git apply --check` of the diff against upstream at the pinned commit.
 
-### Campos
+### Fields
 
-| Campo | Obrigatório | O que escrever |
+| Field | Required | What to write |
 |---|---|---|
-| `id` | sim | Slug único, kebab-case |
-| `target` | sim | `skymp` ou `skyrim-platform` |
-| `file` | sim | Caminho do `.patch` relativo a este diretório; o arquivo precisa existir |
-| `upstream_commit` | sim | SHA do commit upstream sobre o qual o diff aplica. Precisa ser o `upstream.pin` do manifesto, ou um prefixo dele de 7+ caracteres |
-| `reason` | sim | O problema. Não o que o patch faz — **o que quebra sem ele** |
-| `files_touched` | sim | Lista de arquivos upstream modificados |
-| `impact` | sim | O que muda em runtime, incluindo risco |
-| `test` | sim | Como se prova que funciona. `null` só com justificativa em `notes` |
-| `loss_condition` | sim | **O que faz este patch sumir.** Nunca `null` |
-| `removal_strategy` | sim | O que precisa ser verdade para apagar o patch |
-| `upstream_pr` | sim | URL do PR, ou `null` com o motivo de não caber upstream |
-| `added` | sim | Data ISO |
-| `notes` | não | Contexto livre |
+| `id` | yes | Unique slug, kebab-case |
+| `target` | yes | `skymp` or `skyrim-platform` |
+| `file` | yes | Path of the `.patch` relative to this directory; the file must exist |
+| `upstream_commit` | yes | SHA of the upstream commit the diff applies on. Must be the manifest's `upstream.pin`, or a 7+ character prefix of it |
+| `reason` | yes | The problem. Not what the patch does — **what breaks without it** |
+| `files_touched` | yes | List of modified upstream files |
+| `impact` | yes | What changes at runtime, including risk |
+| `test` | yes | How it is proven to work. `null` only with a justification in `notes` |
+| `loss_condition` | yes | **What makes this patch disappear.** Never `null` |
+| `removal_strategy` | yes | What must be true to delete the patch |
+| `upstream_pr` | yes | PR URL, or `null` with the reason it does not fit upstream |
+| `added` | yes | ISO date |
+| `notes` | no | Free-form context |
 
-### Exemplo preenchido
+### Filled-in example
 
-Este patch **não existe**. Está aqui para mostrar o formato — é o `onPlayerSpawn` do Divine Comedy, que seria nosso candidato mais plausível se algum dia precisássemos dele.
+This patch **does not exist**. It is here to show the format — it is Divine Comedy's `onPlayerSpawn`, which would be our most plausible candidate if we ever needed it.
 
 ```json
 {
@@ -68,20 +68,20 @@ Este patch **não existe**. Está aqui para mostrar o formato — é o `onPlayer
   "target": "skymp",
   "file": "skymp/gamemode-spawn-hook.patch",
   "upstream_commit": "d85f18d",
-  "reason": "O gamemode não consegue decidir onde o jogador nasce; o spawn é resolvido dentro do servidor antes de qualquer hook.",
+  "reason": "The gamemode cannot decide where the player spawns; the spawn is resolved inside the server before any hook.",
   "files_touched": ["skymp5-server/src/systems/spawn.ts"],
-  "impact": "Se o gamemode expõe `onPlayerSpawn`, ele decide o spawn. Sem isso, comportamento idêntico ao upstream.",
-  "test": "skymp/gamemode/spawn.test.js — cobre com hook e sem hook",
-  "loss_condition": "Reclone ou atualização do SkyMP. O arquivo é sobrescrito sem aviso e o spawn volta ao padrão.",
-  "removal_strategy": "Apagar quando o PR upstream for aceito e o pin de versão subir para além dele.",
+  "impact": "If the gamemode exposes `onPlayerSpawn`, it decides the spawn. Without it, behavior identical to upstream.",
+  "test": "skymp/gamemode/spawn.test.js — covers with and without the hook",
+  "loss_condition": "Reclone or update of SkyMP. The file is overwritten without warning and the spawn goes back to the default.",
+  "removal_strategy": "Delete when the upstream PR is accepted and the version pin moves past it.",
   "upstream_pr": null,
   "added": "2026-08-13",
-  "notes": "Desenhado para ser upstreamable: não muda comportamento de quem não expõe o hook."
+  "notes": "Designed to be upstreamable: it does not change behavior for anyone who does not expose the hook."
 }
 ```
 
-## O que não entra aqui
+## What does not go here
 
-**Sobrescrever fonte upstream por cópia.** O Divine Comedy também tem um `sync-client.mjs` que copia o diretório deles por cima de `skymp5-client/src`, com caminho absoluto da máquina do autor. É sobrescrita silenciosa, sem diff e sem registro: ninguém consegue dizer depois o que foi trocado. Se precisar mudar arquivo upstream, é patch com diff.
+**Overwriting upstream source by copying.** Divine Comedy also has a `sync-client.mjs` that copies their directory over `skymp5-client/src`, with an absolute path from the author's machine. It is a silent overwrite, with no diff and no record: nobody can tell afterwards what was swapped. If you need to change an upstream file, it is a patch with a diff.
 
-**Mudança de ambiente do jogo.** Esvaziar `Skyrim.ccc`, mexer em INI, alterar arquivo instalado pelo Steam. Isso não é patch de código, reverte sozinho, e pertence ao gate do modpack — ver `MOD-005` no [roadmap](../docs/roadmap/ECOSYSTEM_ADAPTATION_ROADMAP.md).
+**Changes to the game environment.** Emptying `Skyrim.ccc`, editing INIs, altering files installed by Steam. That is not a code patch, it reverts on its own, and it belongs to the modpack gate — see `MOD-005` in the [roadmap](../docs/roadmap/ECOSYSTEM_ADAPTATION_ROADMAP.md).

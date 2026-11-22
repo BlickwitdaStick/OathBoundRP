@@ -40,26 +40,27 @@ function validConfigs() {
   };
 }
 
-describe('parser de .env', () => {
-  test('ignora comentários e remove aspas externas', () => {
-    assert.deepEqual(parseEnv('# x\nA=1\nB="dois"\nC=\'tres\''), { A: '1', B: 'dois', C: 'tres' });
+describe('.env parser', () => {
+  test('ignores comments and strips outer quotes', () => {
+    assert.deepEqual(parseEnv('# x\nA=1\nB="two"\nC=\'three\''), { A: '1', B: 'two', C: 'three' });
   });
 
-  test('reconhece placeholders sem imprimir valores', () => {
-    assert.equal(isPlaceholder('SEU_CLIENT_ID_AQUI'), true);
+  test('recognizes placeholders without printing values', () => {
+    assert.equal(isPlaceholder('SEU_CLIENT_ID_AQUI'), true); // legacy Portuguese placeholder
+    assert.equal(isPlaceholder('YOUR_CLIENT_ID_HERE'), true);
     assert.equal(isPlaceholder('owner/repo'), false);
   });
 });
 
-describe('auditoria de produção', () => {
-  test('aprova configuração coerente sem banco', () => {
+describe('production audit', () => {
+  test('approves a consistent configuration without a database', () => {
     assert.deepEqual(auditProductionConfig(validConfigs(), { skipDb: true }), []);
   });
 
-  test('reprova HTTP público, segredo curto e ambiente de desenvolvimento', () => {
+  test('rejects public HTTP, a short secret and a development environment', () => {
     const configs = validConfigs();
     configs.web.PANEL_PUBLIC_URL = 'http://localhost:3001';
-    configs.web.SESSION_SECRET = 'curto';
+    configs.web.SESSION_SECRET = 'short';
     configs.web.NODE_ENV = 'development';
     const issues = auditProductionConfig(configs, { skipDb: true });
     assert.ok(issues.some(issue => issue.key === 'PANEL_PUBLIC_URL'));
@@ -67,13 +68,13 @@ describe('auditoria de produção', () => {
     assert.ok(issues.some(issue => issue.key === 'NODE_ENV'));
   });
 
-  test('reprova segredo interno divergente entre serviços', () => {
+  test('rejects an internal secret that differs between services', () => {
     const configs = validConfigs();
     configs.bot.INTERNAL_API_SECRET = 'c'.repeat(40);
     assert.ok(auditProductionConfig(configs, { skipDb: true }).some(issue => issue.service === 'cross-service'));
   });
 
-  test('campos de banco só são exigidos sem --skip-db', () => {
+  test('database fields are only required without --skip-db', () => {
     assert.ok(auditProductionConfig(validConfigs()).some(issue => issue.key === 'DB_HOST'));
     assert.ok(!auditProductionConfig(validConfigs(), { skipDb: true }).some(issue => issue.key === 'DB_HOST'));
   });

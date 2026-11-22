@@ -1,6 +1,6 @@
 {
   "name": "SkyMP Heavy RP - Local",
-  "masterKey": "TROQUE-POR-UM-VALOR-ALEATORIO-E-IGUAL-AO-MASTER_KEY-DO-PAINEL",
+  "masterKey": "REPLACE-WITH-A-RANDOM-VALUE-EQUAL-TO-THE-PANEL-MASTER_KEY",
   "listenHost": "127.0.0.1",
   "uiListenHost": "127.0.0.1",
   "port": 7777,

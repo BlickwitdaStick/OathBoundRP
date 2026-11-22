@@ -1,26 +1,26 @@
-# Regras Globais do Projeto: SkyMP Heavy RP
+# Global Project Rules: SkyMP Heavy RP
 
-Estas regras devem ser estritamente seguidas ao trabalhar neste projeto:
+These rules must be followed strictly when working on this project:
 
-1. **Contexto do Projeto:** 
-   - Este é um servidor público de **Skyrim Heavy RP**, desenvolvido usando o framework **SkyMP**.
-   - O projeto adota a separação estrita entre a plataforma RP (painel web, whitelist, loja) e o estado nativo in-game (posições, mundo).
+1. **Project Context:** 
+   - This is a public **Skyrim Heavy RP** server, built on the **SkyMP** framework.
+   - The project keeps a strict separation between the RP platform (web panel, whitelist, store) and native in-game state (positions, world).
 
-2. **Banco de Dados (CRÍTICO):**
-   - O banco de dados relacional oficial do projeto é o **MariaDB / MySQL**. 
-   - **NUNCA** sugira, migre ou crie schemas para PostgreSQL.
-   - Todo o código backend interage com o banco utilizando a biblioteca `mysql2/promise`.
+2. **Database (CRITICAL):**
+   - The project's official relational database is **MariaDB / MySQL**. 
+   - **NEVER** suggest, migrate to or create schemas for PostgreSQL.
+   - All backend code talks to the database through the `mysql2/promise` library.
 
-3. **Arquitetura e Código:**
-   - O código principal do gamemode fica em `skymp/gamemode/`.
-   - Modificações na estrutura do banco de dados exigem a atualização obrigatória do arquivo de migration em `skymp/packages/database/schema.sql`.
+3. **Architecture and Code:**
+   - The main gamemode code lives in `skymp/gamemode/`.
+   - Changes to the database structure require updating the migration file in `skymp/packages/database/schema.sql`.
 
-4. **Regras de Produto e Game Design:**
-   - O servidor é focado em RP Estrito (Heavy RP). Ações devem ter motivações in-game plausíveis.
-   - Sistemas de progressão e economia devem ser intencionalmente lentos.
-   - O sistema de monetização (VIP/Apoiador) existe para sustento, mas mecânicas agressivas de Pay-to-Win são proibidas no design.
+4. **Product and Game Design Rules:**
+   - The server is focused on Strict RP (Heavy RP). Actions must have plausible in-game motivations.
+   - Progression and economy systems must be intentionally slow.
+   - The monetization system (VIP/Supporter) exists to keep the server running, but aggressive Pay-to-Win mechanics are forbidden by design.
 
-5. **Gerenciamento de Testes e Setup Técnico:**
-   - Para testes locais, sempre assumir `offlineMode=true` no artefato do servidor, permitindo o uso de `profileId`. Em produção isso é expressamente proibido.
-   - Scripts de setup, instalação do cliente e boot do servidor devem sempre usar o PowerShell presentes na pasta `scripts/phase0/`.
-   - Setup do zero (dependências, banco, `.env`, assets do Skyrim, artefato do servidor, Discord, troubleshooting) está documentado em `docs/technical/FASE_0_SETUP_DO_ZERO.md`. Antes de guiar alguém (humano ou agente) por um boot do zero, siga esse roteiro em vez de reconstruir os passos por conta própria.
+5. **Test Management and Technical Setup:**
+   - For local tests, always assume `offlineMode=true` on the server artifact, allowing the use of `profileId`. In production this is strictly forbidden.
+   - Setup, client install and server boot scripts must always use the PowerShell scripts in the `scripts/phase0/` folder.
+   - Setup from scratch (dependencies, database, `.env`, Skyrim assets, server artifact, Discord, troubleshooting) is documented in `docs/technical/FASE_0_SETUP_DO_ZERO.md`. Before guiding anyone (human or agent) through a from-scratch boot, follow that guide instead of reconstructing the steps yourself.

@@ -1,37 +1,37 @@
-# Staging reproduzível
+# Reproducible staging
 
-Esta stack cobre MariaDB, painel, Game API e bot em containers. SkyMP e
-launcher continuam no host Windows: o artefato pinado do servidor e o Skyrim
-são nativos, portanto não pertencem ao container Linux.
+This stack runs MariaDB, the panel, the Game API and the bot in containers. SkyMP
+and the launcher stay on the Windows host: the pinned server artifact and Skyrim
+are native, so they do not belong in the Linux container.
 
-## Preparação
+## Setup
 
-1. Inicie o Docker Desktop.
-2. Copie `.env.example` para `.env` e substitua **todos** os placeholders.
-3. Confirme que `apps/game-api/mods.json` representa a `Data` do servidor.
-4. No primeiro uso, execute:
+1. Start Docker Desktop.
+2. Copy `.env.example` to `.env` and replace **every** placeholder.
+3. Confirm that `apps/game-api/mods.json` matches the server's `Data` folder.
+4. On first use, run:
 
 ```powershell
 .\deploy\staging\Start-Staging.ps1 -BootstrapDatabase
 ```
 
-Nos usos seguintes, não repita o bootstrap:
+On later runs, do not repeat the bootstrap:
 
 ```powershell
 .\deploy\staging\Start-Staging.ps1
 ```
 
-Para iniciar também o SkyMP no host:
+To also start SkyMP on the host:
 
 ```powershell
 .\deploy\staging\Start-Staging.ps1 -StartSkyMP
 ```
 
-O painel fica em `127.0.0.1:3001`, a Game API em `127.0.0.1:7758` e MariaDB
-em `127.0.0.1:3306` (portas ajustáveis no `.env`). A porta do bot não é
-publicada; painel e bot conversam pela rede privada do compose.
+The panel is at `127.0.0.1:3001`, the Game API at `127.0.0.1:7758` and MariaDB
+at `127.0.0.1:3306` (ports adjustable in `.env`). The bot port is not
+published; the panel and the bot talk over the compose private network.
 
-## Verificação
+## Verification
 
 ```powershell
 docker compose --env-file deploy/staging/.env -f deploy/staging/compose.yaml ps
@@ -39,31 +39,30 @@ Invoke-RestMethod http://127.0.0.1:3001/health
 Invoke-RestMethod http://127.0.0.1:7758/health
 ```
 
-Todos os containers precisam aparecer `healthy`. A Game API permanece
-`unhealthy` se o manifesto de mods estiver ausente/inválido — comportamento
-fail-closed intencional.
+Every container must show as `healthy`. The Game API stays `unhealthy` if the
+mods manifest is missing/invalid — intentional fail-closed behavior.
 
-Depois do bootstrap, configure `skymp/config/database.local.json` para a porta
-publicada e rode `npm run check:schema` em `skymp/gamemode`.
+After the bootstrap, point `skymp/config/database.local.json` at the published
+port and run `npm run check:schema` in `skymp/gamemode`.
 
-## Encerramento
+## Shutdown
 
 ```powershell
 .\deploy\staging\Stop-Staging.ps1
 ```
 
-O volume do banco é preservado. `-RemoveVolumes` exige confirmação textual e
-é destrutivo; use somente para recriar uma staging descartável.
+The database volume is preserved. `-RemoveVolumes` requires a typed
+confirmation and is destructive; use it only to recreate a throwaway staging.
 
-## Backup e restore
+## Backup and restore
 
 ```powershell
 .\deploy\staging\Backup-Staging.ps1
-.\deploy\staging\Restore-Staging.ps1 -BackupFile .\deploy\staging\backups\skymp-staging-AAAAmmdd-HHMMSS.sql.gz
+.\deploy\staging\Restore-Staging.ps1 -BackupFile .\deploy\staging\backups\skymp-staging-YYYYmmdd-HHMMSS.sql.gz
 ```
 
-O backup usa transação consistente, inclui banco/rotinas/eventos/triggers, é
-comprimido dentro do container e recebe SHA-256 no host. O restore aceita
-somente arquivos do diretório `backups`, confere o hash, exige confirmação,
-para consumidores, restaura e roda o schema drift em modo estrito antes de
-religar os serviços.
+The backup uses a consistent transaction, includes the database/routines/events/triggers,
+is compressed inside the container and gets a SHA-256 on the host. The restore only
+accepts files from the `backups` directory, checks the hash, requires confirmation,
+stops the consumers, restores, and runs the schema drift check in strict mode before
+bringing the services back up.
