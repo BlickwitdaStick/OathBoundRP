@@ -6,7 +6,8 @@
     "requireApprovedCharacterForSpawn": true,
     "allowRaceMenuBeforeApproval": false,
     "defaultStartPointPolicy": "approved_character",
-    "permadeathEnabled": false
+    "permadeathEnabled": false,
+    "downedSeconds": 60
   },
   "chat": {
     "localRange": 1200,
@@ -25,7 +26,6 @@
   },
   "spawn": {
     "vanillaSpawnMode": "selective",
-    "playerRespawnSeconds": 300,
     "npcRespawnSeconds": 3600,
     "disableRespawnActorIds": []
   },

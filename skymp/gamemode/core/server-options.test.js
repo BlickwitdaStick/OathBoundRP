@@ -44,7 +44,7 @@ describe('defaults', () => {
     assert.equal(options['chat.localRange'], 1200);
     assert.equal(options['chat.shoutRange'], 3500);
     assert.equal(options['chat.oocRateLimitSeconds'], 5);
-    assert.equal(options['spawn.playerRespawnSeconds'], 5);
+    assert.equal(options['rp.downedSeconds'], 60);
     assert.equal(options['economy.startingGold'], 0);
   });
 });
@@ -68,8 +68,8 @@ describe('leitura de valores válidos', () => {
   });
 
   test('aceita zero como valor legítimo', () => {
-    writeConfig({ spawn: { playerRespawnSeconds: 0 } });
-    assert.equal(serverOptions.load(TEST_ENV).options['spawn.playerRespawnSeconds'], 0);
+    writeConfig({ chat: { oocRateLimitSeconds: 0 } });
+    assert.equal(serverOptions.load(TEST_ENV).options['chat.oocRateLimitSeconds'], 0);
   });
 });
 

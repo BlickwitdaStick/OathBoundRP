@@ -3,18 +3,28 @@
  *
  * Morte e resgate com consequência real (Heavy RP).
  *
- * Antes: HP<=0 disparava um respawn automático 10s depois, sem estado, sem
- * penalidade, sem chance de outro jogador intervir — "morrer" era um
- * non-event mecânico. Agora:
- *
  *   HP<=0 → estado DOWNED (bloqueia gameplay/fala via core/action-policy.js,
  *           que já restringe esses estados) → ou:
- *     (a) outro jogador usa /socorrer <actorId> a tempo → volta pra NORMAL
- *         com uma pequena estabilização de vida; ou
- *     (b) ninguém socorre dentro de BLEED_OUT_MS → estado DEAD, penalidade
- *         de ouro é aplicada via core/transaction-service (atômico), um
- *         snapshot de quem estava por perto é gravado em audit_logs (evidência
- *         de RDM pra staff), e só então o personagem respawna no ponto seguro.
+ *     (a) outro jogador usa /rescue a tempo → volta pra NORMAL com uma
+ *         pequena estabilização de vida; ou
+ *     (b) ninguém socorre dentro de DOWNED_MS (rp.downedSeconds, 60 s) →
+ *         penalidade de ouro via core/transaction-service (atômico), snapshot
+ *         de quem estava por perto em audit_logs (evidência de RDM pra staff),
+ *         e o personagem acorda no templo mais próximo (core/temple-locator.js).
+ *
+ * The downed pose (2026-11-21). SkyMP has no "essential" or bleedout state:
+ * at 0 health the server calls MpActor::Kill, and the client's
+ * deathService.killActor ragdolls the player (pushActorAway) and blocks every
+ * other animation until it is resurrected. That was the ragdoll players saw
+ * for the whole four minutes. Now, shortly after the death event (properties
+ * cannot be set inside it), the actor is resurrected where it fell
+ * (mp.set isDead false, no teleport), and once the client has stood it up it
+ * gets the vanilla bleedout animation (Debug.SendAnimationEvent BleedOutStart,
+ * the same event the game plays for an essential actor) and SetDontMove. The
+ * player is alive but on one knee. A short ragdoll at the moment of the fall
+ * remains: avoiding it needs the kill itself to be skipped in the SkyMP
+ * server, which the gamemode cannot do. Another kill while downed (someone
+ * keeps hitting) re-runs the same revive and pose; the 60 s do not restart.
  */
 
 const db = require('./database');
@@ -33,6 +43,7 @@ const deathEvents = require('./core/death-events');
 const { actorRef } = require('./core/papyrus');
 const skymp = require('./core/skymp-adapter');
 const interactionRegistry = require('./core/interaction-registry');
+const { createTempleLocator } = require('./core/temple-locator');
 
 // Temple of Kynareth, Whiterun (cell 0x165a7), on the floor near the healers.
 // Checked against Skyrim.esm on 2026-11-21.
@@ -81,9 +92,24 @@ const DEATH_PENALTY_PERCENTAGE = 0.1; // 10% do ouro atual, o que for maior
 
 const serverOptions = require('./core/server-options');
 
-const BLEED_OUT_MS = 4 * 60 * 1000; // janela de socorro: 4 minutos
-// Pausa entre "morreu" e respawn. Configurável em `spawn.playerRespawnSeconds`.
-const RESPAWN_DELAY_MS = serverOptions.get('spawn.playerRespawnSeconds') * 1000;
+// How long a player stays downed before waking at the nearest temple (the
+// rescue window). `rp.downedSeconds`, 60 by default.
+const DOWNED_MS = serverOptions.get('rp.downedSeconds') * 1000;
+// The revive cannot happen inside the death event: SkyMP refuses property
+// writes for the dying actor there (PercentagesBinding::Set).
+const DOWNED_REVIVE_DELAY_MS = 750;
+// The client resurrects in two steps (remove ragdoll, then GetUpBegin). The
+// bleedout event is sent after that, and once more in case the first one
+// landed while the get-up animation was still playing.
+const DOWNED_POSE_DELAYS_MS = [3000, 7000];
+// Health while downed: enough that a single stray hit does not kill again.
+const DOWNED_HEALTH = 0.25;
+// After the teleport the cell loads; the pose is cleared again once it has.
+const WAKE_CLEANUP_DELAY_MS = 4000;
+const ANIM_DOWNED_START = 'BleedOutStart';
+const ANIM_DOWNED_STOP = 'BleedOutStop';
+
+const templeLocator = createTempleLocator();
 const RESCUE_RANGE = 300;
 // Mesmo raio da fala normal: quem podia ouvir a cena é quem entra na evidência.
 const DEATH_CONTEXT_RANGE = require('./core/proximity-ranges').RANGES.say;
@@ -91,7 +117,7 @@ const STABILIZE_HEALTH = 25;
 const INITIATE_RANGE = 800;
 const DAMAGE_SPIKE_THRESHOLD = 25; // heurística: pontos de vida perdidos num único tick de 2s
 
-// characterId -> { actorId, downedAt, timer }
+// characterId -> { actorId, downedAt, timer, poseTimers }
 const _downedPlayers = new Map();
 // actorId -> última leitura de Health (pra detectar picos de dano)
 const _lastHealth = new Map();
@@ -152,6 +178,13 @@ async function logCombatEpisode(episodio) {
 function initDeathService() {
   if (typeof mp === 'undefined') return;
   console.log('[death-service] Initializing Death and Respawn hooks...');
+
+  // Every temple cell must be a CELL on this server. A wrong id froze every
+  // player once (0x162e2 is an object); a temple that fails is dropped.
+  const dropped = templeLocator.validate(mp);
+  const temples = templeLocator.temples();
+  console.log(`[death-service] ${temples.length} temples for waking downed players: ${temples.map((t) => t.key).join(', ')}` +
+    (dropped.length ? ` (dropped: ${dropped.join(', ')})` : ''));
 
   // Agressão relatada pelo cliente. Substitui, quando confirmado in-game, a
   // heurística de `checkDamageSpike` — que só existe porque estava pendurada
@@ -292,6 +325,10 @@ function pollPlayersOnce() {
       if (typeof healthPct === 'number' && Number.isFinite(healthPct)) {
         checkDamageSpike(actorId, Math.round(healthPct * 100));
       }
+
+      // Last Tamriel position, for a fall inside a cell the temple table does
+      // not know (a mod's interior).
+      try { templeLocator.remember(actorId, mp.get(actorId, 'locationalData')); } catch { /* actor gone */ }
     }
   }
 }
@@ -309,7 +346,13 @@ function pollPlayersOnce() {
 async function handlePlayerDowned(actorId, killerId) {
   const character = commands.getActiveCharacterData(actorId);
   if (!character) return;
-  if (_downedPlayers.has(character.characterId)) return; // já processando esta queda
+  const already = _downedPlayers.get(character.characterId);
+  if (already) {
+    // Killed again while downed: stand the body back up into the pose. The
+    // downed timer keeps running from the first fall.
+    enterDownedPose(already);
+    return;
+  }
 
   console.log(`[death-service] Player Actor ${actorId.toString(16)} caiu. Estado: DOWNED.`);
   characterState.set(character.characterId, STATES.DOWNED, { downedAt: Date.now() });
@@ -323,11 +366,73 @@ async function handlePlayerDowned(actorId, killerId) {
 
   const timer = setTimeout(() => {
     bleedOut(actorId, character.characterId).catch(err => console.error('[death-service] Falha no bleed-out:', err.message));
-  }, BLEED_OUT_MS);
+  }, DOWNED_MS);
   // unref: um bleed-out pendente não deve impedir o processo (ou os testes) de encerrar.
   if (typeof timer.unref === 'function') timer.unref();
 
-  _downedPlayers.set(character.characterId, { actorId, downedAt: Date.now(), timer });
+  const entry = { actorId, downedAt: Date.now(), timer, poseTimers: [] };
+  _downedPlayers.set(character.characterId, entry);
+  enterDownedPose(entry);
+  commands.sendNotification(actorId,
+    `You are badly wounded. Someone nearby can /rescue you; otherwise you wake at the nearest temple in ${Math.round(DOWNED_MS / 1000)} seconds.`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Downed pose: alive, on one knee, not a ragdoll
+// ─────────────────────────────────────────────────────────────────────────────
+
+function later(ms, fn) {
+  const t = setTimeout(() => {
+    try { fn(); } catch (err) { console.error('[death-service] Downed pose step failed:', err.message); }
+  }, ms);
+  if (typeof t.unref === 'function') t.unref();
+  return t;
+}
+
+function clearPoseTimers(entry) {
+  for (const t of entry.poseTimers || []) clearTimeout(t);
+  entry.poseTimers = [];
+}
+
+function playDownedAnimation(actorId, start) {
+  const self = actorRef(actorId);
+  mp.callPapyrusFunction('global', 'Debug', 'SendAnimationEvent', null, [self, start ? ANIM_DOWNED_START : ANIM_DOWNED_STOP]);
+  mp.callPapyrusFunction('method', 'Actor', 'SetDontMove', self, [Boolean(start)]);
+}
+
+/**
+ * Revives the fallen actor where it lies and puts it in the bleedout pose.
+ * Steps run on timers (see the constants); each checks the actor is still
+ * downed, so a rescue in between wins.
+ */
+function enterDownedPose(entry) {
+  if (typeof mp === 'undefined') return;
+  clearPoseTimers(entry);
+  const { actorId } = entry;
+  const stillDowned = () => [..._downedPlayers.values()].includes(entry);
+
+  entry.poseTimers.push(later(DOWNED_REVIVE_DELAY_MS, () => {
+    if (!stillDowned()) return;
+    // No teleport: MpActor::SetIsDead(false) respawns in place.
+    mp.set(actorId, 'isDead', false);
+    _wasDead.set(actorId, false);
+    mp.set(actorId, 'percentages', { health: DOWNED_HEALTH, magicka: 0, stamina: 0 });
+  }));
+  for (const ms of DOWNED_POSE_DELAYS_MS) {
+    entry.poseTimers.push(later(ms, () => {
+      if (stillDowned()) playDownedAnimation(actorId, true);
+    }));
+  }
+}
+
+/** Gets the actor off its knee and lets it move again. */
+function leaveDownedPose(actorId) {
+  if (typeof mp === 'undefined') return;
+  try {
+    playDownedAnimation(actorId, false);
+  } catch (err) {
+    console.error('[death-service] Could not clear the downed pose:', err.message);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -365,6 +470,7 @@ async function rescueTarget(rescuerActorId, targetActorId) {
   }
 
   clearTimeout(downed.timer);
+  clearPoseTimers(downed);
   _downedPlayers.delete(target.characterId);
   // Socorrido a tempo: não houve morte, então a autoria deixa de ser relevante
   // (e o registro em audit_logs já guarda o que aconteceu, se a staff precisar).
@@ -375,6 +481,7 @@ async function rescueTarget(rescuerActorId, targetActorId) {
     // `Actor.Resurrect` NÃO existe neste SkyMP (papyrus-catalog.js); o caminho
     // upstream é a property nativa `isDead` (docs/research/SKYMP_INTEGRATION_AUDIT.md §7).
     mp.set(targetActorId, 'isDead', false);
+    leaveDownedPose(targetActorId);
     mp.callPapyrusFunction('method', 'Actor', 'SetActorValue', actorRef(targetActorId), ['Health', STABILIZE_HEALTH]);
     _wasDead.set(targetActorId, false);
   }
@@ -426,6 +533,11 @@ function registerInteractions() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function bleedOut(actorId, characterId) {
+  const downed = _downedPlayers.get(characterId);
+  if (downed) {
+    clearTimeout(downed.timer);
+    clearPoseTimers(downed);
+  }
   _downedPlayers.delete(characterId);
   console.log(`[death-service] Personagem ${characterId} sangrou ate a morte sem socorro.`);
 
@@ -456,10 +568,8 @@ async function bleedOut(actorId, characterId) {
     return penalty;
   }
 
-  const respawnTimer = setTimeout(() => {
-    executeRespawn(actorId, characterId, penalty).catch(err => console.error('[death-service] Falha no respawn:', err.message));
-  }, RESPAWN_DELAY_MS);
-  if (typeof respawnTimer.unref === 'function') respawnTimer.unref();
+  // The downed minute was the wait; the player wakes at the temple now.
+  await executeRespawn(actorId, characterId, penalty);
 
   return penalty;
 }
@@ -506,8 +616,17 @@ async function executeRespawn(actorId, characterId, penalty = 0) {
   if (typeof mp === 'undefined') return;
 
   try {
+    // Where the actor lies decides the temple; read it before the teleport.
+    let fellAt = null;
+    try { fellAt = mp.get(actorId, 'locationalData'); } catch { /* unknown: default temple */ }
+    const found = templeLocator.nearestTemple(fellAt, actorId);
+    const temple = found ? found.temple : null;
+
     // Ver nota em handleRescue: `isDead`, não `Actor.Resurrect` (inexistente).
+    // Normally already alive (the downed pose revived it); this covers a fall
+    // seen only by the polling, before the revive ran.
     mp.set(actorId, 'isDead', false);
+    leaveDownedPose(actorId);
 
     // ⚠️ As tres chaves e os tres tipos sao exigencia do addon nativo, nao
     // convencao nossa. **[DOC]** `LocationalDataBinding::Set` (§8.4) le
@@ -523,19 +642,22 @@ async function executeRespawn(actorId, characterId, penalty = 0) {
     // A forma certa ja estava declarada em `types/mp.d.ts` e ja era usada pelo
     // `governance-service` ao prender alguem. O `typecheck` e informativo
     // (`ARCHITECTURE.md` §1.4), entao nunca reclamou da divergencia.
-    mp.set(actorId, 'locationalData', {
-      cellOrWorldDesc: respawnCellDesc(),
-      pos: RESPAWN_POS,
-      rot: [0, 0, 0]
-    });
+    mp.set(actorId, 'locationalData', temple
+      ? { cellOrWorldDesc: temple.cellDesc, pos: temple.pos.slice(), rot: temple.rot.slice() }
+      : { cellOrWorldDesc: respawnCellDesc(), pos: RESPAWN_POS, rot: [0, 0, 0] });
+    mp.set(actorId, 'percentages', { health: 1, magicka: 1, stamina: 1 });
     _wasDead.set(actorId, false);
+    // The cell change can swallow the first BleedOutStop: send it again once
+    // the temple has loaded, or the player stays on one knee.
+    later(WAKE_CLEANUP_DELAY_MS, () => leaveDownedPose(actorId));
 
     characterState.set(characterId, STATES.NORMAL, {});
-    console.log(`[death-service] Respawn complete for actor ${actorId.toString(16)}.`);
+    console.log(`[death-service] Actor ${actorId.toString(16)} woke at ${temple ? `${temple.key} (${found.reason})` : 'the fallback respawn'}.`);
 
+    const where = temple ? temple.name : 'a temple';
     commands.sendNotification(actorId, penalty > 0
-      ? `You were rescued and woke up somewhere safe. You lost ${penalty} Septims.`
-      : 'You were rescued and woke up somewhere safe.');
+      ? `You were carried to the ${where} and wake up there. You lost ${penalty} Septims.`
+      : `You were carried to the ${where} and wake up there.`);
     panelRefreshBus.requestRefresh(actorId, 'status');
   } catch (err) {
     console.error(`[death-service] Failed to respawn actor ${actorId.toString(16)}:`, err.message);
@@ -561,7 +683,7 @@ async function executeRespawn(actorId, characterId, penalty = 0) {
  * quem foi.
  *
  * Guarda também em `_killers` porque a morte definitiva (`bleedOut`) acontece
- * até quatro minutos depois, e o `killerId` só existe neste instante.
+ * até `rp.downedSeconds` depois, e o `killerId` só existe neste instante.
  */
 async function logKiller(actorId, characterId, killerId) {
   if (!killerId) return null; // 0 ou ausente: queda, veneno, ou veio do polling
@@ -710,6 +832,7 @@ function checkDamageSpike(actorId, health) {
 function cleanup(actorId) {
   _lastHealth.delete(actorId);
   _wasDead.delete(actorId);
+  templeLocator.forget(actorId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -774,6 +897,9 @@ module.exports = {
   _handlePlayerDowned: handlePlayerDowned,
   _respawnCellDesc: respawnCellDesc,
   RESPAWN_CELL_FALLBACK,
+  DOWNED_MS,
+  _templeLocator: templeLocator,
+  _enterDownedPose: enterDownedPose,
   _downedPlayers,
   _lastHealth,
   _wasDead,

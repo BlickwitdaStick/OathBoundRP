@@ -256,11 +256,12 @@ describe('death-service', () => {
   });
 
   describe('bleedOut', () => {
-    it('aplica a penalidade de morte, registra contexto e transiciona pra DEAD', async () => {
+    it('aplica a penalidade de morte, registra contexto e acorda no templo (NORMAL)', async () => {
       await deathService._handlePlayerDowned(VICTIM_ACTOR_ID);
       const penalty = await deathService.bleedOut(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID);
 
-      assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.DEAD);
+      // The downed minute was the wait: no extra "dead" pause before the temple.
+      assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
       assert.ok(penalty > 0, 'deveria ter aplicado alguma penalidade');
       assert.strictEqual(mockGold[VICTIM_CHARACTER_ID], 500 - penalty);
       assert.strictEqual(deathService.isDowned(VICTIM_CHARACTER_ID), false);
@@ -663,5 +664,185 @@ describe('death-service — pollPlayersOnce', () => {
     papyrusResults = { IsDead: false, GetActorValuePercentage: 0.84 };
     deathService.pollPlayersOnce();
     assert.strictEqual(deathService._lastHealth.get(VICTIM_ACTOR_ID), 84);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Downed for rp.downedSeconds (60 s), then wake at the nearest temple
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('death-service — downed pose instead of a ragdoll', () => {
+  const { mock } = require('node:test');
+  let calls;
+  let sets;
+  const original = {};
+
+  beforeEach(() => {
+    commands.registerActiveCharacter(VICTIM_ACTOR_ID, { id: VICTIM_CHARACTER_ID, first_name: 'Vitima', last_name: 'Um' }, 1, 1);
+    commands.registerActiveCharacter(RESCUER_ACTOR_ID, { id: RESCUER_CHARACTER_ID, first_name: 'Socorrista', last_name: 'Dois' }, 2, 2);
+    characterState.set(VICTIM_CHARACTER_ID, STATES.NORMAL, {});
+    setPos(VICTIM_ACTOR_ID, [0, 0, 0]);
+    setPos(RESCUER_ACTOR_ID, [10, 0, 0]);
+    deathService._downedPlayers.clear();
+    calls = [];
+    sets = [];
+    Object.assign(original, { call: mp.callPapyrusFunction, set: mp.set });
+    mp.callPapyrusFunction = (type, cls, fn, self, args) => { calls.push({ type, cls, fn, args }); return null; };
+    mp.set = (id, prop, v) => { sets.push({ id, prop, v }); return original.set(id, prop, v); };
+    mock.timers.enable({ apis: ['setTimeout'] });
+  });
+
+  afterEach(() => {
+    mock.timers.reset();
+    mp.callPapyrusFunction = original.call;
+    mp.set = original.set;
+    for (const e of deathService._downedPlayers.values()) clearTimeout(e.timer);
+    deathService._downedPlayers.clear();
+  });
+
+  const anims = () => calls.filter((c) => c.fn === 'SendAnimationEvent').map((c) => c.args[1]);
+
+  it('lasts 60 seconds by default', () => {
+    assert.strictEqual(deathService.DOWNED_MS, 60000);
+  });
+
+  it('revives in place (no teleport) and plays the bleedout animation, not a ragdoll', async () => {
+    await deathService._handlePlayerDowned(VICTIM_ACTOR_ID);
+    assert.deepStrictEqual(sets.filter((s) => s.prop === 'isDead'), [], 'nothing may be written inside the death event');
+
+    mock.timers.tick(1000);
+    assert.deepStrictEqual(sets.filter((s) => s.prop === 'isDead').map((s) => s.v), [false]);
+    assert.strictEqual(sets.some((s) => s.prop === 'locationalData'), false, 'the revive must not move the body');
+    const pct = sets.find((s) => s.prop === 'percentages');
+    assert.ok(pct && pct.v.health > 0 && pct.v.health < 1, 'downed health stays low but above zero');
+
+    mock.timers.tick(2500);
+    assert.deepStrictEqual(anims(), ['BleedOutStart']);
+    assert.ok(calls.some((c) => c.fn === 'SetDontMove' && c.args[0] === true));
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.DOWNED);
+  });
+
+  it('a second kill while downed re-poses the body without restarting the 60 s', async () => {
+    await deathService._handlePlayerDowned(VICTIM_ACTOR_ID);
+    const entry = deathService._downedPlayers.get(VICTIM_CHARACTER_ID);
+    const timer = entry.timer;
+    mock.timers.tick(8000);
+    sets.length = 0;
+
+    await deathService._handlePlayerDowned(VICTIM_ACTOR_ID);
+    assert.strictEqual(deathService._downedPlayers.get(VICTIM_CHARACTER_ID).timer, timer);
+    mock.timers.tick(1000);
+    assert.deepStrictEqual(sets.filter((s) => s.prop === 'isDead').map((s) => s.v), [false]);
+  });
+
+  it('rescue gets the player off the knee and cancels the pending pose steps', async () => {
+    await deathService._handlePlayerDowned(VICTIM_ACTOR_ID);
+    await deathService.rescueTarget(RESCUER_ACTOR_ID, VICTIM_ACTOR_ID);
+    assert.deepStrictEqual(anims(), ['BleedOutStop']);
+    assert.ok(calls.some((c) => c.fn === 'SetDontMove' && c.args[0] === false));
+
+    mock.timers.tick(10000);
+    assert.deepStrictEqual(anims(), ['BleedOutStop'], 'no BleedOutStart after the rescue');
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
+  });
+
+  it('after 60 s without help the player wakes at the nearest temple', async () => {
+    // Just outside Riften's Temple of Mara, in RiftenWorld.
+    setPos(VICTIM_ACTOR_ID, [176000, -97000, 11392], '16bb4:Skyrim.esm');
+    await deathService._handlePlayerDowned(VICTIM_ACTOR_ID);
+    mock.timers.tick(60000);
+    for (let i = 0; i < 20 && characterState.get(VICTIM_CHARACTER_ID) !== STATES.NORMAL; i++) {
+      await new Promise((r) => setImmediate(r));
+    }
+
+    const loc = sets.filter((s) => s.prop === 'locationalData').pop();
+    assert.ok(loc, 'the wake-up must teleport');
+    assert.strictEqual(loc.v.cellOrWorldDesc, '16bd7:Skyrim.esm');
+    assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
+    assert.ok(anims().includes('BleedOutStop'));
+    const full = sets.filter((s) => s.prop === 'percentages').pop();
+    assert.deepStrictEqual(full.v, { health: 1, magicka: 1, stamina: 1 });
+  });
+});
+
+describe('core/temple-locator', () => {
+  const { createTempleLocator, skyrimIdFromDesc } = require('./core/temple-locator');
+  const data = require('./data/temple-data.json');
+  const quiet = { warn() {}, error() {} };
+  const at = (cellOrWorldDesc, pos = [0, 0, 0]) => ({ cellOrWorldDesc, pos });
+
+  it('every temple is a full FormDesc for Skyrim.esm, never 0x...', () => {
+    assert.ok(data.temples.length >= 6);
+    for (const t of data.temples) {
+      assert.match(t.cellDesc, /^[0-9a-f]+:Skyrim\.esm$/, t.key);
+      assert.strictEqual(t.pos.length, 3);
+      assert.strictEqual(t.rot.length, 3);
+    }
+  });
+
+  it('keeps the Temple of Kynareth as 165a7 (the cell already used for respawn)', () => {
+    const whiterun = data.temples.find((t) => t.key === 'whiterun');
+    assert.strictEqual(whiterun.cellDesc, '165a7:Skyrim.esm');
+    assert.strictEqual(data.defaultTemple, 'whiterun');
+    assert.strictEqual(data.temples.some((t) => t.cellDesc.startsWith('162e2')), false, '0x162e2 is an object, not a cell');
+  });
+
+  it('exterior: closest temple door by distance, also across city worldspaces', () => {
+    const loc = createTempleLocator({ data, logger: quiet });
+    assert.strictEqual(loc.nearestTemple(at('3c:Skyrim.esm', [19312, -7424, -3520])).temple.key, 'whiterun'); // Whiterun gate
+    assert.strictEqual(loc.nearestTemple(at('3c:Skyrim.esm', [138289, 37664, -12689])).temple.key, 'windhelm'); // Windhelm gate
+    assert.strictEqual(loc.nearestTemple(at('3c:Skyrim.esm', [-173272, 5440, -3337])).temple.key, 'markarth'); // Markarth gate
+    assert.strictEqual(loc.nearestTemple(at('37edf:Skyrim.esm', [-58000, 110000, -8000])).temple.key, 'solitude');
+    assert.strictEqual(loc.nearestTemple(at('3c:Skyrim.esm', [-34000, -84000, -3000])).temple.key, 'falkreath');
+    assert.strictEqual(loc.nearestTemple(at('3c:Skyrim.esm', [0, 0, 0])).reason, 'distance');
+  });
+
+  it('interior: the temple mapped from the cell (Sleeping Giant Inn -> Whiterun, Windpeak Inn -> Solitude)', () => {
+    const loc = createTempleLocator({ data, logger: quiet });
+    const inn = loc.nearestTemple(at('133c6:Skyrim.esm'));
+    assert.deepStrictEqual([inn.temple.key, inn.reason], ['whiterun', 'cell']);
+    assert.strictEqual(loc.nearestTemple(at('13a7f:Skyrim.esm')).temple.key, 'solitude');
+    assert.strictEqual(loc.nearestTemple(at('16bd7:Skyrim.esm')).temple.key, 'riften', 'a temple is its own nearest');
+  });
+
+  it('unknown interior (a mod cell): nearest to the last Tamriel position seen', () => {
+    const loc = createTempleLocator({ data, logger: quiet });
+    loc.remember(7, at('1691d:Skyrim.esm', [134000, 38700, -12200]));
+    loc.remember(7, at('800:Oathbound.esp', [1, 2, 3])); // interior: not remembered
+    const r = loc.nearestTemple(at('800:Oathbound.esp'), 7);
+    assert.deepStrictEqual([r.temple.key, r.reason], ['windhelm', 'last-exterior']);
+    loc.forget(7);
+    const d = loc.nearestTemple(at('800:Oathbound.esp'), 7);
+    assert.deepStrictEqual([d.temple.key, d.reason], ['whiterun', 'default']);
+  });
+
+  it('nothing known at all: the default temple', () => {
+    const loc = createTempleLocator({ data, logger: quiet });
+    assert.strictEqual(loc.nearestTemple(null).temple.key, 'whiterun');
+    assert.strictEqual(loc.nearestTemple(at('garbage')).temple.key, 'whiterun');
+  });
+
+  it('validate drops a temple the server does not know as a CELL', () => {
+    const loc = createTempleLocator({ data, logger: quiet });
+    const api = {
+      getIdFromDesc: (desc) => skyrimIdFromDesc(desc),
+      lookupEspmRecordById: (id) => (id === 0x16bd7 ? { record: { type: 'REFR' } } : { record: { type: 'CELL' } })
+    };
+    assert.deepStrictEqual(loc.validate(api), ['riften']);
+    assert.strictEqual(loc.temples().some((t) => t.key === 'riften'), false);
+    assert.notStrictEqual(loc.nearestTemple(at('16bb4:Skyrim.esm', [176323, -97022, 0])).temple.key, 'riften');
+  });
+
+  it('validate keeps every temple when the lookup throws (never strands players)', () => {
+    const loc = createTempleLocator({ data, logger: quiet });
+    assert.deepStrictEqual(loc.validate({ lookupEspmRecordById: () => { throw new Error('no espm'); } }), []);
+    assert.strictEqual(loc.temples().length, data.temples.length);
+  });
+
+  it('skyrimIdFromDesc only reads Skyrim.esm descs', () => {
+    assert.strictEqual(skyrimIdFromDesc('165a7:Skyrim.esm'), 0x165a7);
+    assert.strictEqual(skyrimIdFromDesc('165A7:skyrim.esm'), 0x165a7);
+    assert.strictEqual(skyrimIdFromDesc('165a7:Update.esm'), null);
+    assert.strictEqual(skyrimIdFromDesc('0x165a7'), null);
   });
 });

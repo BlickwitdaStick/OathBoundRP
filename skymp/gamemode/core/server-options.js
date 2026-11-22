@@ -49,7 +49,7 @@ const SPEC = {
 
   'rp.permadeathEnabled': { ...bool(), default: false, usedBy: 'death-service.js (bleed-out aposenta em vez de respawnar)' },
 
-  'spawn.playerRespawnSeconds': { ...num(0, 3600), default: 5, usedBy: 'death-service.js (RESPAWN_DELAY_MS)' },
+  'rp.downedSeconds': { ...num(5, 600), default: 60, usedBy: 'death-service.js (how long a downed player stays down before waking at the nearest temple)' },
 
   'economy.startingGold': { ...num(0, 1000000), default: 0, usedBy: 'whitelist.js (ouro inicial do personagem)' },
 
