@@ -1,8 +1,10 @@
 /**
  * holdstone-panel.js
  *
- * Hold menu opened at a holdstone (`gamemode/holdstone-service.js`). Shows the
- * hold, your rank, the rank ladder, members and parcels. Buttons go back
+ * Menu opened at a holdstone (`gamemode/holdstone-service.js`). Every stone
+ * belongs to an organization (a hold, town, faction, thanedom or council).
+ * Shows it, your rank, the rank ladder, members, parcels, and every
+ * organization you are tied to. Buttons go back
  * through the SAME pipeline as the interaction menu (`interaction:execute`)
  * and are re-checked by the server; this file decides nothing.
  *
@@ -41,7 +43,7 @@
     const root = $('hs-ranks');
     root.innerHTML = '';
     if (!ranks || ranks.length === 0) {
-      root.appendChild(el('div', 'hs-empty', 'No ranks set up for this hold.'));
+      root.appendChild(el('div', 'hs-empty', 'No ranks set up here.'));
       return;
     }
     for (const rank of ranks) {
@@ -71,7 +73,7 @@
     root.innerHTML = '';
     const parcels = data.parcels || [];
     if (parcels.length === 0) {
-      root.appendChild(el('div', 'hs-empty', 'No parcels in this hold.'));
+      root.appendChild(el('div', 'hs-empty', 'No parcels here.'));
       return;
     }
     for (const parcel of parcels) {
@@ -104,13 +106,30 @@
     }
   }
 
+  function renderAllegiances(list) {
+    const root = $('hs-allegiances');
+    if (!root) return;
+    root.innerHTML = '';
+    if (!list || list.length === 0) {
+      root.appendChild(el('div', 'hs-empty', 'You are tied to no stone yet.'));
+      return;
+    }
+    for (const a of list) {
+      const chip = el('span', 'hs-rank', a.name + ': ' + a.rank);
+      chip.title = a.kind;
+      root.appendChild(chip);
+    }
+  }
+
   function render(data) {
     state.data = data;
     if (data.targetId != null) state.targetId = data.targetId;
-    $('hs-hold-name').textContent = data.holdName || data.holdId || '—';
+    $('hs-eyebrow').textContent = (data.kind || 'Holdstone') + (data.seat ? ' · ' + data.seat : '');
+    $('hs-hold-name').textContent = data.orgName || data.orgId || '—';
     $('hs-your-rank').textContent = data.yourRank
       ? 'Your rank: ' + data.yourRank
-      : (data.isStaff ? 'Staff' : 'You are not a member of this hold');
+      : (data.isStaff ? 'Staff' : 'You are not tied to this stone');
+    renderAllegiances(data.allegiances);
     renderRanks(data.ranks);
     renderMembers(data.members);
     renderParcels(data);

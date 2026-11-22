@@ -1,35 +1,60 @@
 'use strict';
 
 /**
- * holdstone-service: activation blocking, parcel assignment, ranks and the
- * parceling tool, against an in-memory fake of the v33 tables and a fake `mp`.
+ * holdstone-service: stones known by their activator (placed in the Creation
+ * Kit, nothing bound in game), organizations synced from holdstones.json,
+ * activation blocking, parcel assignment, ranks and the parceling tool —
+ * against an in-memory fake of the v33/v41 tables and a fake `mp`.
  */
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { describe, it, beforeEach, afterEach } = require('node:test');
 
 const service = require('./holdstone-service');
 const activationEvents = require('./core/activation-events');
 const interactionRegistry = require('./core/interaction-registry');
-const physicalAnchorRegistry = require('./core/physical-anchor-registry');
 const espm = require('./core/espm');
 
 // ── fake world ──────────────────────────────────────────────────────────────
 const FRONT_DOOR = 0xa1;
 const INSIDE_DOOR = 0xa2;
 const CHEST = 0xc1;
-const STONE = 0xb0;
 const ROCK = 0xe1;
+const WHITERUN_STONE = 0xb1;   // a placed "Whiterun Holdstone"
+const WHITERUN_STONE_2 = 0xb2; // a second Whiterun stone elsewhere
+const HROTHGAR_STONE = 0xb3;   // a placed "High Hrothgar Holdstone"
+const GENERIC_STONE = 0xb9;    // the old generic "Holdstone" (800)
 const DOOR_BASE = 0x1000;
 const CHEST_BASE = 0x2000;
 const ROCK_BASE = 0x3000;
-const BASE_OF = { [FRONT_DOOR]: DOOR_BASE, [INSIDE_DOOR]: DOOR_BASE, [CHEST]: CHEST_BASE, [ROCK]: ROCK_BASE, [STONE]: ROCK_BASE };
+const PLUGIN = 'Oathbound_Holdstone.esp';
+const BASE_DESC_OF = {
+  [FRONT_DOOR]: '1000:Skyrim.esm',
+  [INSIDE_DOOR]: '1000:Skyrim.esm',
+  [CHEST]: '2000:Skyrim.esm',
+  [ROCK]: '3000:Skyrim.esm',
+  [WHITERUN_STONE]: `801:${PLUGIN}`,
+  [WHITERUN_STONE_2]: `801:${PLUGIN}`,
+  [HROTHGAR_STONE]: `80B:${PLUGIN}`,
+  [GENERIC_STONE]: `800:${PLUGIN}`
+};
+
+const STONES = {
+  plugin: PLUGIN,
+  stones: [
+    { id: 'whiterun', name: 'Whiterun', kind: 'hold', hold: 'whiterun', formId: '801' },
+    { id: 'riverwood', name: 'Riverwood', kind: 'town', hold: 'whiterun', formId: '80a' },
+    { id: 'high_hrothgar', name: 'High Hrothgar', kind: 'council', hold: null, formId: '80b' },
+    { id: 'imperial_legion', name: 'Imperial Legion', kind: 'faction', hold: 'solitude', formId: '80c' }
+  ]
+};
 
 function installMp() {
   global.mp = {
     getDescFromId: (id) => `${id.toString(16)}:Skyrim.esm`,
     getIdFromDesc: (desc) => parseInt(desc.split(':')[0], 16),
-    get: (id, prop) => (prop === 'baseDesc' && BASE_OF[id] ? `${BASE_OF[id].toString(16)}:Skyrim.esm` : undefined),
+    get: (id, prop) => (prop === 'baseDesc' ? BASE_DESC_OF[id] : undefined),
     lookupEspmRecordById: (id) => {
       if (id === DOOR_BASE) return { record: { type: 'DOOR', editorId: 'HouseDoor', fields: [] } };
       if (id === CHEST_BASE) return { record: { type: 'CONT', editorId: 'Chest', fields: [] } };
@@ -45,15 +70,20 @@ function installMp() {
 // ── fake database (only the statements holdstone-service issues) ────────────
 function createDb() {
   const t = {
-    holds: [{ id: 'whiterun', name: 'Whiterun' }, { id: 'riften', name: 'Riften' }],
-    holdstones: [],
-    hold_ranks: [
-      { id: 1, hold_id: 'whiterun', rank_key: 'citizen', name: 'Citizen', position: 10, is_leader: 0 },
-      { id: 2, hold_id: 'whiterun', rank_key: 'guard', name: 'Guard', position: 20, is_leader: 0 },
-      { id: 3, hold_id: 'whiterun', rank_key: 'steward', name: 'Steward', position: 30, is_leader: 1 },
-      { id: 4, hold_id: 'whiterun', rank_key: 'jarl', name: 'Jarl', position: 40, is_leader: 1 }
+    holds: [{ id: 'whiterun', name: 'Whiterun Hold' }, { id: 'solitude', name: 'Haafingar' }, { id: 'riften', name: 'The Rift' }],
+    // As migration v41 leaves them: holds copied from v33 with their ranks.
+    stone_orgs: [
+      { id: 'whiterun', name: 'Whiterun Hold', kind: 'hold', hold_id: 'whiterun', base_id: null },
+      { id: 'riften', name: 'The Rift', kind: 'hold', hold_id: 'riften', base_id: null }
     ],
-    hold_members: [],
+    stone_ranks: [
+      { id: 1, org_id: 'whiterun', rank_key: 'citizen', name: 'Citizen', position: 10, is_leader: 0 },
+      { id: 2, org_id: 'whiterun', rank_key: 'guard', name: 'Guard', position: 20, is_leader: 0 },
+      { id: 3, org_id: 'whiterun', rank_key: 'steward', name: 'Steward', position: 30, is_leader: 1 },
+      { id: 4, org_id: 'whiterun', rank_key: 'jarl', name: 'Jarl', position: 40, is_leader: 1 },
+      { id: 5, org_id: 'riften', rank_key: 'citizen', name: 'Citizen', position: 10, is_leader: 0 }
+    ],
+    stone_members: [],
     parcels: [],
     parcel_objects: [],
     characters: [
@@ -64,45 +94,62 @@ function createDb() {
     ]
   };
   let nextParcel = 1;
-  const log = [];
+  let nextRank = 100;
   const sql = (s) => s.replace(/\s+/g, ' ').trim();
 
   async function query(raw, p = []) {
     const s = sql(raw);
-    log.push(s);
+    if (s === 'SELECT id FROM holds') return t.holds.map((h) => ({ id: h.id }));
     if (s.startsWith('SELECT id, name FROM holds')) return t.holds;
-    if (s.startsWith('SELECT hold_id, object_id FROM holdstones')) return t.holdstones;
-    if (s.startsWith('SELECT id, hold_id, rank_key')) return t.hold_ranks;
-    if (s.startsWith('SELECT hold_id, character_id, rank_id')) return t.hold_members;
-    if (s.startsWith('SELECT id, hold_id, name, owner_character_id')) return t.parcels;
+    if (s.startsWith('SELECT id, name, kind, hold_id, base_id FROM stone_orgs')) return t.stone_orgs;
+    if (s === 'SELECT id, kind FROM stone_orgs') return t.stone_orgs.map((o) => ({ id: o.id, kind: o.kind }));
+    if (s === 'SELECT DISTINCT org_id FROM stone_ranks') return [...new Set(t.stone_ranks.map((r) => r.org_id))].map((org_id) => ({ org_id }));
+    if (s.startsWith('SELECT id, org_id, rank_key')) return t.stone_ranks;
+    if (s.startsWith('SELECT org_id, character_id, rank_id')) return t.stone_members;
+    if (s.startsWith('SELECT id, org_id, hold_id, name, owner_character_id')) return t.parcels;
     if (s.startsWith('SELECT object_id, parcel_id')) return t.parcel_objects;
     if (s.includes('FROM characters WHERE char_number')) return t.characters.filter((c) => c.char_number === p[0]);
     if (s.includes('FROM characters WHERE id IN')) return t.characters.filter((c) => p.includes(c.id));
 
-    if (s.startsWith('DELETE FROM holdstones WHERE hold_id')) {
-      t.holdstones = t.holdstones.filter((r) => r.hold_id !== p[0]);
-      return { affectedRows: 1 };
-    }
-    if (s.startsWith('DELETE FROM holdstones WHERE object_id')) {
-      t.holdstones = t.holdstones.filter((r) => !(r.object_id === p[0] && r.hold_id !== p[1]));
-      return { affectedRows: 1 };
-    }
-    if (s.startsWith('INSERT INTO holdstones')) {
-      t.holdstones = t.holdstones.filter((r) => r.hold_id !== p[0]).concat({ hold_id: p[0], object_id: p[1] });
-      return { affectedRows: 1 };
-    }
-    if (s.startsWith('DELETE FROM hold_members')) {
-      t.hold_members = t.hold_members.filter((r) => !(r.hold_id === p[0] && r.character_id === p[1]));
+    if (s.startsWith('UPDATE stone_orgs SET base_id = NULL')) {
+      for (const o of t.stone_orgs) if (o.base_id === p[0] && o.id !== p[1]) o.base_id = null;
       return {};
     }
-    if (s.startsWith('INSERT INTO hold_members')) {
-      t.hold_members = t.hold_members.filter((r) => !(r.hold_id === p[0] && r.character_id === p[1]))
-        .concat({ hold_id: p[0], character_id: p[1], rank_id: p[2] });
+    if (s.startsWith('INSERT INTO stone_orgs')) {
+      const row = { id: p[0], name: p[1], kind: p[2], hold_id: p[3], base_id: p[4] };
+      const existing = t.stone_orgs.find((o) => o.id === p[0]);
+      if (existing) Object.assign(existing, row); else t.stone_orgs.push(row);
+      return {};
+    }
+    if (s.startsWith('INSERT IGNORE INTO stone_ranks')) {
+      if (!t.stone_ranks.some((r) => r.org_id === p[0] && r.rank_key === p[1])) {
+        t.stone_ranks.push({ id: nextRank++, org_id: p[0], rank_key: p[1], name: p[2], position: p[3], is_leader: p[4] });
+      }
+      return {};
+    }
+    if (s.startsWith('INSERT INTO stone_ranks')) {
+      const existing = t.stone_ranks.find((r) => r.org_id === p[0] && r.rank_key === p[1]);
+      if (existing) Object.assign(existing, { name: p[2], position: p[3], is_leader: p[4] });
+      else t.stone_ranks.push({ id: nextRank++, org_id: p[0], rank_key: p[1], name: p[2], position: p[3], is_leader: p[4] });
+      return {};
+    }
+    if (s.startsWith('DELETE FROM stone_ranks')) {
+      t.stone_ranks = t.stone_ranks.filter((r) => r.id !== p[0]);
+      t.stone_members = t.stone_members.filter((m) => m.rank_id !== p[0]);
+      return {};
+    }
+    if (s.startsWith('DELETE FROM stone_members')) {
+      t.stone_members = t.stone_members.filter((r) => !(r.org_id === p[0] && r.character_id === p[1]));
+      return {};
+    }
+    if (s.startsWith('INSERT INTO stone_members')) {
+      t.stone_members = t.stone_members.filter((r) => !(r.org_id === p[0] && r.character_id === p[1]))
+        .concat({ org_id: p[0], character_id: p[1], rank_id: p[2] });
       return {};
     }
     if (s.startsWith('INSERT INTO parcels')) {
       const id = nextParcel++;
-      t.parcels.push({ id, hold_id: p[0], name: p[1], owner_character_id: null, min_rank_id: p[2], locked: 1 });
+      t.parcels.push({ id, org_id: p[0], hold_id: p[1], name: p[2], owner_character_id: null, min_rank_id: p[3], locked: 1 });
       return { insertId: id };
     }
     const upd = s.match(/^UPDATE parcels SET (\w+) = \? WHERE id = \?$/);
@@ -139,7 +186,7 @@ function createDb() {
     }
     throw new Error(`fake db: unhandled SQL: ${s}`);
   }
-  return { query, tables: t, log };
+  return { query, tables: t };
 }
 
 // ── fake players ────────────────────────────────────────────────────────────
@@ -154,12 +201,13 @@ const PLAYERS = {
 const STAFF = 0xff000001;
 const ANA = 0xff000010;
 const BO = 0xff000020;
-const CY = 0xff000030;
+const STAFF_ACTOR = { isStaff: true, characterId: 1 };
 
 let db;
 let notes;
 let menus;
 let modals;
+let errors;
 
 function setup() {
   installMp();
@@ -167,11 +215,11 @@ function setup() {
   service._resetForTest();
   activationEvents._resetForTest();
   interactionRegistry._reset();
-  physicalAnchorRegistry._reset();
   db = createDb();
   notes = [];
   menus = [];
   modals = [];
+  errors = [];
   service.configure({
     db,
     commands: {
@@ -185,56 +233,175 @@ function setup() {
     isStaff: (actorId) => actorId === STAFF,
     sendModal: (actorId, type, data) => modals.push({ actorId, type, data }),
     openInteractionMenu: (actorId, targetId) => menus.push({ actorId, targetId }),
-    logger: { log() {}, error() {} }
+    stoneList: () => STONES,
+    logger: { log() {}, error: (...a) => errors.push(a.join(' ')) }
   });
+}
+
+async function boot() {
+  setup();
+  await service.syncOrganizations();
+  await service.reload();
 }
 
 const desc = (id) => `${id.toString(16)}:Skyrim.esm`;
 const lastNote = (actorId) => [...notes].reverse().find((n) => n.actorId === actorId)?.message;
+const flush = async () => { await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r)); };
+
+describe('holdstone-service: stones from holdstones.json', () => {
+  beforeEach(boot);
+  afterEach(() => { delete global.mp; });
+
+  it('the shipped holdstones.json is valid: unique ids and formIds, known kinds', () => {
+    const real = JSON.parse(fs.readFileSync(service.STONES_FILE, 'utf8'));
+    assert.equal(real.plugin, 'Oathbound_Holdstone.esp');
+    const ids = real.stones.map((s) => s.id);
+    const forms = real.stones.map((s) => parseInt(s.formId, 16));
+    assert.equal(new Set(ids).size, ids.length);
+    assert.equal(new Set(forms).size, forms.length);
+    assert.ok(forms.every((f) => f > 0x800 && f <= 0xfff), 'own records of a light plugin, 800 is the generic stone');
+    for (const s of real.stones) assert.ok(['hold', 'town', 'faction', 'thanedom', 'council'].includes(s.kind), s.id);
+    for (const id of ['whiterun', 'riverwood', 'high_hrothgar', 'imperial_legion', 'solitude']) assert.ok(ids.includes(id), id);
+  });
+
+  it('boot creates one organization per stone, keeps existing ranks, seeds ladders for new ones', () => {
+    const orgs = Object.fromEntries(db.tables.stone_orgs.map((o) => [o.id, o]));
+    assert.equal(orgs.whiterun.base_id, `801:${PLUGIN}`);
+    assert.equal(orgs.whiterun.name, 'Whiterun', 'name comes from holdstones.json');
+    assert.equal(orgs.high_hrothgar.kind, 'council');
+    assert.equal(orgs.high_hrothgar.hold_id, null);
+    assert.equal(orgs.riften.base_id, null, 'a hold with no stone in the list keeps none');
+    const keys = (org) => db.tables.stone_ranks.filter((r) => r.org_id === org).map((r) => r.rank_key);
+    assert.deepEqual(keys('whiterun'), ['citizen', 'guard', 'steward', 'jarl'], 'v33 ranks untouched');
+    assert.deepEqual(keys('high_hrothgar'), ['councilor', 'elder']);
+    assert.deepEqual(keys('riverwood'), ['resident', 'guard', 'reeve']);
+    assert.deepEqual(keys('imperial_legion'), ['recruit', 'member', 'officer', 'leader']);
+  });
+
+  it('booting twice changes nothing', async () => {
+    const before = JSON.stringify(db.tables);
+    await service.syncOrganizations();
+    assert.equal(JSON.stringify(db.tables), before);
+  });
+
+  it('a seat hold that does not exist is stored as none; bad entries are skipped', async () => {
+    service.configure({ stoneList: () => ({ plugin: PLUGIN, stones: [
+      { id: 'thane_x', name: 'Thanedom X', kind: 'thanedom', hold: 'atlantis', formId: '80d' },
+      { id: 'Bad Id', name: 'Bad', kind: 'hold', hold: null, formId: '80e' },
+      { id: 'nokind', name: 'No kind', kind: 'empire', hold: null, formId: '80f' }
+    ] }) });
+    await service.syncOrganizations();
+    const thane = db.tables.stone_orgs.find((o) => o.id === 'thane_x');
+    assert.equal(thane.hold_id, null);
+    assert.equal(thane.kind, 'thanedom');
+    assert.ok(!db.tables.stone_orgs.some((o) => o.id === 'nokind' || o.id === 'Bad Id'));
+    assert.equal(errors.length, 2);
+  });
+});
+
+describe('holdstone-service: a stone placed in the Creation Kit works without binding', () => {
+  beforeEach(boot);
+  afterEach(() => { delete global.mp; });
+
+  it('E on any reference of an organization activator opens its menu', () => {
+    assert.equal(service.orgOfStoneRef(WHITERUN_STONE), 'whiterun');
+    assert.equal(service.orgOfStoneRef(WHITERUN_STONE_2), 'whiterun', 'two stones of one organization');
+    assert.equal(service.orgOfStoneRef(HROTHGAR_STONE), 'high_hrothgar', 'hex case does not matter');
+    assert.equal(service.handleActivation(HROTHGAR_STONE, ANA), false);
+    assert.deepEqual(menus, [{ actorId: ANA, targetId: HROTHGAR_STONE }]);
+  });
+
+  it('the generic stone belongs to no one: E says so (and tells staff why) instead of doing nothing', () => {
+    assert.equal(service.handleActivation(GENERIC_STONE, ANA), false);
+    assert.match(lastNote(ANA), /belongs to no one/);
+    service.handleActivation(GENERIC_STONE, STAFF);
+    assert.match(lastNote(STAFF), /800:Oathbound_Holdstone\.esp\) is not in data\/holdstones\.json/);
+    assert.deepEqual(menus, []);
+  });
+
+  it('the generic stone and ordinary objects are not stones', () => {
+    assert.equal(service.orgOfStoneRef(GENERIC_STONE), null);
+    assert.equal(service.orgOfStoneRef(ROCK), null);
+    assert.equal(service.handleActivation(ROCK, ANA), undefined);
+    assert.deepEqual(menus, []);
+  });
+
+  it('the stone menu: everyone sees it, only leaders see leadership actions', async () => {
+    service.registerInteractions();
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 10, name: 'Ana' }, 'citizen');
+    const ctx = { actorId: ANA, characterId: 10, target: { formId: WHITERUN_STONE }, data: {} };
+    assert.equal(await interactionRegistry.get('holdstone.view').canSee(ctx), true);
+    assert.equal(await interactionRegistry.get('holdstone.create_parcel').canSee(ctx), false);
+    assert.equal(await interactionRegistry.get('holdstone.view').canSee({ ...ctx, target: { formId: ROCK } }), false);
+
+    await interactionRegistry.get('holdstone.view').execute(ctx);
+    const panel = modals.at(-1);
+    assert.equal(panel.type, 'holdstone:open');
+    assert.equal(panel.data.orgName, 'Whiterun');
+    assert.equal(panel.data.kind, 'Hold');
+    assert.equal(panel.data.yourRank, 'Citizen');
+    assert.equal(panel.data.canManage, false);
+    assert.deepEqual(panel.data.allegiances, [{ name: 'Whiterun', kind: 'Hold', rank: 'Citizen' }]);
+  });
+
+  it('High Hrothgar: staff tie themselves to it; members show their allegiances everywhere', async () => {
+    service.registerInteractions();
+    await service.setMemberRank(STAFF_ACTOR, 'high_hrothgar', { id: 1, name: 'Staff Member' }, 'elder');
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 1, name: 'Staff Member' }, 'citizen');
+    const ctx = { actorId: STAFF, characterId: 1, target: { formId: HROTHGAR_STONE }, data: {} };
+    await interactionRegistry.get('holdstone.view').execute(ctx);
+    const panel = modals.at(-1).data;
+    assert.equal(panel.kind, 'Council');
+    assert.equal(panel.seat, null);
+    assert.equal(panel.yourRank, 'Elder');
+    assert.deepEqual(panel.allegiances.map((a) => a.name), ['High Hrothgar', 'Whiterun']);
+  });
+});
 
 describe('holdstone-service: parcel assignment', () => {
-  beforeEach(setup);
+  beforeEach(boot);
   afterEach(() => { delete global.mp; });
 
   it('creates a parcel and adds a door; the teleport partner joins as an exit', async () => {
-    await service.reload();
     const created = await service.createParcel('whiterun', 'Barracks', 'guard');
     assert.equal(created.ok, true);
+    assert.equal(db.tables.parcels[0].hold_id, 'whiterun', 'located in the organization seat');
     assert.equal(service.findTeleportPartner(FRONT_DOOR), desc(INSIDE_DOOR));
 
     const added = await service.addObject(created.parcelId, desc(FRONT_DOOR), 'door', { partnerDesc: desc(INSIDE_DOOR) });
     assert.equal(added.ok, true, added.message);
     assert.match(added.message, /other side/);
-    const rows = db.tables.parcel_objects;
-    assert.deepEqual(rows.map((r) => [r.object_id, r.locks]), [[desc(FRONT_DOOR), 1], [desc(INSIDE_DOOR), 0]]);
+    assert.deepEqual(db.tables.parcel_objects.map((r) => [r.object_id, r.locks]), [[desc(FRONT_DOOR), 1], [desc(INSIDE_DOOR), 0]]);
     assert.equal(service.getIndex().objectsById.get(FRONT_DOOR).parcelId, created.parcelId);
   });
 
-  it('refuses an object that already belongs to another parcel, and holdstones', async () => {
-    await service.reload();
+  it('a council parcel has no hold; the Legion and the city can both name one "Barracks"', async () => {
+    const hall = await service.createParcel('high_hrothgar', 'Council Hall');
+    assert.equal(hall.ok, true);
+    assert.equal(db.tables.parcels.at(-1).hold_id, null);
+    assert.equal((await service.createParcel('whiterun', 'Barracks')).ok, true);
+    assert.equal((await service.createParcel('imperial_legion', 'Barracks')).ok, true);
+  });
+
+  it('refuses an object that already belongs to another parcel', async () => {
     const a = await service.createParcel('whiterun', 'House A');
-    const b = await service.createParcel('whiterun', 'House B');
+    const b = await service.createParcel('imperial_legion', 'House B');
     assert.equal((await service.addObject(a.parcelId, desc(CHEST), 'container')).ok, true);
     const clash = await service.addObject(b.parcelId, desc(CHEST), 'container');
     assert.equal(clash.ok, false);
     assert.match(clash.message, /already belongs to parcel #/);
-
-    await service.setHoldstone('whiterun', desc(STONE));
-    assert.equal((await service.addObject(a.parcelId, desc(STONE), 'container')).ok, false);
   });
 
-  it('rejects bad input: unknown kind, malformed FormDesc, duplicate names', async () => {
-    await service.reload();
+  it('rejects bad input: unknown kind, malformed FormDesc, duplicate names, unknown stone', async () => {
     const p = await service.createParcel('whiterun', 'Mill');
     assert.equal((await service.addObject(p.parcelId, desc(ROCK), 'statue')).ok, false);
     assert.equal((await service.addObject(p.parcelId, '12345', 'door')).ok, false);
     assert.equal((await service.createParcel('whiterun', 'mill')).ok, false);
-    assert.equal((await service.createParcel('nowhere', 'Mill')).ok, false);
+    assert.match((await service.createParcel('nowhere', 'Mill')).message, /Unknown stone/);
     assert.equal(service.normalizeDesc('0x000A1:Skyrim.esm'), 'a1:Skyrim.esm');
   });
 
   it('removing an object unlocks it; deleting a parcel unlocks all of it', async () => {
-    await service.reload();
     const p = await service.createParcel('whiterun', 'Shed');
     await service.addObject(p.parcelId, desc(CHEST), 'container');
     assert.equal(service.handleActivation(CHEST, ANA), false);
@@ -247,8 +414,6 @@ describe('holdstone-service: parcel assignment', () => {
   });
 
   it('detects doors and containers from the base record', () => {
-    installMp();
-    espm._limparCache();
     assert.equal(service.detectKind(FRONT_DOOR), 'door');
     assert.equal(service.detectKind(CHEST), 'container');
     assert.equal(service.detectKind(ROCK), null);
@@ -257,16 +422,15 @@ describe('holdstone-service: parcel assignment', () => {
 
 describe('holdstone-service: activation blocking', () => {
   beforeEach(async () => {
-    setup();
-    await service.reload();
+    await boot();
     const p = await service.createParcel('whiterun', 'Barracks', 'guard');
     await service.addObject(p.parcelId, desc(FRONT_DOOR), 'door', { partnerDesc: desc(INSIDE_DOOR) });
-    await service.setMemberRank({ isStaff: true, characterId: 1 }, 'whiterun', { id: 10, name: 'Ana Stone' }, 'citizen');
-    await service.setMemberRank({ isStaff: true, characterId: 1 }, 'whiterun', { id: 20, name: 'Bo Guard' }, 'guard');
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 10, name: 'Ana Stone' }, 'citizen');
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 20, name: 'Bo Guard' }, 'guard');
   });
   afterEach(() => { delete global.mp; });
 
-  it('blocks a citizen with "It\'s locked." through mp.onActivate', async () => {
+  it('blocks a citizen with "It\'s locked." through mp.onActivate', () => {
     activationEvents.subscribe('holdstones', service.handleActivation);
     assert.equal(global.mp.onActivate(FRONT_DOOR, ANA), false);
     assert.equal(lastNote(ANA), "It's locked.");
@@ -277,6 +441,11 @@ describe('holdstone-service: activation blocking', () => {
     assert.equal(service.handleActivation(FRONT_DOOR, STAFF), undefined);
     await service.transferParcel(1, { id: 10, name: 'Ana Stone' });
     assert.equal(service.handleActivation(FRONT_DOOR, ANA), undefined);
+  });
+
+  it('a rank in another organization does not open it', async () => {
+    await service.setMemberRank(STAFF_ACTOR, 'imperial_legion', { id: 10, name: 'Ana Stone' }, 'leader');
+    assert.equal(service.handleActivation(FRONT_DOOR, ANA), false);
   });
 
   it('never blocks the exit side, unknown objects or NPC casters', () => {
@@ -307,11 +476,9 @@ describe('holdstone-service: activation blocking', () => {
 
 describe('holdstone-service: ranks', () => {
   beforeEach(async () => {
-    setup();
-    await service.reload();
-    const staff = { isStaff: true, characterId: 1 };
-    await service.setMemberRank(staff, 'whiterun', { id: 30, name: 'Cy Steward' }, 'steward');
-    await service.setMemberRank(staff, 'whiterun', { id: 40, name: 'Di Jarl' }, 'jarl');
+    await boot();
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 30, name: 'Cy Steward' }, 'steward');
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 40, name: 'Di Jarl' }, 'jarl');
   });
   afterEach(() => { delete global.mp; });
 
@@ -321,16 +488,24 @@ describe('holdstone-service: ranks', () => {
     assert.match(lastNote(BO), /now Guard of Whiterun/);
   });
 
-  it('a steward cannot crown a jarl or demote one', async () => {
+  it('a steward cannot crown a jarl or demote one, nor rank anyone in another organization', async () => {
     const steward = { characterId: 30, isStaff: false };
     assert.equal((await service.setMemberRank(steward, 'whiterun', { id: 20, name: 'Bo' }, 'jarl')).ok, false);
     assert.equal((await service.setMemberRank(steward, 'whiterun', { id: 40, name: 'Di' }, 'none')).ok, false);
+    assert.equal((await service.setMemberRank(steward, 'imperial_legion', { id: 20, name: 'Bo' }, 'recruit')).ok, false);
   });
 
   it('unknown rank keys are refused with the list of ranks', async () => {
-    const r = await service.setMemberRank({ isStaff: true }, 'whiterun', { id: 20, name: 'Bo' }, 'emperor');
+    const r = await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 20, name: 'Bo' }, 'emperor');
     assert.equal(r.ok, false);
     assert.match(r.message, /citizen, guard, steward, jarl/);
+  });
+
+  it('staff edit a ladder: add a rank, remove one', async () => {
+    assert.equal((await service.addRank('high_hrothgar', 'greybeard', 30, true, 'Greybeard')).ok, true);
+    assert.equal(service.getIndex().ranksByOrg.get('high_hrothgar').at(-1).key, 'greybeard');
+    assert.equal((await service.removeRank('high_hrothgar', 'greybeard')).ok, true);
+    assert.equal((await service.addRank('high_hrothgar', 'x', 10, false, 'Clash')).ok, false, 'position taken');
   });
 
   it('character numbers resolve from the database', async () => {
@@ -339,11 +514,8 @@ describe('holdstone-service: ranks', () => {
   });
 });
 
-describe('holdstone-service: parceling tool and holdstone', () => {
-  beforeEach(async () => {
-    setup();
-    await service.reload();
-  });
+describe('holdstone-service: parceling tool and commands', () => {
+  beforeEach(boot);
   afterEach(() => { delete global.mp; });
 
   it('with the tool on, E on a door opens the parcel menu instead of the door', async () => {
@@ -355,22 +527,22 @@ describe('holdstone-service: parceling tool and holdstone', () => {
     assert.equal(service.handleActivation(FRONT_DOOR, STAFF), undefined);
   });
 
-  it('/holdstone place: the next activated object becomes the stone', async () => {
-    await service.handleHoldstoneCommand(STAFF, 'place whiterun');
-    assert.equal(service.handleActivation(STONE, STAFF), false);
-    await new Promise((r) => setImmediate(r));
-    await new Promise((r) => setImmediate(r));
-    assert.deepEqual(db.tables.holdstones, [{ hold_id: 'whiterun', object_id: desc(STONE) }]);
-    assert.equal(service.getIndex().holdstoneById.get(STONE), 'whiterun');
-  });
-
-  it('staff commands refuse non-staff', async () => {
+  it('staff commands refuse non-staff; /holdstone list shows every organization', async () => {
     await service.handleParcelCommand(ANA, 'create whiterun Sneaky');
     assert.match(lastNote(ANA), /Staff only/);
     assert.equal(db.tables.parcels.length, 0);
+    await service.handleHoldstoneCommand(STAFF, 'list');
+    assert.match(lastNote(STAFF), /high_hrothgar \(Council\)/);
+    assert.match(lastNote(STAFF), /riften \(Hold, no stone\)/);
   });
 
-  it('interactions: the add/remove actions follow the tool and execute against the target', async () => {
+  it('/holdrank works with any stone key', async () => {
+    await service.handleHoldRankCommand(STAFF, `imperial_legion 0x${BO.toString(16)} officer`);
+    assert.match(lastNote(STAFF), /Bo Guard is now Officer of Imperial Legion/);
+    await flush();
+  });
+
+  it('interactions: the add/remove actions follow the tool and never treat a stone as a door', async () => {
     service.registerInteractions();
     const p = await service.createParcel('whiterun', 'Hall');
     const add = interactionRegistry.get('parcel.add_object');
@@ -380,6 +552,7 @@ describe('holdstone-service: parceling tool and holdstone', () => {
     assert.equal(await add.canSee(ctx), false, 'tool off');
     service.startParcelTool(STAFF, p.parcelId);
     assert.equal(await add.canSee(ctx), true);
+    assert.equal(await add.canSee({ ...ctx, target: { formId: WHITERUN_STONE } }), false);
     assert.equal(await remove.canSee(ctx), false);
 
     const res = await add.execute(ctx);
@@ -389,139 +562,5 @@ describe('holdstone-service: parceling tool and holdstone', () => {
 
     const notDoor = await add.execute({ ...ctx, target: { formId: ROCK } });
     assert.match(notDoor.message, /Only doors and containers/);
-  });
-
-  it('interactions: a citizen at the stone sees "Hold" but not leadership actions', async () => {
-    service.registerInteractions();
-    await service.setHoldstone('whiterun', desc(STONE));
-    await service.setMemberRank({ isStaff: true }, 'whiterun', { id: 10, name: 'Ana' }, 'citizen');
-    const ctx = { actorId: ANA, characterId: 10, target: { formId: STONE }, data: {} };
-    assert.equal(await interactionRegistry.get('holdstone.view').canSee(ctx), true);
-    assert.equal(await interactionRegistry.get('holdstone.create_parcel').canSee(ctx), false);
-    await interactionRegistry.get('holdstone.view').execute(ctx);
-    assert.equal(modals.at(-1).type, 'holdstone:open');
-    assert.equal(modals.at(-1).data.yourRank, 'Citizen');
-    assert.equal(modals.at(-1).data.canManage, false);
-  });
-});
-
-describe('holdstone-service: holdstone model (OathboundHoldstone.esp)', () => {
-  const HOLDSTONE_BASE = 0xfe000800;
-  let placed;
-  let sets;
-  let placedBy;
-  let destroyed;
-  let nextRef;
-
-  beforeEach(async () => {
-    setup();
-    placed = new Map(); // refId → baseId
-    placedBy = new Map(); // refId → Papyrus self it was placed at
-    sets = [];
-    destroyed = [];
-    nextRef = 0xff000100;
-    const base = global.mp;
-    global.mp = {
-      ...base,
-      // runtime references have no plugin in their desc, as in SkyMP's FormDesc
-      getDescFromId: (id) => (id >= 0xff000000 ? (id - 0xff000000).toString(16) : base.getDescFromId(id)),
-      getIdFromDesc: (d) => {
-        if (d === service.HOLDSTONE_BASE_DESC) return HOLDSTONE_BASE;
-        return d.includes(':') ? base.getIdFromDesc(d) : 0xff000000 + parseInt(d, 16);
-      },
-      get: (id, prop) => {
-        if (prop === 'baseDesc' && placed.has(id)) return service.HOLDSTONE_BASE_DESC;
-        if (prop === 'locationalData' && id === STAFF) return { pos: [1000, 2000, 50], rot: [0, 0, 90], cellOrWorldDesc: '3c:Skyrim.esm' };
-        return base.get(id, prop);
-      },
-      // SkyMP's server-side Papyrus PlaceAtMe: a new reference at the caller's
-      // position, returned as {type:'form', desc}.
-      callPapyrusFunction: (kind, cls, fn, self, args) => {
-        if (fn !== 'PlaceAtMe') throw new Error(`unexpected Papyrus ${fn}`);
-        assert.equal(args[0].type, 'espm', 'the base goes as baseRef');
-        const id = nextRef++;
-        placed.set(id, global.mp.getIdFromDesc(args[0].desc));
-        placedBy.set(id, self);
-        return { type: 'form', desc: global.mp.getDescFromId(id) };
-      },
-      place: () => { throw new Error('mp.place leaves the reference at 0,0,0; use PlaceAtMe'); },
-      // Real SkyMP refuses this for non-actors ("can only change 'locationalData' for actors").
-      set: (id, prop, value) => {
-        if (prop === 'locationalData' && placed.has(id)) throw new Error("mp.set can only change 'locationalData' for actors, not for refrs");
-        sets.push({ id, prop, value });
-      },
-      destroyActor: (id) => { destroyed.push(id); placed.delete(id); }
-    };
-    service.registerPhysicalAnchors();
-    await service.reload();
-  });
-  afterEach(() => { delete global.mp; });
-
-  /** A holdstone already in the world that no hold owns. */
-  const newStone = () => { const id = nextRef++; placed.set(id, HOLDSTONE_BASE); return id; };
-
-  it('/holdstone spawn puts the stone where staff stands (Papyrus PlaceAtMe) and binds it', async () => {
-    await service.handleHoldstoneCommand(STAFF, 'spawn whiterun');
-    assert.match(lastNote(STAFF), /Whiterun holdstone placed where you stand/);
-    const [ref] = placed.keys();
-    assert.equal(placed.get(ref), HOLDSTONE_BASE);
-    assert.deepEqual(placedBy.get(ref), { type: 'form', desc: global.mp.getDescFromId(STAFF) }, 'placed at the staff member');
-    assert.deepEqual(sets, [], 'no attempt to move a reference with mp.set');
-    assert.deepEqual(db.tables.holdstones, [{ hold_id: 'whiterun', object_id: '100' }]);
-    assert.equal(service.getIndex().holdstoneById.get(ref), 'whiterun');
-    assert.equal(physicalAnchorRegistry.has(ref), true, 'pressing E on it opens the hold menu');
-  });
-
-  it('spawning again moves the hold to the new stone and removes the old one', async () => {
-    await service.spawnHoldstone(STAFF, 'whiterun');
-    const res = await service.spawnHoldstone(STAFF, 'whiterun');
-    assert.equal(res.ok, true);
-    assert.match(res.message, /old one was removed/);
-    assert.deepEqual(destroyed, [0xff000100]);
-    assert.deepEqual(db.tables.holdstones, [{ hold_id: 'whiterun', object_id: '101' }]);
-  });
-
-  it('clearing a hold removes a spawned stone, but never a map object', async () => {
-    await service.setHoldstone('riften', desc(STONE));
-    await service.clearHoldstone('riften');
-    assert.deepEqual(destroyed, [], 'a stone that is part of the map stays');
-
-    await service.spawnHoldstone(STAFF, 'whiterun');
-    const res = await service.clearHoldstone('whiterun');
-    assert.match(res.message, /removed from the world/);
-    assert.deepEqual(destroyed, [0xff000100]);
-  });
-
-  it('an unbound holdstone tells the player it belongs to no hold, and staff how to bind it', async () => {
-    const ref = newStone();
-    assert.equal(service.handleActivation(ref, ANA), false);
-    assert.match(lastNote(ANA), /belongs to no hold yet/);
-    assert.equal(service.handleActivation(ref, STAFF), false);
-    assert.match(lastNote(STAFF), /\/holdstone place <hold>/);
-  });
-
-  it('/holdstone place works on a spawned stone; a typed desc without its plugin is still refused', async () => {
-    const ref = newStone();
-    await service.handleHoldstoneCommand(STAFF, 'place riften');
-    service.handleActivation(ref, STAFF);
-    await new Promise((r) => setImmediate(r));
-    await new Promise((r) => setImmediate(r));
-    assert.equal(service.getIndex().holdstoneById.get(ref), 'riften');
-
-    const typed = await service.setHoldstone('whiterun', '12eb7');
-    assert.equal(typed.ok, false);
-  });
-
-  it('refuses when the plugin is not loaded or the hold is unknown', async () => {
-    assert.match((await service.spawnHoldstone(STAFF, 'nowhere')).message, /Unknown hold/);
-    global.mp.getIdFromDesc = () => { throw new Error('OathboundHoldstone.esp not found in loaded files'); };
-    assert.match((await service.spawnHoldstone(STAFF, 'whiterun')).message, /not loaded on the server/);
-    assert.equal(placed.size, 0);
-  });
-
-  it('non-staff cannot spawn', async () => {
-    await service.handleHoldstoneCommand(ANA, 'spawn whiterun');
-    assert.match(lastNote(ANA), /Staff only/);
-    assert.equal(placed.size, 0);
   });
 });

@@ -1,21 +1,26 @@
 /**
  * holdstone-service.js
  *
- * Holdstones, hold rank ladders, parcels and door/container locks
- * (migration-v33-holdstones-parcels.sql, docs/gameplay/HOLDSTONES_AND_PARCELS.md).
+ * Holdstones, organizations with rank ladders, parcels and door/container
+ * locks (migration-v33-holdstones-parcels.sql, migration-v41-stone-organizations.sql,
+ * docs/gameplay/HOLDSTONES_AND_PARCELS.md).
  *
- * - Holdstone: one world object per hold. Activating it (E) opens the hold
- *   menu through the Interaction Framework (it is a physical anchor, so the
- *   `interaction-prompt` subscriber turns the activation into the menu).
- * - Ranks: an ordered ladder per hold (`hold_ranks.position`); leader ranks
- *   (`is_leader`) set ranks below their own and manage parcels.
- * - Parcel: a set of doors and containers with an owner and a minimum rank.
- *   Locked parcel objects open only for the owner, members at or above the
- *   minimum rank in that hold, and staff. Everyone else reads "It's locked."
- *   and the activation is blocked (`core/activation-events.js`).
- * - Parceling tool: a leader/staff picks a parcel at the holdstone, then
- *   presses E on doors and containers to get "Add to parcel" / "Remove from
- *   parcel" — no commands needed. Staff commands remain as a fallback.
+ * - Organization: a hold (Whiterun), a town (Riverwood), a faction (Imperial
+ *   Legion), a thanedom or a council (High Hrothgar). Each has an ordered rank
+ *   ladder and members; a character can belong to several.
+ * - Stone: each organization has its OWN activator in Oathbound_Holdstone.esp
+ *   ("Whiterun Holdstone", "High Hrothgar Holdstone"...), listed in
+ *   data/holdstones.json. Staff place it in the Creation Kit; any reference of
+ *   that activator is the organization's stone. Nothing is bound in game.
+ *   Pressing E on it opens the organization's menu.
+ * - Parcel: a set of doors and containers controlled by an organization, with
+ *   an owner and a minimum rank. Locked parcel objects open only for the
+ *   owner, members of that organization at or above the minimum rank, and
+ *   staff. Everyone else reads "It's locked." and the activation is blocked
+ *   (`core/activation-events.js`).
+ * - Parceling tool: a leader/staff picks a parcel at the stone, then presses E
+ *   on doors and containers to get "Add to parcel" / "Remove from parcel" —
+ *   no commands needed. Staff commands remain as a fallback.
  *
  * All permission decisions live in `core/parcel-locks.js` (pure, tested).
  * This file loads the index, writes changes, and wires the game hooks.
@@ -31,36 +36,29 @@
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const database = require('./database');
 const parcelLocks = require('./core/parcel-locks');
 const activationEvents = require('./core/activation-events');
 const interactionRegistry = require('./core/interaction-registry');
-const physicalAnchorRegistry = require('./core/physical-anchor-registry');
 const { parseFormId } = require('./core/interaction-targets');
 const espm = require('./core/espm');
-const { actorRef, baseRef } = require('./core/papyrus');
 
 const MODULE_ID = 'holdstones';
 const ACTIVATION_SUBSCRIBER = 'holdstones';
 const LOCKED_MESSAGE = "It's locked.";
 /** About 5 m: stand at the door or chest you are assigning. */
 const PARCEL_TOOL_RANGE = 350;
-const HOLDSTONE_RANGE = 350;
+const STONE_RANGE = 350;
 const NAME_MAX = 64;
 const RANK_KEY_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 const FORM_DESC_PATTERN = /^[0-9a-f]{1,8}:[^\s:]+\.(esm|esp|esl)$/i;
-/**
- * A reference the server created at runtime (mp.place) has an id of
- * 0xFF000000 + n, and SkyMP writes its desc as just `n` in hex, with no
- * plugin. Accepted only from the server itself (descOf / spawnHoldstone),
- * never typed, so a FormDesc with its plugin left off is not mistaken for one.
- */
-const DYNAMIC_DESC_PATTERN = /^[0-9a-f]{1,6}$/;
-/** The holdstone activator in tools/holdstone/dist/OathboundHoldstone.esp. */
-const HOLDSTONE_BASE_DESC = '800:OathboundHoldstone.esp';
+const STONES_FILE = path.join(__dirname, 'data', 'holdstones.json');
+const KIND_LABELS = Object.freeze({ hold: 'Hold', town: 'Town', faction: 'Faction', thanedom: 'Thanedom', council: 'Council' });
 
 let _index = parcelLocks.EMPTY_INDEX;
-/** actorId → { parcelId } | { placeHoldId } */
+/** actorId → { parcelId } */
 const _tools = new Map();
 let _deps = null;
 
@@ -82,6 +80,7 @@ function _defaultDeps() {
     },
     sendModal: () => {},
     openInteractionMenu: () => {},
+    stoneList: () => JSON.parse(fs.readFileSync(STONES_FILE, 'utf8')),
     logger: console
   };
 }
@@ -112,9 +111,7 @@ function descOf(formId) {
   if (!api || typeof api.getDescFromId !== 'function') return null;
   try {
     const desc = api.getDescFromId(formId);
-    if (typeof desc !== 'string') return null;
-    if (desc.includes(':')) return desc;
-    return formId >= 0xff000000 && DYNAMIC_DESC_PATTERN.test(desc) ? desc : null;
+    return typeof desc === 'string' && desc.includes(':') ? desc : null;
   } catch {
     return null;
   }
@@ -126,13 +123,37 @@ function idOfDesc(desc) {
   return api.getIdFromDesc(desc);
 }
 
-function normalizeDesc(raw, { allowDynamic = false } = {}) {
+function normalizeDesc(raw) {
   if (typeof raw !== 'string') return null;
   const clean = raw.trim().replace(/^0x/i, '');
-  if (allowDynamic && DYNAMIC_DESC_PATTERN.test(clean)) return clean.toLowerCase();
   if (!FORM_DESC_PATTERN.test(clean)) return null;
   const [hex, plugin] = clean.split(':');
   return `${hex.toLowerCase().replace(/^0+(?=.)/, '')}:${plugin}`;
+}
+
+/** Base record (activator, door...) of a placed reference, as a normalized FormDesc. */
+function baseDescOf(formId) {
+  const api = _mp();
+  if (!api || typeof api.get !== 'function') return null;
+  try {
+    return normalizeDesc(api.get(formId, 'baseDesc'));
+  } catch {
+    return null;
+  }
+}
+
+let _stonePluginLower = null;
+/** Lowercase name of the stone plugin (from holdstones.json), cached. */
+function STONE_PLUGIN_LOWER() {
+  if (_stonePluginLower === null) {
+    try { _stonePluginLower = String(deps().stoneList().plugin || '').toLowerCase(); } catch { _stonePluginLower = ''; }
+  }
+  return _stonePluginLower;
+}
+
+/** Organization whose stone this placed reference is, or null. */
+function orgOfStoneRef(formId) {
+  return parcelLocks.orgOfStone(_index, baseDescOf(formId));
 }
 
 /** 'door' | 'container' | null, from the base record type (DOOR / CONT). */
@@ -186,21 +207,79 @@ function findTeleportPartner(formId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Stone list (data/holdstones.json) → organizations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The stones the plugin defines, with each one's activator FormDesc.
+ * Malformed entries are skipped with a log line, never half-applied.
+ * @returns {{plugin:string, stones:Array<{id:string, name:string, kind:string, hold:string|null, baseId:string}>}}
+ */
+function stoneList() {
+  const d = deps();
+  const raw = d.stoneList();
+  const plugin = String(raw.plugin || '');
+  const stones = [];
+  for (const s of raw.stones || []) {
+    const baseId = normalizeDesc(`${s.formId}:${plugin}`);
+    if (!s || !RANK_KEY_PATTERN.test(String(s.id)) || !parcelLocks.ORG_KINDS.includes(s.kind) || !baseId) {
+      d.logger.error(`[holdstones] skipping bad entry in holdstones.json: ${JSON.stringify(s)}`);
+      continue;
+    }
+    stones.push({ id: s.id, name: String(s.name || s.id), kind: s.kind, hold: s.hold || null, baseId });
+  }
+  return { plugin, stones };
+}
+
+/**
+ * Creates/updates one organization per stone (name, kind, seat, activator)
+ * and gives any organization without ranks the default ladder of its kind.
+ * Runs on boot; editing holdstones.json + restart is how stones are added.
+ */
+async function syncOrganizations() {
+  const { db } = deps();
+  const { stones } = stoneList();
+  const holdRows = await db.query('SELECT id FROM holds');
+  const holdIds = new Set(holdRows.map((r) => String(r.id)));
+  for (const s of stones) {
+    const seat = s.hold && holdIds.has(s.hold) ? s.hold : null;
+    // Another organization holding this activator (renamed id) gives it up.
+    await db.query('UPDATE stone_orgs SET base_id = NULL WHERE base_id = ? AND id <> ?', [s.baseId, s.id]);
+    await db.query(
+      `INSERT INTO stone_orgs (id, name, kind, hold_id, base_id) VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE name = VALUES(name), kind = VALUES(kind), hold_id = VALUES(hold_id), base_id = VALUES(base_id)`,
+      [s.id, s.name, s.kind, seat, s.baseId]
+    );
+  }
+  const orgs = await db.query('SELECT id, kind FROM stone_orgs');
+  const ranked = new Set((await db.query('SELECT DISTINCT org_id FROM stone_ranks')).map((r) => String(r.org_id)));
+  for (const org of orgs) {
+    if (ranked.has(String(org.id))) continue;
+    for (const [key, name, position, leader] of parcelLocks.DEFAULT_LADDERS[org.kind] || parcelLocks.DEFAULT_LADDERS.faction) {
+      await db.query(
+        'INSERT IGNORE INTO stone_ranks (org_id, rank_key, name, position, is_leader) VALUES (?, ?, ?, ?, ?)',
+        [org.id, key, name, position, leader ? 1 : 0]
+      );
+    }
+  }
+  return stones.length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Index loading
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function reload() {
   const { db } = deps();
-  const [holds, holdstones, ranks, members, parcels, objects] = await Promise.all([
+  const [holds, orgs, ranks, members, parcels, objects] = await Promise.all([
     db.query('SELECT id, name FROM holds ORDER BY id'),
-    db.query('SELECT hold_id, object_id FROM holdstones'),
-    db.query('SELECT id, hold_id, rank_key, name, position, is_leader FROM hold_ranks'),
-    db.query('SELECT hold_id, character_id, rank_id FROM hold_members'),
-    db.query('SELECT id, hold_id, name, owner_character_id, min_rank_id, locked FROM parcels'),
+    db.query('SELECT id, name, kind, hold_id, base_id FROM stone_orgs'),
+    db.query('SELECT id, org_id, rank_key, name, position, is_leader FROM stone_ranks'),
+    db.query('SELECT org_id, character_id, rank_id FROM stone_members'),
+    db.query('SELECT id, org_id, hold_id, name, owner_character_id, min_rank_id, locked FROM parcels'),
     db.query('SELECT object_id, parcel_id, kind, locks, partner_object_id FROM parcel_objects')
   ]);
-  _index = parcelLocks.buildIndex({ holds, holdstones, ranks, members, parcels, objects }, idOfDesc);
-  try { await physicalAnchorRegistry.refresh(); } catch { /* anchors are optional */ }
+  _index = parcelLocks.buildIndex({ holds, orgs, ranks, members, parcels, objects }, idOfDesc);
   return _index;
 }
 
@@ -254,202 +333,104 @@ function _notifyCharacter(characterId, message) {
 const ok = (message, extra = {}) => ({ ok: true, message, ...extra });
 const no = (message) => ({ ok: false, message });
 
-function _holdName(holdId) {
-  return _index.holds.get(holdId) || holdId;
+function _org(orgId) {
+  return _index.orgs.get(String(orgId || '')) || null;
+}
+
+function _orgName(orgId) {
+  const org = _org(orgId);
+  return org ? org.name : String(orgId);
+}
+
+function _unknownOrg(orgId) {
+  return no(`Unknown stone "${orgId || ''}". See /holdstone list.`);
 }
 
 function _validName(name) {
   return typeof name === 'string' && name.trim().length >= 2 && name.trim().length <= NAME_MAX;
 }
 
-async function setHoldstone(holdId, objectDesc, { allowDynamic = false } = {}) {
-  if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
-  const desc = normalizeDesc(objectDesc, { allowDynamic });
-  if (!desc) return no('That object has no FormDesc (hex:Plugin.esm).');
-  if (_index.objectsByDesc.has(desc)) return no('That object is part of a parcel; remove it first.');
-  const { db } = deps();
-  await db.query('DELETE FROM holdstones WHERE object_id = ? AND hold_id <> ?', [desc, holdId]);
-  await db.query(
-    'INSERT INTO holdstones (hold_id, object_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE object_id = VALUES(object_id)',
-    [holdId, desc]
-  );
-  await reload();
-  return ok(`${_holdName(holdId)} holdstone set to ${desc}.`);
-}
-
-async function clearHoldstone(holdId) {
-  const old = _index.holdstoneByHold.get(holdId);
-  await deps().db.query('DELETE FROM holdstones WHERE hold_id = ?', [holdId]);
-  await reload();
-  const removed = old ? _removeSpawnedStone(old) : false;
-  return ok(`${_holdName(holdId)} has no holdstone now.${removed ? ' Its stone was removed from the world.' : ''}`);
-}
-
-/** Is this reference an OATHBOUND holdstone (the activator from OathboundHoldstone.esp)? */
-function isHoldstoneObject(formId) {
-  const api = _mp();
-  if (!api || typeof api.get !== 'function') return false;
-  try {
-    return String(api.get(formId, 'baseDesc') || '').toLowerCase() === HOLDSTONE_BASE_DESC.toLowerCase();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Deletes a stone that spawnHoldstone created. Only runtime references whose
- * base is the holdstone activator: a stone that is part of the map (placed in
- * the Creation Kit, or a vanilla object chosen with "place") is left alone.
- */
-function _removeSpawnedStone(desc) {
-  const api = _mp();
-  if (!DYNAMIC_DESC_PATTERN.test(desc) || !api || typeof api.destroyActor !== 'function') return false;
-  const formId = idOfDesc(desc);
-  if (!Number.isInteger(formId) || !isHoldstoneObject(formId)) return false;
-  try {
-    api.destroyActor(formId);
-    return true;
-  } catch (err) {
-    deps().logger.error(`[holdstones] could not remove old stone ${desc}:`, err.message);
-    return false;
-  }
-}
-
-/**
- * Staff: puts a new holdstone in the world where `actorId` stands, and makes
- * it `holdId`'s stone. The hold's previous stone, if it was spawned this way,
- * is removed. The stone is a server reference, saved with the world like any
- * other, so it stays after restarts.
- */
-async function spawnHoldstone(actorId, holdId) {
-  if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
-  const api = _mp();
-  if (!api || typeof api.callPapyrusFunction !== 'function' || typeof api.getDescFromId !== 'function') {
-    return no('This server build cannot place objects (no Papyrus PlaceAtMe).');
-  }
-  let baseId;
-  try {
-    baseId = api.getIdFromDesc(HOLDSTONE_BASE_DESC);
-  } catch {
-    baseId = null;
-  }
-  if (!Number.isInteger(baseId)) return no('OathboundHoldstone.esp is not loaded on the server.');
-
-  let loc = null;
-  try { loc = api.get(actorId, 'locationalData'); } catch { loc = null; }
-  const where = loc && Array.isArray(loc.pos)
-    ? `${loc.cellOrWorldDesc} at ${loc.pos.map((v) => Math.round(v)).join(',')}`
-    : 'unknown position';
-
-  // Papyrus PlaceAtMe on the staff member: SkyMP creates the reference at their
-  // position, cell and facing, and saves it with the world. A server reference
-  // cannot be moved afterwards: mp.set('locationalData') is refused for
-  // non-actors, and SetPosition does not save. So the stone goes where the
-  // staff member stands; they step out of it. (Runes are on both faces.)
-  let formId;
-  try {
-    const placed = api.callPapyrusFunction('method', 'ObjectReference', 'PlaceAtMe', actorRef(actorId), [baseRef(baseId), 1, true, false]);
-    formId = placed && typeof placed === 'object' && typeof placed.desc === 'string'
-      ? api.getIdFromDesc(placed.desc)
-      : placed;
-    if (!Number.isInteger(formId) || formId <= 0) throw new Error('PlaceAtMe returned no reference');
-  } catch (err) {
-    deps().logger.error('[holdstones] spawn failed:', err.message);
-    return no(`Could not place the holdstone: ${err.message}`);
-  }
-
-  const desc = descOf(formId);
-  const previous = _index.holdstoneByHold.get(holdId);
-  const result = await setHoldstone(holdId, desc, { allowDynamic: true });
-  if (!result.ok) {
-    try { api.destroyActor(formId); } catch { /* nothing to undo */ }
-    return result;
-  }
-  const replaced = previous && previous !== desc ? _removeSpawnedStone(previous) : false;
-  deps().logger.log(`[holdstones] ${actorId.toString(16)} placed the ${holdId} holdstone as ${desc} in ${where}`);
-  return ok(`${_holdName(holdId)} holdstone placed where you stand: step out of it.${replaced ? ' The old one was removed.' : ''}`, { formId, desc });
-}
-
-async function addRank(holdId, key, position, isLeader, name) {
-  if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
+async function addRank(orgId, key, position, isLeader, name) {
+  if (!_org(orgId)) return _unknownOrg(orgId);
   const rankKey = String(key || '').toLowerCase();
   if (!RANK_KEY_PATTERN.test(rankKey)) return no('Rank key must be lowercase letters, digits or _ (e.g. "captain").');
   if (!Number.isSafeInteger(position) || position < 1 || position > 1000) return no('Position must be 1-1000.');
   if (!_validName(name)) return no(`Rank name must be 2-${NAME_MAX} characters.`);
-  if (parcelLocks.ranksOf(_index, holdId).some((r) => r.position === position && r.key !== rankKey)) {
-    return no(`Position ${position} is already used in ${_holdName(holdId)}.`);
+  if (parcelLocks.ranksOf(_index, orgId).some((r) => r.position === position && r.key !== rankKey)) {
+    return no(`Position ${position} is already used in ${_orgName(orgId)}.`);
   }
   await deps().db.query(
-    `INSERT INTO hold_ranks (hold_id, rank_key, name, position, is_leader) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO stone_ranks (org_id, rank_key, name, position, is_leader) VALUES (?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE name = VALUES(name), position = VALUES(position), is_leader = VALUES(is_leader)`,
-    [holdId, rankKey, name.trim(), position, isLeader ? 1 : 0]
+    [orgId, rankKey, name.trim(), position, isLeader ? 1 : 0]
   );
   await reload();
-  return ok(`${_holdName(holdId)}: rank ${name.trim()} (${rankKey}) at position ${position}${isLeader ? ', leader' : ''}.`);
+  return ok(`${_orgName(orgId)}: rank ${name.trim()} (${rankKey}) at position ${position}${isLeader ? ', leader' : ''}.`);
 }
 
-async function removeRank(holdId, key) {
-  const rank = parcelLocks.findRank(_index, holdId, key);
-  if (!rank) return no(`No rank "${key}" in ${_holdName(holdId)}.`);
+async function removeRank(orgId, key) {
+  const rank = parcelLocks.findRank(_index, orgId, key);
+  if (!rank) return no(`No rank "${key}" in ${_orgName(orgId)}.`);
   // Members holding it are removed by the FK cascade; parcels fall back to owner-only.
-  await deps().db.query('DELETE FROM hold_ranks WHERE id = ?', [rank.id]);
+  await deps().db.query('DELETE FROM stone_ranks WHERE id = ?', [rank.id]);
   await reload();
-  return ok(`${_holdName(holdId)}: rank ${rank.name} removed.`);
+  return ok(`${_orgName(orgId)}: rank ${rank.name} removed.`);
 }
 
 /**
  * @param {{characterId:number|null, isStaff:boolean}} actor
- * @param {string} holdId
+ * @param {string} orgId
  * @param {{id:number, name:string}} target character
  * @param {string|null} rankKey null / 'none' removes the membership
  */
-async function setMemberRank(actor, holdId, target, rankKey) {
-  if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
+async function setMemberRank(actor, orgId, target, rankKey) {
+  if (!_org(orgId)) return _unknownOrg(orgId);
   const removing = rankKey == null || String(rankKey).toLowerCase() === 'none';
-  const rank = removing ? null : parcelLocks.findRank(_index, holdId, rankKey);
+  const rank = removing ? null : parcelLocks.findRank(_index, orgId, rankKey);
   if (!removing && !rank) {
-    const keys = parcelLocks.ranksOf(_index, holdId).map((r) => r.key).join(', ');
-    return no(`No rank "${rankKey}" in ${_holdName(holdId)}. Ranks: ${keys || 'none'}.`);
+    const keys = parcelLocks.ranksOf(_index, orgId).map((r) => r.key).join(', ');
+    return no(`No rank "${rankKey}" in ${_orgName(orgId)}. Ranks: ${keys || 'none'}.`);
   }
-  const verdict = parcelLocks.canAssignRank(_index, holdId, actor, target.id, rank);
+  const verdict = parcelLocks.canAssignRank(_index, orgId, actor, target.id, rank);
   if (!verdict.ok) return no(verdict.message);
 
   const { db } = deps();
   if (removing) {
-    await db.query('DELETE FROM hold_members WHERE hold_id = ? AND character_id = ?', [holdId, target.id]);
+    await db.query('DELETE FROM stone_members WHERE org_id = ? AND character_id = ?', [orgId, target.id]);
   } else {
     await db.query(
-      `INSERT INTO hold_members (hold_id, character_id, rank_id) VALUES (?, ?, ?)
+      `INSERT INTO stone_members (org_id, character_id, rank_id) VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE rank_id = VALUES(rank_id)`,
-      [holdId, target.id, rank.id]
+      [orgId, target.id, rank.id]
     );
   }
   await reload();
   const text = removing
-    ? `${target.name} is no longer a member of ${_holdName(holdId)}.`
-    : `${target.name} is now ${rank.name} of ${_holdName(holdId)}.`;
-  _notifyCharacter(target.id, `[Hold] ${text}`);
+    ? `${target.name} is no longer a member of ${_orgName(orgId)}.`
+    : `${target.name} is now ${rank.name} of ${_orgName(orgId)}.`;
+  _notifyCharacter(target.id, `[${_orgName(orgId)}] ${text}`);
   return ok(text);
 }
 
-async function createParcel(holdId, name, minRankKey = null) {
-  if (!_index.holds.has(holdId)) return no(`Unknown hold "${holdId}".`);
+async function createParcel(orgId, name, minRankKey = null) {
+  const org = _org(orgId);
+  if (!org) return _unknownOrg(orgId);
   if (!_validName(name)) return no(`Parcel name must be 2-${NAME_MAX} characters.`);
   let minRank = null;
   if (minRankKey && String(minRankKey).toLowerCase() !== 'none') {
-    minRank = parcelLocks.findRank(_index, holdId, minRankKey);
-    if (!minRank) return no(`No rank "${minRankKey}" in ${_holdName(holdId)}.`);
+    minRank = parcelLocks.findRank(_index, org.id, minRankKey);
+    if (!minRank) return no(`No rank "${minRankKey}" in ${org.name}.`);
   }
-  if (parcelLocks.parcelsOf(_index, holdId).some((p) => p.name.toLowerCase() === name.trim().toLowerCase())) {
-    return no(`${_holdName(holdId)} already has a parcel named "${name.trim()}".`);
+  if (parcelLocks.parcelsOf(_index, org.id).some((p) => p.name.toLowerCase() === name.trim().toLowerCase())) {
+    return no(`${org.name} already has a parcel named "${name.trim()}".`);
   }
   const result = await deps().db.query(
-    'INSERT INTO parcels (hold_id, name, min_rank_id, locked) VALUES (?, ?, ?, 1)',
-    [holdId, name.trim(), minRank ? minRank.id : null]
+    'INSERT INTO parcels (org_id, hold_id, name, min_rank_id, locked) VALUES (?, ?, ?, ?, 1)',
+    [org.id, org.holdId, name.trim(), minRank ? minRank.id : null]
   );
   await reload();
   const id = result && result.insertId;
-  return ok(`Parcel #${id} "${name.trim()}" created in ${_holdName(holdId)}${minRank ? ` (${minRank.name} and above)` : ' (owner and staff only)'}.`, { parcelId: id });
+  return ok(`Parcel #${id} "${name.trim()}" created for ${org.name}${minRank ? ` (${minRank.name} and above)` : ' (owner and staff only)'}.`, { parcelId: id });
 }
 
 function _parcel(parcelId) {
@@ -460,8 +441,8 @@ async function renameParcel(parcelId, name) {
   const parcel = _parcel(parcelId);
   if (!parcel) return no(`No parcel #${parcelId}.`);
   if (!_validName(name)) return no(`Parcel name must be 2-${NAME_MAX} characters.`);
-  if (parcelLocks.parcelsOf(_index, parcel.holdId).some((p) => p.id !== parcel.id && p.name.toLowerCase() === name.trim().toLowerCase())) {
-    return no(`${_holdName(parcel.holdId)} already has a parcel named "${name.trim()}".`);
+  if (parcelLocks.parcelsOf(_index, parcel.orgId).some((p) => p.id !== parcel.id && p.name.toLowerCase() === name.trim().toLowerCase())) {
+    return no(`${_orgName(parcel.orgId)} already has a parcel named "${name.trim()}".`);
   }
   await deps().db.query('UPDATE parcels SET name = ? WHERE id = ?', [name.trim(), parcel.id]);
   await reload();
@@ -474,7 +455,7 @@ async function transferParcel(parcelId, owner) {
   if (!parcel) return no(`No parcel #${parcelId}.`);
   await deps().db.query('UPDATE parcels SET owner_character_id = ? WHERE id = ?', [owner ? owner.id : null, parcel.id]);
   await reload();
-  if (owner) _notifyCharacter(owner.id, `[Hold] You now own parcel "${parcel.name}" in ${_holdName(parcel.holdId)}.`);
+  if (owner) _notifyCharacter(owner.id, `[${_orgName(parcel.orgId)}] You now own parcel "${parcel.name}".`);
   return ok(owner ? `Parcel "${parcel.name}" now belongs to ${owner.name}.` : `Parcel "${parcel.name}" has no owner now.`);
 }
 
@@ -483,8 +464,8 @@ async function setParcelMinRank(parcelId, rankKey) {
   if (!parcel) return no(`No parcel #${parcelId}.`);
   let rank = null;
   if (rankKey && String(rankKey).toLowerCase() !== 'none') {
-    rank = parcelLocks.findRank(_index, parcel.holdId, rankKey);
-    if (!rank) return no(`No rank "${rankKey}" in ${_holdName(parcel.holdId)}.`);
+    rank = parcelLocks.findRank(_index, parcel.orgId, rankKey);
+    if (!rank) return no(`No rank "${rankKey}" in ${_orgName(parcel.orgId)}.`);
   }
   await deps().db.query('UPDATE parcels SET min_rank_id = ? WHERE id = ?', [rank ? rank.id : null, parcel.id]);
   await reload();
@@ -519,7 +500,6 @@ async function addObject(parcelId, objectDesc, kind, { partnerDesc = null } = {}
   const desc = normalizeDesc(objectDesc);
   if (!desc) return no('That object has no FormDesc (hex:Plugin.esm).');
   if (kind !== 'door' && kind !== 'container') return no('Only doors and containers can be part of a parcel.');
-  if ([..._index.holdstoneByHold.values()].includes(desc)) return no('That object is a holdstone.');
   const existing = _index.objectsByDesc.get(desc);
   if (existing && existing.parcelId !== parcel.id) {
     const other = _index.parcels.get(existing.parcelId);
@@ -571,10 +551,6 @@ function startParcelTool(actorId, parcelId) {
   _tools.set(actorId, { parcelId: Number(parcelId) });
 }
 
-function startPlaceHoldstone(actorId, holdId) {
-  _tools.set(actorId, { placeHoldId: holdId });
-}
-
 function stopTool(actorId) {
   return _tools.delete(actorId);
 }
@@ -584,13 +560,13 @@ function toolOf(actorId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lock enforcement — `mp.onActivate` via core/activation-events.js
+// Activation — `mp.onActivate` via core/activation-events.js
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Synchronous. Returns `false` to block the vanilla activation.
+ * - a stone (any reference of an organization's activator): opens its menu;
  * - parceling tool on: doors/containers open the parcel menu instead;
- * - placing a holdstone: the activated object becomes that hold's stone;
  * - otherwise: block locked parcel objects for unauthorized characters.
  * Non-player casters (NPCs) and objects outside parcels are never blocked.
  */
@@ -601,28 +577,26 @@ function handleActivation(targetId, casterId) {
   const d = deps();
   const ch = d.commands.getActiveCharacterData(caster);
   if (!ch) return undefined;
+  const openMenu = () => {
+    try { d.openInteractionMenu(caster, target); } catch (err) { d.logger.error('[holdstones] menu failed:', err.message); }
+    return false;
+  };
+
+  if (orgOfStoneRef(target)) return openMenu();
+
+  // A stone from Oathbound_Holdstone.esp that no organization owns: the old
+  // generic stone (800), or an activator missing from holdstones.json.
+  const base = baseDescOf(target);
+  if (base && base.toLowerCase().endsWith(`:${STONE_PLUGIN_LOWER()}`)) {
+    d.logger.log(`[holdstones] E on a stone whose activator ${base} belongs to no organization (data/holdstones.json)`);
+    d.commands.sendNotification(caster, d.isStaff(caster)
+      ? `[Holdstone] This stone's activator (${base}) is not in data/holdstones.json.`
+      : 'This holdstone is silent. It belongs to no one.');
+    return false;
+  }
 
   const tool = _tools.get(caster);
-  if (tool && tool.placeHoldId) {
-    _tools.delete(caster);
-    const desc = descOf(target);
-    setHoldstone(tool.placeHoldId, desc, { allowDynamic: true })
-      .then((r) => d.commands.sendNotification(caster, `[Holdstone] ${r.message}`))
-      .catch((err) => d.logger.error('[holdstones] place failed:', err.message));
-    return false;
-  }
-  if (tool && tool.parcelId && !d.commands.getActiveCharacterData(target) && !physicalAnchorRegistry.has(target)) {
-    try { d.openInteractionMenu(caster, target); } catch (err) { d.logger.error('[holdstones] tool menu failed:', err.message); }
-    return false;
-  }
-
-  // A holdstone model that no hold owns yet (e.g. placed in the Creation Kit).
-  if (!parcelLocks.holdOfStone(_index, target) && isHoldstoneObject(target)) {
-    d.commands.sendNotification(caster, d.isStaff(caster)
-      ? '[Holdstone] Not bound to a hold yet: /holdstone place <hold>, then press E on it.'
-      : 'This holdstone is silent. It belongs to no hold yet.');
-    return false;
-  }
+  if (tool && tool.parcelId && !d.commands.getActiveCharacterData(target)) return openMenu();
 
   const verdict = parcelLocks.checkActivation(_index, target, actorOf(caster));
   if (!verdict.known || verdict.allowed) return undefined;
@@ -631,30 +605,35 @@ function handleActivation(targetId, casterId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Holdstone panel payload
+// Stone panel payload
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function holdPayload(holdId, actor, targetId = null) {
-  const members = parcelLocks.membersOf(_index, holdId);
-  const parcels = parcelLocks.parcelsOf(_index, holdId);
+async function orgPayload(orgId, actor, targetId = null) {
+  const org = _org(orgId);
+  const members = parcelLocks.membersOf(_index, orgId);
+  const parcels = parcelLocks.parcelsOf(_index, orgId);
   const names = await characterNames([
     ...members.map((m) => m.characterId),
     ...parcels.map((p) => p.ownerCharacterId)
   ]);
-  const mine = parcelLocks.memberRank(_index, holdId, actor.characterId);
-  const canManage = parcelLocks.canManageHold(_index, holdId, actor);
+  const mine = parcelLocks.memberRank(_index, orgId, actor.characterId);
+  const canManage = parcelLocks.canManageOrg(_index, orgId, actor);
   const label = (id) => {
     const n = names.get(id);
     return n ? `${n.name}${n.number ? ` #${n.number}` : ''}` : `character ${id}`;
   };
   return {
-    holdId,
-    holdName: _holdName(holdId),
+    orgId,
+    orgName: org ? org.name : orgId,
+    kind: org ? KIND_LABELS[org.kind] || org.kind : '',
+    seat: org && org.holdId ? (_index.holds.get(org.holdId) || org.holdId) : null,
     targetId,
     yourRank: mine ? mine.name : null,
     canManage,
     isStaff: actor.isStaff,
-    ranks: parcelLocks.ranksOf(_index, holdId).map((r) => ({ key: r.key, name: r.name, position: r.position, isLeader: r.isLeader })),
+    allegiances: parcelLocks.membershipsOf(_index, actor.characterId)
+      .map((m) => ({ name: m.org.name, kind: KIND_LABELS[m.org.kind] || m.org.kind, rank: m.rank.name })),
+    ranks: parcelLocks.ranksOf(_index, orgId).map((r) => ({ key: r.key, name: r.name, position: r.position, isLeader: r.isLeader })),
     members: members.map((m) => ({ name: label(m.characterId), rank: m.rank.name, rankKey: m.rank.key })),
     parcels: parcels.map((p) => {
       const min = p.minRankId != null ? _index.ranks.get(p.minRankId) : null;
@@ -677,21 +656,21 @@ async function holdPayload(holdId, actor, targetId = null) {
 // Interaction Framework
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _holdOfTarget(ctx) {
-  return parcelLocks.holdOfStone(_index, ctx.target.formId);
+function _orgOfTarget(ctx) {
+  return orgOfStoneRef(ctx.target.formId);
 }
 
 function _ctxActor(ctx) {
   return { actorId: ctx.actorId, characterId: ctx.characterId, isStaff: Boolean(deps().isStaff(ctx.actorId)) };
 }
 
-function _parcelInHold(ctx, holdId) {
+function _parcelOfOrg(ctx, orgId) {
   const parcel = _parcel(ctx.data.parcelId);
-  return parcel && parcel.holdId === holdId ? parcel : null;
+  return parcel && parcel.orgId === orgId ? parcel : null;
 }
 
-async function _refreshPanel(ctx, holdId) {
-  deps().sendModal(ctx.actorId, 'holdstone:update', await holdPayload(holdId, _ctxActor(ctx), ctx.target.formId));
+async function _refreshPanel(ctx, orgId) {
+  deps().sendModal(ctx.actorId, 'holdstone:update', await orgPayload(orgId, _ctxActor(ctx), ctx.target.formId));
 }
 
 function registerInteractions() {
@@ -700,41 +679,42 @@ function registerInteractions() {
     module: MODULE_ID,
     target: R.TARGET_TYPES.OBJECT,
     section: 'holdstone',
-    distance: HOLDSTONE_RANGE
+    distance: STONE_RANGE
   };
-  const isStone = async (ctx) => Boolean(_holdOfTarget(ctx));
+  const isStone = async (ctx) => Boolean(_orgOfTarget(ctx));
   const isManager = async (ctx) => {
-    const holdId = _holdOfTarget(ctx);
-    return Boolean(holdId) && parcelLocks.canManageHold(_index, holdId, _ctxActor(ctx));
+    const orgId = _orgOfTarget(ctx);
+    return Boolean(orgId) && parcelLocks.canManageOrg(_index, orgId, _ctxActor(ctx));
   };
-  /** Runs `fn(holdId, parcel?)` after re-checking leadership at execute time. */
+  /** Runs `fn(ctx, orgId, parcel?)` after re-checking leadership at execute time. */
   const managed = (needsParcel, fn) => async (ctx) => {
-    const holdId = _holdOfTarget(ctx);
-    if (!holdId) return { message: 'This is not a holdstone.' };
-    if (!parcelLocks.canManageHold(_index, holdId, _ctxActor(ctx))) {
-      return { message: 'Only the leaders of this hold can do that.' };
+    const orgId = _orgOfTarget(ctx);
+    if (!orgId) return { message: 'This is not a holdstone.' };
+    const tag = `[${_orgName(orgId)}]`;
+    if (!parcelLocks.canManageOrg(_index, orgId, _ctxActor(ctx))) {
+      return { message: `${tag} Only its leaders can do that.` };
     }
     let parcel = null;
     if (needsParcel) {
-      parcel = _parcelInHold(ctx, holdId);
-      if (!parcel) return { message: `No parcel #${ctx.data.parcelId} in ${_holdName(holdId)}.` };
+      parcel = _parcelOfOrg(ctx, orgId);
+      if (!parcel) return { message: `${tag} No parcel #${ctx.data.parcelId} here.` };
     }
-    const result = await fn(ctx, holdId, parcel);
-    if (result.ok) await _refreshPanel(ctx, holdId);
-    return { message: `[Hold] ${result.message}` };
+    const result = await fn(ctx, orgId, parcel);
+    if (result.ok) await _refreshPanel(ctx, orgId);
+    return { message: `${tag} ${result.message}` };
   };
 
   R.register({
     ...stone,
     id: 'holdstone.view',
-    label: 'Hold',
+    label: 'Open the stone',
     order: 10,
     audit: R.AUDIT_LEVELS.TRACE,
     canSee: isStone,
     execute: async (ctx) => {
-      const holdId = _holdOfTarget(ctx);
-      if (!holdId) return { message: 'This is not a holdstone.' };
-      deps().sendModal(ctx.actorId, 'holdstone:open', await holdPayload(holdId, _ctxActor(ctx), ctx.target.formId));
+      const orgId = _orgOfTarget(ctx);
+      if (!orgId) return { message: 'This is not a holdstone.' };
+      deps().sendModal(ctx.actorId, 'holdstone:open', await orgPayload(orgId, _ctxActor(ctx), ctx.target.formId));
       return { message: null };
     }
   });
@@ -749,10 +729,10 @@ function registerInteractions() {
       player: { type: 'int', label: 'Character number', min: 1, max: 5000, required: true },
       rank: { type: 'string', label: 'Rank key (or none)', min: 2, max: 32, required: true }
     },
-    execute: managed(false, async (ctx, holdId) => {
+    execute: managed(false, async (ctx, orgId) => {
       const target = await characterByNumber(ctx.data.player);
       if (!target) return no(`No character with number #${ctx.data.player}.`);
-      return setMemberRank(_ctxActor(ctx), holdId, target, ctx.data.rank);
+      return setMemberRank(_ctxActor(ctx), orgId, target, ctx.data.rank);
     })
   });
 
@@ -766,7 +746,7 @@ function registerInteractions() {
       name: { type: 'string', label: 'Parcel name', min: 2, max: NAME_MAX, required: true },
       minRank: { type: 'string', label: 'Minimum rank key (or none)', max: 32, default: 'none' }
     },
-    execute: managed(false, (ctx, holdId) => createParcel(holdId, ctx.data.name, ctx.data.minRank))
+    execute: managed(false, (ctx, orgId) => createParcel(orgId, ctx.data.name, ctx.data.minRank))
   });
 
   R.register({
@@ -779,7 +759,7 @@ function registerInteractions() {
       parcelId: { type: 'int', label: 'Parcel number', min: 1, required: true },
       name: { type: 'string', label: 'New name', min: 2, max: NAME_MAX, required: true }
     },
-    execute: managed(true, (ctx, holdId, parcel) => renameParcel(parcel.id, ctx.data.name))
+    execute: managed(true, (ctx, orgId, parcel) => renameParcel(parcel.id, ctx.data.name))
   });
 
   R.register({
@@ -792,7 +772,7 @@ function registerInteractions() {
       parcelId: { type: 'int', label: 'Parcel number', min: 1, required: true },
       owner: { type: 'int', label: 'New owner number (0 = none)', min: 0, max: 5000, required: true }
     },
-    execute: managed(true, async (ctx, holdId, parcel) => {
+    execute: managed(true, async (ctx, orgId, parcel) => {
       if (ctx.data.owner === 0) return transferParcel(parcel.id, null);
       const owner = await characterByNumber(ctx.data.owner);
       if (!owner) return no(`No character with number #${ctx.data.owner}.`);
@@ -810,7 +790,7 @@ function registerInteractions() {
       parcelId: { type: 'int', label: 'Parcel number', min: 1, required: true },
       rank: { type: 'string', label: 'Minimum rank key (or none)', min: 2, max: 32, required: true }
     },
-    execute: managed(true, (ctx, holdId, parcel) => setParcelMinRank(parcel.id, ctx.data.rank))
+    execute: managed(true, (ctx, orgId, parcel) => setParcelMinRank(parcel.id, ctx.data.rank))
   });
 
   R.register({
@@ -820,25 +800,26 @@ function registerInteractions() {
     order: 70,
     // Owners lock/unlock their own parcels from the stone too.
     canSee: async (ctx) => {
-      const holdId = _holdOfTarget(ctx);
-      if (!holdId) return false;
+      const orgId = _orgOfTarget(ctx);
+      if (!orgId) return false;
       const actor = _ctxActor(ctx);
-      return parcelLocks.parcelsOf(_index, holdId).some((p) => parcelLocks.canLockParcel(_index, p, actor));
+      return parcelLocks.parcelsOf(_index, orgId).some((p) => parcelLocks.canLockParcel(_index, p, actor));
     },
     schema: {
       parcelId: { type: 'int', label: 'Parcel number', min: 1, required: true },
       locked: { type: 'bool', label: 'Locked', default: true }
     },
     execute: async (ctx) => {
-      const holdId = _holdOfTarget(ctx);
-      const parcel = holdId ? _parcelInHold(ctx, holdId) : null;
-      if (!parcel) return { message: `[Hold] No parcel #${ctx.data.parcelId} here.` };
+      const orgId = _orgOfTarget(ctx);
+      const parcel = orgId ? _parcelOfOrg(ctx, orgId) : null;
+      if (!parcel) return { message: `No parcel #${ctx.data.parcelId} here.` };
+      const tag = `[${_orgName(orgId)}]`;
       if (!parcelLocks.canLockParcel(_index, parcel, _ctxActor(ctx))) {
-        return { message: '[Hold] Only the owner or the leaders can lock this parcel.' };
+        return { message: `${tag} Only the owner or the leaders can lock this parcel.` };
       }
       const result = await setParcelLocked(parcel.id, ctx.data.locked);
-      if (result.ok) await _refreshPanel(ctx, holdId);
-      return { message: `[Hold] ${result.message}` };
+      if (result.ok) await _refreshPanel(ctx, orgId);
+      return { message: `${tag} ${result.message}` };
     }
   });
 
@@ -851,7 +832,7 @@ function registerInteractions() {
     schema: {
       parcelId: { type: 'int', label: 'Parcel number', min: 1, required: true }
     },
-    execute: managed(true, async (ctx, holdId, parcel) => {
+    execute: managed(true, async (ctx, orgId, parcel) => {
       startParcelTool(ctx.actorId, parcel.id);
       return ok(`Parceling tool on for "${parcel.name}". Press E on a door or container to add or remove it. ` +
         'Choose "Stop parceling tool" (or /parcel tool off) when done.');
@@ -870,13 +851,13 @@ function registerInteractions() {
     const t = _tools.get(ctx.actorId);
     const parcel = t && t.parcelId ? _parcel(t.parcelId) : null;
     if (!parcel) return null;
-    return parcelLocks.canManageHold(_index, parcel.holdId, _ctxActor(ctx)) ? parcel : null;
+    return parcelLocks.canManageOrg(_index, parcel.orgId, _ctxActor(ctx)) ? parcel : null;
   };
   const objectHere = (ctx) => {
     const desc = descOf(ctx.target.formId);
     return desc ? _index.objectsByDesc.get(desc) || null : null;
   };
-  const toolSees = (fn) => async (ctx) => Boolean(toolParcel(ctx)) && !parcelLocks.holdOfStone(_index, ctx.target.formId) && fn(ctx);
+  const toolSees = (fn) => async (ctx) => Boolean(toolParcel(ctx)) && !_orgOfTarget(ctx) && fn(ctx);
 
   R.register({
     ...tool,
@@ -909,8 +890,8 @@ function registerInteractions() {
       const object = objectHere(ctx);
       const parcel = object ? _parcel(object.parcelId) : null;
       if (!object || !parcel) return { message: '[Parcel] That object is not part of any parcel.' };
-      if (!parcelLocks.canManageHold(_index, parcel.holdId, _ctxActor(ctx))) {
-        return { message: '[Parcel] Only the leaders of that hold can change this parcel.' };
+      if (!parcelLocks.canManageOrg(_index, parcel.orgId, _ctxActor(ctx))) {
+        return { message: '[Parcel] Only the leaders of its organization can change this parcel.' };
       }
       const result = await removeObject(object.objectId);
       return { message: `[Parcel] ${result.message}` };
@@ -930,8 +911,8 @@ function registerInteractions() {
       const object = objectHere(ctx);
       const parcel = object ? _parcel(object.parcelId) : null;
       if (!object || !parcel) return { message: '[Parcel] That door is not part of any parcel.' };
-      if (!parcelLocks.canManageHold(_index, parcel.holdId, _ctxActor(ctx))) {
-        return { message: '[Parcel] Only the leaders of that hold can change this parcel.' };
+      if (!parcelLocks.canManageOrg(_index, parcel.orgId, _ctxActor(ctx))) {
+        return { message: '[Parcel] Only the leaders of its organization can change this parcel.' };
       }
       const result = await setObjectLocks(object.objectId, !object.locks);
       return { message: `[Parcel] ${result.message}` };
@@ -952,15 +933,8 @@ function registerInteractions() {
   });
 }
 
-function registerPhysicalAnchors() {
-  physicalAnchorRegistry.register({
-    targetType: interactionRegistry.TARGET_TYPES.OBJECT,
-    list: async () => [..._index.holdstoneById.keys()].map((targetId) => ({ targetId }))
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// UI events (holdstone panel buttons)
+// UI events (stone panel buttons)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -980,7 +954,7 @@ async function handleUiEvent(actorId, uiEvent) {
 function _staffGuard(actorId) {
   const d = deps();
   if (d.isStaff(actorId)) return true;
-  d.commands.sendNotification(actorId, 'Staff only. Leaders manage their hold at the holdstone.');
+  d.commands.sendNotification(actorId, 'Staff only. Leaders manage their organization at its stone.');
   return false;
 }
 
@@ -1004,13 +978,12 @@ function _characterFromActorArg(word) {
 }
 
 const HOLDSTONE_HELP =
-  '/holdstone list · /holdstone spawn <hold> (puts a holdstone where you stand) · ' +
-  '/holdstone place <hold> (then press E on an existing object) · /holdstone set <hold> <formDesc> · ' +
-  '/holdstone clear <hold> · /holdstone ranks <hold> · /holdstone addrank <hold> <key> <position> <leader|member> <name> · ' +
-  '/holdstone delrank <hold> <key> · /holdrank <hold> <player#> <rank|none>';
+  '/holdstone list · /holdstone ranks <stone> · /holdstone addrank <stone> <key> <position> <leader|member> <name> · ' +
+  '/holdstone delrank <stone> <key> · /holdrank <stone> <player#> <rank|none>. ' +
+  'Stones are placed in the Creation Kit; new ones are added in gamemode/data/holdstones.json.';
 
 const PARCEL_HELP =
-  '/parcel list <hold> · /parcel create <hold> <name> · /parcel rename <id> <name> · /parcel rank <id> <rank|none> · ' +
+  '/parcel list <stone> · /parcel create <stone> <name> · /parcel rename <id> <name> · /parcel rank <id> <rank|none> · ' +
   '/parcel lock <id> · /parcel unlock <id> · /parcel disown <id> · /parcel delete <id> · /parcel info <id> · ' +
   '/parcel add <id> <formDesc> <door|container> · /parcel remove <formDesc> · /parcel tool <id|off> · /parcelowner <id> <player#>';
 
@@ -1020,26 +993,16 @@ async function handleHoldstoneCommand(actorId, args) {
   const reply = _reply(actorId, 'Holdstone');
   switch ((sub || '').toLowerCase()) {
     case 'list': {
-      const lines = [..._index.holds.keys()].map((holdId) => {
-        const stoneDesc = _index.holdstoneByHold.get(holdId);
-        return `${holdId}: ${stoneDesc || 'no stone'}, ${parcelLocks.membersOf(_index, holdId).length} members, ${parcelLocks.parcelsOf(_index, holdId).length} parcels`;
-      });
-      _say(actorId, `[Holdstone] ${lines.join(' · ') || 'No holds.'}`);
+      const lines = [..._index.orgs.values()].sort((a, b) => a.id.localeCompare(b.id)).map((org) =>
+        `${org.id} (${KIND_LABELS[org.kind] || org.kind}${org.baseId ? '' : ', no stone'}): ` +
+        `${parcelLocks.membersOf(_index, org.id).length} members, ${parcelLocks.parcelsOf(_index, org.id).length} parcels`);
+      _say(actorId, `[Holdstone] ${lines.join(' · ') || 'No organizations.'}`);
       return;
     }
-    case 'spawn':
-      return reply(await spawnHoldstone(actorId, rest[0]));
-    case 'place':
-      if (!_index.holds.has(rest[0])) return _say(actorId, `[Holdstone] Unknown hold "${rest[0] || ''}".`);
-      startPlaceHoldstone(actorId, rest[0]);
-      return _say(actorId, `[Holdstone] Press E on the object that will be the ${_holdName(rest[0])} holdstone.`);
-    case 'set':
-      return reply(await setHoldstone(rest[0], rest[1]));
-    case 'clear':
-      return reply(await clearHoldstone(rest[0]));
     case 'ranks': {
+      if (!_org(rest[0])) return reply(_unknownOrg(rest[0]));
       const ranks = parcelLocks.ranksOf(_index, rest[0]);
-      return _say(actorId, `[Holdstone] ${_holdName(rest[0])}: ${ranks.map((r) => `${r.position} ${r.key} (${r.name}${r.isLeader ? ', leader' : ''})`).join(' < ') || 'no ranks'}`);
+      return _say(actorId, `[Holdstone] ${_orgName(rest[0])}: ${ranks.map((r) => `${r.position} ${r.key} (${r.name}${r.isLeader ? ', leader' : ''})`).join(' < ') || 'no ranks'}`);
     }
     case 'addrank':
       return reply(await addRank(rest[0], rest[1], Number(rest[2]), rest[3] === 'leader', rest.slice(4).join(' ')));
@@ -1052,11 +1015,11 @@ async function handleHoldstoneCommand(actorId, args) {
 
 async function handleHoldRankCommand(actorId, args) {
   if (!_staffGuard(actorId)) return;
-  const [holdId, actorWord, rankKey] = String(args || '').trim().split(/\s+/);
+  const [orgId, actorWord, rankKey] = String(args || '').trim().split(/\s+/);
   const target = _characterFromActorArg(actorWord);
-  if (!target) return _say(actorId, 'Usage: /holdrank <hold> <player#> <rank|none>');
-  const r = await setMemberRank(actorOf(actorId), holdId, target, rankKey || 'none');
-  _say(actorId, `[Hold] ${r.message}`);
+  if (!target) return _say(actorId, 'Usage: /holdrank <stone> <player#> <rank|none>');
+  const r = await setMemberRank(actorOf(actorId), orgId, target, rankKey || 'none');
+  _say(actorId, `[${_orgName(orgId)}] ${r.message}`);
 }
 
 async function handleParcelOwnerCommand(actorId, args) {
@@ -1079,15 +1042,16 @@ async function handleParcelCommand(actorId, args) {
   const id = Number(rest[0]);
   switch (lower) {
     case 'list': {
+      if (!_org(rest[0])) return reply(_unknownOrg(rest[0]));
       const parcels = parcelLocks.parcelsOf(_index, rest[0]);
-      return _say(actorId, `[Parcel] ${_holdName(rest[0])}: ${parcels.map((p) => `#${p.id} ${p.name}${p.locked ? '' : ' (unlocked)'}`).join(' · ') || 'no parcels'}`);
+      return _say(actorId, `[Parcel] ${_orgName(rest[0])}: ${parcels.map((p) => `#${p.id} ${p.name}${p.locked ? '' : ' (unlocked)'}`).join(' · ') || 'no parcels'}`);
     }
     case 'info': {
       const p = _parcel(id);
       if (!p) return _say(actorId, `[Parcel] No parcel #${rest[0]}.`);
       const min = p.minRankId != null ? _index.ranks.get(p.minRankId) : null;
       const objects = parcelLocks.objectsOf(_index, p.id);
-      return _say(actorId, `[Parcel] #${p.id} ${p.name} (${p.holdId}) owner=${p.ownerCharacterId ?? 'none'} ` +
+      return _say(actorId, `[Parcel] #${p.id} ${p.name} (${p.orgId}) owner=${p.ownerCharacterId ?? 'none'} ` +
         `min=${min ? min.key : 'owner only'} ${p.locked ? 'locked' : 'unlocked'} · ` +
         `${objects.map((o) => `${o.kind}${o.locks ? '' : '(exit)'} ${o.objectId}`).join(', ') || 'no objects'}`);
     }
@@ -1125,8 +1089,8 @@ function commandDefs() {
     _say(actorId, 'Could not complete that. Check the server log.');
   });
   return [
-    { name: '/holdstone', handler: wrap(handleHoldstoneCommand), description: '[Staff] Set up holdstones and hold ranks', usage: '/holdstone [list|spawn|place|set|clear|ranks|addrank|delrank]' },
-    { name: '/holdrank', handler: wrap(handleHoldRankCommand), description: '[Staff] Set a player\'s rank in a hold', usage: '/holdrank <hold> <player#> <rank|none>' },
+    { name: '/holdstone', handler: wrap(handleHoldstoneCommand), description: '[Staff] List stones and edit their rank ladders', usage: '/holdstone [list|ranks|addrank|delrank]' },
+    { name: '/holdrank', handler: wrap(handleHoldRankCommand), description: '[Staff] Set a player\'s rank at a stone', usage: '/holdrank <stone> <player#> <rank|none>' },
     { name: '/parcel', handler: wrap(handleParcelCommand), description: '[Staff] Manage parcels (doors and containers that lock)', usage: '/parcel [list|create|info|rename|rank|lock|unlock|disown|delete|add|remove|tool]' },
     { name: '/parcelowner', handler: wrap(handleParcelOwnerCommand), description: '[Staff] Give a parcel to a player', usage: '/parcelowner <parcelId> <player#>' }
   ];
@@ -1138,13 +1102,18 @@ function commandDefs() {
 
 async function initialize(overrides = {}) {
   configure(overrides);
-  registerPhysicalAnchors();
+  const d = deps();
+  try {
+    await syncOrganizations();
+  } catch (err) {
+    d.logger.error('[holdstones] could not sync data/holdstones.json:', err.message);
+  }
   await reload();
   registerInteractions();
   activationEvents.subscribe(ACTIVATION_SUBSCRIBER, handleActivation);
-  const d = deps();
   if (typeof d.commands.onCharacterRemoved === 'function') d.commands.onCharacterRemoved(stopTool);
-  d.logger.log(`[holdstones] ${_index.holdstoneByHold.size} holdstones, ${_index.parcels.size} parcels, ${_index.objectsByDesc.size} locked objects loaded.`);
+  const stones = [..._index.orgs.values()].filter((o) => o.baseId).length;
+  d.logger.log(`[holdstones] ${_index.orgs.size} organizations (${stones} with a stone), ${_index.parcels.size} parcels, ${_index.objectsByDesc.size} locked objects loaded.`);
 }
 
 function shutdown() {
@@ -1157,23 +1126,24 @@ function _resetForTest() {
   _index = parcelLocks.EMPTY_INDEX;
   _tools.clear();
   _deps = null;
+  _stonePluginLower = null;
 }
 
 module.exports = {
   MODULE_ID,
   LOCKED_MESSAGE,
+  STONES_FILE,
   configure,
   getIndex,
   reload,
+  stoneList,
+  syncOrganizations,
   normalizeDesc,
+  baseDescOf,
+  orgOfStoneRef,
   detectKind,
   findTeleportPartner,
   characterByNumber,
-  setHoldstone,
-  clearHoldstone,
-  spawnHoldstone,
-  isHoldstoneObject,
-  HOLDSTONE_BASE_DESC,
   addRank,
   removeRank,
   setMemberRank,
@@ -1187,13 +1157,11 @@ module.exports = {
   removeObject,
   setObjectLocks,
   startParcelTool,
-  startPlaceHoldstone,
   stopTool,
   toolOf,
   handleActivation,
-  holdPayload,
+  orgPayload,
   registerInteractions,
-  registerPhysicalAnchors,
   handleUiEvent,
   handleHoldstoneCommand,
   handleParcelCommand,
