@@ -58,12 +58,12 @@ CREATE TABLE IF NOT EXISTS `characters` (
   `social_ties` TEXT DEFAULT NULL COMMENT 'Laços sociais/relações pretendidas (rubrica de whitelist Heavy RP)',
   `needs_extra_review` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Conceito forte (nobre, mago poderoso, vampiro, lobisomem, lider de faccao) — exige aprovacao extra da staff antes de approved',
   `extra_review_notes` TEXT DEFAULT NULL COMMENT 'Notas da staff sobre a revisao extra do conceito',
-  -- Coordenadas de Logout (Default: The Bannered Mare Whiterun)
-  `pos_x` FLOAT NOT NULL DEFAULT -71.0,
-  `pos_y` FLOAT NOT NULL DEFAULT -86.0,
-  `pos_z` FLOAT NOT NULL DEFAULT 70.0,
-  `angle_z` FLOAT NOT NULL DEFAULT 178.0,
-  `cell_id` VARCHAR(64) NOT NULL DEFAULT '1605e:Skyrim.esm',
+  -- Logout position (default: the Sleeping Giant Inn, Riverwood)
+  `pos_x` FLOAT NOT NULL DEFAULT -977.0,
+  `pos_y` FLOAT NOT NULL DEFAULT 9.0,
+  `pos_z` FLOAT NOT NULL DEFAULT 5.0,
+  `angle_z` FLOAT NOT NULL DEFAULT 137.0,
+  `cell_id` VARCHAR(64) NOT NULL DEFAULT '133c6:Skyrim.esm',
   `gold` INT NOT NULL DEFAULT 0 COMMENT 'Economia in-game (Septims)',
   `status` VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT 'pending, approved, rejected, retired (soft-delete, ver admin-service.retireCharacter)',
   `racemenu_presets` TEXT DEFAULT NULL COMMENT 'JSON string contendo presets de aparencia',

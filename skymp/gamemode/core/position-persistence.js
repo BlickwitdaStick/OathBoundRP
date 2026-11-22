@@ -39,7 +39,9 @@ const path = require('path');
 /** How often the live position is read (a cache read, no database write). */
 const TICK_MS = 2000;
 /** A character moving inside one cell is written at most this often. */
-const WRITE_MS = 10000;
+// Short so a server restart (no logout event) loses at most a few seconds of
+// walking: the last write is what the character comes back to.
+const WRITE_MS = 3000;
 /** Form ids below this belong to Skyrim.esm (load order index 00). */
 const SKYRIM_ESM_LIMIT = 0x01000000;
 /** Below this many game units of movement a save is skipped (about 1.5 m). */
