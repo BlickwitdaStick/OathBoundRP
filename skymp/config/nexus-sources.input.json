@@ -60,6 +60,7 @@
     { "id": "sorcerer", "modId": 95196, "fileId": 787781, "local": "MODS TO ADD/Sorcerer - A Staff and Scroll Overhaul 95196 1.1.0 2026-08-09T23-48Z uhRBKsv1t.7z" },
     { "id": "thaumaturgy", "modId": 57138, "fileId": 787801, "local": "MODS TO ADD/Thaumaturgy - An Enchanting Overhaul 57138 1.5 2026-08-10T00-26Z kATsMWhoA.7z" },
     { "id": "apprentice", "modId": 169288, "fileId": 790359, "local": "MODS TO ADD/Apprentice - A Class Overhaul 169288 1.1.0 2026-08-15T17-04Z qTl1Sxemn.7z" },
-    { "id": "skyrim-souls-re", "modId": 27859, "fileId": 810395, "local": "MODS TO ADD/Skyrim Souls RE - Unpaused Menus 27859 3.2.0 2026-09-25T11-17Z hfH9s6crn.zip" }
+    { "id": "skyrim-souls-re", "modId": 27859, "fileId": 810395, "local": "MODS TO ADD/Skyrim Souls RE - Unpaused Menus 27859 3.2.0 2026-09-25T11-17Z hfH9s6crn.zip" },
+    { "id": "crashlogger", "modId": 59818, "fileId": 825684, "local": "MODS TO ADD/CrashLogger 59818 1.27.0 2026-10-25T06-21Z 31i7IoqRd.7z" }
   ]
 }

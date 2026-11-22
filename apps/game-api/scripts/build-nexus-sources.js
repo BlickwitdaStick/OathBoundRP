@@ -91,6 +91,12 @@ async function main() {
   }
   const assigned = new Set();
   const sources = [];
+  // The previous recipe: a mod whose local archive is gone keeps its entry as
+  // long as the Nexus file is the same and its files are still in the manifest
+  // (archives get moved or deleted after install; Nexus still has them).
+  let previous = [];
+  try { previous = (JSON.parse(fs.readFileSync(OUTPUT, 'utf8')).sources) || []; } catch { previous = []; }
+  const byPath = new Map(manifest.files.map(f => [f.path, f]));
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nexus-sources-'));
 
   try {
@@ -101,7 +107,15 @@ async function main() {
       if (nf.category === 'REMOVED' || nf.category === 'DELETED') { console.log(`SKIP ${s.id}: Nexus file is ${nf.category}`); continue; }
 
       const local = resolveLocal(root, s.local);
-      if (!fs.existsSync(local)) { console.log(`SKIP ${s.id}: local copy not found (${local})`); continue; }
+      if (!fs.existsSync(local)) {
+        const old = previous.find(p => p.id === s.id && p.modId === s.modId && p.fileId === s.fileId);
+        const kept = old ? old.provides.filter(p => byPath.has(p.path) && byPath.get(p.path).sha256 === p.sha256 && !assigned.has(p.path)) : [];
+        if (kept.length === 0) { console.log(`SKIP ${s.id}: local copy not found (${local})`); continue; }
+        for (const p of kept) assigned.add(p.path);
+        sources.push({ ...old, provides: kept });
+        console.log(`KEPT ${s.id}: local copy gone; ${kept.length} file(s) from the previous recipe`);
+        continue;
+      }
       let contentDir = local;
       let localArchiveSize = 0;
       if (fs.statSync(local).isFile()) {
