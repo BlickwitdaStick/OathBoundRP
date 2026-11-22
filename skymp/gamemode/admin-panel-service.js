@@ -38,6 +38,12 @@ const FLAG = 'ENABLE_ADMIN_PANEL';
 const MAX_CHARACTER_ROWS = 100;
 const MAX_QUERY_LENGTH = 64;
 const MAX_GIVE_COUNT = 1000;
+/**
+ * Gives from one staff member closer together than this are dropped. A held
+ * Enter/Space on the focused Give button clicks it on every key repeat (~35 a
+ * second): on 2026-11-21 that gave 1460 Mysticism spell tomes in 41 seconds.
+ */
+const GIVE_MIN_INTERVAL_MS = 300;
 const MAX_REASON_LENGTH = 500;
 const MAX_LIVE_SPAWNS = 50;
 const SPAWN_DISTANCE = 150;
@@ -93,6 +99,9 @@ function createAdminPanel(deps) {
   const spawned = new Map();
   let resultSeq = 0;
   let openSeq = 0;
+  const now = deps.now || (() => Date.now());
+  /** actorId -> time of the last give accepted from that staff member */
+  const lastGiveAt = new Map();
 
   // ── permissions ──────────────────────────────────────────────────────────
   function isStaff(actorId) {
@@ -322,6 +331,13 @@ function createAdminPanel(deps) {
       if (r.error) return result(actorId, false, r.error);
       targetActorId = r.actorId;
     }
+    const t = now();
+    const prev = lastGiveAt.get(actorId);
+    if (prev !== undefined && t - prev < GIVE_MIN_INTERVAL_MS) {
+      // No result banner: a repeat flood would only replace the real one.
+      return false;
+    }
+    lastGiveAt.set(actorId, t);
     const ok = await admin.giveItemAdmin(actorId, targetActorId, baseId, count);
     const who = targetActorId === actorId ? 'you' : `#${commands.getActiveCharacterData(targetActorId)?.charNumber ?? '?'}`;
     return result(actorId, Boolean(ok), ok ? `Gave ${count} × 0x${baseId.toString(16)} to ${who}.` : 'The item was not given (see the notice).');

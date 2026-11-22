@@ -215,6 +215,11 @@ const ACOES = {
     invoca: () => admin.giveItemAdmin(STAFF_ACTOR_ID, TARGET_ACTOR_ID, 0x0000000f, 10),
     aconteceu: () => itemsGiven.length > 0
   },
+  clearItemAdmin: {
+    permissao: 'add_item',
+    invoca: () => admin.clearItemAdmin(STAFF_ACTOR_ID, TARGET_ACTOR_ID, 0x263c7589),
+    aconteceu: () => auditEntries.some(e => e.action === 'staff:clearItem')
+  },
   setGold: {
     permissao: 'set_gold',
     invoca: () => admin.setGold(STAFF_ACTOR_ID, TARGET_ACTOR_ID, 500),
@@ -263,6 +268,8 @@ const MATRIZ = {
   bringPlayer:     { nenhum: false, moderator: true,  admin: true,  owner: true },
   kickPlayer:      { nenhum: false, moderator: true,  admin: true,  owner: true },
   giveItemAdmin:   { nenhum: false, moderator: false, admin: true,  owner: true },
+  // /clearitem: undoing a give is the same power as giving.
+  clearItemAdmin:  { nenhum: false, moderator: false, admin: true,  owner: true },
   setGold:         { nenhum: false, moderator: false, admin: true,  owner: true },
   // Morte permanente nunca é decisão de linha de frente.
   retireCharacter: { nenhum: false, moderator: false, admin: true,  owner: true },

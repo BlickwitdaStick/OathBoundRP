@@ -475,6 +475,16 @@ function registerCoreCommands() {
     }
   }, { module: 'admin', phase: 'core', description: '[Staff] Give an item to a player', usage: '/additem <player#> <baseId> <count>' });
 
+  commandRegistry.register('/clearitem', (actorId, args) => {
+    if (args) {
+      const parts = args.split(' ');
+      require('./admin-service').clearItemAdmin(actorId, parseInt(parts[0], 16), parseInt(parts[1], 16)).catch((err) => {
+        console.error('[admin] /clearitem failed:', err.message);
+        sendNotification(actorId, '[Staff] Could not clear the item.');
+      });
+    }
+  }, { module: 'admin', phase: 'core', description: '[Staff] Remove every copy of an item from a player (items that keep coming back)', usage: '/clearitem <player#> <baseId>' });
+
   commandRegistry.register('/tp', (actorId, args) => {
     if (args) require('./admin-service').teleportTo(actorId, parseInt(args, 16));
   }, { module: 'admin', phase: 'core', description: '[Staff] Teleport to a player', usage: '/tp <player#>' });

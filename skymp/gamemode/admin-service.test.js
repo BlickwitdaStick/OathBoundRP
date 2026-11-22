@@ -14,6 +14,26 @@ const { describe, it, beforeEach } = require('node:test');
 const characterUpdates = [];
 const auditEntries = [];
 let staffRoleRow = null; // { role: 'admin' } ou null (sem cargo)
+const dbInventory = new Map(); // `${characterId}:${baseId}` -> count (character_inventory)
+const pendingDeletes = [];     // DELETE FROM character_inventory_pending params
+const ledgerRows = [];         // INSERT INTO inventory_transactions params
+
+// The transaction-service connection (removeItem in /clearitem).
+function fakeConnection() {
+  return {
+    beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {},
+    query: async (sql, params = []) => {
+      if (/SELECT count FROM character_inventory WHERE/i.test(sql)) {
+        const k = `${params[0]}:${params[1]}`;
+        return [dbInventory.has(k) ? [{ count: dbInventory.get(k) }] : []];
+      }
+      if (/DELETE FROM character_inventory WHERE/i.test(sql)) { dbInventory.delete(`${params[0]}:${params[1]}`); return [{}]; }
+      if (/UPDATE character_inventory SET count = \?/i.test(sql)) { dbInventory.set(`${params[1]}:${params[2]}`, params[0]); return [{}]; }
+      if (/INSERT INTO inventory_transactions/i.test(sql)) { ledgerRows.push(params); return [{}]; }
+      return [[]];
+    }
+  };
+}
 
 const Module = require('module');
 const originalLoad = Module._load;
@@ -32,8 +52,16 @@ Module._load = function (request, parent, isMain) {
           auditEntries.push(params);
           return {};
         }
+        if (/SELECT COALESCE\(SUM\(count\), 0\) AS n FROM character_inventory/i.test(sql)) {
+          return [{ n: dbInventory.get(`${params[0]}:${params[1]}`) || 0 }];
+        }
+        if (/DELETE FROM character_inventory_pending/i.test(sql)) {
+          pendingDeletes.push(params);
+          return {};
+        }
         return [];
       },
+      getConnection: async () => fakeConnection(),
       init: () => {}
     };
   }
@@ -42,6 +70,8 @@ Module._load = function (request, parent, isMain) {
 
 const commands = require('./commands');
 const admin = require('./admin-service');
+// Loaded here so it gets the fake database: /clearitem requires it lazily.
+require('./core/transaction-service');
 
 Module._load = originalLoad;
 
@@ -217,5 +247,65 @@ describe('admin-service — cargo não sobrevive à desconexão', () => {
         `jogador comum herdou '${permissao}' do admin que ocupava este actorId antes`
       );
     }
+  });
+});
+
+// 2026-11-21: 1460 spell tomes given by a repeating F8 click kept coming back
+// after being dropped, because SkyMP's copy of the inventory still had them
+// and the game copies it back to the player every 5 s.
+describe('admin-service — clearItemAdmin (/clearitem)', () => {
+  const TOME = 0x263c7589;
+  let papyrus;
+
+  beforeEach(async () => {
+    auditEntries.length = 0;
+    pendingDeletes.length = 0;
+    ledgerRows.length = 0;
+    dbInventory.clear();
+    papyrus = [];
+    staffRoleRow = { role: 'admin' };
+    commands.registerActiveCharacter(STAFF_ACTOR_ID, { id: 5000, first_name: 'Staff', last_name: 'Um' }, STAFF_ACCOUNT_ID, 1);
+    commands.registerActiveCharacter(TARGET_ACTOR_ID, { id: TARGET_CHARACTER_ID, first_name: 'Alvo', last_name: 'Dois' }, TARGET_ACCOUNT_ID, 2);
+    admin.removeStaffRole(STAFF_ACTOR_ID);
+    await admin.registerStaffRole(STAFF_ACTOR_ID, STAFF_ACCOUNT_ID);
+    global.mp = {
+      getDescFromId: (id) => `${id.toString(16)}:Skyrim.esm`,
+      callPapyrusFunction: (kind, cls, fn, self, args) => {
+        papyrus.push({ fn, self: self.desc, count: args[1] });
+        return fn === 'GetItemCount' ? 4380 : null;
+      },
+      set: () => {}, get: () => null
+    };
+  });
+
+  const { afterEach } = require('node:test');
+  afterEach(() => { delete global.mp; });
+
+  it('removes every copy in game, in the database and the pending queue, and audits it', async () => {
+    dbInventory.set(`${TARGET_CHARACTER_ID}:${TOME}`, 1460);
+
+    const ok = await admin.clearItemAdmin(STAFF_ACTOR_ID, TARGET_ACTOR_ID, TOME);
+
+    assert.strictEqual(ok, true);
+    const removes = papyrus.filter((c) => c.fn === 'RemoveItem');
+    assert.deepStrictEqual(removes, [{ fn: 'RemoveItem', self: `${TARGET_ACTOR_ID.toString(16)}:Skyrim.esm`, count: 4380 }]);
+    assert.strictEqual(dbInventory.has(`${TARGET_CHARACTER_ID}:${TOME}`), false, 'database row removed');
+    assert.ok(ledgerRows.length === 1, 'the removal is in the ledger');
+    assert.deepStrictEqual(pendingDeletes, [[TARGET_CHARACTER_ID, TOME]]);
+    const entry = auditEntries.find((p) => p[0] === 'staff:clearItem');
+    assert.ok(entry && /inGame=4380 inDb=1460/.test(entry[3]));
+  });
+
+  it('needs add_item, and refuses gold', async () => {
+    admin.removeStaffRole(STAFF_ACTOR_ID);
+    staffRoleRow = { role: 'moderator' };
+    await admin.registerStaffRole(STAFF_ACTOR_ID, STAFF_ACCOUNT_ID);
+    assert.strictEqual(await admin.clearItemAdmin(STAFF_ACTOR_ID, TARGET_ACTOR_ID, TOME), false);
+
+    admin.removeStaffRole(STAFF_ACTOR_ID);
+    staffRoleRow = { role: 'admin' };
+    await admin.registerStaffRole(STAFF_ACTOR_ID, STAFF_ACCOUNT_ID);
+    assert.strictEqual(await admin.clearItemAdmin(STAFF_ACTOR_ID, TARGET_ACTOR_ID, 0x0000000f), false);
+    assert.strictEqual(papyrus.filter((c) => c.fn === 'RemoveItem').length, 0);
   });
 });

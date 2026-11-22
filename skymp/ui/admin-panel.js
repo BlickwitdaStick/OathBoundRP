@@ -38,7 +38,8 @@
     expanded: null,          // { kind: 'retire'|'gold'|'kick', id }
     selectedItem: null,
     selectedCreature: null,
-    resultTimer: null
+    resultTimer: null,
+    giveInFlight: null       // timer while a give waits for the server's answer
   };
 
   const $ = (id) => document.getElementById(id);
@@ -381,6 +382,7 @@
     if (ch.result && ch.result.seq !== st.lastResultSeq) {
       const first = st.lastResultSeq === null && !st.open;
       st.lastResultSeq = ch.result.seq;
+      if (st.giveInFlight) setGiveLock(false);
       if (!first) showResult(ch.result.ok, ch.result.message);
     }
     if (st.open) render();
@@ -405,11 +407,24 @@
   $('ap-creature-query').addEventListener('input', debounce(searchCreatures, SEARCH_DEBOUNCE_MS));
   $('ap-players-refresh').addEventListener('click', () => send('admin:players:refresh'));
 
+  // One give at a time: a held Enter/Space on the focused button clicks it on
+  // every key repeat, which once gave 1460 items in 41 s. The lock clears on
+  // the server's answer, or after 3 s if none comes.
+  function setGiveLock(on) {
+    clearTimeout(st.giveInFlight);
+    st.giveInFlight = on ? setTimeout(() => setGiveLock(false), 3000) : null;
+    const btn = $('ap-item-give');
+    if (btn) btn.disabled = Boolean(on);
+  }
+  $('ap-item-give').addEventListener('keydown', (e) => {
+    if (e.repeat) e.preventDefault();
+  });
   $('ap-item-give').addEventListener('click', () => {
-    if (!st.selectedItem) return;
+    if (!st.selectedItem || st.giveInFlight) return;
     const count = Number($('ap-item-count').value);
     if (!Number.isInteger(count) || count < 1) return showResult(false, 'Count must be a whole number, 1 or more.');
     const target = $('ap-item-target').value.trim();
+    setGiveLock(true);
     send('admin:items:give', {
       baseId: st.selectedItem.baseId,
       count,

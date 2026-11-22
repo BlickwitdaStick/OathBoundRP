@@ -145,6 +145,7 @@ function makePanel(opts = {}) {
     db: { query: async (sql, params) => dbQuery(sql, params) },
     commands, admin, characterNumbers, recordIndex, espm: fakeEspm,
     mpApi: () => mpApi,
+    now: opts.now,
     log: silent
   });
   return { panel, mp: mpApi, index: recordIndex };
@@ -371,6 +372,19 @@ describe('admin panel: item search and give', () => {
     await panel.handleUiEvent(STAFF, { type: 'admin:items:give', data: { baseId: 'abc', count: 1 } });
     assert.match(lastResult(mp, STAFF).message, /Invalid item/);
     assert.deepStrictEqual(given, []);
+  });
+
+  // 2026-11-21: a held Enter on the focused Give button clicked it ~35 times a
+  // second and gave 1460 spell tomes in 41 s.
+  it('gives closer than 300 ms apart from the same staff member are dropped', async () => {
+    let clock = 1000;
+    const { panel } = makePanel({ now: () => clock });
+    const give = () => panel.handleUiEvent(STAFF, { type: 'admin:items:give', data: { baseId: 0x12eb7, count: 1 } });
+    for (let i = 0; i < 30; i++) { await give(); clock += 30; } // 30 key repeats in 0.9 s
+    assert.strictEqual(given.length, 3, 'only one give per 300 ms gets through');
+    clock += 300;
+    await give();
+    assert.strictEqual(given.length, 4, 'a normal click later still works');
   });
 });
 

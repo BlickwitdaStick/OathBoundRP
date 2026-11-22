@@ -273,6 +273,84 @@ async function giveItemAdmin(actorId, targetActorId, baseId, count) {
 }
 
 /**
+ * /clearitem <player#> <baseId> - Removes every copy of an item from a
+ * character: from SkyMP's own copy of the inventory (the one the game copies
+ * back to the player every 5 s), from character_inventory and from
+ * character_inventory_pending. For items that keep coming back after being
+ * dropped, e.g. thousands of spell tomes spawned with the F8 panel.
+ * Permission: 'add_item' (the same power as giving it).
+ */
+async function clearItemAdmin(actorId, targetActorId, baseId) {
+  if (!hasPermission(actorId, 'add_item')) {
+    sendDenied(actorId);
+    return false;
+  }
+  if (!Number.isSafeInteger(baseId) || baseId <= 0) {
+    commands.sendNotification(actorId, '[Staff] Usage: /clearitem <player#> <baseId in hex>');
+    return false;
+  }
+  if (baseId === 0x0000000f) {
+    commands.sendNotification(actorId, '[Staff] Gold is the character balance: use /setgold.');
+    return false;
+  }
+  const targetChar = commands.getActiveCharacterData(targetActorId);
+  if (!targetChar) {
+    commands.sendNotification(actorId, '[Staff] That player is not online.');
+    return false;
+  }
+  const { baseRef } = require('./core/papyrus');
+  const transactionService = require('./core/transaction-service');
+
+  let inGame = 0;
+  if (typeof mp !== 'undefined') {
+    try {
+      const n = Number(mp.callPapyrusFunction('method', 'ObjectReference', 'GetItemCount', actorRef(targetActorId), [baseRef(baseId)]));
+      inGame = Number.isFinite(n) && n > 0 ? n : 0;
+      if (inGame > 0) {
+        mp.callPapyrusFunction('method', 'ObjectReference', 'RemoveItem', actorRef(targetActorId), [baseRef(baseId), inGame, true, null]);
+      }
+    } catch (err) {
+      console.error(`[admin] clearitem 0x${baseId.toString(16)} on ${targetActorId.toString(16)} failed in game:`, err.message);
+      commands.sendNotification(actorId, '[Staff] Could not remove the item in game.');
+      return false;
+    }
+  }
+
+  // The server's record: removed through transaction-service so the ledger
+  // says where it went. actorId null: the game side was done above.
+  let inDb = 0;
+  try {
+    const rows = await db.query(
+      'SELECT COALESCE(SUM(count), 0) AS n FROM character_inventory WHERE character_id = ? AND base_id = ?',
+      [targetChar.characterId, baseId]
+    );
+    inDb = Number(rows[0] && rows[0].n) || 0;
+    if (inDb > 0) {
+      await transactionService.removeItem({
+        actorId: null, characterId: targetChar.characterId, baseId, count: inDb,
+        reason: 'staff_clear_item', module: 'admin'
+      });
+    }
+    await db.query(
+      'DELETE FROM character_inventory_pending WHERE character_id = ? AND base_id = ?',
+      [targetChar.characterId, baseId]
+    );
+  } catch (err) {
+    console.error(`[admin] clearitem 0x${baseId.toString(16)} for char ${targetChar.characterId}: database step failed:`, err.message);
+  }
+
+  const charData = commands.getActiveCharacterData(actorId);
+  await auditLog(
+    charData?.accountId, targetChar.accountId,
+    'staff:clearItem',
+    `role=${getRole(actorId)} baseId=0x${baseId.toString(16)} inGame=${inGame} inDb=${inDb}`
+  );
+  console.log(`[admin] ${actorId.toString(16)} (${getRole(actorId)}) cleared 0x${baseId.toString(16)} from ${targetActorId.toString(16)}: ${inGame} in game, ${inDb} in database`);
+  commands.sendNotification(actorId, `[Staff] Removed 0x${baseId.toString(16)}: ${inGame} from the inventory, ${inDb} from the database.`);
+  return true;
+}
+
+/**
  * /tp [actorId] - Teleporta para jogador
  * Permissão: 'teleport'
  */
@@ -696,6 +774,7 @@ module.exports = {
   auditLog,
   playAnimation,
   giveItemAdmin,
+  clearItemAdmin,
   teleportTo,
   bringPlayer,
   kickPlayer,
