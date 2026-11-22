@@ -466,7 +466,7 @@ describe('crafting-service — Inventory Framework / atomicidade [CURRENT CONTRA
     exchangeResult = { ok: false, code: 'insufficient_stock', reason: 'insufficient ingredient' };
     const ok = await crafting.craftItem(ACTOR, CHAR_A, RECIPE_ID, {});
     assert.equal(ok, false);
-    assert.ok(notifications.some((n) => n.text === 'Craft cancelled: ingrediente insuficiente'));
+    assert.ok(notifications.some((n) => n.text === 'Craft cancelled: insufficient ingredient'));
   });
 
   it('exchange devolve duplicate:true (reenvio do mesmo requestId): devolve true SEM craftar de novo, avisa que já foi concluído', async () => {
