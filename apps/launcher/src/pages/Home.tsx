@@ -41,6 +41,7 @@ export function Home({ auth, setAuth }: HomeProps) {
   // 'nexus' = Nexus mods from Nexus, the rest from the server;
   // 'server' = everything from the game server; null = not now.
   type ModChoice = 'nexus' | 'server' | null;
+  const [downgrade, setDowngrade] = useState<{ gamePath: string; username: string; busy: boolean; message: string } | null>(null);
   const [modPrompt, setModPrompt] = useState<{ check: ServerModsCheck; resolve: (choice: ModChoice) => void } | null>(null);
   const [nexusAccount, setNexusAccount] = useState<NexusAccount | null>(null);
   const [nexusKeyInput, setNexusKeyInput] = useState('');
@@ -194,6 +195,26 @@ export function Home({ auth, setAuth }: HomeProps) {
     if (valid.ok) loadAppInfo();
   };
 
+  const runDowngrade = async () => {
+    if (!downgrade) return;
+    const d = downgrade;
+    setDowngrade({ ...d, busy: true, message: 'Getting DepotDownloader...' });
+    const off = window.electronAPI.onDowngradeProgress((p) => {
+      const pct = p.total ? ': ' + Math.floor((100 * (p.done || 0)) / p.total) + '%' : '...';
+      setDowngrade((cur) => cur && ({ ...cur, message: p.phase === 'steam'
+        ? 'Log in to Steam in the window that opened, then wait for the download to finish.'
+        : 'Getting DepotDownloader' + pct }));
+    });
+    const r = await window.electronAPI.downgradeSkyrim(d.gamePath, d.username);
+    off();
+    if (r.ok) {
+      setDowngrade(null);
+      setStatus('Skyrim is now 1.6.1170. In Steam, set Skyrim to "Only update this game when I launch it", then press Play.');
+    } else {
+      setDowngrade({ ...d, busy: false, message: r.error || 'The downgrade failed.' });
+    }
+  };
+
   const handlePlay = async () => {
     setIsPlaying(true);
     setStatus('Checking game folder...');
@@ -221,6 +242,7 @@ export function Home({ auth, setAuth }: HomeProps) {
       offSkse();
       if (!skse.ok) {
         setStatus(skse.error || 'Could not set up SKSE.');
+        if (skse.code === 'wrong-skyrim-version') setDowngrade({ gamePath, username: '', busy: false, message: '' });
         return;
       }
 
@@ -449,6 +471,38 @@ export function Home({ auth, setAuth }: HomeProps) {
           {status && <p style={{ color: 'var(--accent-gold)', textAlign: 'center', maxWidth: '620px' }}>{status}</p>}
         </div>
       </div>
+
+      {downgrade && (
+        <div className="mods-prompt-overlay" role="dialog" aria-modal="true" aria-labelledby="downgrade-title">
+          <div className="mods-prompt hud-panel">
+            <h2 id="downgrade-title" className="mods-prompt-title">Downgrade Skyrim to 1.6.1170</h2>
+            <p className="mods-prompt-text">
+              The server runs Skyrim 1.6.1170. The launcher can download that version from Steam with your own account.
+              A Steam window opens: type your Steam <strong>password</strong> and <strong>Steam Guard code</strong> there
+              (or approve the login in the Steam app). The launcher never sees them. Only the files that differ are
+              downloaded, and the current ones are backed up first.
+            </p>
+            <input
+              className="downgrade-input"
+              placeholder="Steam account name (login name)"
+              value={downgrade.username}
+              disabled={downgrade.busy}
+              onChange={(e) => setDowngrade({ ...downgrade, username: e.target.value.trim() })}
+            />
+            {downgrade.message && <p className="mods-prompt-text">{downgrade.message}</p>}
+            <div className="mods-prompt-actions">
+              <button className="maintenance-btn" disabled={downgrade.busy} onClick={() => setDowngrade(null)}>Not now</button>
+              <button
+                className="btn-primary"
+                disabled={downgrade.busy || downgrade.username.length < 3}
+                onClick={runDowngrade}
+              >
+                Downgrade with Steam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modPrompt && (
         <div className="mods-prompt-overlay" role="dialog" aria-modal="true" aria-labelledby="mods-prompt-title">

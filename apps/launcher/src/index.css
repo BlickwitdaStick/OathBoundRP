@@ -722,3 +722,14 @@ body {
 .mods-prompt-plugins { font-size: 12px; color: var(--text-muted); }
 .mods-prompt-plugins summary { cursor: pointer; color: var(--accent-gold); }
 .mods-prompt-plugins div { margin-top: 6px; max-height: 120px; overflow-y: auto; line-height: 1.5; }
+
+/* Downgrade window: Steam account name field. */
+.downgrade-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-main);
+  font-size: 14px;
+}

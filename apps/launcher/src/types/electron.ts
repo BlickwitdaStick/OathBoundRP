@@ -67,7 +67,9 @@ export interface ElectronAPI {
   ensureSkyrimIni: (opts?: any) => Promise<any>;
   ensureSkympUi: (folderPath: string) => Promise<{ ok: boolean; repaired: string[]; files?: number; error?: string }>;
   ensureVoiceHelper: (folderPath: string) => Promise<{ ok: boolean; repaired: boolean; skipped?: boolean; reason?: string; error?: string }>;
-  ensureSkse: (folderPath: string) => Promise<{ ok: boolean; installed?: string[]; error?: string }>;
+  ensureSkse: (folderPath: string) => Promise<{ ok: boolean; code?: string; installed?: string[]; error?: string }>;
+  downgradeSkyrim: (folderPath: string, username: string) => Promise<{ ok: boolean; error?: string; backupDir?: string }>;
+  onDowngradeProgress: (cb: (p: { phase: string; done?: number; total?: number }) => void) => () => void;
   onSkseProgress: (cb: (p: { done: number; total: number }) => void) => () => void;
   getDisplaySettings: () => Promise<any>;
   discordLogin: () => Promise<AuthData | null>;

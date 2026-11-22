@@ -19,6 +19,12 @@ const api = {
   ensureSkympUi: (folderPath: string) => ipcRenderer.invoke('ensure-skymp-ui', folderPath),
   ensureVoiceHelper: (folderPath: string) => ipcRenderer.invoke('ensure-voice-helper', folderPath),
   ensureSkse: (folderPath: string) => ipcRenderer.invoke('ensure-skse', folderPath),
+  downgradeSkyrim: (folderPath: string, username: string) => ipcRenderer.invoke('downgrade-skyrim', folderPath, username),
+  onDowngradeProgress: (cb: (p: { phase: string; done?: number; total?: number }) => void) => {
+    const h = (_e: unknown, p: { phase: string; done?: number; total?: number }) => cb(p);
+    ipcRenderer.on('downgrade-progress', h);
+    return () => { ipcRenderer.removeListener('downgrade-progress', h); };
+  },
   onSkseProgress: (cb: (p: { done: number; total: number }) => void) => {
     const h = (_e: unknown, p: { done: number; total: number }) => cb(p);
     ipcRenderer.on('skse-progress', h);

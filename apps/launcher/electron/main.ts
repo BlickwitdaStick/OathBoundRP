@@ -20,6 +20,7 @@ import {
 } from './server-mods.mjs';
 import { checkLauncherUpdate, downloadInstaller } from './launcher-update.mjs';
 import { checkSkse, installSkse, SKSE } from './skse-install.mjs';
+import { ensureDepotDownloader, backupGameFiles, downgradeArgs, runDepotDownloader, isValidSteamUsername } from './skyrim-downgrade.mjs';
 import {
   NEXUS_API_KEY_PAGE,
   createNexusApi,
@@ -423,7 +424,7 @@ ipcMain.handle('ensure-skse', async (event, gamePath) => {
   try {
     const state = await checkSkse(gamePath);
     if (state.skyrimVersionOk === false) {
-      return { ok: false, error: 'Your Skyrim is not version 1.6.1170, the version this server uses with SKSE ' + SKSE.version + '. Downgrade Skyrim to 1.6.1170 (Steam depots) and try again.' };
+      return { ok: false, code: 'wrong-skyrim-version', error: 'Your Skyrim is not version 1.6.1170, the version this server uses with SKSE ' + SKSE.version + '. Downgrade Skyrim to 1.6.1170 (Steam depots) and try again.' };
     }
     if (state.installed) return { ok: true, installed: [] };
     const result = await installSkse({
@@ -437,6 +438,37 @@ ipcMain.handle('ensure-skse', async (event, gamePath) => {
     return { ok: true, installed: result.installed };
   } catch (e: any) {
     return { ok: false, error: 'Could not install SKSE: ' + (e?.message || String(e)) };
+  }
+});
+
+// Downgrade to 1.6.1170 with the player's own Steam account (skyrim-downgrade.mjs).
+// DepotDownloader opens its own window; the password and Steam Guard code are
+// typed there, never into the launcher.
+ipcMain.handle('downgrade-skyrim', async (event, gamePath, username) => {
+  if (!gamePath) return { ok: false, error: 'Invalid game path.' };
+  if (!isValidSteamUsername(username)) return { ok: false, error: 'Enter your Steam account name (the login name, not your profile name).' };
+  if (await isGameRunning()) return { ok: false, error: 'Close Skyrim first.' };
+  const send = (phase: string, extra: any = {}) => {
+    try { event.sender.send('downgrade-progress', { phase, ...extra }); } catch { /* window closed */ }
+  };
+  try {
+    send('tool');
+    const exe = await ensureDepotDownloader({
+      toolDir: path.join(app.getPath('userData'), 'depotdownloader'),
+      sevenZipPath: sevenZipPath(),
+      onProgress: (p: { done: number; total: number }) => send('tool', p)
+    });
+    const backup = backupGameFiles(gamePath);
+    send('steam');
+    const code = await runDepotDownloader({ exe, args: downgradeArgs({ gamePath, username }) });
+    try { fs.rmSync(path.join(gamePath, '.DepotDownloader'), { recursive: true, force: true }); } catch { /* staging folder */ }
+    const state = await checkSkse(gamePath);
+    if (state.skyrimVersionOk) return { ok: true, backupDir: backup.dir };
+    return { ok: false, error: code === 0
+      ? 'The download finished but Skyrim is still not 1.6.1170. Try again, or ask staff for help.'
+      : 'The Steam download did not finish (wrong password, cancelled, or Steam refused the old version). Try again.' };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
   }
 });
 
