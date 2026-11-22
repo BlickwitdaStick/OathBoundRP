@@ -242,14 +242,54 @@ function readLines(file) {
 }
 
 /**
+ * Server-managed plugin set from the previous sync. It sits next to the lists
+ * it describes, in the game folder, so it moves with the install.
+ */
+export const SERVER_PLUGINS_STATE_FILE = 'OATHBOUND_server-plugins.json';
+
+/**
+ * Plugins earlier servers sent and later renamed or dropped. Players whose
+ * launcher synced before the state file existed have no record of what the
+ * launcher put in their lists, so these names count as "previously
+ * server-managed". Only list names that were never anything but a server
+ * plugin.
+ */
+export const RETIRED_SERVER_PLUGINS = Object.freeze([
+  'OathboundHoldstone.esp' // renamed to Oathbound_Holdstone.esp on 2026-11-22
+]);
+
+function readManagedState(file) {
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Array.isArray(data?.plugins) ? data.plugins.filter(p => typeof p === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Ensures the server plugins are enabled, after everything already listed,
  * in server order. Existing lines (including the user's own) are preserved;
  * only entries for the server plugins are moved/enabled.
+ *
+ * Removal rule: a line is dropped only when its plugin was server-managed
+ * before (in OATHBOUND_server-plugins.json from the last sync, or in
+ * RETIRED_SERVER_PLUGINS) and the server no longer sends it. The player's own
+ * entries and the five base masters are never removed. The plugin file in
+ * Data/ is left alone: once it is out of the lists the game does not load it.
+ *
  * Backs up each file before its first change.
- * @returns {{changed:boolean}}
+ * @returns {{changed:boolean, removed:string[]}}
  */
 export function enableServerPlugins({ gamePath, plugins }) {
   const lowerPlugins = new Set(plugins.map(p => p.toLowerCase()));
+  const stateFile = path.join(gamePath, SERVER_PLUGINS_STATE_FILE);
+  const stale = new Set(
+    [...readManagedState(stateFile), ...RETIRED_SERVER_PLUGINS]
+      .map(p => p.toLowerCase())
+      .filter(p => !lowerPlugins.has(p) && !BASE_MASTERS.has(p))
+  );
+  const removed = new Map();
   let changed = false;
 
   const rewrite = (file, render) => {
@@ -257,7 +297,15 @@ export function enableServerPlugins({ gamePath, plugins }) {
     // masters (the game's own order), then the server's plugins below. Without
     // this, PLAY failed with "OATHBOUND plugin list not found" for new players.
     const lines = fs.existsSync(file) ? readLines(file) : BASE_MASTER_ORDER.map(render);
-    const kept = lines.filter(l => !lowerPlugins.has(l.replace(/^\*/, '').trim().toLowerCase()));
+    const kept = lines.filter(l => {
+      const name = l.replace(/^\*/, '').trim();
+      const lower = name.toLowerCase();
+      if (stale.has(lower)) {
+        removed.set(lower, name);
+        return false;
+      }
+      return !lowerPlugins.has(lower);
+    });
     const next = kept.concat(plugins.map(render));
     if (JSON.stringify(next) === JSON.stringify(lines)) return;
     if (fs.existsSync(file)) {
@@ -270,5 +318,8 @@ export function enableServerPlugins({ gamePath, plugins }) {
 
   rewrite(path.join(gamePath, 'OATHBOUND_plugins.txt'), p => `*${p}`);
   rewrite(path.join(gamePath, 'OATHBOUND_loadorder.txt'), p => p);
-  return { changed };
+  try {
+    fs.writeFileSync(stateFile, `${JSON.stringify({ plugins }, null, 2)}\n`);
+  } catch { /* the next sync just has less to clean up */ }
+  return { changed, removed: [...removed.values()] };
 }

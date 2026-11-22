@@ -218,6 +218,37 @@ describe('enableServerPlugins', () => {
       ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm', '_ResourcePack.esl', 'SkyUI_SE.esp']);
     assert.equal(enableServerPlugins({ gamePath, plugins: ['_ResourcePack.esl', 'SkyUI_SE.esp'] }).changed, false, 'second run changes nothing');
   });
+
+  test('a renamed server plugin: the old name leaves both lists, the new one is enabled, the player\'s own stay', () => {
+    // Lists as a pre-state-file launcher left them (no OATHBOUND_server-plugins.json).
+    lists('*Skyrim.esm\r\n*SkyUI_SE.esp\r\n*Mine.esp\r\n*OathboundHoldstone.esp\r\n',
+      'Skyrim.esm\r\nSkyUI_SE.esp\r\nMine.esp\r\nOathboundHoldstone.esp\r\n');
+    const r = enableServerPlugins({ gamePath, plugins: ['SkyUI_SE.esp', 'Oathbound_Holdstone.esp'] });
+    assert.equal(r.changed, true);
+    assert.deepEqual(r.removed, ['OathboundHoldstone.esp']);
+    assert.deepEqual(read('OATHBOUND_plugins.txt'), ['*Skyrim.esm', '*Mine.esp', '*SkyUI_SE.esp', '*Oathbound_Holdstone.esp']);
+    assert.deepEqual(read('OATHBOUND_loadorder.txt'), ['Skyrim.esm', 'Mine.esp', 'SkyUI_SE.esp', 'Oathbound_Holdstone.esp']);
+    assert.equal(enableServerPlugins({ gamePath, plugins: ['SkyUI_SE.esp', 'Oathbound_Holdstone.esp'] }).changed, false);
+  });
+
+  test('drops a plugin the last sync managed and the server no longer sends; never the player\'s own', () => {
+    lists('*Skyrim.esm\r\n*Mine.esp\r\n', 'Skyrim.esm\r\nMine.esp\r\n');
+    enableServerPlugins({ gamePath, plugins: ['Old.esp', 'SkyUI_SE.esp'] });
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(gamePath, 'OATHBOUND_server-plugins.json'), 'utf8')).plugins,
+      ['Old.esp', 'SkyUI_SE.esp']);
+    const r = enableServerPlugins({ gamePath, plugins: ['SkyUI_SE.esp'] });
+    assert.deepEqual(r.removed, ['Old.esp']);
+    assert.deepEqual(read('OATHBOUND_plugins.txt'), ['*Skyrim.esm', '*Mine.esp', '*SkyUI_SE.esp']);
+    assert.deepEqual(read('OATHBOUND_loadorder.txt'), ['Skyrim.esm', 'Mine.esp', 'SkyUI_SE.esp']);
+  });
+
+  test('a corrupt state file removes nothing extra', () => {
+    lists('*Skyrim.esm\r\n*Mine.esp\r\n', 'Skyrim.esm\r\nMine.esp\r\n');
+    fs.writeFileSync(path.join(gamePath, 'OATHBOUND_server-plugins.json'), '{not json');
+    const r = enableServerPlugins({ gamePath, plugins: ['SkyUI_SE.esp'] });
+    assert.deepEqual(r.removed, []);
+    assert.deepEqual(read('OATHBOUND_plugins.txt'), ['*Skyrim.esm', '*Mine.esp', '*SkyUI_SE.esp']);
+  });
 });
 
 describe('base-game plugins (Creation Club masters)', () => {

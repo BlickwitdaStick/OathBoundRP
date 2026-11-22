@@ -275,8 +275,11 @@ export function analyzePlugins({ localPlugins, serverLoadOrder, enabledPlugins, 
   }
 
   // A direcao que faltava.
+  // Entrada ativa no plugins.txt sem arquivo em Data/ nao carrega: o jogo pula
+  // o plugin ausente e nao ocupa indice, entao nao desloca FormID nenhum. E o
+  // caso de um plugin que o servidor renomeou e o jogador nunca baixou.
   const candidatos = Array.isArray(enabledPlugins) && enabledPlugins.length > 0
-    ? enabledPlugins
+    ? enabledPlugins.filter(p => locaisPorMinusculo.has(String(p).toLowerCase()))
     : localPlugins;
 
   for (const local of candidatos) {

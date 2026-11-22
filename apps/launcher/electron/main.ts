@@ -1760,6 +1760,7 @@ ipcMain.handle('install-server-mods', async (_event, gamePath, opts) => {
     cache.save();
     const plugins = enableServerPlugins({ gamePath, plugins: manifest.plugins });
     console.info(`[launcher] server mods: ${nexusInstalled} file(s) from Nexus, ${result.installed.length} from the server; plugin lists ${plugins.changed ? 'updated' : 'unchanged'}.`);
+    if (plugins.removed.length > 0) console.info(`[launcher] removed plugins the server no longer sends: ${plugins.removed.join(', ')}`);
     for (const w of warnings) console.warn(`[launcher] ${w}`);
     return { ok: true, installed: result.installed, nexusInstalled, warnings, pluginsChanged: plugins.changed };
   } catch (e: any) {
