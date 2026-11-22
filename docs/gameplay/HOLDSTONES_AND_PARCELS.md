@@ -1,11 +1,17 @@
 # Holdstones and parcels
 
 Every **holdstone** is the seat of an **organization**: a hold (Whiterun), a
-town (Riverwood), a faction (the Imperial Legion), a thanedom, or a council
-(High Hrothgar, where staff hold in-character meetings). Each organization has
+town (Riverwood), a faction (the Imperial Legion; High Hrothgar, where staff
+hold in-character meetings), a thanedom, or a council. Each organization has
 its own ordered **rank ladder** and **members**, and a character can be tied to
 several at once: a citizen of Solitude can also be a Legion soldier. Solitude
 can therefore have two stones, the Solitude stone and the Imperial Legion's.
+
+An organization can **answer to a parent**: Riverwood answers to Whiterun.
+The parent's leaders (Whiterun's Jarl and Stewards) also lead the child:
+they set Riverwood's ranks, manage its members and parcels, as if they stood
+above its whole ladder. Opening locked doors is not inherited: a Jarl unlocks
+a Riverwood parcel (or is given a Riverwood rank) rather than walking in.
 
 A **parcel** is a building or plot controlled by an organization: a set of
 doors and containers with an **owner** and a **minimum rank**. When a parcel is
@@ -52,8 +58,8 @@ same runed-monolith model:
 | Morthal Holdstone | `OBHoldstoneMorthal` | `807` | `morthal` (hold) |
 | Dawnstar Holdstone | `OBHoldstoneDawnstar` | `808` | `dawnstar` (hold) |
 | Winterhold Holdstone | `OBHoldstoneWinterhold` | `809` | `winterhold` (hold) |
-| Riverwood Holdstone | `OBHoldstoneRiverwood` | `80A` | `riverwood` (town) |
-| High Hrothgar Holdstone | `OBHoldstoneHighHrothgar` | `80B` | `high_hrothgar` (council) |
+| Riverwood Holdstone | `OBHoldstoneRiverwood` | `80A` | `riverwood` (town, answers to Whiterun) |
+| High Hrothgar Holdstone | `OBHoldstoneHighHrothgar` | `80B` | `high_hrothgar` (faction) |
 | Imperial Legion Holdstone | `OBHoldstoneImperialLegion` | `80C` | `imperial_legion` (faction) |
 
 `800` "Holdstone" is the old generic stone; it belongs to no one.
@@ -62,7 +68,8 @@ same runed-monolith model:
 placement plugin (e.g. `Oathbound_Core.esp`), filter Activators by
 `OBHoldstone`, drag the right stone into the cell, save. The server recognizes
 it by its activator: pressing **E** on a "High Hrothgar Holdstone" opens High
-Hrothgar's menu wherever it stands. Placing two of the same activator gives
+Hrothgar's menu wherever it stands. Only stones from `Oathbound_Holdstone.esp`
+work; the old `OathboundHoldstone.esp` is gone. Placing two of the same activator gives
 that organization two stones.
 
 The placement plugin must be loaded by the server and by every player, after
@@ -72,8 +79,9 @@ The placement plugin must be loaded by the server and by every player, after
 
 1. Append an entry to `skymp/gamemode/data/holdstones.json`: a short `id`
    (`thane_rorikstead`), `name`, `kind` (`hold`, `town`, `faction`,
-   `thanedom`, `council`), `hold` (where it sits, or `null`), the next unused
-   `formId` and an `editorId`. Never change or reuse a `formId`.
+   `thanedom`, `council`), `hold` (where it sits, or `null`), optionally
+   `parent` (the organization it answers to), the next unused `formId` and an
+   `editorId`. Never change or reuse a `formId`.
 2. `node tools/holdstone/build-plugin.js` rebuilds `Oathbound_Holdstone.esp`
    (in `tools/holdstone/dist/`).
 3. Place it in the Creation Kit.
@@ -112,7 +120,7 @@ Staff change a ladder with commands:
 
 ```
 /holdstone ranks high_hrothgar
-/holdstone addrank high_hrothgar greybeard 30 leader Greybeard
+/holdstone addrank high_hrothgar greybeard 50 leader Greybeard
 /holdstone addrank imperial_legion leader 40 leader Legate      (renames an existing key)
 /holdstone delrank riverwood guard
 ```
@@ -126,7 +134,7 @@ as minimum rank become owner-only.
 
 1. **Place the stone** in the Creation Kit (above).
 2. **Appoint the leaders:** `/holdrank whiterun 12 jarl`,
-   `/holdrank high_hrothgar 12 elder` (12 = the player's character number, see
+   `/holdrank high_hrothgar 12 leader` (12 = the player's character number, see
    `/nearby`). The player must be online for the command; at the stone,
    leaders can use any number, online or not.
 3. **Create parcels** (or let the leaders do it at the stone):
@@ -214,13 +222,16 @@ Nothing below has been run on a live server yet.
 1. **Boot:** the log shows `[holdstones] N organizations (N with a stone), …`
    and no errors from `activation-events` or `holdstones.json`.
 2. **A Creation Kit stone works untouched:** E on the High Hrothgar Holdstone
-   placed in the Creation Kit opens the High Hrothgar panel (kind Council). The
+   placed in the Creation Kit opens the High Hrothgar panel (kind Faction). The
    E prompt shows "Open the stone" when you look at it.
 3. **Two stones in one city:** the Solitude and Imperial Legion stones open
    different panels with different ladders.
-4. **Ranks:** `/holdrank high_hrothgar <your#> elder`; reopen the panel →
-   "Your rank: Elder", the Leadership section, and High Hrothgar under "Your
+4. **Ranks:** `/holdrank high_hrothgar <your#> leader`; reopen the panel →
+   "Your rank: Leader", the Leadership section, and High Hrothgar under "Your
    allegiances". Add a Whiterun rank too; both appear at any stone.
+   **Riverwood answers to Whiterun:** the Riverwood panel says "answers to
+   Whiterun"; a Whiterun Jarl sees Riverwood's leadership actions and can name
+   its Reeve; the Whiterun panel says "over Riverwood".
 5. **Parcel + tool:** create "Test House" with minimum rank `guard` at the
    Whiterun stone; start the tool; E on the house's front door → the parcel
    menu opens (the door does not). Add it; check whether the inside door was

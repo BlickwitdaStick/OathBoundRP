@@ -6,6 +6,7 @@
     "activator, so nothing is bound in game.",
     "Append only: never change or reuse a formId (placed stones point at it).",
     "kind: hold | town | faction | thanedom | council. hold: where it sits (holds.id) or null.",
+    "parent (optional): the organization it answers to; that organization's leaders also lead this one.",
     "On boot the server creates missing organizations with the default ladder of their kind."
   ],
   "plugin": "Oathbound_Holdstone.esp",
@@ -19,8 +20,8 @@
     { "id": "morthal",         "name": "Morthal",         "kind": "hold",    "hold": "morthal",    "formId": "807", "editorId": "OBHoldstoneMorthal" },
     { "id": "dawnstar",        "name": "Dawnstar",        "kind": "hold",    "hold": "dawnstar",   "formId": "808", "editorId": "OBHoldstoneDawnstar" },
     { "id": "winterhold",      "name": "Winterhold",      "kind": "hold",    "hold": "winterhold", "formId": "809", "editorId": "OBHoldstoneWinterhold" },
-    { "id": "riverwood",       "name": "Riverwood",       "kind": "town",    "hold": "whiterun",   "formId": "80a", "editorId": "OBHoldstoneRiverwood" },
-    { "id": "high_hrothgar",   "name": "High Hrothgar",   "kind": "council", "hold": null,         "formId": "80b", "editorId": "OBHoldstoneHighHrothgar" },
+    { "id": "riverwood",       "name": "Riverwood",       "kind": "town",    "hold": "whiterun",   "formId": "80a", "editorId": "OBHoldstoneRiverwood", "parent": "whiterun" },
+    { "id": "high_hrothgar",   "name": "High Hrothgar",   "kind": "faction", "hold": null,         "formId": "80b", "editorId": "OBHoldstoneHighHrothgar" },
     { "id": "imperial_legion", "name": "Imperial Legion", "kind": "faction", "hold": "solitude",   "formId": "80c", "editorId": "OBHoldstoneImperialLegion" }
   ]
 }

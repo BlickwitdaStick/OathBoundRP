@@ -17,7 +17,7 @@ commands.sendNotification = (id, msg) => notes.push([id, msg]);
 commands.getDisplayNameForObserver = (id) => `P${id & 0xf}`;
 
 function fakeHoldstones({ locked = true, ownerCharacterId = 1, minRankId = null } = {}) {
-  const parcel = { id: 7, holdId: 'whiterun', name: 'House', ownerCharacterId, minRankId, locked };
+  const parcel = { id: 7, orgId: 'whiterun', holdId: 'whiterun', name: 'House', ownerCharacterId, minRankId, locked };
   const calls = [];
   return {
     calls,

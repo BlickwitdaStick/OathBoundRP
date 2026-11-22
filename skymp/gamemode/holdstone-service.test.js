@@ -44,8 +44,8 @@ const STONES = {
   plugin: PLUGIN,
   stones: [
     { id: 'whiterun', name: 'Whiterun', kind: 'hold', hold: 'whiterun', formId: '801' },
-    { id: 'riverwood', name: 'Riverwood', kind: 'town', hold: 'whiterun', formId: '80a' },
-    { id: 'high_hrothgar', name: 'High Hrothgar', kind: 'council', hold: null, formId: '80b' },
+    { id: 'riverwood', name: 'Riverwood', kind: 'town', hold: 'whiterun', formId: '80a', parent: 'whiterun' },
+    { id: 'high_hrothgar', name: 'High Hrothgar', kind: 'faction', hold: null, formId: '80b' },
     { id: 'imperial_legion', name: 'Imperial Legion', kind: 'faction', hold: 'solitude', formId: '80c' }
   ]
 };
@@ -101,7 +101,13 @@ function createDb() {
     const s = sql(raw);
     if (s === 'SELECT id FROM holds') return t.holds.map((h) => ({ id: h.id }));
     if (s.startsWith('SELECT id, name FROM holds')) return t.holds;
-    if (s.startsWith('SELECT id, name, kind, hold_id, base_id FROM stone_orgs')) return t.stone_orgs;
+    if (s.startsWith('SELECT id, name, kind, hold_id, parent_id, base_id FROM stone_orgs')) return t.stone_orgs;
+    if (s === 'SELECT id FROM stone_orgs') return t.stone_orgs.map((o) => ({ id: o.id }));
+    if (s.startsWith('UPDATE stone_orgs SET parent_id')) {
+      const row = t.stone_orgs.find((o) => o.id === p[1]);
+      if (row) row.parent_id = p[0];
+      return {};
+    }
     if (s === 'SELECT id, kind FROM stone_orgs') return t.stone_orgs.map((o) => ({ id: o.id, kind: o.kind }));
     if (s === 'SELECT DISTINCT org_id FROM stone_ranks') return [...new Set(t.stone_ranks.map((r) => r.org_id))].map((org_id) => ({ org_id }));
     if (s.startsWith('SELECT id, org_id, rank_key')) return t.stone_ranks;
@@ -118,7 +124,7 @@ function createDb() {
     if (s.startsWith('INSERT INTO stone_orgs')) {
       const row = { id: p[0], name: p[1], kind: p[2], hold_id: p[3], base_id: p[4] };
       const existing = t.stone_orgs.find((o) => o.id === p[0]);
-      if (existing) Object.assign(existing, row); else t.stone_orgs.push(row);
+      if (existing) Object.assign(existing, row); else t.stone_orgs.push({ ...row, parent_id: null });
       return {};
     }
     if (s.startsWith('INSERT IGNORE INTO stone_ranks')) {
@@ -262,18 +268,25 @@ describe('holdstone-service: stones from holdstones.json', () => {
     assert.ok(forms.every((f) => f > 0x800 && f <= 0xfff), 'own records of a light plugin, 800 is the generic stone');
     for (const s of real.stones) assert.ok(['hold', 'town', 'faction', 'thanedom', 'council'].includes(s.kind), s.id);
     for (const id of ['whiterun', 'riverwood', 'high_hrothgar', 'imperial_legion', 'solitude']) assert.ok(ids.includes(id), id);
+    const byId = Object.fromEntries(real.stones.map((s) => [s.id, s]));
+    assert.equal(byId.high_hrothgar.kind, 'faction');
+    assert.equal(byId.imperial_legion.kind, 'faction');
+    assert.equal(byId.riverwood.parent, 'whiterun');
+    for (const st of real.stones) if (st.parent) assert.ok(ids.includes(st.parent), `${st.id}: parent ${st.parent} exists`);
   });
 
   it('boot creates one organization per stone, keeps existing ranks, seeds ladders for new ones', () => {
     const orgs = Object.fromEntries(db.tables.stone_orgs.map((o) => [o.id, o]));
     assert.equal(orgs.whiterun.base_id, `801:${PLUGIN}`);
     assert.equal(orgs.whiterun.name, 'Whiterun', 'name comes from holdstones.json');
-    assert.equal(orgs.high_hrothgar.kind, 'council');
+    assert.equal(orgs.high_hrothgar.kind, 'faction');
+    assert.equal(orgs.riverwood.parent_id, 'whiterun');
+    assert.equal(orgs.whiterun.parent_id, null);
     assert.equal(orgs.high_hrothgar.hold_id, null);
     assert.equal(orgs.riften.base_id, null, 'a hold with no stone in the list keeps none');
     const keys = (org) => db.tables.stone_ranks.filter((r) => r.org_id === org).map((r) => r.rank_key);
     assert.deepEqual(keys('whiterun'), ['citizen', 'guard', 'steward', 'jarl'], 'v33 ranks untouched');
-    assert.deepEqual(keys('high_hrothgar'), ['councilor', 'elder']);
+    assert.deepEqual(keys('high_hrothgar'), ['recruit', 'member', 'officer', 'leader']);
     assert.deepEqual(keys('riverwood'), ['resident', 'guard', 'reeve']);
     assert.deepEqual(keys('imperial_legion'), ['recruit', 'member', 'officer', 'leader']);
   });
@@ -346,15 +359,79 @@ describe('holdstone-service: a stone placed in the Creation Kit works without bi
 
   it('High Hrothgar: staff tie themselves to it; members show their allegiances everywhere', async () => {
     service.registerInteractions();
-    await service.setMemberRank(STAFF_ACTOR, 'high_hrothgar', { id: 1, name: 'Staff Member' }, 'elder');
+    await service.setMemberRank(STAFF_ACTOR, 'high_hrothgar', { id: 1, name: 'Staff Member' }, 'leader');
     await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 1, name: 'Staff Member' }, 'citizen');
     const ctx = { actorId: STAFF, characterId: 1, target: { formId: HROTHGAR_STONE }, data: {} };
     await interactionRegistry.get('holdstone.view').execute(ctx);
     const panel = modals.at(-1).data;
-    assert.equal(panel.kind, 'Council');
+    assert.equal(panel.kind, 'Faction');
     assert.equal(panel.seat, null);
-    assert.equal(panel.yourRank, 'Elder');
+    assert.equal(panel.yourRank, 'Leader');
     assert.deepEqual(panel.allegiances.map((a) => a.name), ['High Hrothgar', 'Whiterun']);
+  });
+});
+
+describe('holdstone-service: Riverwood answers to Whiterun', () => {
+  const parcelLocks = require('./core/parcel-locks');
+  const JARL = { characterId: 40, isStaff: false };
+  const JARL_ACTOR = 0xff000040;
+  const RIVERWOOD_STONE = 0xb4;
+
+  beforeEach(async () => {
+    await boot();
+    service.registerInteractions();
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 40, name: 'Di Jarl' }, 'jarl');
+    await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 20, name: 'Bo Guard' }, 'guard');
+  });
+  afterEach(() => { delete global.mp; });
+
+  it('the Jarl of Whiterun leads Riverwood: names its Reeve, creates and locks its parcels', async () => {
+    const r = await service.setMemberRank(JARL, 'riverwood', { id: 10, name: 'Ana Stone' }, 'reeve');
+    assert.equal(r.ok, true, r.message);
+    const p = await service.createParcel('riverwood', 'Sleeping Giant Inn');
+    assert.equal(p.ok, true);
+    const idx = service.getIndex();
+    assert.equal(parcelLocks.canManageOrg(idx, 'riverwood', JARL), true);
+    assert.equal(parcelLocks.canLockParcel(idx, idx.parcels.get(p.parcelId), JARL), true);
+  });
+
+  it('the Reeve of Riverwood does not lead Whiterun; a Whiterun Guard does not lead Riverwood', async () => {
+    await service.setMemberRank(STAFF_ACTOR, 'riverwood', { id: 10, name: 'Ana Stone' }, 'reeve');
+    const idx = service.getIndex();
+    assert.equal(parcelLocks.canManageOrg(idx, 'whiterun', { characterId: 10 }), false);
+    assert.equal(parcelLocks.canManageOrg(idx, 'riverwood', { characterId: 20 }), false);
+    const r = await service.setMemberRank({ characterId: 20 }, 'riverwood', { id: 30, name: 'Cy' }, 'resident');
+    assert.equal(r.ok, false);
+  });
+
+  it('the Riverwood panel says it answers to Whiterun; the Whiterun panel lists Riverwood', async () => {
+    BASE_DESC_OF[RIVERWOOD_STONE] = `80a:${PLUGIN}`;
+    try {
+      await interactionRegistry.get('holdstone.view').execute({ actorId: JARL_ACTOR, characterId: 40, target: { formId: RIVERWOOD_STONE }, data: {} });
+      const rw = modals.at(-1).data;
+      assert.equal(rw.orgName, 'Riverwood');
+      assert.deepEqual(rw.answersTo, ['Whiterun']);
+      assert.equal(rw.canManage, true, 'the Jarl sees leadership actions at the Riverwood stone');
+      await interactionRegistry.get('holdstone.view').execute({ actorId: JARL_ACTOR, characterId: 40, target: { formId: WHITERUN_STONE }, data: {} });
+      assert.deepEqual(modals.at(-1).data.vassals, ['Riverwood']);
+    } finally {
+      delete BASE_DESC_OF[RIVERWOOD_STONE];
+    }
+  });
+
+  it('opening locked Riverwood doors is not inherited: it needs a Riverwood rank, the owner or staff', async () => {
+    const p = await service.createParcel('riverwood', 'Mill', 'resident');
+    await service.addObject(p.parcelId, desc(CHEST), 'container');
+    assert.equal(service.handleActivation(CHEST, JARL_ACTOR), false, 'the Jarl unlocks it rather than walking in');
+    await service.setMemberRank(JARL, 'riverwood', { id: 20, name: 'Bo Guard' }, 'resident');
+    assert.equal(service.handleActivation(CHEST, BO), undefined);
+  });
+
+  it('a parent that is not an organization is ignored with a log line', async () => {
+    service.configure({ stoneList: () => ({ plugin: PLUGIN, stones: [{ id: 'orphan', name: 'Orphan', kind: 'town', hold: null, formId: '80d', parent: 'atlantis' }] }) });
+    await service.syncOrganizations();
+    assert.equal(db.tables.stone_orgs.find((o) => o.id === 'orphan').parent_id, null);
+    assert.ok(errors.some((e) => /parent "atlantis"/.test(e)));
   });
 });
 
@@ -502,7 +579,7 @@ describe('holdstone-service: ranks', () => {
   });
 
   it('staff edit a ladder: add a rank, remove one', async () => {
-    assert.equal((await service.addRank('high_hrothgar', 'greybeard', 30, true, 'Greybeard')).ok, true);
+    assert.equal((await service.addRank('high_hrothgar', 'greybeard', 50, true, 'Greybeard')).ok, true);
     assert.equal(service.getIndex().ranksByOrg.get('high_hrothgar').at(-1).key, 'greybeard');
     assert.equal((await service.removeRank('high_hrothgar', 'greybeard')).ok, true);
     assert.equal((await service.addRank('high_hrothgar', 'x', 10, false, 'Clash')).ok, false, 'position taken');
@@ -532,7 +609,8 @@ describe('holdstone-service: parceling tool and commands', () => {
     assert.match(lastNote(ANA), /Staff only/);
     assert.equal(db.tables.parcels.length, 0);
     await service.handleHoldstoneCommand(STAFF, 'list');
-    assert.match(lastNote(STAFF), /high_hrothgar \(Council\)/);
+    assert.match(lastNote(STAFF), /high_hrothgar \(Faction\)/);
+    assert.match(lastNote(STAFF), /riverwood \(Town\)/);
     assert.match(lastNote(STAFF), /riften \(Hold, no stone\)/);
   });
 

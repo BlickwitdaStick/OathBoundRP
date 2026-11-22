@@ -6,8 +6,10 @@
  * docs/gameplay/HOLDSTONES_AND_PARCELS.md).
  *
  * - Organization: a hold (Whiterun), a town (Riverwood), a faction (Imperial
- *   Legion), a thanedom or a council (High Hrothgar). Each has an ordered rank
- *   ladder and members; a character can belong to several.
+ *   Legion, High Hrothgar), a thanedom or a council. Each has an ordered rank
+ *   ladder and members; a character can belong to several. An organization
+ *   can answer to a parent (Riverwood → Whiterun): the parent's leaders also
+ *   lead it.
  * - Stone: each organization has its OWN activator in Oathbound_Holdstone.esp
  *   ("Whiterun Holdstone", "High Hrothgar Holdstone"...), listed in
  *   data/holdstones.json. Staff place it in the Creation Kit; any reference of
@@ -213,7 +215,7 @@ function findTeleportPartner(formId) {
 /**
  * The stones the plugin defines, with each one's activator FormDesc.
  * Malformed entries are skipped with a log line, never half-applied.
- * @returns {{plugin:string, stones:Array<{id:string, name:string, kind:string, hold:string|null, baseId:string}>}}
+ * @returns {{plugin:string, stones:Array<{id:string, name:string, kind:string, hold:string|null, parent:string|null, baseId:string}>}}
  */
 function stoneList() {
   const d = deps();
@@ -226,7 +228,8 @@ function stoneList() {
       d.logger.error(`[holdstones] skipping bad entry in holdstones.json: ${JSON.stringify(s)}`);
       continue;
     }
-    stones.push({ id: s.id, name: String(s.name || s.id), kind: s.kind, hold: s.hold || null, baseId });
+    const parent = s.parent && s.parent !== s.id ? String(s.parent) : null;
+    stones.push({ id: s.id, name: String(s.name || s.id), kind: s.kind, hold: s.hold || null, parent, baseId });
   }
   return { plugin, stones };
 }
@@ -251,6 +254,13 @@ async function syncOrganizations() {
       [s.id, s.name, s.kind, seat, s.baseId]
     );
   }
+  // Parents after every organization exists, so order in the file does not matter.
+  const known = new Set((await db.query('SELECT id FROM stone_orgs')).map((r) => String(r.id)));
+  for (const s of stones) {
+    const parent = s.parent && known.has(s.parent) ? s.parent : null;
+    if (s.parent && !parent) deps().logger.error(`[holdstones] ${s.id}: parent "${s.parent}" is not an organization; ignored`);
+    await db.query('UPDATE stone_orgs SET parent_id = ? WHERE id = ?', [parent, s.id]);
+  }
   const orgs = await db.query('SELECT id, kind FROM stone_orgs');
   const ranked = new Set((await db.query('SELECT DISTINCT org_id FROM stone_ranks')).map((r) => String(r.org_id)));
   for (const org of orgs) {
@@ -273,7 +283,7 @@ async function reload() {
   const { db } = deps();
   const [holds, orgs, ranks, members, parcels, objects] = await Promise.all([
     db.query('SELECT id, name FROM holds ORDER BY id'),
-    db.query('SELECT id, name, kind, hold_id, base_id FROM stone_orgs'),
+    db.query('SELECT id, name, kind, hold_id, parent_id, base_id FROM stone_orgs'),
     db.query('SELECT id, org_id, rank_key, name, position, is_leader FROM stone_ranks'),
     db.query('SELECT org_id, character_id, rank_id FROM stone_members'),
     db.query('SELECT id, org_id, hold_id, name, owner_character_id, min_rank_id, locked FROM parcels'),
@@ -627,6 +637,8 @@ async function orgPayload(orgId, actor, targetId = null) {
     orgName: org ? org.name : orgId,
     kind: org ? KIND_LABELS[org.kind] || org.kind : '',
     seat: org && org.holdId ? (_index.holds.get(org.holdId) || org.holdId) : null,
+    answersTo: org ? parcelLocks.ancestorsOf(_index, org.id).map((o) => o.name) : [],
+    vassals: parcelLocks.childrenOf(_index, orgId).map((o) => o.name),
     targetId,
     yourRank: mine ? mine.name : null,
     canManage,

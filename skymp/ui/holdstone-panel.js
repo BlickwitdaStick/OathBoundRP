@@ -124,7 +124,9 @@
   function render(data) {
     state.data = data;
     if (data.targetId != null) state.targetId = data.targetId;
-    $('hs-eyebrow').textContent = (data.kind || 'Holdstone') + (data.seat ? ' · ' + data.seat : '');
+    const answersTo = Array.isArray(data.answersTo) && data.answersTo.length ? ' · answers to ' + data.answersTo[0] : '';
+    const vassals = Array.isArray(data.vassals) && data.vassals.length ? ' · over ' + data.vassals.join(', ') : '';
+    $('hs-eyebrow').textContent = (data.kind || 'Holdstone') + (data.seat ? ' · ' + data.seat : '') + answersTo + vassals;
     $('hs-hold-name').textContent = data.orgName || data.orgId || '—';
     $('hs-your-rank').textContent = data.yourRank
       ? 'Your rank: ' + data.yourRank

@@ -7,6 +7,11 @@
  * — the service (`holdstone-service.js`) loads rows into `buildIndex` and asks
  * questions.
  *
+ * An organization can answer to a parent (Riverwood answers to Whiterun): the
+ * parent's leaders also lead the child — its ranks, members and parcels — as
+ * if they stood above its whole ladder. Opening locked doors is NOT inherited:
+ * it still needs the parcel's own organization rank (or owner/staff).
+ *
  * An organization is a hold, a town, a faction, a thanedom or a council
  * (migration-v41-stone-organizations.sql). Each has its own stone activator in
  * Oathbound_Holdstone.esp; any placed reference of that activator is its
@@ -38,7 +43,7 @@ const DEFAULT_LADDERS = Object.freeze({
 });
 
 /**
- * @typedef {{id:string, name:string, kind:string, holdId:string|null, baseId:string|null}} Org
+ * @typedef {{id:string, name:string, kind:string, holdId:string|null, parentId:string|null, baseId:string|null}} Org
  * @typedef {{id:number, orgId:string, key:string, name:string, position:number, isLeader:boolean}} Rank
  * @typedef {{id:number, orgId:string, holdId:string|null, name:string, ownerCharacterId:number|null, minRankId:number|null, locked:boolean}} Parcel
  * @typedef {{objectId:string, formId:number|null, parcelId:number, kind:'door'|'container', locks:boolean, partnerObjectId:string|null}} ParcelObject
@@ -87,6 +92,7 @@ function buildIndex(snapshot = {}, resolveId = () => null) {
       name: String(row.name || row.id),
       kind: ORG_KINDS.includes(row.kind) ? row.kind : 'faction',
       holdId: row.hold_id ? String(row.hold_id) : null,
+      parentId: row.parent_id ? String(row.parent_id) : null,
       baseId: row.base_id ? String(row.base_id) : null
     };
     orgs.set(org.id, org);
@@ -258,11 +264,41 @@ function checkActivation(index, formId, actor) {
   return { known: true, object, parcel, ...canOpenParcel(index, parcel, actor) };
 }
 
-/** Leader of the organization (a member whose rank is a leader rank) or staff. */
+/** Parents of an organization, nearest first (Riverwood → [Whiterun]). Cycles stop. */
+function ancestorsOf(index, orgId) {
+  const out = [];
+  const seen = new Set([orgId]);
+  const orgs = index.orgs || new Map();
+  let org = orgs.get(orgId);
+  while (org && org.parentId && !seen.has(org.parentId)) {
+    seen.add(org.parentId);
+    const parent = orgs.get(org.parentId);
+    if (!parent) break;
+    out.push(parent);
+    org = parent;
+  }
+  return out;
+}
+
+/** Organizations that answer directly to this one. */
+function childrenOf(index, orgId) {
+  return [...(index.orgs || new Map()).values()].filter((o) => o.parentId === orgId).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Leader of a parent (or grandparent…) organization: leads this one too. */
+function leadsFromParent(index, orgId, actor) {
+  return ancestorsOf(index, orgId).some((parent) => {
+    const rank = memberRank(index, parent.id, actor.characterId);
+    return Boolean(rank && rank.isLeader);
+  });
+}
+
+/** Leader of the organization (a member whose rank is a leader rank), leader of a parent, or staff. */
 function canManageOrg(index, orgId, actor) {
   if (actor.isStaff) return true;
   const rank = memberRank(index, orgId, actor.characterId);
-  return Boolean(rank && rank.isLeader);
+  if (rank && rank.isLeader) return true;
+  return leadsFromParent(index, orgId, actor);
 }
 
 /** Owners may lock/unlock their own parcel; leaders and staff any of the organization's. */
@@ -273,13 +309,20 @@ function canLockParcel(index, parcel, actor) {
 
 /**
  * May `actor` move `targetCharacterId` to `newRank` (null = remove)?
- * Staff: always. Leaders: only below their own rank, and only for members
+ * Staff: always. Leaders of a parent organization: any rank, anyone but
+ * themselves. Leaders: only below their own rank, and only for members
  * currently below them — a Steward cannot crown a Jarl or demote one.
  *
  * @returns {{ok:true}|{ok:false, message:string}}
  */
 function canAssignRank(index, orgId, actor, targetCharacterId, newRank) {
   if (actor.isStaff) return { ok: true };
+  // A parent's leader stands above the child's whole ladder (the Jarl of
+  // Whiterun can name Riverwood's Reeve), but still not over their own rank.
+  if (leadsFromParent(index, orgId, actor)) {
+    if (targetCharacterId === actor.characterId) return { ok: false, message: 'You cannot change your own rank.' };
+    return { ok: true };
+  }
   const mine = memberRank(index, orgId, actor.characterId);
   if (!mine || !mine.isLeader) return { ok: false, message: 'Only the leaders here can set ranks.' };
   if (targetCharacterId === actor.characterId) return { ok: false, message: 'You cannot change your own rank.' };
@@ -306,6 +349,9 @@ module.exports = {
   objectsOf,
   membersOf,
   membershipsOf,
+  ancestorsOf,
+  childrenOf,
+  leadsFromParent,
   canOpenParcel,
   checkActivation,
   canManageOrg,

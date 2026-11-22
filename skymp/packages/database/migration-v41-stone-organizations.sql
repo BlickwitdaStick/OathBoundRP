@@ -3,8 +3,9 @@
 -- Apply after migration-v40-survival-thirst.sql. Safe to run again.
 --
 -- A stone is the seat of an ORGANIZATION: a hold (Whiterun), a town
--- (Riverwood), a faction (the Imperial Legion), a thanedom, or a council
--- (staff meetings at High Hrothgar). Each organization has its own rank ladder, members and parcels;
+-- (Riverwood, which answers to Whiterun), a faction (the Imperial Legion,
+-- High Hrothgar), a thanedom, or a council. Each organization has its own
+-- rank ladder, members and parcels;
 -- a character can belong to several (citizen of Solitude AND Legion soldier).
 -- Solitude can therefore have two stones: the Solitude stone and the Legion's.
 --
@@ -68,6 +69,16 @@ CREATE TABLE IF NOT EXISTS `stone_members` (
 
 ALTER TABLE `stone_members`
   ADD INDEX IF NOT EXISTS `idx_stone_members_character` (`character_id`);
+
+-- Parent organization: Riverwood answers to Whiterun. The parent's leaders
+-- also lead the child (ranks, members, parcels). Separate ALTER so it reaches
+-- a stone_orgs table created by an earlier run of this migration too.
+ALTER TABLE `stone_orgs`
+  ADD COLUMN IF NOT EXISTS `parent_id` VARCHAR(32) NULL DEFAULT NULL
+    COMMENT 'Organization this one answers to; its leaders also lead this one' AFTER `hold_id`;
+ALTER TABLE `stone_orgs` DROP FOREIGN KEY IF EXISTS `fk_stone_org_parent`;
+ALTER TABLE `stone_orgs`
+  ADD CONSTRAINT `fk_stone_org_parent` FOREIGN KEY (`parent_id`) REFERENCES `stone_orgs` (`id`) ON DELETE SET NULL;
 
 -- ── copy v33 data ─────────────────────────────────────────────────────────────
 INSERT IGNORE INTO `stone_orgs` (`id`, `name`, `kind`, `hold_id`)
