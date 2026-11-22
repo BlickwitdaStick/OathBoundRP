@@ -1,47 +1,47 @@
 /**
- * Ponte testavel entre a CEF (browser embutido no cliente) e o gamemode.
+ * Testable bridge between the CEF (the browser embedded in the client) and the gamemode.
  *
- * ─── `mp.onUiEvent` nunca existiu — BOUND-004 ───────────────────────────────
+ * ─── `mp.onUiEvent` never existed — BOUND-004 ───────────────────────────────
  *
- * Ate 20/08/2026 este arquivo fazia `mpApi.onUiEvent = gateway`. O SkyMP
- * **nunca chama essa property** — busca em `skymp5-client/src`,
- * `skymp5-server/cpp`, `skymp5-front/src` e `skymp5-functions-lib/src` por
- * `onUiEvent`: zero ocorrencias, confirmado duas vezes (14/08 e 20/08/2026,
- * a segunda direto contra o `main` do upstream via `gh api`). Ver
- * `docs/research/SKYMP_INTEGRATION_AUDIT.md` §5 (`BOUND-004`) para a
- * investigacao completa. Ate aqui, `ui-event-router`, `ui-event-rate-limiter`,
- * os schemas de `governance`/`player-panel` e o menu de interacao inteiro
- * estavam ligados a um callback morto — nenhum evento da CEF jamais chegava
- * ao servidor pelo caminho normal.
+ * Until 2026-08-20 this file did `mpApi.onUiEvent = gateway`. SkyMP
+ * **never calls that property** — searching `skymp5-client/src`,
+ * `skymp5-server/cpp`, `skymp5-front/src` and `skymp5-functions-lib/src` for
+ * `onUiEvent`: zero occurrences, confirmed twice (2026-08-14 and 2026-08-20,
+ * the second directly against upstream `main` via `gh api`). See
+ * `docs/research/SKYMP_INTEGRATION_AUDIT.md` §5 (`BOUND-004`) for the
+ * full investigation. Until then, `ui-event-router`, `ui-event-rate-limiter`,
+ * the `governance`/`player-panel` schemas and the whole interaction menu
+ * were wired to a dead callback — no CEF event ever reached
+ * the server through the normal path.
  *
- * O caminho real, documentado oficialmente
- * (`docs/skyrim_platform/browser.md` upstream) e tres saltos:
+ * The real path, officially documented
+ * (upstream `docs/skyrim_platform/browser.md`), is three hops:
  *
- *   1. **CEF -> cliente.** A pagina chama `window.skyrimPlatform.sendMessage(...)`.
- *      O Skyrim Platform emite o evento `browserMessage`, com os argumentos
- *      em `e.arguments`.
- *   2. **Cliente -> servidor.** `mp.makeEventSource('_onUiEvent', <snippet>)`
- *      injeta um trecho que roda no cliente, assina `ctx.sp.on('browserMessage', ...)`
- *      e repassa via `ctx.sendEvent(...)`.
- *   3. **Servidor -> gamemode.** O SkyMP dispara `mp._onUiEvent(pcFormId, ...args)`
- *      — nome de evento customizado TEM que comecar com `_`.
+ *   1. **CEF -> client.** The page calls `window.skyrimPlatform.sendMessage(...)`.
+ *      Skyrim Platform emits the `browserMessage` event, with the arguments
+ *      in `e.arguments`.
+ *   2. **Client -> server.** `mp.makeEventSource('_onUiEvent', <snippet>)`
+ *      injects a snippet that runs on the client, subscribes to `ctx.sp.on('browserMessage', ...)`
+ *      and forwards via `ctx.sendEvent(...)`.
+ *   3. **Server -> gamemode.** SkyMP fires `mp._onUiEvent(pcFormId, ...args)`
+ *      — a custom event name MUST start with `_`.
  *
- * Mesma tecnica ja usada em `core/hit-events.js` para `_onHitReported` —
- * `mp.makeEventSource` esta confirmada num servidor real desde 06/08/2026
- * (ver cabecalho daquele arquivo). O snippet de cliente daqui, como o de la,
- * **nao foi exercitado contra CEF real** nesta correcao — so a parte
- * server-side (registro do event source + despacho) tem teste automatizado.
+ * Same technique already used in `core/hit-events.js` for `_onHitReported` —
+ * `mp.makeEventSource` has been confirmed on a real server since 2026-08-06
+ * (see that file's header). The client snippet here, like the one there,
+ * **was not exercised against a real CEF** in this fix — only the
+ * server-side part (event source registration + dispatch) has automated tests.
  *
- * `ui/index.html` foi corrigido junto: `sendUiEvent` mandava
- * `window.mp.trigger(...)`/`window.mp.send(...)` — `window.mp` nao e injetado
- * na CEF do SkyMP (a busca por `window.mp` no upstream so aparece em
- * `skymp5-front`, o painel administrativo separado, nao no cliente de jogo).
- * Passou a usar `window.skyrimPlatform.sendMessage({ type, data })` — um
- * unico argumento, para que `ctx.sendEvent(...e.arguments)` repasse o
- * envelope inteiro como `args[0]` do lado do servidor.
+ * `ui/index.html` was fixed alongside: `sendUiEvent` sent
+ * `window.mp.trigger(...)`/`window.mp.send(...)` — `window.mp` is not injected
+ * into SkyMP's CEF (searching upstream for `window.mp` only shows up in
+ * `skymp5-front`, the separate admin panel, not in the game client).
+ * It now uses `window.skyrimPlatform.sendMessage({ type, data })` — a
+ * single argument, so that `ctx.sendEvent(...e.arguments)` forwards the
+ * whole envelope as `args[0]` on the server side.
  *
- * Este modulo continua sem conhecer `mp`, banco ou gameplay: recebe as
- * dependencias e devolve o callback — a diferenca e so onde ele e pendurado.
+ * This module still knows nothing about `mp`, the DB or gameplay: it receives its
+ * dependencies and returns the callback — the only difference is where it is hung.
  */
 
 /**
@@ -55,13 +55,13 @@
  */
 function createUiEventGateway({ uiEventRouter, handleChatInput, rateLimiter, logger = console }) {
   if (!uiEventRouter || typeof uiEventRouter.isValidEventEnvelope !== 'function' || typeof uiEventRouter.dispatch !== 'function') {
-    throw new Error('[ui-event-gateway] uiEventRouter invalido');
+    throw new Error('[ui-event-gateway] invalid uiEventRouter');
   }
   if (typeof handleChatInput !== 'function') {
-    throw new Error('[ui-event-gateway] handleChatInput invalido');
+    throw new Error('[ui-event-gateway] invalid handleChatInput');
   }
   if (rateLimiter && typeof rateLimiter.observe !== 'function') {
-    throw new Error('[ui-event-gateway] rateLimiter invalido');
+    throw new Error('[ui-event-gateway] invalid rateLimiter');
   }
 
   return (actorId, uiEvent) => {
@@ -82,8 +82,8 @@ function createUiEventGateway({ uiEventRouter, handleChatInput, rateLimiter, log
         }
       }
 
-      // Nunca registrar o payload bruto: ele e controlado pelo cliente e pode
-      // conter texto privado ou dados que nao sao necessarios para diagnostico.
+      // Never log the raw payload: it is controlled by the client and may
+      // contain private text or data that is not needed for diagnostics.
       logger.log(
         `[phase0] onUiEvent callback from ${actorId.toString(16)}: ` +
         `type=${event.type} data=${describeEventData(event.data)}`
@@ -103,47 +103,47 @@ function createUiEventGateway({ uiEventRouter, handleChatInput, rateLimiter, log
   };
 }
 
-/** Nome do event source — TEM que comecar com `_` (ActionListener::OnCustomEvent). */
+/** Event source name — MUST start with `_` (ActionListener::OnCustomEvent). */
 const NOME_DO_EVENTO = '_onUiEvent';
 
 /**
- * O trecho que roda NO CLIENTE, dentro do Skyrim Platform. Escrito como
- * string porque e isso que `makeEventSource` recebe — nada aqui tem acesso ao
- * escopo deste arquivo, so ao `ctx` que o SkyMP fornece.
+ * The snippet that runs ON THE CLIENT, inside Skyrim Platform. Written as a
+ * string because that is what `makeEventSource` takes — nothing here has access to
+ * this file's scope, only to the `ctx` that SkyMP provides.
  *
- * `e.arguments` e o array que `window.skyrimPlatform.sendMessage(...)` mandou
- * do lado da CEF. `ui/index.html` manda sempre UM argumento (o envelope
- * `{type, data}`), entao `...e.arguments` aqui vira sempre uma chamada de um
- * argumento so — e do lado do servidor `args[0]` e esse envelope.
+ * `e.arguments` is the array `window.skyrimPlatform.sendMessage(...)` sent
+ * from the CEF side. `ui/index.html` always sends ONE argument (the
+ * `{type, data}` envelope), so `...e.arguments` here always becomes a
+ * single-argument call — and on the server side `args[0]` is that envelope.
  */
 const SNIPPET_DO_CLIENTE = `
   ctx.sp.on('browserMessage', (e) => {
     try {
       ctx.sendEvent(...e.arguments);
     } catch (err) {
-      // Erro aqui roda no cliente e nao tem pra onde ir — engolir e o mesmo
-      // criterio de core/hit-events.js: derrubar o snippet mataria todo
-      // evento de UI seguinte daquele jogador, nao so este.
+      // An error here runs on the client and has nowhere to go — swallowing it is the same
+      // criterion as core/hit-events.js: crashing the snippet would kill every
+      // following UI event from that player, not just this one.
     }
   });
 `;
 
 /**
- * Registra o event source `_onUiEvent` e liga o despacho a ele. Mantido
- * testavel sem precisar carregar o bootstrap inteiro — recebe `mpApi` em vez
- * de importar `mp` global.
+ * Registers the `_onUiEvent` event source and wires dispatch to it. Kept
+ * testable without loading the whole bootstrap — it receives `mpApi` instead
+ * of importing the global `mp`.
  *
  * @param {{makeEventSource?: Function, [key: string]: any}} mpApi
  * @param {Parameters<typeof createUiEventGateway>[0]} dependencies
- * @returns {(actorId: number, uiEvent: unknown) => boolean} o gateway puro, para teste direto
+ * @returns {(actorId: number, uiEvent: unknown) => boolean} the pure gateway, for direct testing
  */
 function installUiEventGateway(mpApi, dependencies) {
-  if (!mpApi || typeof mpApi !== 'object') throw new Error('[ui-event-gateway] mp invalido');
+  if (!mpApi || typeof mpApi !== 'object') throw new Error('[ui-event-gateway] invalid mp');
   const gateway = createUiEventGateway(dependencies);
   const logger = (dependencies && dependencies.logger) || console;
 
   if (typeof mpApi.makeEventSource !== 'function') {
-    logger.warn('[ui-event-gateway] mp.makeEventSource indisponivel — nenhum evento de UI sera recebido.');
+    logger.warn('[ui-event-gateway] mp.makeEventSource unavailable — no UI events will be received.');
     return gateway;
   }
 
@@ -153,8 +153,8 @@ function installUiEventGateway(mpApi, dependencies) {
 }
 
 /**
- * Devolve somente a categoria de um payload recebido da UI, sem vazar seu
- * conteudo nos logs do servidor.
+ * Returns only the category of a payload received from the UI, without leaking its
+ * contents into the server logs.
  * @param {unknown} data
  * @returns {string}
  */

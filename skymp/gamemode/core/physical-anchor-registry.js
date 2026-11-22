@@ -1,30 +1,30 @@
 /**
  * core/physical-anchor-registry.js
  *
- * Tarefa 11 — a peça que faltava pro prompt `[E]` cobrir objetos (Depot),
- * não só atores. Mesmo espírito de `interaction-registry.js`: o core não
- * conhece Depot, Depot é quem se registra aqui.
+ * Task 11 — the missing piece for the `[E]` prompt to cover objects (Depot),
+ * not only actors. Same spirit as `interaction-registry.js`: the core does not
+ * know Depot, Depot is the one that registers here.
  *
- * ─── Por que isto existe, e não uma varredura genérica de objetos ──────────
+ * ─── Why this exists, and not a generic object sweep ───────────────────────
  *
- * Não existe em lugar nenhum do projeto (nem no SkyMP, verificado contra a
- * documentação oficial antes desta tarefa) uma função "liste objetos perto
- * do ponto X" — o motor não expõe isso sem fork. O que EXISTE são tabelas
- * pequenas, curadas por staff, de âncoras físicas conhecidas — `depot_
- * terminals` é a primeira. Este arquivo é o ponto único onde um módulo
- * desses se anuncia, pra `interaction-prompt-service.js` saber quem
- * perguntar, sem importar `depot-service.js` diretamente (o core não pode
- * conhecer um módulo lab por nome).
+ * Nowhere in the project (nor in SkyMP, checked against the
+ * official documentation before this task) is there a "list objects near
+ * point X" function — the engine does not expose that without a fork. What DOES exist are
+ * small, staff-curated tables of known physical anchors — `depot_
+ * terminals` is the first. This file is the single point where such a module
+ * announces itself, so `interaction-prompt-service.js` knows whom to
+ * ask, without importing `depot-service.js` directly (the core must not
+ * know a lab module by name).
  *
- * ─── Contrato do provider ────────────────────────────────────────────────
+ * ─── Provider contract ─────────────────────────────────────────────────────
  *
  * `{ targetType: string, list: () => Promise<Array<{targetId: number}>> }`
  *
- * `list()` devolve TODAS as âncoras daquele tipo — a filtragem por distância
- * é do chamador (`interaction-prompt-service.js`), porque só ele sabe de
- * quem está perguntando. `targetId` já precisa vir como FormID numérico
- * (resolvido de FormDesc por quem registrou — `mp.getIdFromDesc`), porque é
- * o formato que `interaction-service.peek`/`range-utils` esperam.
+ * `list()` returns ALL the anchors of that type — distance filtering
+ * is the caller's job (`interaction-prompt-service.js`), because only it knows
+ * who is asking. `targetId` must already be a numeric FormID
+ * (resolved from a FormDesc by whoever registered — `mp.getIdFromDesc`), because that is
+ * the format `interaction-service.peek`/`range-utils` expect.
  */
 
 'use strict';
@@ -38,15 +38,15 @@ let _snapshot = new Map();
  */
 function register(provider) {
   if (!provider || typeof provider.list !== 'function' || typeof provider.targetType !== 'string') {
-    throw new Error('[physical-anchor-registry] provider precisa de targetType (string) e list() (function).');
+    throw new Error('[physical-anchor-registry] provider needs targetType (string) and list() (function).');
   }
   _providers.push(provider);
 }
 
 /**
- * Reconstrói o índice síncrono usado por `mp.onActivate`. O hook nativo não
- * pode esperar banco; por isso módulos carregam seus anchors no boot e a
- * ativação faz somente uma consulta O(1) neste snapshot.
+ * Rebuilds the synchronous index used by `mp.onActivate`. The native hook
+ * cannot wait on the DB; that is why modules load their anchors at boot and
+ * activation does only an O(1) lookup in this snapshot.
  */
 async function refresh() {
   const next = new Map();
@@ -66,9 +66,9 @@ function has(targetId) {
 }
 
 /**
- * Todas as âncoras de todos os providers registrados, achatadas numa lista
- * só. Um provider que lança não derruba os outros — mesmo critério de
- * `canSee` em `interaction-service.js`: um módulo com bug não trava o resto.
+ * Every anchor from every registered provider, flattened into a single
+ * list. A provider that throws does not take down the others — same criterion as
+ * `canSee` in `interaction-service.js`: a buggy module does not lock up the rest.
  * @returns {Promise<Array<{targetId: number, targetType: string}>>}
  */
 async function listAll() {
@@ -82,13 +82,13 @@ async function listAll() {
         }
       }
     } catch (err) {
-      console.error(`[physical-anchor-registry] provider de '${provider.targetType}' falhou:`, err.message);
+      console.error(`[physical-anchor-registry] provider for '${provider.targetType}' failed:`, err.message);
     }
   }
   return resultado;
 }
 
-/** Só para teste. */
+/** Test only. */
 function _reset() {
   _providers.length = 0;
   _snapshot = new Map();

@@ -1,19 +1,19 @@
 /**
  * core/panel-refresh-bus.js
  *
- * Barramento de eventos desacoplado para "algo mudou, o Painel do Jogador
- * de tal ator deveria se atualizar". Existe para evitar dependência circular
- * entre player-panel-service.js (que já depende de governance-service.js e
- * market-stalls-service.js para montar snapshots) e esses mesmos serviços
- * (que agora precisam avisar quando uma ação deles afeta um jogador).
+ * Decoupled event bus for "something changed, the Player Panel
+ * of this actor should refresh". It exists to avoid a circular dependency
+ * between player-panel-service.js (which already depends on governance-service.js and
+ * market-stalls-service.js to build snapshots) and those same services
+ * (which now need to signal when one of their actions affects a player).
  *
- * Uso:
+ * Usage:
  *   const panelRefreshBus = require('./core/panel-refresh-bus');
  *
- *   // em qualquer serviço, após uma ação que muda o estado de um jogador:
+ *   // in any service, after an action that changes a player's state:
  *   panelRefreshBus.requestRefresh(targetActorId, 'governance');
  *
- *   // no player-panel-service, uma única vez em initPlayerPanelService():
+ *   // in player-panel-service, once in initPlayerPanelService():
  *   panelRefreshBus.onRefresh((actorId, channel) => { ... });
  */
 
@@ -25,9 +25,9 @@ const emitter = new EventEmitter();
 emitter.setMaxListeners(50);
 
 /**
- * Pede que o painel de um ator seja atualizado num canal específico.
- * Não faz nada se não houver nenhum listener registrado (ex: módulo
- * player-panel desabilitado) nem se o canal for desconhecido.
+ * Asks for an actor's panel to be refreshed on a specific channel.
+ * Does nothing if no listener is registered (e.g. the
+ * player-panel module is disabled) or if the channel is unknown.
  * @param {number} actorId
  * @param {'status'|'governance'|'economy'|'social'} channel
  */
@@ -37,7 +37,7 @@ function requestRefresh(actorId, channel) {
 }
 
 /**
- * Registra um handler chamado a cada requestRefresh().
+ * Registers a handler called on every requestRefresh().
  * @param {(actorId: number, channel: string) => void} handler
  */
 function onRefresh(handler) {
@@ -45,7 +45,7 @@ function onRefresh(handler) {
 }
 
 /**
- * Remove um handler registrado com onRefresh().
+ * Removes a handler registered with onRefresh().
  * @param {(actorId: number, channel: string) => void} handler
  */
 function offRefresh(handler) {

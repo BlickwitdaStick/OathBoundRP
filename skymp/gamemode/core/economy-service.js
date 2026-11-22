@@ -1,40 +1,40 @@
 /**
  * core/economy-service.js
  *
- * A porta única do dinheiro. Todo septim que muda de titular passa por aqui.
+ * The single door for money. Every septim that changes holder goes through here.
  *
- * ─── Como isto se relaciona com o transaction-service ───────────────────────
+ * ─── How this relates to transaction-service ───────────────────────────────
  *
- * O `core/transaction-service.js` continua sendo o **motor** de
- * `characters.gold` — ele é o único arquivo que escreve aquela coluna, e nada
- * aqui desfaz isso. O que muda é quem fica no topo:
+ * `core/transaction-service.js` is still the **engine** of
+ * `characters.gold` — it is the only file that writes that column, and nothing
+ * here undoes that. What changes is who sits on top:
  *
- *     modulo de dominio  →  economy-service  →  transaction-service.tx.*
- *                                            →  tesouros (cities/holds/...)
- *                                            →  economy_escrow
+ *     domain module  →  economy-service  →  transaction-service.tx.*
+ *                                        →  treasuries (cities/holds/...)
+ *                                        →  economy_escrow
  *
- * Módulo de domínio (governança, barraca, contrato, aluguel) chama **este**
- * arquivo. Chamar `tx.applyGoldDelta` direto continua funcionando e continua
- * errado: são as primitivas do motor, não a API da economia.
+ * A domain module (governance, stall, contract, rent) calls **this**
+ * file. Calling `tx.applyGoldDelta` directly still works and is still
+ * wrong: those are the engine's primitives, not the economy's API.
  *
- * ─── O que este arquivo resolve ────────────────────────────────────────────
+ * ─── What this file solves ─────────────────────────────────────────────────
  *
- * Decisão: `docs/technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md`
- * Evidência: `docs/research/ECONOMY_FRAMEWORK_AUDIT.md`
+ * Decision: `docs/technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md`
+ * Evidence: `docs/research/ECONOMY_FRAMEWORK_AUDIT.md`
  *
- *   Achado 1  — o ledger passa a nomear os dois lados, com `transfer_id`.
- *   Achado 2  — tesouro deixa de ser `UPDATE` solto e ganha ledger.
- *   Achado 7  — resultado tipado: recusa é `{ok:false, code}`, falha de
- *               infraestrutura **lança**. `false` nunca mais significa três
- *               coisas.
- *   Achado 10 — travas em ordem canônica, não na ordem "pagador, recebedor".
- *   Achado 11 — `escrow` é um titular de verdade, capaz de segurar valor.
+ *   Finding 1  — the ledger now names both sides, with `transfer_id`.
+ *   Finding 2  — the treasury stops being a loose `UPDATE` and gets a ledger.
+ *   Finding 7  — typed result: a refusal is `{ok:false, code}`, an
+ *                infrastructure failure **throws**. `false` never again means three
+ *                things.
+ *   Finding 10 — locks in canonical order, not in "payer, payee" order.
+ *   Finding 11 — `escrow` is a real holder, able to hold value.
  *
- * ─── Conta é uma referência, não uma linha de saldo ────────────────────────
+ * ─── An account is a reference, not a balance row ─────────────────────────
  *
- * `{ type, ref }`. O serviço resolve o par para onde o saldo realmente mora —
- * não existe tabela `accounts` duplicando valor que já existe (ADR 004 §2.1 e
- * a alternativa rejeitada §4.1).
+ * `{ type, ref }`. The service resolves the pair to where the balance really lives —
+ * there is no `accounts` table duplicating value that already exists (ADR 004 §2.1 and
+ * the rejected alternative §4.1).
  */
 
 const crypto = require('crypto');
@@ -45,15 +45,15 @@ const serverOptions = require('./server-options');
 const MODULE_DEFAULT = 'economy';
 
 /**
- * Onde o saldo de cada tipo de titular realmente mora.
+ * Where the balance of each holder type really lives.
  *
- * ─── Por que é uma lista fechada ───────────────────────────────────────────
+ * ─── Why it is a closed list ───────────────────────────────────────────────
  *
- * `_lockBalance` e `_applyDelta` interpolam nome de tabela e de coluna no SQL —
- * um `?` não funciona para identificador. A lista fechada é o que torna essa
- * interpolação segura por construção: nenhum nome vindo de payload, de
- * configuração ou de módulo chega ao SQL. Um titular novo entra editando este
- * objeto, sob revisão. Mesmo critério do `STACK_TABLES` do transaction-service.
+ * `_lockBalance` and `_applyDelta` interpolate table and column names into the SQL —
+ * a `?` does not work for identifiers. The closed list is what makes that
+ * interpolation safe by construction: no name coming from a payload,
+ * configuration or module reaches the SQL. A new holder comes in by editing this
+ * object, under review. Same criterion as transaction-service's `STACK_TABLES`.
  */
 const ACCOUNT_KINDS = Object.freeze({
   character: Object.freeze({ table: 'characters', keyColumn: 'id', balanceColumn: 'gold', numericRef: true }),
@@ -65,14 +65,14 @@ const ACCOUNT_KINDS = Object.freeze({
 });
 
 /**
- * `system` é a fronteira declarada por onde ouro entra e sai do mundo: ouro
- * inicial de whitelist, penalidade de morte, ajuste de staff, venda para NPC.
+ * `system` is the declared boundary through which gold enters and leaves the world:
+ * whitelist starting gold, death penalty, staff adjustment, sale to an NPC.
  *
- * Ele **não tem saldo** de propósito — não há coluna, e `SUM(delta)` de
- * `system` não bate com nada. O que ele dá é a lista completa de criação e
- * destruição de septim, que é o que faltava: hoje a penalidade de morte
- * destrói patrimônio sem contraparte, e um dreno não declarado é
- * indistinguível de ouro sumindo por bug (auditoria §9).
+ * It **has no balance** on purpose — there is no column, and the `SUM(delta)` of
+ * `system` matches nothing. What it gives is the complete list of septim
+ * creation and destruction, which is what was missing: today the death penalty
+ * destroys wealth with no counterpart, and an undeclared drain is
+ * indistinguishable from gold vanishing because of a bug (audit §9).
  */
 const SYSTEM_TYPE = 'system';
 
@@ -85,21 +85,21 @@ function uuid() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Normalização de entrada
+// Input normalization
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Aceita `{ type, ref }` e devolve a forma canônica, ou `null` se inválida.
- * `ref` sempre vira string — é assim que ele é gravado no ledger, e comparar
- * `7` com `'7'` em dois lugares diferentes é como um titular vira dois.
+ * Accepts `{ type, ref }` and returns the canonical shape, or `null` if invalid.
+ * `ref` always becomes a string — that is how it is written in the ledger, and comparing
+ * `7` with `'7'` in two different places is how one holder becomes two.
  */
 function normalizeAccount(value) {
   if (!value || typeof value !== 'object') return null;
   const type = typeof value.type === 'string' ? value.type.trim() : '';
   if (type === SYSTEM_TYPE) {
     const ref = typeof value.ref === 'string' ? value.ref.trim() : '';
-    // O rótulo do `system` é obrigatório e vai para o ledger: `system:mint`
-    // não diz nada, `system:whitelist_grant` diz de onde o ouro veio.
+    // The `system` label is mandatory and goes into the ledger: `system:mint`
+    // says nothing, `system:whitelist_grant` says where the gold came from.
     if (!/^[a-z0-9_]{3,48}$/.test(ref)) return null;
     return { type, ref };
   }
@@ -126,8 +126,8 @@ function normalizeIdempotencyKey(value) {
   if (value === undefined || value === null) return uuid();
   if (typeof value !== 'string') return null;
   const key = value.trim();
-  // O teto deixa espaço para o sufixo `#in` da perna de crédito dentro do
-  // VARCHAR(128) de `gold_transactions.idempotency_key`.
+  // The cap leaves room for the credit leg's `#in` suffix within the
+  // VARCHAR(128) of `gold_transactions.idempotency_key`.
   return key.length >= 8 && key.length <= 96 ? key : null;
 }
 
@@ -137,7 +137,7 @@ function normalizeReason(value) {
   return reason.length > 0 && reason.length <= 64 ? reason : null;
 }
 
-/** Chave de ordenação canônica das travas — ver `_lockPair`. */
+/** Canonical ordering key for the locks — see `_lockPair`. */
 function lockKey(account) {
   return `${account.type}:${account.ref}`;
 }
@@ -151,10 +151,10 @@ function sameAccount(a, b) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Lê e trava o saldo de uma conta dentro da transação do chamador.
+ * Reads and locks an account's balance inside the caller's transaction.
  *
- * @returns {Promise<{found:boolean, balance:number|null}>} `balance` é `null`
- *          para `system`, que não tem saldo por definição.
+ * @returns {Promise<{found:boolean, balance:number|null}>} `balance` is `null`
+ *          for `system`, which has no balance by definition.
  */
 async function _lockBalance(conn, account) {
   if (account.type === SYSTEM_TYPE) return { found: true, balance: null };
@@ -169,16 +169,16 @@ async function _lockBalance(conn, account) {
 }
 
 /**
- * Trava as duas contas de uma transferência em **ordem canônica**.
+ * Locks both accounts of a transfer in **canonical order**.
  *
- * Achado 10: `buyItem` e `transfer()` travavam na ordem "pagador, recebedor".
- * O personagem 7 comprando da barraca do 12 enquanto o 12 compra da barraca do
- * 7 produz `7→12` numa transação e `12→7` na outra: deadlock do InnoDB, que o
- * detector resolve matando uma — e o jogador lê "não foi possível concluir a
- * compra" por um motivo que não tem nada a ver com ele.
+ * Finding 10: `buyItem` and `transfer()` locked in "payer, payee" order.
+ * Character 7 buying from character 12's stall while 12 buys from 7's
+ * stall produces `7→12` in one transaction and `12→7` in the other: an InnoDB deadlock, which the
+ * detector resolves by killing one — and the player reads "could not complete the
+ * purchase" for a reason that has nothing to do with them.
  *
- * Ordenar por `type:ref` faz as duas transações pedirem as travas na mesma
- * ordem, e a segunda espera em vez de cruzar.
+ * Ordering by `type:ref` makes both transactions ask for the locks in the same
+ * order, and the second waits instead of crossing.
  */
 async function _lockPair(conn, from, to) {
   const ordered = [from, to].sort((a, b) => (lockKey(a) < lockKey(b) ? -1 : 1));
@@ -190,14 +190,14 @@ async function _lockPair(conn, from, to) {
 }
 
 /**
- * Aplica o delta no saldo. Não grava ledger — quem chama é responsável pelos
- * dois, e a separação existe porque as duas pernas compartilham `transfer_id`.
+ * Applies the delta to the balance. It does not write the ledger — the caller is responsible for
+ * both, and the separation exists because the two legs share `transfer_id`.
  */
 async function _applyDelta(conn, account, delta, dependencies) {
   if (account.type === SYSTEM_TYPE) return;
 
   if (account.type === 'character') {
-    // O `characters.gold` continua tendo uma porta só, e ela não é esta.
+    // `characters.gold` still has a single door, and it is not this one.
     const tx = dependencies.tx || transactionService.tx;
     await tx.applyGoldDelta(conn, Number(account.ref), delta);
     return;
@@ -205,16 +205,16 @@ async function _applyDelta(conn, account, delta, dependencies) {
 
   const kind = ACCOUNT_KINDS[account.type];
   const ref = kind.numericRef ? Number(account.ref) : account.ref;
-  // A guarda `>= 0` no próprio UPDATE é redundante com a checagem feita sob a
-  // trava — e é de propósito. Se alguém acrescentar um caminho que pule a
-  // checagem, o banco recusa em vez de gravar tesouro negativo.
+  // The `>= 0` guard in the UPDATE itself is redundant with the check done under the
+  // lock — and that is on purpose. If someone adds a path that skips the
+  // check, the DB refuses instead of writing a negative treasury.
   const [result] = await conn.query(
     `UPDATE ${kind.table} SET ${kind.balanceColumn} = ${kind.balanceColumn} + ?
       WHERE ${kind.keyColumn} = ? AND ${kind.balanceColumn} + ? >= 0`,
     [delta, ref, delta]
   );
   if (result.affectedRows !== 1) {
-    throw new Error(`[economy] saldo de ${lockKey(account)} recusou delta ${delta}`);
+    throw new Error(`[economy] balance of ${lockKey(account)} refused delta ${delta}`);
   }
 }
 
@@ -223,17 +223,17 @@ async function _applyDelta(conn, account, delta, dependencies) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Grava as duas pernas de uma transferência.
+ * Writes the two legs of a transfer.
  *
- * A chave crua vai na perna de **débito**, sempre — é ela que
- * `_findReplay` consulta. A perna de crédito recebe `#in`, porque a `UNIQUE` de
- * `idempotency_key` não aceita as duas iguais.
+ * The raw key always goes on the **debit** leg — it is the one
+ * `_findReplay` looks up. The credit leg gets `#in`, because the `UNIQUE` on
+ * `idempotency_key` does not accept both being equal.
  *
- * Isso corrige o Achado 5: o `transfer()` do transaction-service consultava a
- * chave crua e gravava só chaves derivadas (`_item_from`, `_gold_to`), então a
- * checagem dele nunca casava com nada — era código morto, e o que impedia a
- * duplicação era a `UNIQUE` do banco, ao preço de o chamador receber `false`
- * numa operação que tinha dado certo.
+ * That fixes Finding 5: transaction-service's `transfer()` looked up the
+ * raw key and only wrote derived keys (`_item_from`, `_gold_to`), so its
+ * check never matched anything — it was dead code, and what prevented
+ * duplication was the DB's `UNIQUE`, at the price of the caller receiving `false`
+ * for an operation that had succeeded.
  */
 async function _recordLegs(conn, params, dependencies) {
   const tx = dependencies.tx || transactionService.tx;
@@ -269,20 +269,20 @@ async function _recordLegs(conn, params, dependencies) {
 }
 
 /**
- * Registra uma transferência grande em `audit_logs` — o mesmo lugar que
- * `admin-service.auditLog` escreve, para a staff olhar dinheiro e ações de
- * staff no mesmo lugar. Não cria tabela nova: `gold_transactions` já tem a
- * história completa (Achado 1), o que faltava era marcar o que passa de um
- * limiar configurável (`economy.largeTransactionThreshold`) num lugar que já
- * é rotina de auditoria olhar, sem precisar somar o ledger toda vez.
+ * Records a large transfer in `audit_logs` — the same place
+ * `admin-service.auditLog` writes to, so staff can look at money and staff
+ * actions in one place. It does not create a new table: `gold_transactions` already has the
+ * full history (Finding 1); what was missing was flagging whatever crosses a
+ * configurable threshold (`economy.largeTransactionThreshold`) in a place auditing
+ * already routinely looks at, without having to sum the ledger every time.
  *
- * Escreve na MESMA `conn`/transação do movimento — atômico com o ledger, sem
- * janela entre "moveu dinheiro" e "registrou que moveu muito dinheiro". Mas o
- * `INSERT` em si nunca propaga erro: uma falha aqui não pode reverter uma
- * transferência de dinheiro válida, mesma filosofia de `_applyToClient` em
- * `transaction-service.js` ("BD já está correto, o resto é melhor-esforço").
+ * Writes on the SAME `conn`/transaction as the movement — atomic with the ledger, with no
+ * window between "moved money" and "recorded that it moved a lot of money". But the
+ * `INSERT` itself never propagates errors: a failure here must not roll back a
+ * valid money transfer, same philosophy as `_applyToClient` in
+ * `transaction-service.js` ("the DB is already correct, the rest is best-effort").
  *
- * @param {object} conn conexão com transação ativa
+ * @param {object} conn connection with an active transaction
  * @param {object} params
  * @param {object} [dependencies]
  */
@@ -307,20 +307,20 @@ async function _auditLargeTransfer(conn, params, dependencies = {}) {
       ]
     );
   } catch (err) {
-    logger.error(`[economy] Falha ao gravar audit_logs para transferência grande ${params.transferId} (transferência já aplicada, só a auditoria falhou): ${err.message}`);
+    logger.error(`[economy] Failed to write audit_logs for large transfer ${params.transferId} (transfer already applied, only the audit failed): ${err.message}`);
   }
 }
 
 /**
- * Procura um movimento já gravado com esta chave, **dentro** da transação.
+ * Looks for a movement already written with this key, **inside** the transaction.
  *
- * Achado 6: as funções públicas do transaction-service consultam a
- * idempotência numa conexão do pool e só depois abrem a transação. Duas
- * chamadas concorrentes leem vazio, ambas seguem, e a `UNIQUE` derruba a
- * segunda — resultado correto, mensagem errada. Aqui a leitura acontece sob a
- * mesma transação e com `FOR UPDATE`, então a segunda chamada **espera** e
- * enxerga a primeira. É o padrão que `market-stalls`, `regional-market` e
- * `institutional-treasury` já usam.
+ * Finding 6: transaction-service's public functions check
+ * idempotency on a pool connection and only then open the transaction. Two
+ * concurrent calls read nothing, both proceed, and the `UNIQUE` knocks down the
+ * second — correct result, wrong message. Here the read happens under the
+ * same transaction and with `FOR UPDATE`, so the second call **waits** and
+ * sees the first. It is the pattern `market-stalls`, `regional-market` and
+ * `institutional-treasury` already use.
  */
 async function _findReplay(conn, idempotencyKey) {
   const [rows] = await conn.query(
@@ -341,29 +341,29 @@ function replayResult(row) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Transferência
+// Transfer
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Move septims de uma conta para outra, **dentro da transação do chamador**.
+ * Moves septims from one account to another, **inside the caller's transaction**.
  *
- * ─── Contrato ──────────────────────────────────────────────────────────────
+ * ─── Contract ──────────────────────────────────────────────────────────────
  *
- * - Quem chama abre, commita e faz rollback. Esta função não faz nenhuma das três.
- * - Recusa de regra devolve `{ok:false, code}` **sem ter escrito nada** — só
- *   travas foram tomadas, então commitar ou dar rollback é seguro.
- * - Falha de infraestrutura **lança**. Ela não vira `ok:false`, e essa é a
- *   distinção que o Achado 7 existe para restaurar: hoje um timeout de banco
- *   vira multa não paga e mandado de prisão em `governance-service`.
+ * - The caller opens, commits and rolls back. This function does none of the three.
+ * - A rule refusal returns `{ok:false, code}` **having written nothing** — only
+ *   locks were taken, so committing or rolling back is safe.
+ * - An infrastructure failure **throws**. It does not become `ok:false`, and that is the
+ *   distinction Finding 7 exists to restore: today a DB timeout
+ *   becomes an unpaid fine and an arrest warrant in `governance-service`.
  *
- * @param {object} conn conexão com transação ativa
+ * @param {object} conn connection with an active transaction
  * @param {object} request
  * @param {{type:string, ref:string|number}} request.from
  * @param {{type:string, ref:string|number}} request.to
  * @param {number|string} request.amount
  * @param {string} request.reason
  * @param {string} [request.module]
- * @param {number} [request.actorCharacterId] quem pediu o movimento, quando não é o titular
+ * @param {number} [request.actorCharacterId] who asked for the movement, when it is not the holder
  * @param {string} [request.idempotencyKey]
  */
 async function transferInTransaction(conn, request, dependencies = {}) {
@@ -378,10 +378,10 @@ async function transferInTransaction(conn, request, dependencies = {}) {
   if (!amount) return { ok: false, code: 'invalid_amount' };
   if (!reason) return { ok: false, code: 'invalid_reason' };
   if (!idempotencyKey) return { ok: false, code: 'invalid_idempotency_key' };
-  // Transferir para si mesmo grava duas linhas que se anulam e um `transfer_id`
-  // que não conta história nenhuma. É sempre erro de cálculo do chamador.
+  // Transferring to yourself writes two rows that cancel out and a `transfer_id`
+  // that tells no story at all. It is always a calculation error by the caller.
   if (sameAccount(from, to)) return { ok: false, code: 'same_account' };
-  // Ouro nascendo e morrendo na mesma linha não é transferência.
+  // Gold being born and dying on the same row is not a transfer.
   if (from.type === SYSTEM_TYPE && to.type === SYSTEM_TYPE) return { ok: false, code: 'system_to_system' };
 
   const prior = await _findReplay(conn, idempotencyKey);
@@ -419,9 +419,9 @@ async function transferInTransaction(conn, request, dependencies = {}) {
 }
 
 /**
- * Move septims abrindo a própria transação. Use quando a operação for isolada;
- * use `transferInTransaction` quando ela precisar commitar junto com outra coisa
- * (compra em barraca, liquidação de contrato).
+ * Moves septims opening its own transaction. Use it when the operation is isolated;
+ * use `transferInTransaction` when it must commit together with something else
+ * (stall purchase, contract settlement).
  */
 async function transfer(request, dependencies = {}) {
   const db = dependencies.db || database;
@@ -442,7 +442,7 @@ async function transfer(request, dependencies = {}) {
 }
 
 async function _safeRollback(conn) {
-  try { await conn.rollback(); } catch { /* preserva o erro original */ }
+  try { await conn.rollback(); } catch { /* keep the original error */ }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -450,15 +450,15 @@ async function _safeRollback(conn) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Trava valor de um titular numa conta de escrow.
+ * Locks a holder's value in an escrow account.
  *
- * ─── Trava no post, não na entrega ─────────────────────────────────────────
+ * ─── Locked at posting, not at delivery ────────────────────────────────────
  *
- * O valor sai do bolso de quem promete **no momento da promessa**. Uma falha
- * aqui produz **sem escrow e sem contrato**, nunca um contrato que ninguém pode
- * pagar. É a mesma filosofia fail-closed do `server-options`, e é o conceito
- * que o Mereth descreve (ver `SKYMP_ECOSYSTEM_DEEP_DIVE.md` §4 — sem licença e
- * sem código público: só a ideia foi usada).
+ * The value leaves the promiser's pocket **at the moment of the promise**. A failure
+ * here yields **no escrow and no contract**, never a contract nobody can
+ * pay. It is the same fail-closed philosophy as `server-options`, and it is the concept
+ * Mereth describes (see `SKYMP_ECOSYSTEM_DEEP_DIVE.md` §4 — no license and
+ * no public code: only the idea was used).
  */
 async function openEscrowInTransaction(conn, request, dependencies = {}) {
   const funder = normalizeAccount(request?.funder);
@@ -485,9 +485,9 @@ async function openEscrowInTransaction(conn, request, dependencies = {}) {
     };
   }
 
-  // A conta de escrow nasce com saldo zero e é creditada pela transferência —
-  // assim o valor travado tem as mesmas duas pernas de ledger que qualquer
-  // outro movimento, em vez de aparecer por `INSERT`.
+  // The escrow account is born with a zero balance and is credited by the transfer —
+  // that way the locked value has the same two ledger legs as any
+  // other movement, instead of appearing through an `INSERT`.
   const escrowId = uuid();
   await conn.query(
     `INSERT INTO economy_escrow (escrow_id, purpose, funder_type, funder_ref, balance, status, idempotency_key)
@@ -510,12 +510,12 @@ async function openEscrowInTransaction(conn, request, dependencies = {}) {
 }
 
 /**
- * Libera o escrow para um beneficiário e o fecha.
+ * Releases the escrow to a beneficiary and closes it.
  *
- * `status` vira `released` (ou `refunded`, quando o beneficiário é o próprio
- * financiador). A transição só acontece a partir de `held` — liberar duas vezes
- * é o exploit óbvio de escrow, e o `FOR UPDATE` mais a checagem de status o
- * fecham dentro da mesma transação.
+ * `status` becomes `released` (or `refunded`, when the beneficiary is the
+ * funder themselves). The transition only happens from `held` — releasing twice
+ * is the obvious escrow exploit, and the `FOR UPDATE` plus the status check
+ * close it within the same transaction.
  */
 async function closeEscrowInTransaction(conn, request, dependencies = {}) {
   const beneficiary = normalizeAccount(request?.beneficiary);
@@ -535,14 +535,14 @@ async function closeEscrowInTransaction(conn, request, dependencies = {}) {
   const escrow = rows[0];
   if (!escrow) return { ok: false, code: 'escrow_not_found' };
 
-  // ─── Replay antes de status ────────────────────────────────────────────────
+  // ─── Replay before status ─────────────────────────────────────────────────
   //
-  // A ordem importa e o inverso é um bug: um escrow já liberado tem
-  // `status = 'released'`, então checar o status primeiro faria um **retry
-  // legítimo** (mesma chave, reenviado por timeout de rede) receber
-  // `escrow_not_held` — o Achado 7 renascendo dentro da correção dele. O
-  // ledger é quem sabe se esta chave já moveu dinheiro; o status só sabe que
-  // *alguma* liberação aconteceu.
+  // The order matters and the reverse is a bug: an already released escrow has
+  // `status = 'released'`, so checking the status first would make a **legitimate
+  // retry** (same key, resent because of a network timeout) receive
+  // `escrow_not_held` — Finding 7 reborn inside its own fix. The
+  // ledger is what knows whether this key already moved money; the status only knows that
+  // *some* release happened.
   const prior = await _findReplay(conn, idempotencyKey);
   if (prior) {
     return {
@@ -613,19 +613,19 @@ async function _withTransaction(dependencies, fn) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ajuste de staff
+// Staff adjustment
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * `economy.adjust` do briefing §12: staff cria ou destrói septims contra
- * `system`, com motivo e ator obrigatórios.
+ * `economy.adjust` from briefing §12: staff create or destroy septims against
+ * `system`, with a mandatory reason and actor.
  *
- * **Este arquivo não checa permissão.** Quem chama já sabe quem é a staff e com
- * qual cargo — duplicar a checagem aqui criaria dois lugares para mantê-la em
- * dia. O que este arquivo garante é que o ajuste é **impossível de fazer sem
- * rastro**: `actorCharacterId` e `reason` são obrigatórios, e o outro lado do
- * movimento é sempre `system:staff_adjust`, então um `SELECT` no ledger lista
- * todo ouro que a staff criou ou destruiu.
+ * **This file does not check permissions.** The caller already knows who the staff member is and with
+ * which role — duplicating the check here would create two places to keep it
+ * up to date. What this file guarantees is that the adjustment is **impossible to make without a
+ * trail**: `actorCharacterId` and `reason` are mandatory, and the other side of the
+ * movement is always `system:staff_adjust`, so a `SELECT` on the ledger lists
+ * all the gold staff created or destroyed.
  */
 async function adjust(request, dependencies = {}) {
   const target = normalizeAccount(request?.target);
@@ -673,15 +673,15 @@ async function getBalance(accountRequest, dependencies = {}) {
 }
 
 /**
- * Confere o saldo guardado contra a soma dos deltas do ledger.
+ * Checks the stored balance against the sum of the ledger's deltas.
  *
- * Isto é o que a §3 do briefing quer dizer com "saldo pode ser snapshot, ledger
- * é histórico" — e é o que hoje é **impossível** para tesouro, porque imposto
- * entra com `UPDATE` solto e não deixa linha (Achado 2).
+ * This is what briefing §3 means by "a balance can be a snapshot, the ledger
+ * is history" — and it is what is **impossible** today for treasuries, because tax
+ * comes in through a loose `UPDATE` and leaves no row (Finding 2).
  *
- * Só é conclusivo para contas cujo saldo nasceu depois da migration v15.
- * `characters.gold` tem histórico anterior ao ledger e vai divergir por
- * construção — por isso `ledgerSum` é devolvido junto, e não só o veredito.
+ * It is only conclusive for accounts whose balance was born after migration v15.
+ * `characters.gold` has history from before the ledger and will diverge by
+ * construction — that is why `ledgerSum` is returned along with it, and not just the verdict.
  */
 async function reconcile(accountRequest, dependencies = {}) {
   const balance = await getBalance(accountRequest, dependencies);
@@ -712,7 +712,7 @@ module.exports = {
   getBalance,
   reconcile,
 
-  // Expostos para os serviços de domínio (contratos, dívida) e para teste.
+  // Exposed for the domain services (contracts, debt) and for tests.
   normalizeAccount,
   normalizeAmount,
   normalizeIdempotencyKey,

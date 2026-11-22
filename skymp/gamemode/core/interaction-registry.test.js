@@ -45,14 +45,14 @@ describe('interaction-registry — registro', () => {
     registry.register(descriptor({ module: 'primeiro' }));
     assert.throws(
       () => registry.register(descriptor({ module: 'segundo' })),
-      /ja registrado pelo modulo 'primeiro'/
+      /already registered by module 'primeiro'/
     );
     assert.equal(registry.get('test.action').module, 'primeiro', 'o primeiro sobrevive');
   });
 
   it('recusa id fora do formato <modulo>.<acao>', () => {
     for (const id of ['semponto', 'Maiuscula.acao', 'modulo.', '.acao', 'a.b.c', 'guard search', '']) {
-      assert.throws(() => registry.register(descriptor({ id })), /id invalido/, `aceitou '${id}'`);
+      assert.throws(() => registry.register(descriptor({ id })), /invalid id/, `aceitou '${id}'`);
     }
   });
 
@@ -66,7 +66,7 @@ describe('interaction-registry — registro', () => {
   });
 
   it('recusa target desconhecido e aceita todo o vocabulário de TARGET_TYPES', () => {
-    assert.throws(() => registry.register(descriptor({ target: 'dragao' })), /desconhecido/);
+    assert.throws(() => registry.register(descriptor({ target: 'dragao' })), /unknown/);
     for (const [i, target] of Object.values(TARGET_TYPES).entries()) {
       registry.register(descriptor({ id: `test.a${i}`, target }));
     }
@@ -74,16 +74,16 @@ describe('interaction-registry — registro', () => {
   });
 
   it('recusa descritor sem execute, sem module ou com guardas que não são função', () => {
-    assert.throws(() => registry.register(descriptor({ execute: undefined })), /sem funcao execute/);
-    assert.throws(() => registry.register(descriptor({ module: undefined })), /sem 'module'/);
-    assert.throws(() => registry.register(descriptor({ canSee: 'sim' })), /canSee deve ser funcao/);
-    assert.throws(() => registry.register(descriptor({ canExecute: 42 })), /canExecute deve ser funcao/);
+    assert.throws(() => registry.register(descriptor({ execute: undefined })), /no execute function/);
+    assert.throws(() => registry.register(descriptor({ module: undefined })), /no 'module'/);
+    assert.throws(() => registry.register(descriptor({ canSee: 'sim' })), /canSee must be a function/);
+    assert.throws(() => registry.register(descriptor({ canExecute: 42 })), /canExecute must be a function/);
   });
 
   it('recusa distance não positiva e audit desconhecido', () => {
     assert.throws(() => registry.register(descriptor({ distance: 0 })), /distance/);
     assert.throws(() => registry.register(descriptor({ distance: -1 })), /distance/);
-    assert.throws(() => registry.register(descriptor({ audit: 'DEBUG' })), /audit 'DEBUG' desconhecido/);
+    assert.throws(() => registry.register(descriptor({ audit: 'DEBUG' })), /unknown audit 'DEBUG'/);
   });
 
   // Schema errado é bug de quem programa. O lugar de descobri-lo é o boot, e
@@ -91,13 +91,13 @@ describe('interaction-registry — registro', () => {
   it('recusa schema malformado no REGISTRO, não no primeiro clique', () => {
     assert.throws(
       () => registry.register(descriptor({ schema: { valor: { type: 'money' } } })),
-      /tipo 'money'/
+      /type 'money'/
     );
     assert.throws(
       () => registry.register(descriptor({ schema: { tipo: { type: 'enum' } } })),
-      /enum 'tipo' sem 'values'/
+      /enum field 'tipo' has no 'values'/
     );
-    assert.throws(() => registry.register(descriptor({ schema: [] })), /schema deve ser um objeto/);
+    assert.throws(() => registry.register(descriptor({ schema: [] })), /schema must be an object/);
   });
 });
 

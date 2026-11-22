@@ -1,68 +1,68 @@
 /**
  * core/crime-service.js
  *
- * Fundação do Sistema de Crime e Proveniência (Tarefa 12). "Ladino" não é uma
- * profissão neste projeto — é uma identidade emergente das ações registradas
- * aqui. O pilar técnico é o inventário híbrido: um item comum continua
- * fungível em `character_inventory` (pilha por `base_id`); um item roubado sai
- * da pilha na hora do roubo e vira uma linha própria em `item_instances`, com
- * UUID e histórico de posse — ver `migration-v21-crime-provenance.sql`.
+ * Foundation of the Crime and Provenance System (Task 12). "Thief" is not a
+ * profession in this project — it is an identity that emerges from the actions recorded
+ * here. The technical pillar is the hybrid inventory: an ordinary item stays
+ * fungible in `character_inventory` (stacked by `base_id`); a stolen item leaves
+ * the stack at the moment of the theft and becomes its own row in `item_instances`, with a
+ * UUID and ownership history — see `migration-v21-crime-provenance.sql`.
  *
- * ─── Escopo da fundação (Tarefa 12, 21/08/2026) ─────────────────────────────
+ * ─── Scope of the foundation (Task 12, 2026-08-21) ──────────────────────────
  *
- * Migration + motor de regra (hot item, anti-combat-log, restituição) +
+ * Migration + rule engine (hot item, anti-combat-log, restitution) +
  * `audit_logs.is_crime`.
  *
- * ─── Escopo da Tarefa 13 (Interações Criminais e Autoridade de Guarda) ──────
+ * ─── Scope of Task 13 (Criminal Interactions and Guard Authority) ───────────
  *
- * `crime.surrender` (SELF) e `crime.rob` (PLAYER) no Interaction Framework —
- * roubo só é permitido contra alvo rendido (`character-state.SURRENDERED`,
- * setado por `crime.surrender`) ou incapacitado (`RESTRAINED`/`DOWNED`, já
- * existentes). `getStolenInstancesHeldBy` resolve `original_owner_id` para
- * nome de personagem — é o que `governance-service.showInventorySnapshot`
- * chama para a Revista Institucional dizer "este anel pertence a
- * Balgruuf", nunca "ele é ladrão" (nenhum oráculo). `markItemConfiscated`
- * implementa a Lógica de Evidência: o item confiscado perde `hot` mas
- * continua `stolen` até ser restituído — nunca vira `clean` por confisco
- * sozinho.
+ * `crime.surrender` (SELF) and `crime.rob` (PLAYER) in the Interaction Framework —
+ * robbery is only allowed against a target who surrendered (`character-state.SURRENDERED`,
+ * set by `crime.surrender`) or is incapacitated (`RESTRAINED`/`DOWNED`, which already
+ * exist). `getStolenInstancesHeldBy` resolves `original_owner_id` to a
+ * character name — it is what `governance-service.showInventorySnapshot`
+ * calls so the Institutional Search says "this ring belongs to
+ * Balgruuf", never "he is a thief" (no oracle). `markItemConfiscated`
+ * implements the Evidence Logic: a confiscated item loses `hot` but
+ * stays `stolen` until it is restituted — it never becomes `clean` through confiscation
+ * alone.
  *
- * `governance-service.js` já tinha `requestSearch`/`approveSearch`/
- * `confiscateItem` e o cargo `guard` com `GUARD_SEARCH`/`GUARD_CONFISCATE` —
- * a autorização "só cargos aprovados disparam a revista" já existia antes
- * desta tarefa; o que faltava era a revista **saber sobre proveniência**.
+ * `governance-service.js` already had `requestSearch`/`approveSearch`/
+ * `confiscateItem` and the `guard` post with `GUARD_SEARCH`/`GUARD_CONFISCATE` —
+ * the authorization "only approved posts trigger a search" already existed before
+ * this task; what was missing was the search **knowing about provenance**.
  *
- * ─── Animação de rendição: gap conhecido ────────────────────────────────────
+ * ─── Surrender animation: a known gap ───────────────────────────────────────
  *
- * Não existe `animation-service.js` neste projeto. `crime.surrender` reusa o
- * mesmo primitivo Papyrus que `admin-service.playAnimation` já usa
- * (`Actor.PlayIdle`), com um nome de idle que é **suposição, não validada em
- * jogo** — mesma ressalva de `core/interaction-targets.js` sobre
- * `locationalData`. A mudança de estado (`SURRENDERED`) é o que
- * `crime.rob` de fato verifica; a animação é só o sinal visual, best-effort
- * e nunca bloqueia a rendição se falhar.
+ * There is no `animation-service.js` in this project. `crime.surrender` reuses the
+ * same Papyrus primitive `admin-service.playAnimation` already uses
+ * (`Actor.PlayIdle`), with an idle name that is an **assumption, not validated in
+ * game** — same caveat as `core/interaction-targets.js` about
+ * `locationalData`. The state change (`SURRENDERED`) is what
+ * `crime.rob` actually checks; the animation is only the visual signal, best-effort,
+ * and it never blocks the surrender if it fails.
  *
- * ─── Por que só item roubado vira instância (não "valor alto") ─────────────
+ * ─── Why only stolen items become instances (not "high value") ─────────────
  *
- * Decisão do dono do produto: instanciar por valor exigiria uma tabela de
- * preço por `base_id` confiável, que este projeto não tem hoje. Instanciação
- * lazy — só no momento do roubo — mantém todo item nunca roubado 100% na
- * pilha comum, com custo zero.
+ * Product owner's decision: instancing by value would require a reliable price
+ * table per `base_id`, which this project does not have today. Lazy
+ * instancing — only at the moment of the theft — keeps every never-stolen item 100% in the
+ * common stack, at zero cost.
  *
- * ─── Atomicidade ─────────────────────────────────────────────────────────
+ * ─── Atomicity ───────────────────────────────────────────────────────────
  *
- * `markItemStolen` e a restituição usam as primitivas `tx.*` de
- * `transaction-service.js` (mesmo contrato que `depot-service.js` já segue):
- * uma única transação SQL move a posse física E marca a proveniência. Nunca
- * duas transações separadas para a mesma operação de roubo.
+ * `markItemStolen` and restitution use the `tx.*` primitives from
+ * `transaction-service.js` (same contract `depot-service.js` already follows):
+ * a single SQL transaction moves physical ownership AND marks provenance. Never
+ * two separate transactions for the same theft operation.
  *
- * ─── Restituição Técnica ────────────────────────────────────────────────────
+ * ─── Technical Restitution ──────────────────────────────────────────────────
  *
- * Reusa `core/depot-service.js` (decisão do dono do produto, 21/08/2026): o
- * item volta para o depósito do dono original no hold onde o roubo aconteceu
- * (`item_instances.last_hold_id`), não para um mecanismo de devolução novo.
- * Se o módulo `depot` estiver desligado, a restituição fica pendente e é
- * tentada de novo na próxima varredura — nunca falha o boot do `crime` por
- * causa disso (dependência opcional, não obrigatória).
+ * It reuses `core/depot-service.js` (product owner's decision, 2026-08-21): the
+ * item goes back to the original owner's depot in the hold where the theft happened
+ * (`item_instances.last_hold_id`), not to a new return mechanism.
+ * If the `depot` module is off, the restitution stays pending and is
+ * retried on the next sweep — it never fails the `crime` boot because
+ * of that (optional dependency, not a required one).
  */
 
 'use strict';
@@ -80,22 +80,22 @@ const { actorRef } = require('./papyrus');
 
 const MODULE_ID = 'crime';
 
-/** Estados de `item_instances.status`. */
+/** States of `item_instances.status`. */
 const STATUS = Object.freeze({ HOT: 'hot', STOLEN: 'stolen', CLEAN: 'clean' });
 
 /**
- * Alcance de `crime.rob` — roubo é contato próximo, não uma ação a
- * distância. Constante simples (geometria, não balanceamento), mesmo
- * critério de `DEPOT_INTERACT_RANGE` em `core/depot-service.js`.
+ * Range of `crime.rob` — robbery is close contact, not a ranged
+ * action. A plain constant (geometry, not balancing), same
+ * criterion as `DEPOT_INTERACT_RANGE` in `core/depot-service.js`.
  */
 const ROB_RANGE = 150;
 
 /**
- * [DOC] Nome de idle tocado em `crime.surrender`, via o mesmo primitivo que
- * `admin-service.playAnimation` usa (`Actor.PlayIdle`). Suposto a partir de
- * convenções comuns de idle vanilla de "mãos ao alto/rendição" — **não
- * validado em jogo neste projeto**. Nunca bloqueia a rendição se a chamada
- * falhar (ver `_applySurrenderAnimation`).
+ * [DOC] Idle name played in `crime.surrender`, via the same primitive
+ * `admin-service.playAnimation` uses (`Actor.PlayIdle`). Assumed from
+ * common conventions for vanilla "hands up/surrender" idles — **not
+ * validated in game in this project**. It never blocks the surrender if the call
+ * fails (see `_applySurrenderAnimation`).
  */
 const SURRENDER_IDLE = 'IdleHandsForward';
 
@@ -128,8 +128,8 @@ function _isPositiveInt(v) {
 function _appendProvenance(existingJson, entry) {
   let list = [];
   if (existingJson) {
-    // mysql2 já devolve JSON parseado quando a coluna é JSON; string é o caso
-    // de teste com stub de banco puro.
+    // mysql2 already returns parsed JSON when the column is JSON; a string is the
+    // test case with a plain DB stub.
     list = typeof existingJson === 'string' ? JSON.parse(existingJson) : existingJson;
   }
   return [...list, entry];
@@ -142,9 +142,9 @@ async function _resolveAccountId(conn, characterId) {
 }
 
 /**
- * Grava em `audit_logs` com `is_crime=1`. Toda transferência de item
- * instanciado passa por aqui — objetivo 5 do brief. Roda dentro da MESMA
- * transação `conn` do movimento de posse, nunca depois do commit.
+ * Writes to `audit_logs` with `is_crime=1`. Every transfer of an
+ * instanced item goes through here — objective 5 of the brief. It runs inside the SAME
+ * `conn` transaction as the ownership move, never after the commit.
  */
 async function _recordCrimeAudit(conn, { action, actorCharacterId, targetCharacterId, itemInstanceId, details }) {
   const actorAccountId = await _resolveAccountId(conn, actorCharacterId);
@@ -161,18 +161,18 @@ async function _recordCrimeAudit(conn, { action, actorCharacterId, targetCharact
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Marca 1 unidade de `baseId` como roubada: transfere a posse física de
- * `victimCharacterId` para `thiefCharacterId` e cria (ou atualiza, em caso de
- * refurto) a linha de `item_instances` — tudo em uma única transação SQL.
+ * Marks 1 unit of `baseId` as stolen: transfers physical ownership from
+ * `victimCharacterId` to `thiefCharacterId` and creates (or updates, in the case of a
+ * re-theft) the `item_instances` row — all in a single SQL transaction.
  *
  * @param {object} opts
- * @param {number} [opts.victimActorId] Actor SkyMP da vítima, para aplicar no cliente
+ * @param {number} [opts.victimActorId] the victim's SkyMP actor, to apply on the client
  * @param {number} opts.victimCharacterId
- * @param {number} [opts.thiefActorId] Actor SkyMP do ladrão, para aplicar no cliente
+ * @param {number} [opts.thiefActorId] the thief's SkyMP actor, to apply on the client
  * @param {number} opts.thiefCharacterId
- * @param {number} opts.baseId FormID nativo do item roubado
- * @param {string} opts.holdId Hold onde o roubo ocorreu (usado pela Restituição Técnica)
- * @param {string} [opts.reason] Motivo/contexto do roubo (padrão: 'crime_theft')
+ * @param {number} opts.baseId native FormID of the stolen item
+ * @param {string} opts.holdId Hold where the theft happened (used by Technical Restitution)
+ * @param {string} [opts.reason] reason/context of the theft (default: 'crime_theft')
  * @param {object} [dependencies]
  */
 async function markItemStolen(opts, dependencies = {}) {
@@ -194,19 +194,19 @@ async function markItemStolen(opts, dependencies = {}) {
   try {
     await conn.beginTransaction();
 
-    // Mesma primitiva que qualquer outra transferência de item deste projeto
-    // usa (`depot-service.depositItem`, `transfer` de trade) — nenhuma segunda
-    // implementação de "como mexer em item". `applyStackDelta` já recusa (via
-    // throw, capturado abaixo) se a vítima não tiver o item de verdade.
+    // The same primitive every other item transfer in this project
+    // uses (`depot-service.depositItem`, trade's `transfer`) — no second
+    // implementation of "how to touch items". `applyStackDelta` already refuses (via
+    // throw, caught below) if the victim does not really have the item.
     await deps.tx.applyStackDelta(conn, 'character_inventory', victimCharacterId, baseId, -1);
     await deps.tx.applyStackDelta(conn, 'character_inventory', thiefCharacterId, baseId, 1);
     await deps.tx.recordInventoryLedger(conn, { characterId: victimCharacterId, baseId, delta: -1, reason, module: MODULE_ID });
     await deps.tx.recordInventoryLedger(conn, { characterId: thiefCharacterId, baseId, delta: 1, reason, module: MODULE_ID });
 
-    // Refurto: o item já era uma instância rastreada (roubado de outro
-    // ladrão). Atualiza a MESMA linha — `original_owner_id` nunca muda depois
-    // da primeira vez que o item entra em `item_instances`, senão a
-    // proveniência perde o dono legítimo original.
+    // Re-theft: the item was already a tracked instance (stolen from another
+    // thief). Updates the SAME row — `original_owner_id` never changes after
+    // the first time the item enters `item_instances`, otherwise
+    // provenance loses the original legitimate owner.
     const [existing] = await conn.query(
       `SELECT id, provenance_data FROM item_instances
         WHERE base_id = ? AND current_owner_id = ? AND status IN ('hot', 'stolen') FOR UPDATE`,
@@ -249,18 +249,18 @@ async function markItemStolen(opts, dependencies = {}) {
     deps.tx.applyToClient(victimActorId, baseId, -1);
     deps.tx.applyToClient(thiefActorId, baseId, 1);
 
-    deps.logger.log(`[crime] roubo: item=0x${baseId.toString(16)} victima=${victimCharacterId} ladrao=${thiefCharacterId} instancia=${instanceId}`);
+    deps.logger.log(`[crime] theft: item=0x${baseId.toString(16)} victim=${victimCharacterId} thief=${thiefCharacterId} instance=${instanceId}`);
     return { ok: true, data: { instanceId } };
   } catch (err) {
     await conn.rollback();
-    deps.logger.error('[crime] markItemStolen falhou:', err.message);
+    deps.logger.error('[crime] markItemStolen failed:', err.message);
     return { ok: false, code: 'error', error: err.message };
   } finally {
     conn.release();
   }
 }
 
-/** Lê a instância ativa de um item, se houver. */
+/** Reads an item's active instance, if there is one. */
 async function getInstance(instanceId, dependencies = {}) {
   const deps = _deps(dependencies);
   const rows = await deps.db.query('SELECT * FROM item_instances WHERE id = ?', [instanceId]);
@@ -268,15 +268,15 @@ async function getInstance(instanceId, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Proveniência para a Revista Institucional (Tarefa 13)
+// Provenance for the Institutional Search (Task 13)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Itens que `characterId` carrega e que têm proveniência suja (`hot` ou
- * `stolen`), com o nome do dono original já resolvido — nunca um
- * `characterId` cru. É o que faz a UI de revista dizer "Este anel pertence a
- * Balgruuf Pedra-Cinzenta!" em vez de "ele é ladrão": o veredito é do
- * jogador que lê o nome, não do servidor rotulando ninguém.
+ * Items `characterId` is carrying that have dirty provenance (`hot` or
+ * `stolen`), with the original owner's name already resolved — never a raw
+ * `characterId`. It is what makes the search UI say "This ring belongs to
+ * Balgruuf the Greater!" instead of "he is a thief": the verdict belongs to the
+ * player reading the name, not to the server labeling anyone.
  *
  * @param {number} characterId
  * @param {object} [dependencies]
@@ -305,27 +305,27 @@ async function getStolenInstancesHeldBy(characterId, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Evidência: confisco (Tarefa 13)
+// Evidence: confiscation (Task 13)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Marca 1 instância confiscada: perde `hot` (deixa de contar como "roubo
- * recente" para fins de bounty/alerta) mas continua `stolen` — nunca vira
- * `clean` por confisco sozinho. Só a Restituição Técnica (`sweep`/
- * `_restitute`, de volta ao dono original) ou uma devolução equivalente pode
- * limpar a proveniência.
+ * Marks 1 instance as confiscated: it loses `hot` (stops counting as a "recent
+ * theft" for bounty/alert purposes) but stays `stolen` — it never becomes
+ * `clean` through confiscation alone. Only Technical Restitution (`sweep`/
+ * `_restitute`, back to the original owner) or an equivalent return can
+ * clear the provenance.
  *
- * Não move item nenhum: `governance-service.confiscateItem` já chamou
- * `inventory.removeItem` antes disso (é o que tira o item fisicamente do
- * personagem); aqui é só a atualização de metadados de proveniência. Não
- * grava em `confiscations` — essa tabela já existe desde
- * `migration-v3-governance.sql` e `governance-service.js` grava nela
- * diretamente; `migration-v22-crime-interactions.sql` só ADICIONA a coluna
- * `item_instance_id` a ela, pra ligar o registro de evidência de volta à
- * instância rastreada.
+ * It moves no items: `governance-service.confiscateItem` already called
+ * `inventory.removeItem` before this (that is what physically takes the item from the
+ * character); here it is only the provenance metadata update. It does not
+ * write to `confiscations` — that table exists since
+ * `migration-v3-governance.sql` and `governance-service.js` writes to it
+ * directly; `migration-v22-crime-interactions.sql` only ADDS the
+ * `item_instance_id` column to it, to link the evidence record back to the
+ * tracked instance.
  *
  * @param {object} opts
- * @param {number} opts.characterId de quem o item foi confiscado
+ * @param {number} opts.characterId who the item was confiscated from
  * @param {number} opts.baseId
  * @param {object} [dependencies]
  */
@@ -347,9 +347,9 @@ async function markItemConfiscated(opts, dependencies = {}) {
     );
     if (rows.length === 0) {
       await conn.rollback();
-      // Não é erro: a maioria dos itens confiscados nunca foi roubada, e o
-      // confisco comum (`governance-service.confiscateItem`) continua
-      // funcionando sem instância nenhuma para atualizar.
+      // Not an error: most confiscated items were never stolen, and
+      // ordinary confiscation (`governance-service.confiscateItem`) keeps
+      // working without any instance to update.
       return { ok: false, code: 'no_instance' };
     }
 
@@ -370,7 +370,7 @@ async function markItemConfiscated(opts, dependencies = {}) {
     return { ok: true, data: { instanceId: instance.id } };
   } catch (err) {
     await conn.rollback();
-    deps.logger.error('[crime] markItemConfiscated falhou:', err.message);
+    deps.logger.error('[crime] markItemConfiscated failed:', err.message);
     return { ok: false, code: 'error', error: err.message };
   } finally {
     conn.release();
@@ -382,14 +382,14 @@ async function markItemConfiscated(opts, dependencies = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Assinante de `commands.onCharacterRemoved`. Cria um `session_crime_alert`
- * para cada item 'hot' que o personagem carregava ao desconectar — a
- * varredura (`sweep`) decide depois se ele voltou a tempo ou se o item é
- * restituído.
+ * Subscriber of `commands.onCharacterRemoved`. Creates a `session_crime_alert`
+ * for each 'hot' item the character was carrying when they disconnected — the
+ * sweep (`sweep`) later decides whether they came back in time or the item is
+ * restituted.
  *
  * @param {number} actorId
- * @param {{characterId: number}} character forma exata que `commands.js`
- *   passa aos assinantes de `onCharacterRemoved` (campo é `characterId`, não `id`)
+ * @param {{characterId: number}} character the exact shape `commands.js`
+ *   passes to `onCharacterRemoved` subscribers (the field is `characterId`, not `id`)
  * @param {object} [dependencies]
  */
 async function onCharacterDisconnected(actorId, character, dependencies = {}) {
@@ -410,15 +410,15 @@ async function onCharacterDisconnected(actorId, character, dependencies = {}) {
     );
   }
   if (hotItems.length > 0) {
-    deps.logger.log(`[crime] ${hotItems.length} alerta(s) de combat-log criado(s) ao desconectar personagem ${characterId}`);
+    deps.logger.log(`[crime] ${hotItems.length} combat-log alert(s) created when character ${characterId} disconnected`);
   }
 }
 
 /**
- * Devolve 1 unidade de `alert.base_id` ao dono original via `depot-service`,
- * dentro de uma única transação junto com a atualização de `item_instances`.
+ * Returns 1 unit of `alert.base_id` to the original owner via `depot-service`,
+ * inside a single transaction together with the `item_instances` update.
  * @param {{character_id:number, base_id:number, item_instance_id:string, original_owner_id:number}} alert
- * @param {object} deps já resolvidos por `_deps`
+ * @param {object} deps already resolved by `_deps`
  */
 async function _restitute(alert, deps) {
   if (!deps.moduleRegistry.isEnabled('depot')) {
@@ -429,9 +429,9 @@ async function _restitute(alert, deps) {
   const holdId = rows.length > 0 ? rows[0].last_hold_id : null;
   if (!holdId) return { ok: false, code: 'missing_hold' };
 
-  // Garante que o depósito do dono original existe (abre a própria
-  // transação curta, mesmo padrão que `depot-service.depositItem` já usa
-  // internamente) antes de travar a linha na transação principal abaixo.
+  // Makes sure the original owner's depot exists (opens its own short
+  // transaction, same pattern `depot-service.depositItem` already uses
+  // internally) before locking the row in the main transaction below.
   const depot = await deps.depot.getOrCreateDepot(alert.original_owner_id, holdId, deps);
 
   const conn = await deps.db.getConnection();
@@ -472,17 +472,17 @@ async function _restitute(alert, deps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Varredura periódica
+// Periodic sweep
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * (1) Esfria item 'hot' para 'stolen' após `crime.hotItemWindowMinutes`.
- * (2) Resolve alertas de combat-log: se o personagem já está online de novo,
- *     resolve sem restituição; se a graça (`crime.combatLogGraceMinutes`)
- *     passou e ele segue offline, restitui via `depot-service`.
+ * (1) Cools 'hot' items down to 'stolen' after `crime.hotItemWindowMinutes`.
+ * (2) Resolves combat-log alerts: if the character is already online again,
+ *     resolves without restitution; if the grace period (`crime.combatLogGraceMinutes`)
+ *     has passed and they are still offline, restitutes via `depot-service`.
  *
- * Chamada por um `setInterval` próprio (ver `initSweepTimer`), nunca a partir
- * de um evento de jogo — mesmo idioma que `market-stalls-service.expireStalls`.
+ * Called by its own `setInterval` (see `initSweepTimer`), never from
+ * a game event — same idiom as `market-stalls-service.expireStalls`.
  */
 async function sweep(dependencies = {}) {
   const deps = _deps(dependencies);
@@ -509,7 +509,7 @@ async function sweep(dependencies = {}) {
 
   let restituted = 0;
   for (const alert of pendingAlerts) {
-    // Jogador voltou antes desta varredura rodar: resolve sem restituição.
+    // The player came back before this sweep ran: resolve without restitution.
     if (deps.commands.getActiveActorByCharacterId(alert.character_id)) {
       await deps.db.query('UPDATE session_crime_alerts SET resolved = 1, resolved_at = NOW() WHERE id = ?', [alert.alert_id]);
       continue;
@@ -520,9 +520,9 @@ async function sweep(dependencies = {}) {
       restituted += 1;
       await deps.db.query('UPDATE session_crime_alerts SET resolved = 1, resolved_at = NOW() WHERE id = ?', [alert.alert_id]);
     } else {
-      // Fica pendente (`resolved=0`) — tentado de novo na próxima varredura.
-      // `depot_disabled` é o caso esperado se ninguém ligou ENABLE_DEPOT_SERVICE.
-      deps.logger.error(`[crime] restituicao adiada para alerta ${alert.alert_id}: ${result.code}`);
+      // Stays pending (`resolved=0`) — retried on the next sweep.
+      // `depot_disabled` is the expected case if nobody turned on ENABLE_DEPOT_SERVICE.
+      deps.logger.error(`[crime] restitution postponed for alert ${alert.alert_id}: ${result.code}`);
     }
   }
 
@@ -531,7 +531,7 @@ async function sweep(dependencies = {}) {
 
 let _sweepTimer = null;
 
-/** Inicia a varredura periódica. Chamado do `initialize()` do módulo. */
+/** Starts the periodic sweep. Called from the module's `initialize()`. */
 function initSweepTimer(dependencies = {}) {
   const deps = _deps(dependencies);
   const intervalSeconds = deps.serverOptions.get('crime.sweepIntervalSeconds');
@@ -539,15 +539,15 @@ function initSweepTimer(dependencies = {}) {
     try {
       const result = await sweep(dependencies);
       if (result.cooled > 0 || result.restituted > 0) {
-        deps.logger.log(`[crime] varredura: ${result.cooled} esfriado(s), ${result.restituted} restituido(s), ${result.pending} pendente(s)`);
+        deps.logger.log(`[crime] sweep: ${result.cooled} cooled, ${result.restituted} restituted, ${result.pending} pending`);
       }
     } catch (err) {
-      deps.logger.error('[crime] varredura falhou:', err.message);
+      deps.logger.error('[crime] sweep failed:', err.message);
     }
   }, intervalSeconds * 1000);
 }
 
-/** Para a varredura periódica. Chamado do `shutdown()` do módulo. */
+/** Stops the periodic sweep. Called from the module's `shutdown()`. */
 function stopSweepTimer() {
   if (_sweepTimer) {
     clearInterval(_sweepTimer);
@@ -560,9 +560,9 @@ function stopSweepTimer() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Um alvo é roubável se está rendido (voluntário, `crime.surrender`) ou
- * incapacitado (`RESTRAINED` — algemado pela guarda, ou `DOWNED` — abatido em
- * combate). Nenhum dos dois é setado por este arquivo; `crime.rob` só lê.
+ * A target can be robbed if they surrendered (voluntarily, `crime.surrender`) or are
+ * incapacitated (`RESTRAINED` — cuffed by the guard, or `DOWNED` — downed in
+ * combat). Neither is set by this file; `crime.rob` only reads them.
  */
 function _isRobbable(characterId, deps) {
   return deps.characterState.is(characterId, [
@@ -572,25 +572,25 @@ function _isRobbable(characterId, deps) {
   ]);
 }
 
-/** Best-effort: nunca lança, nunca bloqueia a rendição. Ver nota [DOC] no cabeçalho. */
+/** Best-effort: never throws, never blocks the surrender. See the [DOC] note in the header. */
 function _applySurrenderAnimation(actorId) {
   if (typeof mp === 'undefined') return;
   try {
     mp.callPapyrusFunction('method', 'Actor', 'PlayIdle', actorRef(actorId), [SURRENDER_IDLE]);
   } catch (err) {
-    console.error('[crime] animacao de rendicao falhou (ignorado):', err.message);
+    console.error('[crime] surrender animation failed (ignored):', err.message);
   }
 }
 
 /**
- * Registra `crime.surrender` (SELF) e `crime.rob` (PLAYER) no Interaction
- * Framework. Chamado do `initialize()` do módulo — precisa do framework de
- * interação já de pé (`dependencies: ['interaction']` no `phase0-basic.js`,
- * mesmo padrão de `depot-service.registerInteractions`).
+ * Registers `crime.surrender` (SELF) and `crime.rob` (PLAYER) in the Interaction
+ * Framework. Called from the module's `initialize()` — it needs the interaction
+ * framework already up (`dependencies: ['interaction']` in `phase0-basic.js`,
+ * same pattern as `depot-service.registerInteractions`).
  *
- * O resolvedor de `TARGET_TYPES.SELF` já existe (registrado por
- * `core/character-dashboard-bridge.js`, Tarefa 11) — este arquivo não
- * registra um segundo, só declara mais uma interação contra o tipo.
+ * The `TARGET_TYPES.SELF` resolver already exists (registered by
+ * `core/character-dashboard-bridge.js`, Task 11) — this file does not
+ * register a second one, it only declares one more interaction against that type.
  */
 function registerInteractions(dependencies = {}) {
   const deps = _deps(dependencies);
@@ -601,7 +601,7 @@ function registerInteractions(dependencies = {}) {
     module: MODULE_ID,
     target: interactionRegistry.TARGET_TYPES.SELF,
     section: 'crime',
-    label: 'Render-se',
+    label: 'Surrender',
     order: 10,
     audit: interactionRegistry.AUDIT_LEVELS.GAMEPLAY,
     execute: async (ctx) => {
@@ -617,21 +617,21 @@ function registerInteractions(dependencies = {}) {
     module: MODULE_ID,
     target: interactionRegistry.TARGET_TYPES.PLAYER,
     section: 'crime',
-    label: 'Roubar',
+    label: 'Rob',
     order: 20,
     distance: ROB_RANGE,
     audit: interactionRegistry.AUDIT_LEVELS.SECURITY,
     schema: {
       baseId: { type: 'formid', label: 'Item', required: true, placeholder: '0x0000000F' },
-      // Sem resolvedor de "hold pela posicao do jogador" neste projeto (ver
-      // core/interaction-targets.js, cabecalho, sobre locationalData). O
-      // cliente informa; usado só pela Restituicao Tecnica pra saber onde
-      // devolver depois — nunca afeta o roubo em si.
-      holdId: { type: 'string', label: 'Regiao atual', max: 64, default: 'unknown' }
+      // There is no "hold from the player's position" resolver in this project (see
+      // core/interaction-targets.js, header, about locationalData). The
+      // client reports it; it is only used by Technical Restitution to know where to
+      // return things later — it never affects the theft itself.
+      holdId: { type: 'string', label: 'Current region', max: 64, default: 'unknown' }
     },
-    // `canSee`/`canExecute` são o mesmo veredito: se o alvo não é roubável, a
-    // ação nem aparece no menu. `execute` confere de novo (redundante de
-    // propósito, mesmo critério do resto do pipeline).
+    // `canSee`/`canExecute` are the same verdict: if the target cannot be robbed, the
+    // action does not even show up in the menu. `execute` checks again (redundant on
+    // purpose, same criterion as the rest of the pipeline).
     canSee: async (ctx) => _isRobbable(ctx.target.characterId, deps),
     canExecute: async (ctx) => {
       const robbable = _isRobbable(ctx.target.characterId, deps);
@@ -669,7 +669,7 @@ module.exports = {
   stopSweepTimer,
   registerInteractions,
 
-  // Exposto só para teste.
+  // Exposed only for tests.
   _restitute,
   _isRobbable
 };

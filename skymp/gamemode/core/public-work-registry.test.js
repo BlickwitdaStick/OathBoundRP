@@ -24,7 +24,7 @@ describe('public-work-registry', () => {
 
   it('recusa duplicata', () => {
     registry.register(valid());
-    assert.throws(() => registry.register(valid()), /registrado duas vezes/);
+    assert.throws(() => registry.register(valid()), /registered twice/);
   });
 
   it('recusa rota sem três FormDesc reais', () => {
@@ -40,7 +40,7 @@ describe('public-work-registry', () => {
   });
 
   it('recusa origem igual ao destino e política de carga desconhecida', () => {
-    assert.throws(() => registry.register(valid({ destinationFormDesc: '101:Skyrim.esm' })), /mesma origem/);
+    assert.throws(() => registry.register(valid({ destinationFormDesc: '101:Skyrim.esm' })), /same origin/);
     assert.throws(() => registry.register(valid({ cargoPolicy: 'client_item' })), /cargoPolicy/);
   });
 });

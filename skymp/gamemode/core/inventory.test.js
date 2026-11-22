@@ -215,20 +215,20 @@ const REQ = 'req.teste.0001';
 
 describe('core/inventory-owner — vocabulário', () => {
   it('recusa tipo de dono desconhecido', () => {
-    assert.throws(() => ownerLib.owner('dragao', 1), /tipo de dono desconhecido/);
+    assert.throws(() => ownerLib.owner('dragao', 1), /unknown owner type/);
   });
 
   it('recusa origem de sistema fora da lista fechada', () => {
     // A lista fechada é o que torna "que caminhos criam item?" respondível por
     // leitura. Um rótulo novo é decisão de economia, não string solta.
-    assert.throws(() => ownerLib.system('presente_de_natal'), /origem de sistema desconhecida/);
+    assert.throws(() => ownerLib.system('presente_de_natal'), /unknown system source/);
     assert.doesNotThrow(() => ownerLib.system('craft'));
   });
 
   it('recusa ref vazio, negativo e longo demais', () => {
-    assert.throws(() => ownerLib.character(0), /ref invalido/);
-    assert.throws(() => ownerLib.character(-5), /ref invalido/);
-    assert.throws(() => ownerLib.owner('container', 'x'.repeat(65)), /ref invalido/);
+    assert.throws(() => ownerLib.character(0), /invalid ref/);
+    assert.throws(() => ownerLib.character(-5), /invalid ref/);
+    assert.throws(() => ownerLib.owner('container', 'x'.repeat(65)), /invalid ref/);
   });
 
   it('ref é sempre string, mesmo vindo número', () => {
@@ -370,7 +370,7 @@ describe('transferência entre personagens', () => {
     });
 
     assert.strictEqual(r.ok, false);
-    assert.match(r.reason, /insuficiente/i);
+    assert.match(r.reason, /insufficient/i);
     assert.strictEqual(itemDo(1, 10), 2);
     assert.strictEqual(itemDo(2, 10), 0);
     assert.strictEqual(ledger.length, 0);
@@ -641,7 +641,7 @@ describe('a primitiva de pilha valida o que o wrapper validava (auditoria §6)',
     it(`recusa delta ${nome}`, async () => {
       await assert.rejects(
         () => transactionService.tx.applyStackDelta(conexaoFalsa, 'character_inventory', 1, 10, delta),
-        /delta invalido/
+        /invalid delta/
       );
     });
   }
@@ -651,14 +651,14 @@ describe('a primitiva de pilha valida o que o wrapper validava (auditoria §6)',
     // um TypeError que escondia a causa real.
     await assert.rejects(
       () => transactionService.tx.applyStackDelta(conexaoFalsa, 'character_inventory', 1, 'abc', -1),
-      /baseId invalido/
+      /invalid baseId/
     );
   });
 
   it('recusa tabela fora da lista fechada', async () => {
     await assert.rejects(
       () => transactionService.tx.applyStackDelta(conexaoFalsa, 'characters; DROP TABLE x', 1, 10, 1),
-      /tabela de pilha desconhecida/
+      /unknown stack table/
     );
   });
 
@@ -669,7 +669,7 @@ describe('a primitiva de pilha valida o que o wrapper validava (auditoria §6)',
       source: 'staff', reason: 'admin_give', module: 'admin', requestId: REQ
     });
     assert.strictEqual(r.ok, false);
-    assert.match(r.reason, /Pilha cheia/);
+    assert.match(r.reason, /Stack full/);
   });
 });
 

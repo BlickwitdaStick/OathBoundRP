@@ -1,36 +1,36 @@
 /**
  * core/skymp-adapter/index.js
  *
- * A fronteira declarada entre o gamemode e o motor do SkyMP.
+ * The declared boundary between the gamemode and the SkyMP engine.
  *
- * ─── Por que isto existe ─────────────────────────────────────────────────────
+ * ─── Why this exists ─────────────────────────────────────────────────────────
  *
- * `mp` e um global que aceita qualquer property e devolve `undefined` para
- * qualquer erro de nome. O `mp` mockado dos testes tambem. Entre os dois, uma
- * chamada errada atravessa a suite inteira sem tocar em nada.
+ * `mp` is a global that accepts any property and returns `undefined` for
+ * any naming mistake. So does the tests' mocked `mp`. Between the two, a
+ * wrong call goes through the whole suite without touching anything.
  *
- * A auditoria de 14/08/2026 encontrou seis defeitos dessa forma
- * (docs/research/SKYMP_INTEGRATION_AUDIT.md). Cinco sao a mesma doenca: a
- * fronteira nao e um objeto, e uma convencao nao escrita.
+ * The 2026-08-14 audit found six defects of that shape
+ * (docs/research/SKYMP_INTEGRATION_AUDIT.md). Five are the same disease: the
+ * boundary is not an object, it is an unwritten convention.
  *
- * Este modulo cobre **so o que aquela auditoria provou instavel**:
+ * This module covers **only what that audit proved unstable**:
  *
- *   - identidade  — `userId` (slot de conexao) versus `actorId` (FormID);
- *   - Papyrus     — chamada conferida contra o que o VM do servidor implementa;
- *   - capacidade  — `supports()` responde se a API existe neste servidor.
+ *   - identity    — `userId` (connection slot) versus `actorId` (FormID);
+ *   - Papyrus     — a call checked against what the server's VM implements;
+ *   - capability  — `supports()` answers whether the API exists on this server.
  *
- * E deliberadamente **nao** cobre `get`, `set`, `makeProperty`, `place` ou
- * `lookupEspmRecordById`. Sao estaveis, nunca deram problema, e envolve-las so
- * acrescentaria indirecao. O briefing §8 diz isso com todas as letras: adapter
- * para boundary instavel, nao wrapper para cada funcao.
+ * And it deliberately does **not** cover `get`, `set`, `makeProperty`, `place` or
+ * `lookupEspmRecordById`. They are stable, never caused trouble, and wrapping them would only
+ * add indirection. Briefing §8 says it plainly: an adapter
+ * for an unstable boundary, not a wrapper for every function.
  *
- * ─── Como usar ───────────────────────────────────────────────────────────────
+ * ─── How to use it ───────────────────────────────────────────────────────────
  *
  *     const adapter = require('./core/skymp-adapter');
- *     adapter.kick(actorId);                 // converte para userId sozinho
- *     adapter.supports('espmLoadOrder');     // false num servidor antigo
+ *     adapter.kick(actorId);                 // converts to userId by itself
+ *     adapter.supports('espmLoadOrder');     // false on an old server
  *
- * Em teste, injete o `mp` falso em vez de mexer no global:
+ * In tests, inject the fake `mp` instead of touching the global:
  *
  *     const { createAdapter } = require('./core/skymp-adapter');
  *     const adapter = createAdapter({ mp: fakeMp });
@@ -41,8 +41,8 @@
 const { isKnownPapyrusFunction, UPSTREAM_COMMIT } = require('./papyrus-catalog');
 
 /**
- * Capacidades **detectaveis**: sao metodos do objeto `mp`, entao da para
- * perguntar se existem.
+ * **Detectable** capabilities: they are methods of the `mp` object, so it is possible to
+ * ask whether they exist.
  *
  * @type {Record<string, string>}
  */
@@ -60,54 +60,54 @@ const CAPABILITY_METHODS = {
 };
 
 /**
- * Capacidades **nao detectaveis**, e o motivo de cada uma.
+ * **Non-detectable** capabilities, and the reason for each one.
  *
- * Hook de gamemode e property que *nos* atribuimos: `typeof mp.onDeath` e
- * sempre `'undefined'` antes de escrevermos, e sempre `'function'` depois.
- * Perguntar nao responde nada. O que se sabe vem da leitura do upstream no
- * commit fixado em `patches/manifest.json`.
+ * A gamemode hook is a property that *we* assign: `typeof mp.onDeath` is
+ * always `'undefined'` before we write it, and always `'function'` after.
+ * Asking answers nothing. What is known comes from reading upstream at the
+ * commit pinned in `patches/manifest.json`.
  *
- * Declarar isso explicitamente e melhor que fingir deteccao: quem le sabe que
- * a resposta vem de um documento, nao do servidor.
+ * Declaring that explicitly is better than faking detection: whoever reads knows that
+ * the answer comes from a document, not from the server.
  *
  * @type {Record<string, {value: boolean, why: string}>}
  */
 const DECLARED_CAPABILITIES = {
   nativeDeathEvent: {
     value: true,
-    why: 'DeathEvent.cpp registra "onDeath"; traz o assassino em killerId'
+    why: 'DeathEvent.cpp registers "onDeath"; it carries the killer in killerId'
   },
   nativeRespawnEvent: {
     value: true,
-    why: 'RespawnEvent.cpp registra "onRespawn"'
+    why: 'RespawnEvent.cpp registers "onRespawn"'
   },
   loginAttemptHook: {
     value: true,
-    why: 'login.ts chama mp.onLoginAttempt(profileId) antes do spawn; false recusa'
+    why: 'login.ts calls mp.onLoginAttempt(profileId) before spawning; false refuses'
   },
   equipmentVeto: {
     value: true,
-    why: 'UpdateEquipmentAttemptEvent.cpp registra "onUpdateEquipmentAttempt"'
+    why: 'UpdateEquipmentAttemptEvent.cpp registers "onUpdateEquipmentAttempt"'
   },
   appearanceVeto: {
     value: true,
-    why: 'UpdateAppearanceAttemptEvent.cpp registra "onUpdateAppearanceAttempt"'
+    why: 'UpdateAppearanceAttemptEvent.cpp registers "onUpdateAppearanceAttempt"'
   },
   playerSpawnHook: {
     value: false,
-    why: 'spawn.ts resolve o spawn sozinho. mp._onSpawnAllowed existe mas sobrescreve-lo nao intercepta: o EventEmitter guarda a referencia da funcao original'
+    why: 'spawn.ts resolves the spawn by itself. mp._onSpawnAllowed exists but overriding it does not intercept: the EventEmitter keeps the reference to the original function'
   },
   cellTransitionEvent: {
     value: false,
-    why: 'nao ha evento de celula em gamemode_events/. Use getActorCellOrWorld ou um event source de cliente'
+    why: 'there is no cell event in gamemode_events/. Use getActorCellOrWorld or a client event source'
   },
   eslPlugins: {
     value: false,
-    why: 'libespm nao trata plugin light. FormDesc::ToFormId e aritmetica de indice de um byte'
+    why: 'libespm does not handle light plugins. FormDesc::ToFormId is one-byte index arithmetic'
   }
 };
 
-/** Erro de fronteira: nome proprio para nao se confundir com erro de dominio. */
+/** Boundary error: its own name so it is not confused with a domain error. */
 class SkympBoundaryError extends Error {
   constructor(message) {
     super(message);
@@ -117,16 +117,16 @@ class SkympBoundaryError extends Error {
 
 /**
  * @param {object}  [deps]
- * @param {any}     [deps.mp]      objeto `mp`; por padrao o global
- * @param {boolean} [deps.strict]  true (padrao) faz chamada Papyrus desconhecida
- *                                 lancar em vez de devolver `null` em silencio
+ * @param {any}     [deps.mp]      the `mp` object; the global by default
+ * @param {boolean} [deps.strict]  true (default) makes an unknown Papyrus call
+ *                                 throw instead of silently returning `null`
  * @param {{warn: Function, error: Function}} [deps.logger]
  */
 function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
-  // Resolvido a cada chamada, e nao na criacao: o gamemode e carregado pelo
-  // SkyMP com `globalThis.mp` ja pronto, mas os testes carregam este modulo
-  // antes de existir `mp` nenhum. Fixar no `require` daria `undefined` para
-  // sempre.
+  // Resolved on every call, not at creation: the gamemode is loaded by
+  // SkyMP with `globalThis.mp` already in place, but tests load this module
+  // before any `mp` exists. Pinning it at `require` time would yield `undefined`
+  // forever.
   const mpDe = () => (mpApi !== undefined ? mpApi : (typeof mp !== 'undefined' ? mp : undefined));
 
   const has = (nome) => {
@@ -134,14 +134,14 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
     return Boolean(mp) && typeof mp[nome] === 'function';
   };
 
-  /** Cache da reflexao do VM: `${callType}:${classe}.${funcao}` → boolean. */
+  /** VM reflection cache: `${callType}:${class}.${function}` → boolean. */
   const cacheDeReflexao = new Map();
 
   /**
-   * A API existe neste servidor?
+   * Does the API exist on this server?
    *
-   * Nomes de `CAPABILITY_METHODS` sao perguntados ao `mp`. Nomes de
-   * `DECLARED_CAPABILITIES` vem da leitura do upstream — ver o comentario la.
+   * Names from `CAPABILITY_METHODS` are asked of `mp`. Names from
+   * `DECLARED_CAPABILITIES` come from reading upstream — see the comment there.
    *
    * @param {string} capability
    * @returns {boolean}
@@ -154,14 +154,14 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
       return DECLARED_CAPABILITIES[capability].value;
     }
     throw new SkympBoundaryError(
-      `capacidade desconhecida "${capability}". ` +
-      'Acrescente em CAPABILITY_METHODS (detectavel) ou DECLARED_CAPABILITIES (lida do upstream).'
+      `unknown capability "${capability}". ` +
+      'Add it to CAPABILITY_METHODS (detectable) or DECLARED_CAPABILITIES (read from upstream).'
     );
   }
 
   /**
-   * Por que uma capacidade e o que e. Existe para o log de boot dizer o motivo
-   * em vez de so o booleano.
+   * Why a capability is what it is. It exists so the boot log states the reason
+   * instead of just the boolean.
    *
    * @param {string} capability
    * @returns {string}
@@ -170,16 +170,16 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
     if (Object.prototype.hasOwnProperty.call(CAPABILITY_METHODS, capability)) {
       const metodo = CAPABILITY_METHODS[capability];
       return has(metodo)
-        ? `mp.${metodo} existe`
-        : `mp.${metodo} ausente neste servidor`;
+        ? `mp.${metodo} exists`
+        : `mp.${metodo} missing on this server`;
     }
     if (Object.prototype.hasOwnProperty.call(DECLARED_CAPABILITIES, capability)) {
-      return `${DECLARED_CAPABILITIES[capability].why} (lido em ${UPSTREAM_COMMIT.slice(0, 8)})`;
+      return `${DECLARED_CAPABILITIES[capability].why} (read at ${UPSTREAM_COMMIT.slice(0, 8)})`;
     }
-    throw new SkympBoundaryError(`capacidade desconhecida "${capability}"`);
+    throw new SkympBoundaryError(`unknown capability "${capability}"`);
   }
 
-  /** Todas as capacidades e seus valores. Para o log de boot. */
+  /** Every capability and its value. For the boot log. */
   function capabilities() {
     const saida = {};
     for (const nome of Object.keys(CAPABILITY_METHODS)) saida[nome] = supports(nome);
@@ -188,24 +188,24 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
   }
 
   /**
-   * Desconecta o jogador **dono deste ator**.
+   * Disconnects the player **who owns this actor**.
    *
-   * `mp.kick` recebe `userId` — o slot de conexao — e nao o FormID:
+   * `mp.kick` takes `userId` — the connection slot — and not the FormID:
    *
    *     Napi::Value ScampServer::Kick(const Napi::CallbackInfo& info) {
    *       auto userId = info[0].As<Napi::Number>().Uint32Value();
    *       server->CloseConnection(userId);
    *     }
    *
-   * Ator criado pelo servidor vive em 0xFF000000+. Passar isso para
-   * `CloseConnection` fecha um slot que nao existe: kick de staff, permakill e
-   * permadeath falhavam em silencio (auditoria §6).
+   * An actor created by the server lives at 0xFF000000+. Passing that to
+   * `CloseConnection` closes a slot that does not exist: staff kick, permakill and
+   * permadeath silently failed (audit §6).
    *
-   * Devolve `false` quando nao havia ninguem conectado naquele ator — o que e
-   * resposta legitima, nao erro.
+   * Returns `false` when nobody was connected on that actor — which is a
+   * legitimate answer, not an error.
    *
-   * @param {number} actorId FormID do ator
-   * @returns {boolean} true se um usuario foi desconectado
+   * @param {number} actorId the actor's FormID
+   * @returns {boolean} true if a user was disconnected
    */
   function kick(actorId) {
     const mp = mpDe();
@@ -216,9 +216,9 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
     }
 
     if (!has('getUserByActor')) {
-      // Sem o conversor nao da para adivinhar. Recusar e melhor que chutar:
-      // chutar aqui significa desconectar a pessoa errada.
-      logger.error('[skymp-adapter] mp.getUserByActor ausente — kick recusado para nao desconectar o slot errado.');
+      // Without the converter there is no way to guess. Refusing is better than guessing:
+      // guessing here means disconnecting the wrong person.
+      logger.error('[skymp-adapter] mp.getUserByActor missing — kick refused so as not to disconnect the wrong slot.');
       return false;
     }
 
@@ -230,9 +230,9 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
   }
 
   /**
-   * Desconecta por slot de conexao, quando o `userId` ja e o que se tem —
-   * `whitelist.js` e `connection-monitor.js` estao nesse caso e sempre
-   * estiveram certos.
+   * Disconnects by connection slot, when the `userId` is already what you have —
+   * `whitelist.js` and `connection-monitor.js` are in that case and always
+   * were right.
    *
    * @param {number} userId
    * @returns {boolean}
@@ -248,11 +248,11 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
   }
 
   /**
-   * A funcao Papyrus existe neste servidor?
+   * Does the Papyrus function exist on this server?
    *
-   * Prefere a reflexao do VM em runtime — que e a verdade — e so cai para o
-   * catalogo estatico quando ela nao esta disponivel. E o ponto do adaptador:
-   * a resposta certa vem do servidor, nao de um arquivo nosso que envelhece.
+   * Prefers the VM's runtime reflection — which is the truth — and only falls back to the
+   * static catalog when it is not available. That is the point of the adapter:
+   * the right answer comes from the server, not from a file of ours that ages.
    *
    * @param {'method'|'global'} callType
    * @param {string} className
@@ -268,7 +268,7 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
       try {
         existe = Boolean(mpDe()._sp3GetFunctionImplementation(className, functionName, callType === 'global'));
       } catch (err) {
-        logger.warn(`[skymp-adapter] reflexao do VM falhou para ${className}.${functionName}: ${err.message}`);
+        logger.warn(`[skymp-adapter] VM reflection failed for ${className}.${functionName}: ${err.message}`);
         existe = isKnownPapyrusFunction(callType, className, functionName);
       }
     } else {
@@ -280,24 +280,24 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
   }
 
   /**
-   * Chama Papyrus conferindo o nome antes.
+   * Calls Papyrus after checking the name.
    *
-   * O VM nao lanca quando a funcao nao existe: loga e devolve `VarValue::None()`,
-   * que chega ao JS como `null`. E `null <= 0` e `true` — foi assim que o
-   * `death-service` passou a derrubar todo jogador conectado.
+   * The VM does not throw when the function does not exist: it logs and returns `VarValue::None()`,
+   * which reaches JS as `null`. And `null <= 0` is `true` — that is how
+   * `death-service` started knocking down every connected player.
    *
-   * Em `strict` (padrao), nome desconhecido **lanca**, com o nome no texto.
-   * Fora de `strict`, avisa e segue — util so em diagnostico.
+   * In `strict` (default), an unknown name **throws**, with the name in the text.
+   * Outside `strict`, it warns and carries on — only useful for diagnostics.
    *
    * @param {'method'|'global'} callType
    * @param {string} className
    * @param {string} functionName
-   * @param {object|null} self  `{type, desc}`, nunca FormID cru — ver core/papyrus.js
+   * @param {object|null} self  `{type, desc}`, never a raw FormID — see core/papyrus.js
    * @param {unknown[]} args
    */
   function callPapyrus(callType, className, functionName, self, args = []) {
     if (callType !== 'method' && callType !== 'global') {
-      throw new SkympBoundaryError(`callType deve ser 'method' ou 'global', veio "${callType}"`);
+      throw new SkympBoundaryError(`callType must be 'method' or 'global', got "${callType}"`);
     }
     const mp = mpDe();
     if (!mp || typeof mp.callPapyrusFunction !== 'function') {
@@ -306,8 +306,8 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
 
     if (!papyrusFunctionExists(callType, className, functionName)) {
       const recado =
-        `${className}.${functionName} nao existe no VM Papyrus do servidor. ` +
-        'A chamada devolveria null em silencio. Ver docs/technical/PAPYRUS_USAGE_POLICY.md';
+        `${className}.${functionName} does not exist in the server's Papyrus VM. ` +
+        'The call would silently return null. See docs/technical/PAPYRUS_USAGE_POLICY.md';
       if (strict) throw new SkympBoundaryError(recado);
       logger.warn(`[skymp-adapter] ${recado}`);
     }
@@ -327,7 +327,7 @@ function createAdapter({ mp: mpApi, strict = true, logger = console } = {}) {
   };
 }
 
-/** Instancia unica ligada ao `mp` global. Guarda o cache de reflexao do VM. */
+/** Single instance bound to the global `mp`. Holds the VM reflection cache. */
 const padrao = createAdapter();
 
 module.exports = {

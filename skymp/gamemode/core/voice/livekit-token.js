@@ -1,61 +1,61 @@
 /**
  * core/voice/livekit-token.js
  *
- * Emissão de access token do LiveKit — SEMPRE no servidor, nunca no cliente.
+ * Issuing LiveKit access tokens — ALWAYS on the server, never on the client.
  *
- * ## Por que este arquivo existe e por que ele é pequeno
+ * ## Why this file exists and why it is small
  *
- * Um access token do LiveKit é um JWT HS256 comum: header, payload e uma
- * assinatura HMAC-SHA256 feita com o **API secret**. Não há nada de proprietário
- * no formato — o que existe de proprietário é o *conteúdo* do claim `video`.
+ * A LiveKit access token is an ordinary HS256 JWT: header, payload and an
+ * HMAC-SHA256 signature made with the **API secret**. There is nothing proprietary
+ * about the format — what is proprietary is the *contents* of the `video` claim.
  *
- * Por isso não puxamos `livekit-server-sdk`. Assinar um JWT HS256 é uma chamada
- * de `crypto.createHmac`, e o gamemode roda dentro do Node embutido pelo SkyMP,
- * onde cada dependência nova é uma dependência que alguém precisa auditar,
- * empacotar e atualizar. O mesmo raciocínio que fez o `voice-helper/src/main.cpp`
- * escrever base64 à mão em vez de arrastar mais uma port do vcpkg.
+ * That is why we do not pull in `livekit-server-sdk`. Signing an HS256 JWT is one
+ * `crypto.createHmac` call, and the gamemode runs inside the Node embedded by SkyMP,
+ * where every new dependency is a dependency someone has to audit,
+ * package and update. Same reasoning that made `voice-helper/src/main.cpp`
+ * write base64 by hand instead of dragging in yet another vcpkg port.
  *
- * O preço dessa escolha é que o formato do claim `video` é responsabilidade
- * nossa. Ele está travado por teste contra um `livekit-server` **real** — ver
- * `spikes/skyvoice-livekit/`, que sobe o servidor oficial e confirma que o token
- * emitido aqui é aceito. Um token que "parece certo" e é recusado pelo servidor
- * seria exatamente o tipo de defeito que compilar não pega.
+ * The price of that choice is that the format of the `video` claim is our
+ * responsibility. It is pinned by a test against a **real** `livekit-server` — see
+ * `spikes/skyvoice-livekit/`, which starts the official server and confirms that the token
+ * issued here is accepted. A token that "looks right" and is refused by the server
+ * would be exactly the kind of defect compiling does not catch.
  *
- * ## A regra que não pode ser quebrada
+ * ## The rule that cannot be broken
  *
- * **O API secret nunca sai deste processo.** Ele entra por `LIVEKIT_API_SECRET`,
- * é usado para assinar, e o que viaja para o cliente é o JWT — que já é o
- * resultado da assinatura, não o insumo dela. Um cliente com o secret pode
- * forjar qualquer identidade em qualquer sala; um cliente com um JWT pode
- * apenas ser quem o servidor disse que ele é, até o token expirar.
+ * **The API secret never leaves this process.** It comes in through `LIVEKIT_API_SECRET`,
+ * is used to sign, and what travels to the client is the JWT — which is already the
+ * result of the signature, not its input. A client with the secret can
+ * forge any identity in any room; a client with a JWT can
+ * only be who the server said it is, until the token expires.
  *
- * Isto espelha o que o `voip-service.issueTicket` já fazia no caminho legado: o
- * servidor emite, o cliente apresenta. A diferença é só o formato do papel.
+ * This mirrors what `voip-service.issueTicket` already did on the legacy path: the
+ * server issues, the client presents. The only difference is the format of the paper.
  *
- * ## O que o token NÃO decide
+ * ## What the token does NOT decide
  *
- * O token concede *acesso ao transporte*. Ele não diz quem ouve quem — isso é
- * proximidade, é regra de mundo, e é do SkyMP (`voip-service.tickProximity`).
- * Ver `docs/technical/SKYVOICE_LIVEKIT_AUDIT.md` §7.
+ * The token grants *access to the transport*. It does not say who hears whom — that is
+ * proximity, a world rule, and it belongs to SkyMP (`voip-service.tickProximity`).
+ * See `docs/technical/SKYVOICE_LIVEKIT_AUDIT.md` §7.
  */
 
 const crypto = require('crypto');
 
 /**
- * Vida útil do token, em segundos.
+ * Token lifetime, in seconds.
  *
- * Curto de propósito: o token é um crachá de entrada, não uma sessão. O cliente
- * o usa para abrir a conexão e o LiveKit mantém a sessão viva depois disso —
- * `exp` não derruba quem já está dentro, só impede uma entrada nova. Seis
- * minutos dão folga para o handshake e para uma reconexão imediata sem manter
- * um crachá válido esquecido em disco ou em log.
+ * Short on purpose: the token is an entry badge, not a session. The client
+ * uses it to open the connection and LiveKit keeps the session alive after that —
+ * `exp` does not kick out whoever is already inside, it only prevents a new entry. Six
+ * minutes leave room for the handshake and an immediate reconnection without keeping
+ * a valid badge forgotten on disk or in a log.
  *
- * Reconexão longa (cabo caiu, jogador voltou dez minutos depois) pede um token
- * novo, e pedir é barato: é o mesmo caminho do `/voz`.
+ * A long reconnection (cable dropped, player came back ten minutes later) asks for a new
+ * token, and asking is cheap: it is the same path as `/voice`.
  */
 const DEFAULT_TTL_SECONDS = 360;
 
-/** Folga de relógio aceita para trás no `nbf`. */
+/** Clock skew tolerated backwards on `nbf`. */
 const CLOCK_SKEW_SECONDS = 10;
 
 function _b64url(buf) {
@@ -66,22 +66,22 @@ function _b64url(buf) {
 }
 
 /**
- * Identidade do participante no LiveKit.
+ * The participant's identity in LiveKit.
  *
- * **Sempre derivada do actorId pelo servidor, nunca escolhida pelo cliente.** A
- * identidade é o que o LiveKit repete para todos os outros participantes na
- * sala; se o cliente pudesse escolhê-la, ele escolheria a de outra pessoa, e
- * todo mundo veria a voz dele rotulada com o nome alheio. É o mesmo furo que o
- * ticket de uso único fecha no `auth` do caminho legado, e fecha aqui pelo mesmo
- * motivo: quem afirma a identidade é quem já sabe quem você é.
+ * **Always derived from the actorId by the server, never chosen by the client.** The
+ * identity is what LiveKit repeats to every other participant in the
+ * room; if the client could choose it, it would choose someone else's, and
+ * everyone would see its voice labeled with someone else's name. It is the same hole the
+ * single-use ticket closes in the legacy path's `auth`, and it closes here for the same
+ * reason: whoever asserts the identity is whoever already knows who you are.
  *
- * O sufixo de sessão existe porque o LiveKit trata identidade como chave única
- * na sala — um segundo participante com a mesma identidade **derruba o
- * primeiro**. Sem o sufixo, uma reconexão rápida (antes de o servidor perceber
- * que a anterior morreu) expulsaria a própria conexão que está entrando.
+ * The session suffix exists because LiveKit treats identity as a unique key
+ * in the room — a second participant with the same identity **kicks the
+ * first one**. Without the suffix, a quick reconnection (before the server notices
+ * the previous one died) would kick out the very connection that is coming in.
  *
  * @param {number} actorId
- * @param {string} [sessionNonce] identificador curto desta tentativa de conexão
+ * @param {string} [sessionNonce] short identifier for this connection attempt
  * @returns {string}
  */
 function participantIdentity(actorId, sessionNonce) {
@@ -90,13 +90,13 @@ function participantIdentity(actorId, sessionNonce) {
 }
 
 /**
- * Extrai o actorId de uma identidade emitida por `participantIdentity`.
+ * Extracts the actorId from an identity issued by `participantIdentity`.
  *
- * Existe para o lado que **recebe**: ao ver um participante na sala, o cliente
- * precisa saber a que ator aquela voz pertence para aplicar o ganho de
- * proximidade que o SkyMP mandou. Devolve `null` para qualquer coisa que não
- * tenha o formato — uma identidade que não reconhecemos não é um ator nosso, e
- * adivinhar seria pior do que admitir que não sabemos.
+ * It exists for the **receiving** side: when it sees a participant in the room, the client
+ * needs to know which actor that voice belongs to in order to apply the proximity
+ * gain SkyMP sent. Returns `null` for anything that does not have the
+ * format — an identity we do not recognize is not one of our actors, and
+ * guessing would be worse than admitting we do not know.
  *
  * @param {string} identity
  * @returns {number|null}
@@ -110,19 +110,19 @@ function actorIdFromIdentity(identity) {
 }
 
 /**
- * Monta e assina um access token do LiveKit.
+ * Builds and signs a LiveKit access token.
  *
  * @param {object} opts
  * @param {string} opts.apiKey            LIVEKIT_API_KEY
- * @param {string} opts.apiSecret         LIVEKIT_API_SECRET — nunca sai daqui
- * @param {string} opts.room              sala (uma por cena de voz)
- * @param {string} opts.identity          identidade — use `participantIdentity`
- * @param {string} [opts.name]            nome exibível (personagem)
- * @param {boolean} [opts.canPublish]     pode falar (padrão: true)
- * @param {boolean} [opts.canSubscribe]   pode ouvir (padrão: true)
+ * @param {string} opts.apiSecret         LIVEKIT_API_SECRET — never leaves here
+ * @param {string} opts.room              room (one per voice scene)
+ * @param {string} opts.identity          identity — use `participantIdentity`
+ * @param {string} [opts.name]            display name (character)
+ * @param {boolean} [opts.canPublish]     can speak (default: true)
+ * @param {boolean} [opts.canSubscribe]   can listen (default: true)
  * @param {number} [opts.ttlSeconds]
- * @param {number} [opts.now]             injetável por teste
- * @returns {string} JWT compacto
+ * @param {number} [opts.now]             injectable by tests
+ * @returns {string} compact JWT
  */
 function mintAccessToken(opts) {
   const {
@@ -137,41 +137,41 @@ function mintAccessToken(opts) {
     now = Date.now()
   } = opts || {};
 
-  // Falhar alto e cedo. Um token assinado com secret vazio é aceito por
-  // `createHmac` sem reclamar e recusado pelo servidor lá na frente, longe
-  // daqui — o erro apareceria como "voz não conecta", que é o sintoma mais
-  // caro de diagnosticar.
-  if (!apiKey) throw new Error('[livekit-token] apiKey ausente');
-  if (!apiSecret) throw new Error('[livekit-token] apiSecret ausente');
-  if (!room) throw new Error('[livekit-token] room ausente');
-  if (!identity) throw new Error('[livekit-token] identity ausente');
+  // Fail loudly and early. A token signed with an empty secret is accepted by
+  // `createHmac` without complaint and refused by the server later on, far from
+  // here — the error would show up as "voice does not connect", which is the most
+  // expensive symptom to diagnose.
+  if (!apiKey) throw new Error('[livekit-token] missing apiKey');
+  if (!apiSecret) throw new Error('[livekit-token] missing apiSecret');
+  if (!room) throw new Error('[livekit-token] missing room');
+  if (!identity) throw new Error('[livekit-token] missing identity');
 
   const nowSec = Math.floor(now / 1000);
 
   const header = { alg: 'HS256', typ: 'JWT' };
 
   const payload = {
-    iss: apiKey,               // quem emitiu — o LiveKit acha o secret por aqui
-    sub: identity,             // o LiveKit lê a identidade do `sub`
+    iss: apiKey,               // who issued it — LiveKit finds the secret through this
+    sub: identity,             // LiveKit reads the identity from `sub`
     nbf: nowSec - CLOCK_SKEW_SECONDS,
     exp: nowSec + ttlSeconds,
     jti: crypto.randomBytes(8).toString('hex'),
     ...(name ? { name } : {}),
     video: {
-      // `roomJoin` + `room` prendem o token a UMA sala. Sem `room`, um token
-      // vazado entra em qualquer cena de voz do servidor.
+      // `roomJoin` + `room` tie the token to ONE room. Without `room`, a leaked
+      // token gets into any voice scene on the server.
       roomJoin: true,
       room,
       canPublish,
       canSubscribe,
 
-      // Negados explicitamente, e não por omissão. São os direitos que
-      // transformariam um jogador em operador da sala: `roomAdmin` mexe em
-      // quem está dentro, `roomCreate` cria salas fora do controle do
-      // gamemode, `canPublishData` abre um canal de mensagens entre clientes
-      // que o SkyMP não vê — e o SkyMP é quem manda nas regras do mundo.
-      // Escrever `false` em vez de omitir é para que uma leitura do token
-      // responda a pergunta, em vez de exigir que alguém saiba o padrão.
+      // Denied explicitly, not by omission. These are the rights that
+      // would turn a player into a room operator: `roomAdmin` messes with
+      // who is inside, `roomCreate` creates rooms outside the
+      // gamemode's control, `canPublishData` opens a message channel between clients
+      // that SkyMP does not see — and SkyMP is the one that rules the world.
+      // Writing `false` instead of omitting it is so that reading the token
+      // answers the question, instead of requiring someone to know the default.
       canPublishData: false,
       canUpdateOwnMetadata: false,
       roomAdmin: false,
@@ -179,10 +179,10 @@ function mintAccessToken(opts) {
       roomList: false,
       roomRecord: false,
 
-      // Só áudio. Um cliente com este token que tente publicar vídeo é
-      // recusado pelo próprio servidor, não pela boa vontade da UI — a câmera
-      // fica bloqueada em duas camadas independentes (aqui e no
-      // CefPermissionHandler; ver a auditoria §5 e §8).
+      // Audio only. A client with this token that tries to publish video is
+      // refused by the server itself, not by the UI's good will — the camera
+      // is blocked in two independent layers (here and in the
+      // CefPermissionHandler; see the audit §5 and §8).
       canPublishSources: ['microphone']
     }
   };
@@ -194,13 +194,13 @@ function mintAccessToken(opts) {
 }
 
 /**
- * Decodifica o payload de um token SEM verificar a assinatura.
+ * Decodes a token's payload WITHOUT verifying the signature.
  *
- * Para teste e diagnóstico apenas. Não use isto para tomar decisão de
- * autorização: quem verifica assinatura de token do LiveKit é o
- * `livekit-server`, e reimplementar essa verificação aqui criaria uma segunda
- * opinião sobre quem tem acesso — duas autoridades sobre a mesma pergunta é o
- * mesmo defeito que a tabela de raios duplicada de `proximity-ranges.js`.
+ * For tests and diagnostics only. Do not use this to make an
+ * authorization decision: whoever verifies LiveKit token signatures is
+ * `livekit-server`, and reimplementing that check here would create a second
+ * opinion about who has access — two authorities over the same question is the
+ * same defect as the duplicated radius table in `proximity-ranges.js`.
  *
  * @param {string} token
  * @returns {object|null}

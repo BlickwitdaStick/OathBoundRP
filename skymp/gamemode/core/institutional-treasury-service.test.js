@@ -117,7 +117,7 @@ describe('institutional-treasury-service', () => {
         amount: 30,
         idempotencyKey: 'hold-withdraw-0004'
       }, harness.dependencies),
-      /Faccao regente/
+      /Ruling faction/
     );
     assert.ok(harness.state.events.includes('debit'));
     assert.ok(harness.state.events.includes('rollback'));

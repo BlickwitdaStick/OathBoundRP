@@ -79,27 +79,27 @@ describe('validação falha alto', () => {
 
   test('tipo errado aborta', () => {
     writeConfig({ chat: { localRange: 'muito' } });
-    assert.throws(() => serverOptions.load(TEST_ENV), /localRange.*esperado n[uú]mero/i);
+    assert.throws(() => serverOptions.load(TEST_ENV), /localRange.*expected number/i);
   });
 
   test('booleano recebendo string aborta', () => {
     writeConfig({ rp: { permadeathEnabled: 'true' } });
-    assert.throws(() => serverOptions.load(TEST_ENV), /permadeathEnabled.*booleano/i);
+    assert.throws(() => serverOptions.load(TEST_ENV), /permadeathEnabled.*boolean/i);
   });
 
   test('valor fora do intervalo aborta', () => {
     writeConfig({ chat: { localRange: 999999 } });
-    assert.throws(() => serverOptions.load(TEST_ENV), /localRange.*fora do intervalo/i);
+    assert.throws(() => serverOptions.load(TEST_ENV), /localRange.*outside the allowed range/i);
   });
 
   test('número negativo onde não faz sentido aborta', () => {
     writeConfig({ economy: { startingGold: -50 } });
-    assert.throws(() => serverOptions.load(TEST_ENV), /startingGold.*fora do intervalo/i);
+    assert.throws(() => serverOptions.load(TEST_ENV), /startingGold.*outside the allowed range/i);
   });
 
   test('JSON corrompido aborta com o caminho no erro', () => {
     fs.writeFileSync(TEST_FILE, '{ isso nao e json');
-    assert.throws(() => serverOptions.load(TEST_ENV), /nao e JSON valido/i);
+    assert.throws(() => serverOptions.load(TEST_ENV), /is not valid JSON/i);
   });
 
   test('relata TODOS os erros de uma vez, não só o primeiro', () => {

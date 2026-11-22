@@ -21,7 +21,7 @@ async function run() {
   console.log(`Attempting to connect to MySQL at ${config.host}:${config.port} as ${config.user}...`);
 
   try {
-    // Conecta inicialmente sem especificar banco de dados para podermos cria-lo
+    // Connect first without specifying a database so we can create it
     const connection = await mysql.createConnection({
       host: config.host || '127.0.0.1',
       port: config.port || 3306,

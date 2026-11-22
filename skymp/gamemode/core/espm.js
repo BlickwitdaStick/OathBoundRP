@@ -1,101 +1,101 @@
 /**
- * core/espm.js — leitura dos records dos plugins carregados
+ * core/espm.js — reading records from the loaded plugins
  *
- * ─── Atribuição de origem (LICENSE_AND_AFFILIATION_POLICY.md §4) ────────────
+ * ─── Attribution (LICENSE_AND_AFFILIATION_POLICY.md §4) ─────────────────────
  *
- *   Projeto : alekcey0211/red-house-public — build pública do Red House (SkyMP)
- *   Autor   : alekcey0211 e colaboradores
- *   Licença : GPL-3.0. Compatível com a AGPL-3.0-or-later deste projeto pela
- *             GPLv3 §13; o conjunto continua distribuído sob AGPL.
+ *   Project : alekcey0211/red-house-public — public build of Red House (SkyMP)
+ *   Author  : alekcey0211 and contributors
+ *   License : GPL-3.0. Compatible with this project's AGPL-3.0-or-later through
+ *             GPLv3 §13; the combined work is still distributed under the AGPL.
  *   Commit  : 65c66bb3e1b9f5765ed5fc036d69d75e3afbb53d (branch `master`,
- *             01/11/2021 — repositório parado, último push em 16/11/2021)
- *   Origem  : `functions-lib/src/` — é onde `mp.lookupEspmRecordById` aparece
- *             em uso, para ler dano base de arma e armadura no cálculo de dano
- *   Estudo  : docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md §4.1,
- *             "Outras coisas que aprendemos"
+ *             2021-11-01 — repository inactive, last push on 2021-11-16)
+ *   Origin  : `functions-lib/src/` — that is where `mp.lookupEspmRecordById` shows up
+ *             in use, to read base weapon and armor damage in the damage calculation
+ *   Study   : docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md §4.1,
+ *             "Other things we learned"
  *
- *   **O que foi adaptado é técnica, não código.** Nenhuma linha foi copiada: o
- *   que veio de lá é *saber que a API existe* — que o servidor consegue ler
- *   records dos plugins carregados, o que este projeto não sabia. O formato do
- *   retorno **não veio deles**: foi lido de um servidor real (ver abaixo), e o
- *   uso é outro — eles leem stats para calcular dano, nós lemos `type` para
- *   conferir se um `base_id` digitado à mão é mesmo um item.
+ *   **What was adapted is technique, not code.** No line was copied: what
+ *   came from there is *knowing the API exists* — that the server can read
+ *   records from the loaded plugins, which this project did not know. The return
+ *   format **did not come from them**: it was read from a real server (see below), and the
+ *   use is different — they read stats to compute damage, we read `type` to
+ *   check whether a hand-typed `base_id` is really an item.
  *
- *   Registrado também no CHANGELOG.md, seção `[Não lançado]`.
+ *   Also recorded in CHANGELOG.md, section `[Unreleased]`.
  *
- * ─── De onde veio, e como o formato foi descoberto ──────────────────────────
+ * ─── Where it came from, and how the format was discovered ──────────────────
  *
- * `mp.lookupEspmRecordById` apareceu no estudo do Red House
- * (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1) — o projeto sabia que ela existia
- * e nunca tinha visto o retorno dela.
+ * `mp.lookupEspmRecordById` showed up in the Red House study
+ * (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1) — the project knew it existed
+ * and had never seen what it returns.
  *
- * O formato abaixo **não foi inferido**: foi lido de um servidor real em
- * 06/08/2026, com uma sonda temporária apontada como gamemode. Isso importa
- * porque este projeto já pagou caro duas vezes por assumir formato de API —
- * as 22 chamadas Papyrus com `self` errado (QA 2.13) e o `require('dotenv')`
- * nu, que só apareceram quando algo rodou de verdade.
+ * The format below **was not inferred**: it was read from a real server on
+ * 2026-08-06, with a temporary probe set as the gamemode. That matters
+ * because this project has already paid dearly twice for assuming an API format —
+ * the 22 Papyrus calls with the wrong `self` (QA 2.13) and the bare
+ * `require('dotenv')`, which only surfaced when something actually ran.
  *
  *     mp.lookupEspmRecordById(0x0000000f)
  *     // => { record: { id: 15, editorId: 'Gold001', type: 'MISC',
  *     //                flags: 0, fields: [ { type, data }, ... ] },
  *     //      fileIndex: ..., toGlobalRecordId: ... }
  *
- *     mp.lookupEspmRecordById(0x00000014)   // Player, que é referência
- *     // => {}                              ← sem `record`
+ *     mp.lookupEspmRecordById(0x00000014)   // Player, which is a reference
+ *     // => {}                              ← no `record`
  *
- *     mp.lookupEspmRecordById(0x7fffffff)   // não existe
+ *     mp.lookupEspmRecordById(0x7fffffff)   // does not exist
  *     // => {}
  *
- * **`{}` é a resposta para "não existe como record de plugin".** Não lança, não
- * devolve null: devolve objeto vazio. É por isso que a checagem aqui é por
- * `r && r.record`, e não por truthiness do retorno — `{}` é truthy.
+ * **`{}` is the answer for "does not exist as a plugin record".** It does not throw, it does not
+ * return null: it returns an empty object. That is why the check here is on
+ * `r && r.record`, and not on the truthiness of the return — `{}` is truthy.
  *
  * ─── Cache ──────────────────────────────────────────────────────────────────
  *
- * O retorno traz **todos os fields do record em bytes** — um Gold001 já vem com
- * centenas de bytes de EDID, OBND, MODL, MODT. Chamar isso por operação de
- * inventário alocaria lixo à toa, e o dado é imutável enquanto o servidor roda:
- * a load order não muda em runtime.
+ * The return carries **every field of the record as bytes** — a Gold001 already comes with
+ * hundreds of bytes of EDID, OBND, MODL, MODT. Calling this per inventory
+ * operation would allocate garbage for nothing, and the data is immutable while the server runs:
+ * the load order does not change at runtime.
  *
- * O cache guarda só o que interessa (`type` e `editorId`), não o record cru.
+ * The cache keeps only what matters (`type` and `editorId`), not the raw record.
  */
 
-/** baseId → { existe, type, editorId } */
+/** baseId → { existe (exists), type, editorId } */
 const _cache = new Map();
 
 /**
- * Records do Skyrim que fazem sentido dentro de um inventário.
+ * Skyrim records that make sense inside an inventory.
  *
- * Deliberadamente uma lista de PERMISSÃO, não de bloqueio: um FormID digitado
- * errado cai em qualquer record do jogo — célula, quest, som, perk — e a
- * pergunta certa é "isto é um item?", não "isto é uma das coisas que eu me
- * lembrei de proibir".
+ * Deliberately an ALLOW list, not a block list: a mistyped FormID
+ * lands on any record in the game — cell, quest, sound, perk — and the
+ * right question is "is this an item?", not "is this one of the things I
+ * remembered to forbid".
  */
 const TIPOS_DE_INVENTARIO = new Set([
   'WEAP', // arma
   'ARMO', // armadura e roupa
-  'MISC', // diverso (ouro, minério, ossos)
-  'ALCH', // poção e comida
+  'MISC', // misc (gold, ore, bones)
+  'ALCH', // potions and food
   'AMMO', // flecha e virote
-  'BOOK', // livro e pergaminho de feitiço
-  'INGR', // ingrediente de alquimia
+  'BOOK', // books and spell tomes
+  'INGR', // alchemy ingredient
   'KEYM', // chave
-  'SLGM', // pedra de alma
+  'SLGM', // soul gem
   'SCRL', // pergaminho
-  'LIGH'  // tocha (é carregável)
+  'LIGH'  // torch (it can be carried)
 ]);
 
 /**
  * @typedef {object} RecordConsultado
  * @property {boolean} existe
- * @property {string|null} type      tag de 4 letras do record (WEAP, ARMO, ...)
+ * @property {string|null} type      4-letter record tag (WEAP, ARMO, ...)
  * @property {string|null} editorId
- * @property {boolean} [indisponivel] a API não respondeu — "não sei", que é
- *   diferente de "não existe". Ver `pareceItem`.
+ * @property {boolean} [indisponivel] the API did not answer — "I don't know", which is
+ *   different from "it does not exist". See `pareceItem`.
  */
 
 /**
- * Consulta o record de um FormID nos plugins carregados.
+ * Looks up a FormID's record in the loaded plugins.
  *
  * @param {number} baseId
  * @returns {RecordConsultado}
@@ -111,7 +111,7 @@ function lookup(baseId) {
   if (typeof mp !== 'undefined' && typeof mp.lookupEspmRecordById === 'function') {
     try {
       const r = mp.lookupEspmRecordById(baseId);
-      // `{}` quando nao existe — por isso `r.record` e nao `r`.
+      // `{}` when it does not exist — hence `r.record` and not `r`.
       if (r && r.record) {
         resultado = {
           existe: true,
@@ -120,15 +120,15 @@ function lookup(baseId) {
         };
       }
     } catch (err) {
-      // Falha de leitura nao pode virar "o item nao existe", senao uma
-      // instabilidade da API bloquearia operacao legitima. Fica desconhecido,
-      // e quem chama decide (ver `pareceItem`).
-      console.error(`[espm] Falha ao consultar 0x${baseId.toString(16)}:`, err.message);
+      // A read failure must not become "the item does not exist", otherwise an
+      // unstable API would block legitimate operations. It stays unknown,
+      // and the caller decides (see `pareceItem`).
+      console.error(`[espm] Failed to look up 0x${baseId.toString(16)}:`, err.message);
       return { existe: false, type: null, editorId: null, indisponivel: true };
     }
   } else {
-    // Sem `mp` (teste) ou sem a funcao (servidor antigo): nao da pra afirmar
-    // nada. Marcado como indisponivel pra que a validacao nao vire bloqueio.
+    // Without `mp` (tests) or without the function (old server): nothing can be
+    // asserted. Marked as unavailable so validation does not turn into a block.
     return { existe: false, type: null, editorId: null, indisponivel: true };
   }
 
@@ -137,15 +137,15 @@ function lookup(baseId) {
 }
 
 /**
- * O FormID é um item que faz sentido num inventário?
+ * Is the FormID an item that makes sense in an inventory?
  *
- * **Devolve `true` quando não dá pra saber.** Isso é deliberado: a função
- * existe pra pegar erro de digitação, não pra ser uma autoridade. Se a API não
- * estiver disponível — servidor antigo, ambiente de teste — bloquear seria
- * transformar uma melhoria de diagnóstico numa quebra de funcionalidade.
+ * **Returns `true` when it cannot tell.** That is deliberate: the function
+ * exists to catch typos, not to be an authority. If the API is not
+ * available — old server, test environment — blocking would
+ * turn a diagnostics improvement into broken functionality.
  *
- * O único caso em que nega é aquele em que tem certeza: a API respondeu, e
- * respondeu que aquele FormID não é um item.
+ * The only case where it says no is when it is certain: the API answered, and
+ * answered that the FormID is not an item.
  *
  * @param {number} baseId
  * @returns {{ok: boolean, motivo?: string, type?: string, editorId?: string}}
@@ -174,7 +174,7 @@ function pareceItem(baseId) {
   return { ok: true, type: r.type, editorId: r.editorId };
 }
 
-/** Nome de editor do record, pra log e auditoria legíveis. */
+/** The record's editor name, for readable logs and audits. */
 function editorIdOf(baseId) {
   return lookup(baseId).editorId;
 }

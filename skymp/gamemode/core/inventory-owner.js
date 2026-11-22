@@ -1,60 +1,60 @@
 /**
  * core/inventory-owner.js
  *
- * O vocabulário de "de quem é este item".
+ * The vocabulary of "who owns this item".
  *
- * ─── Por que isto existe ────────────────────────────────────────────────────
+ * ─── Why this exists ────────────────────────────────────────────────────────
  *
- * Até 13/08/2026 o servidor tinha **uma** noção de dono de item: personagem.
- * `core/transaction-service.js` só aceita `characterId`, e o ledger
- * `inventory_transactions` tinha `character_id INT NOT NULL`.
+ * Until 2026-08-13 the server had **one** notion of an item owner: a character.
+ * `core/transaction-service.js` only accepts `characterId`, and the
+ * `inventory_transactions` ledger had `character_id INT NOT NULL`.
  *
- * Toda vez que um item precisou ir para outro lugar — baú, barraca, receita —
- * quem precisou disso escreveu o outro lado à mão, fora da transação. Três
- * implementações independentes, com a mesma forma de defeito que já foi apagada
- * duas vezes neste projeto (`economy-service.transfer` e o `craftItem` pré-Fase
- * 3). Ver `docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md` §2 a §5.
+ * Every time an item had to go somewhere else — a chest, a stall, a recipe —
+ * whoever needed that wrote the other side by hand, outside the transaction. Three
+ * independent implementations, with the same shape of defect that was already wiped out
+ * twice in this project (`economy-service.transfer` and the pre-Phase-3
+ * `craftItem`). See `docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md` §2 to §5.
  *
- * Este arquivo é a metade barata da correção: nomear o dono. A cara é o
- * `core/inventory-service.js`, que move item entre dois donos numa transação só.
+ * This file is the cheap half of the fix: naming the owner. The expensive half is
+ * `core/inventory-service.js`, which moves items between two owners in a single transaction.
  *
- * ─── O que este arquivo deliberadamente NÃO faz ─────────────────────────────
+ * ─── What this file deliberately does NOT do ────────────────────────────────
  *
- * Não toca `mp`, não abre banco, não sabe se o dono existe. É função pura sobre
- * strings e números, pelo mesmo motivo que `core/interaction-registry.js` e
- * `core/soul.js` são: a parte que dá para provar fora do servidor fica onde dá
- * para provar. Quem confere existência é o adaptador de armazenamento, dentro
- * da transação, onde a resposta ainda vale quando for usada.
+ * It does not touch `mp`, does not open the DB, does not know whether the owner exists. It is a pure function over
+ * strings and numbers, for the same reason `core/interaction-registry.js` and
+ * `core/soul.js` are: the part that can be proven outside the server lives where it
+ * can be proven. Existence is checked by the storage adapter, inside
+ * the transaction, where the answer is still valid when it gets used.
  */
 
 /**
- * Os sete tipos de dono.
+ * The seven owner types.
  *
- * **Três têm adaptador de armazenamento hoje** (`character`, `container`,
- * `system`); os outros quatro são vocabulário reservado, e uma transferência
- * contra eles falha **fechada e por nome** no `inventory-service`.
+ * **Three have a storage adapter today** (`character`, `container`,
+ * `system`); the other four are reserved vocabulary, and a transfer
+ * against them fails **closed and by name** in `inventory-service`.
  *
- * É o mesmo critério do `TARGET_TYPES` do Interaction Framework, pela mesma
- * razão: escrever adaptador para `corpse` hoje seria escrever contra uma tabela
- * que não existe e um consumidor que não existe. Um vocabulário fechado com
- * ponto de registro (`inventoryService.registerAdapter`) é extensão; quatro
- * adaptadores adivinhados são pior que a ausência, porque parecem prontos.
+ * It is the same criterion as the Interaction Framework's `TARGET_TYPES`, for the same
+ * reason: writing an adapter for `corpse` today would mean writing against a table
+ * that does not exist and a consumer that does not exist. A closed vocabulary with a
+ * registration point (`inventoryService.registerAdapter`) is extension; four
+ * guessed adapters are worse than none, because they look finished.
  *
- * - `CHARACTER` — inventário persistente do personagem (`character_inventory`).
- * - `CONTAINER` — baú registrado (`container_inventory`, chaveado por `containers.id`).
- * - `PROPERTY`  — reservado. Hoje uma propriedade **é** um container
- *                 (`properties.container_id`); vira tipo próprio quando tiver
- *                 estoque que não passe por baú.
- * - `FACTION`   — reservado. Não há tabela de patrimônio de facção em item;
- *                 `factions.treasury` é ouro, e o ADR daquele patrimônio não foi
- *                 escrito (ver `PARKED_SERVICES_DECISION.md` §7.6).
- * - `CORPSE`    — reservado. `corpse-probe.js` observa cadáver, não guarda item.
- * - `MARKET`    — reservado. `market_stall_items` **não é** uma pilha: carrega
- *                 preço, rótulo e status por anúncio. Forçá-la neste vocabulário
- *                 apagaria a diferença entre estoque e oferta.
- * - `SYSTEM`    — o nada. Item que entra vem do mundo (craft, coleta, staff);
- *                 item que sai é destruído (confisco, consumo). Não tem
- *                 armazenamento **de propósito** — ver §3 abaixo.
+ * - `CHARACTER` — the character's persistent inventory (`character_inventory`).
+ * - `CONTAINER` — a registered chest (`container_inventory`, keyed by `containers.id`).
+ * - `PROPERTY`  — reserved. Today a property **is** a container
+ *                 (`properties.container_id`); it becomes its own type when it has
+ *                 stock that does not go through a chest.
+ * - `FACTION`   — reserved. There is no item-holdings table for factions;
+ *                 `factions.treasury` is gold, and the ADR for those holdings was not
+ *                 written (see `PARKED_SERVICES_DECISION.md` §7.6).
+ * - `CORPSE`    — reserved. `corpse-probe.js` observes corpses, it does not hold items.
+ * - `MARKET`    — reserved. `market_stall_items` **is not** a stack: it carries
+ *                 price, label and status per listing. Forcing it into this vocabulary
+ *                 would erase the difference between stock and offer.
+ * - `SYSTEM`    — the void. An item coming in comes from the world (craft, gathering, staff);
+ *                 an item going out is destroyed (confiscation, consumption). It has no
+ *                 storage **on purpose** — see §3 below.
  */
 const OWNER_TYPES = Object.freeze({
   CHARACTER: 'character',
@@ -70,33 +70,33 @@ const OWNER_TYPES = Object.freeze({
 const VALID_OWNER_TYPES = new Set(Object.values(OWNER_TYPES));
 
 /**
- * Rótulos de origem/destino aceitos para o dono `SYSTEM`.
+ * Source/destination labels accepted for the `SYSTEM` owner.
  *
- * ─── Por que o `system` é uma lista fechada ─────────────────────────────────
+ * ─── Why `system` is a closed list ──────────────────────────────────────────
  *
- * `transfer({ from: system(...), to: character(...) })` **cria item**. É o mesmo
- * poder que `transactionService.giveItem` já tinha, então nada de novo é
- * concedido — mas ali o poder estava escondido atrás de um nome que parecia
- * inofensivo, e aqui ele fica escrito na assinatura.
+ * `transfer({ from: system(...), to: character(...) })` **creates an item**. It is the same
+ * power `transactionService.giveItem` already had, so nothing new is
+ * granted — but there the power was hidden behind a name that looked
+ * harmless, and here it is written in the signature.
  *
- * A lista fechada faz duas coisas. Primeiro, um `ref` novo é uma decisão de
- * economia que passa por revisão de código, e não uma string digitada no meio de
- * um módulo. Segundo, ela torna a pergunta *"que caminhos criam item neste
- * servidor?"* respondível por leitura, que é exatamente a pergunta que a
- * auditoria §2 não conseguia responder.
+ * The closed list does two things. First, a new `ref` is an economy
+ * decision that goes through code review, not a string typed in the middle of
+ * a module. Second, it makes the question *"which paths create items on this
+ * server?"* answerable by reading, which is exactly the question that
+ * audit §2 could not answer.
  */
 const SYSTEM_SOURCES = Object.freeze({
-  /** Resultado de receita. Contrapartida: o consumo dos ingredientes. */
+  /** Recipe output. Counterpart: the consumption of the ingredients. */
   CRAFT: 'craft',
-  /** Consumo de ingrediente/recurso que deixa de existir. */
+  /** Consumption of an ingredient/resource that stops existing. */
   CONSUME: 'consume',
-  /** Coleta no mundo (lenha, minério, pesca). */
+  /** Gathering in the world (wood, ore, fishing). */
   GATHER: 'gather',
-  /** Staff criando ou apagando item, sempre auditado. */
+  /** Staff creating or deleting an item, always audited. */
   STAFF: 'staff',
-  /** Destruição por regra do jogo (confisco de contrabando). */
+  /** Destruction by game rule (contraband confiscation). */
   DESTROY: 'destroy',
-  /** Semente de teste e de seed. Nunca deve aparecer em produção. */
+  /** Test and seed data. Must never show up in production. */
   SEED: 'seed'
 });
 
@@ -105,20 +105,20 @@ const VALID_SYSTEM_SOURCES = new Set(Object.values(SYSTEM_SOURCES));
 
 /**
  * @typedef {object} InventoryOwner
- * @property {string} type        um de `OWNER_TYPES`
- * @property {string} ref         identificador dentro do tipo, **sempre string**
- * @property {number|null} characterId  preenchido só quando `type === 'character'`
- * @property {number|null} actorId      ator SkyMP, quando conhecido — só para projetar no cliente
- * @property {string} label       texto curto para log e auditoria
+ * @property {string} type        one of `OWNER_TYPES`
+ * @property {string} ref         identifier within the type, **always a string**
+ * @property {number|null} characterId  set only when `type === 'character'`
+ * @property {number|null} actorId      SkyMP actor, when known — only for projecting onto the client
+ * @property {string} label       short text for logs and audits
  */
 
 /**
- * Um `ref` é sempre string no banco (`owner_ref VARCHAR(64)`), porque nem todo
- * tipo de dono tem id numérico. Aqui a conversão acontece num lugar só.
+ * A `ref` is always a string in the DB (`owner_ref VARCHAR(64)`), because not every
+ * owner type has a numeric id. Here the conversion happens in a single place.
  *
- * Recusa `""`, `null`, `undefined`, `NaN`, `Infinity` e qualquer coisa acima de
- * 64 caracteres — o tamanho da coluna. Truncar silenciosamente faria dois donos
- * distintos virarem o mesmo `owner_ref`, que é a pior forma de errar aqui.
+ * Rejects `""`, `null`, `undefined`, `NaN`, `Infinity` and anything over
+ * 64 characters — the column size. Silently truncating would make two distinct
+ * owners become the same `owner_ref`, which is the worst way to get this wrong.
  *
  * @param {unknown} raw
  * @returns {string|null}
@@ -135,32 +135,32 @@ function normalizeRef(raw) {
 }
 
 /**
- * Monta um dono, validando tipo e `ref`.
+ * Builds an owner, validating the type and `ref`.
  *
  * @param {string} type
  * @param {unknown} ref
  * @param {{actorId?: number|null, label?: string}} [opts]
  * @returns {InventoryOwner}
- * @throws quando o tipo é desconhecido ou o `ref` é inválido
+ * @throws when the type is unknown or the `ref` is invalid
  */
 function owner(type, ref, opts = {}) {
   if (!VALID_OWNER_TYPES.has(type)) {
     throw new Error(
-      `[inventory-owner] tipo de dono desconhecido: ${JSON.stringify(type)}. ` +
-      `Validos: ${[...VALID_OWNER_TYPES].join(', ')}`
+      `[inventory-owner] unknown owner type: ${JSON.stringify(type)}. ` +
+      `Valid: ${[...VALID_OWNER_TYPES].join(', ')}`
     );
   }
 
   const normalized = normalizeRef(ref);
   if (normalized === null) {
-    throw new Error(`[inventory-owner] '${type}': ref invalido ${JSON.stringify(ref)}`);
+    throw new Error(`[inventory-owner] '${type}': invalid ref ${JSON.stringify(ref)}`);
   }
 
   if (type === OWNER_TYPES.SYSTEM && !VALID_SYSTEM_SOURCES.has(normalized)) {
     throw new Error(
-      `[inventory-owner] origem de sistema desconhecida: '${normalized}'. ` +
-      `Validas: ${[...VALID_SYSTEM_SOURCES].join(', ')}. ` +
-      `Criar item por um rotulo novo e decisao de economia, nao de modulo.`
+      `[inventory-owner] unknown system source: '${normalized}'. ` +
+      `Valid: ${[...VALID_SYSTEM_SOURCES].join(', ')}. ` +
+      `Creating items under a new label is an economy decision, not a module one.`
     );
   }
 
@@ -178,12 +178,12 @@ function owner(type, ref, opts = {}) {
 }
 
 /**
- * O dono é um personagem.
+ * The owner is a character.
  *
- * `actorId` é **opcional e nunca é autoridade**: ele existe só para projetar a
- * mudança no cliente depois do commit. Um personagem offline transfere item do
- * mesmo jeito — é o que permite devolver estoque de barraca para quem não está
- * conectado, coisa que o `packStall` hoje não consegue fazer.
+ * `actorId` is **optional and never authoritative**: it only exists to project the
+ * change onto the client after the commit. An offline character transfers items the
+ * same way — which is what makes it possible to return stall stock to someone who is not
+ * connected, something `packStall` cannot do today.
  *
  * @param {number} characterId
  * @param {number|null} [actorId]
@@ -193,9 +193,9 @@ function character(characterId, actorId = null) {
 }
 
 /**
- * O dono é um baú registrado. `ref` é `containers.id`, **não** o `object_id`
- * (formDesc): o formDesc é o endereço no mundo e pode ser reapontado; o id é a
- * identidade do baú.
+ * The owner is a registered chest. `ref` is `containers.id`, **not** the `object_id`
+ * (formDesc): the formDesc is the address in the world and can be repointed; the id is the
+ * chest's identity.
  *
  * @param {number} containerId
  * @param {string} [label]
@@ -205,15 +205,15 @@ function container(containerId, label) {
 }
 
 /**
- * O dono é o nada: item nasce aqui ou morre aqui.
- * @param {string} source um de `SYSTEM_SOURCES`
+ * The owner is the void: the item is born here or dies here.
+ * @param {string} source one of `SYSTEM_SOURCES`
  */
 function system(source) {
   return owner(OWNER_TYPES.SYSTEM, source, { label: `sistema:${source}` });
 }
 
 /**
- * Chave estável do dono, para lock ordenado, log e deduplicação.
+ * Stable key for the owner, for ordered locking, logging and deduplication.
  * @param {InventoryOwner} o
  * @returns {string}
  */
@@ -222,11 +222,11 @@ function key(o) {
 }
 
 /**
- * Dois donos são o mesmo?
+ * Are two owners the same?
  *
- * Usado para recusar transferência de alguém para si mesmo — que não é um erro
- * inofensivo: ela geraria duas linhas de ledger que se cancelam e, num caminho
- * com `FOR UPDATE`, poderia travar contra a própria transação.
+ * Used to refuse a transfer from someone to themselves — which is not a harmless
+ * error: it would produce two ledger rows that cancel out and, on a path
+ * with `FOR UPDATE`, could deadlock against its own transaction.
  *
  * @param {InventoryOwner} a
  * @param {InventoryOwner} b
@@ -236,8 +236,8 @@ function isSame(a, b) {
 }
 
 /**
- * `system` não guarda nada. Serve para o `inventory-service` saber que não
- * precisa de adaptador de armazenamento nem de lock para esta ponta.
+ * `system` holds nothing. It lets `inventory-service` know that it needs
+ * no storage adapter and no lock for this end.
  * @param {InventoryOwner} o
  */
 function isVoid(o) {

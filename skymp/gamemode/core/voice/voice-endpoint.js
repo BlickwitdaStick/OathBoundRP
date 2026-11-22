@@ -1,90 +1,90 @@
 /**
  * core/voice/voice-endpoint.js
  *
- * VoiceEndpoint — **quem captura o microfone, e nada além disso.**
+ * VoiceEndpoint — **who captures the microphone, and nothing else.**
  *
- * ## O problema que esta abstração existe para resolver
+ * ## The problem this abstraction exists to solve
  *
- * Hoje o projeto tem um caminho de voz só, e ele sabe demais sobre si mesmo: o
- * `voip-service.js` conhece o formato PCM no fio, o papel `sender`, o teto de
- * base64 e o relay por WebSocket. Nada disso é *regra de voz* — é detalhe de
- * **como aquele microfone específico chega até o servidor**.
+ * Today the project has a single voice path, and it knows too much about itself: the
+ * `voip-service.js` knows the PCM format on the wire, the `sender` role, the
+ * base64 cap and the WebSocket relay. None of that is a *voice rule* — it is a detail of
+ * **how that specific microphone reaches the server**.
  *
- * A migração para LiveKit troca exatamente esse detalhe, e ele pode ser trocado
- * de duas formas que ainda não dá para escolher entre si com dados:
+ * The migration to LiveKit swaps exactly that detail, and it can be swapped
+ * in two ways that cannot yet be chosen between with data:
  *
- *   - **CEF**: `getUserMedia` dentro da UI do jogo, publicando com o SDK JS do
- *     LiveKit. Depende de o client expor um `CefPermissionHandler` seguro —
- *     tecnicamente possível na CEF 108 que o SkyMP usa (auditoria §5), mas
- *     exige um build de client nosso.
- *   - **Nativo**: WASAPI no `voice-helper/`, publicando com o SDK C++ do
- *     LiveKit. Não depende de patch de client nenhum, e é o Plano B se o
- *     caminho CEF não fechar com segurança.
+ *   - **CEF**: `getUserMedia` inside the game UI, publishing with LiveKit's JS
+ *     SDK. It depends on the client exposing a safe `CefPermissionHandler` —
+ *     technically possible in the CEF 108 SkyMP uses (audit §5), but it
+ *     requires a client build of our own.
+ *   - **Native**: WASAPI in `voice-helper/`, publishing with LiveKit's C++
+ *     SDK. It does not depend on any client patch, and it is Plan B if the
+ *     CEF path does not close safely.
  *
- * Se o resto do sistema perguntar "é CEF ou é nativo?", cada resposta nova
- * espalha um `if` por mais um arquivo, e a decisão entre A e B vira uma
- * refatoração em vez de uma troca de configuração. Este módulo é a costura que
- * impede isso: o resto do sistema pergunta **capacidades**, nunca **identidade**.
+ * If the rest of the system asks "is it CEF or native?", every new answer
+ * spreads an `if` across one more file, and the choice between A and B becomes a
+ * refactor instead of a configuration change. This module is the seam that
+ * prevents that: the rest of the system asks about **capabilities**, never **identity**.
  *
- * ## O que continua sendo do SkyMP, e não do endpoint
+ * ## What still belongs to SkyMP, and not to the endpoint
  *
- * O endpoint diz de onde vêm os bytes do microfone. Ele **não** decide:
+ * The endpoint says where the microphone bytes come from. It does **not** decide:
  *
- *   - quem ouve quem (proximidade — `voip-service.tickProximity`);
- *   - com que volume (mesma conta, mesma tabela `VOICE_RANGES`);
- *   - se a pessoa está muda (`muted`, que é do ator);
- *   - o alcance do modo de voz (`voiceMode`).
+ *   - who hears whom (proximity — `voip-service.tickProximity`);
+ *   - at what volume (same math, same `VOICE_RANGES` table);
+ *   - whether the person is muted (`muted`, which belongs to the actor);
+ *   - the voice mode's range (`voiceMode`).
  *
- * Isso é regra de mundo, é autoridade do servidor de jogo, e não muda quando o
- * transporte muda. O LiveKit transporta; o SkyMP manda. Ver
+ * That is a world rule, it is the game server's authority, and it does not change when the
+ * transport changes. LiveKit carries; SkyMP rules. See
  * `docs/technical/SKYVOICE_LIVEKIT_AUDIT.md` §7.
  *
- * ## Estado
+ * ## Status
  *
- * Isto é **andaime de migração**, declarado agora para que a decisão CEF-vs-
- * nativo não precise ser tomada antes da hora. Só `legacy-relay` tem
- * implementação de verdade hoje; os dois endpoints LiveKit descrevem o contrato
- * que a implementação terá que cumprir, e são exercitados pelo spike em
- * `spikes/skyvoice-livekit/`. Nada aqui captura áudio sozinho.
+ * This is **migration scaffolding**, declared now so the CEF-vs-
+ * native decision does not have to be made ahead of time. Only `legacy-relay` has a
+ * real implementation today; the two LiveKit endpoints describe the contract
+ * the implementation will have to fulfill, and are exercised by the spike in
+ * `spikes/skyvoice-livekit/`. Nothing here captures audio by itself.
  */
 
 /**
- * Como o áudio chega do microfone de uma pessoa até o resto do mundo.
+ * How audio gets from a person's microphone to the rest of the world.
  * @typedef {'ws-pcm-relay'|'livekit-sfu'} VoiceTransport
  */
 
 /**
- * Onde o microfone é aberto.
+ * Where the microphone is opened.
  * @typedef {'cef'|'native-helper'} VoiceCaptureSite
  */
 
 /**
- * Descritor de um endpoint de voz.
+ * Descriptor of a voice endpoint.
  *
- * É deliberadamente um objeto de dados congelado, e não uma classe com métodos
- * a sobrescrever. Um endpoint não *faz* nada aqui — ele **declara** o que exige
- * e o que oferece, e quem age (o serviço de voz, o emissor de token, o
- * launcher) lê essa declaração. Herança daria a cada endpoint um lugar para
- * esconder comportamento, que é justamente o que esta costura quer evitar.
+ * It is deliberately a frozen data object, not a class with methods
+ * to override. An endpoint does not *do* anything here — it **declares** what it requires
+ * and what it offers, and whoever acts (the voice service, the token issuer, the
+ * launcher) reads that declaration. Inheritance would give each endpoint a place to
+ * hide behavior, which is exactly what this seam wants to avoid.
  *
  * @typedef {object} VoiceEndpoint
  * @property {string} id
  * @property {VoiceTransport} transport
  * @property {VoiceCaptureSite} capturesAt
- * @property {boolean} requiresClientPatch    exige build de client nosso?
- * @property {boolean} requiresExternalProcess exige processo fora do jogo?
- * @property {boolean} carriesAudioThroughGameServer  o áudio passa pelo servidor de jogo?
- * @property {boolean} implemented            existe implementação hoje?
- * @property {string} rationale               por que este endpoint existe
+ * @property {boolean} requiresClientPatch    requires a client build of ours?
+ * @property {boolean} requiresExternalProcess requires a process outside the game?
+ * @property {boolean} carriesAudioThroughGameServer  does audio go through the game server?
+ * @property {boolean} implemented            is there an implementation today?
+ * @property {string} rationale               why this endpoint exists
  */
 
 /**
- * O caminho atual: helper nativo → WebSocket → `voip-service` → UI.
+ * The current path: native helper → WebSocket → `voip-service` → UI.
  *
- * `carriesAudioThroughGameServer: true` é a propriedade que o resto do sistema
- * realmente precisa saber sobre ele, e é a que dói: o processo Node do gamemode
- * multiplica cada quadro pela audiência. É o custo registrado no
- * `TASK_005_VOIP_CAPACITY_AND_SECURITY.md`, e é o motivo de existir migração.
+ * `carriesAudioThroughGameServer: true` is the property the rest of the system
+ * really needs to know about it, and it is the one that hurts: the gamemode's Node process
+ * multiplies each frame by the audience. It is the cost recorded in
+ * `TASK_005_VOIP_CAPACITY_AND_SECURITY.md`, and it is why the migration exists.
  */
 const LEGACY_RELAY = Object.freeze({
   id: 'legacy-relay',
@@ -95,24 +95,24 @@ const LEGACY_RELAY = Object.freeze({
   carriesAudioThroughGameServer: true,
   implemented: true,
   rationale:
-    'Caminho provado até o transporte (VOICE_NATIVE_HELPER.md §7/§8.4). ' +
-    'Não escala: PCM cru re-serializado por ouvinte, dentro do processo do jogo.'
+    'Path proven up to the transport (VOICE_NATIVE_HELPER.md §7/§8.4). ' +
+    'Does not scale: raw PCM re-serialized per listener, inside the game process.'
 });
 
 /**
- * Plano A: captura na UI do jogo, dentro da CEF, publicando no LiveKit.
+ * Plan A: capture in the game UI, inside the CEF, publishing to LiveKit.
  *
- * `requiresClientPatch: true` é a única razão de este não ser obviamente o
- * escolhido. A CEF 108 do SkyMP **tem** a API para conceder microfone com
- * escopo (`CefPermissionHandler::OnRequestMediaAccessPermission`, verificado na
- * auditoria §5), mas o `OverlayClient` do client oficial não a implementa — e
- * sem implementá-la o padrão do runtime alloy é negar. Usar isto exige
- * distribuir um client nosso.
+ * `requiresClientPatch: true` is the only reason this is not obviously the
+ * chosen one. SkyMP's CEF 108 **has** the API to grant the microphone with
+ * scope (`CefPermissionHandler::OnRequestMediaAccessPermission`, verified in
+ * audit §5), but the official client's `OverlayClient` does not implement it — and
+ * without implementing it the alloy runtime's default is to deny. Using this requires
+ * shipping a client of our own.
  *
- * Não confundir com o patch descartado do `VOICE_CLIENT_PATCH.md`: aquele ligava
- * flags globais de linha de comando que liberam microfone **e câmera** para
- * **qualquer origem**. Este endpoint pressupõe o contrário — um handler que
- * responde origem por origem e só concede `AUDIO_CAPTURE`.
+ * Not to be confused with the discarded patch in `VOICE_CLIENT_PATCH.md`: that one turned on
+ * global command-line flags that unlock the microphone **and the camera** for
+ * **any origin**. This endpoint assumes the opposite — a handler that
+ * answers origin by origin and only grants `AUDIO_CAPTURE`.
  */
 const CEF_LIVEKIT = Object.freeze({
   id: 'cef-livekit',
@@ -123,19 +123,19 @@ const CEF_LIVEKIT = Object.freeze({
   carriesAudioThroughGameServer: false,
   implemented: false,
   rationale:
-    'Sem processo extra para o jogador. Exige CefPermissionHandler com escopo ' +
-    'de origem e só AUDIO_CAPTURE, num build de client nosso.'
+    'No extra process for the player. Requires an origin-scoped CefPermissionHandler ' +
+    'granting only AUDIO_CAPTURE, in a client build of our own.'
 });
 
 /**
- * Plano B: WASAPI no `voice-helper/`, publicando com o SDK C++ do LiveKit.
+ * Plan B: WASAPI in `voice-helper/`, publishing with LiveKit's C++ SDK.
  *
- * Existe porque o Plano A depende de um build de client, e um plano que depende
- * de uma coisa que ainda não temos não é um plano — é uma aposta. Este reusa o
- * `voice-helper/` que já compila e já capturou áudio real (VOICE_NATIVE_HELPER
- * §8.4): o que muda é para onde os quadros vão, não como são capturados.
+ * It exists because Plan A depends on a client build, and a plan that depends
+ * on something we do not have yet is not a plan — it is a bet. This one reuses the
+ * `voice-helper/` that already compiles and has already captured real audio (VOICE_NATIVE_HELPER
+ * §8.4): what changes is where the frames go, not how they are captured.
  *
- * É também o motivo de o `voice-helper/` não ser apagado nesta migração.
+ * It is also why `voice-helper/` is not deleted in this migration.
  */
 const NATIVE_LIVEKIT = Object.freeze({
   id: 'native-livekit',
@@ -146,8 +146,8 @@ const NATIVE_LIVEKIT = Object.freeze({
   carriesAudioThroughGameServer: false,
   implemented: false,
   rationale:
-    'Não depende de build de client. Reaproveita a captura WASAPI já provada ' +
-    'do voice-helper, trocando o destino dos quadros para o SDK C++ do LiveKit.'
+    'Does not depend on a client build. Reuses the WASAPI capture already proven ' +
+    'in voice-helper, switching the frames\' destination to LiveKit\'s C++ SDK.'
 });
 
 const ENDPOINTS = Object.freeze({
@@ -156,7 +156,7 @@ const ENDPOINTS = Object.freeze({
   [NATIVE_LIVEKIT.id]: NATIVE_LIVEKIT
 });
 
-/** Backends de voz selecionáveis por `VOICE_BACKEND`. */
+/** Voice backends selectable through `VOICE_BACKEND`. */
 const BACKENDS = Object.freeze({
   legacy: Object.freeze({
     id: 'legacy',
@@ -164,11 +164,11 @@ const BACKENDS = Object.freeze({
   }),
   livekit: Object.freeze({
     id: 'livekit',
-    // Os dois endpoints LiveKit convivem de propósito: a sala é a mesma e o
-    // transporte é o mesmo, então um jogador com client patchado e outro com
-    // helper nativo se ouvem sem que nenhum dos dois saiba do outro. É essa
-    // propriedade que permite migrar sem um corte — e é ela que se perderia se
-    // o resto do sistema perguntasse "CEF ou nativo?".
+    // The two LiveKit endpoints coexist on purpose: the room is the same and the
+    // transport is the same, so a player with a patched client and another with the
+    // native helper hear each other without either one knowing about the other. That
+    // property is what allows migrating without a cutover — and it is what would be lost if
+    // the rest of the system asked "CEF or native?".
     endpoints: Object.freeze([CEF_LIVEKIT.id, NATIVE_LIVEKIT.id])
   })
 });
@@ -176,18 +176,18 @@ const BACKENDS = Object.freeze({
 const DEFAULT_BACKEND = 'legacy';
 
 /**
- * Backend de voz em vigor, lido de `VOICE_BACKEND`.
+ * Voice backend in effect, read from `VOICE_BACKEND`.
  *
- * **Padrão `legacy`, e a leitura é por chamada.** O padrão é o caminho que já
- * existe porque uma migração que começa ligada não é uma migração, é uma troca:
- * quem não configurou nada continua exatamente onde estava. E ler por chamada,
- * em vez de uma vez no load, é o mesmo motivo do `VOIP_DEBUG_EXPOSE_TICKET` —
- * uma flag que só muda reiniciando o servidor é uma flag que alguém deixa no
- * estado errado para não ter que reiniciar de novo.
+ * **Default `legacy`, and it is read on every call.** The default is the path that already
+ * exists because a migration that starts switched on is not a migration, it is a swap:
+ * whoever configured nothing stays exactly where they were. And reading on every call,
+ * instead of once at load, is for the same reason as `VOIP_DEBUG_EXPOSE_TICKET` —
+ * a flag that only changes by restarting the server is a flag someone leaves in the
+ * wrong state to avoid restarting again.
  *
- * Valor desconhecido cai no padrão **e avisa**. Cair calado faria um erro de
- * digitação (`VOICE_BACKEND=livekt`) rodar o servidor inteiro no backend antigo
- * com todo mundo achando que migrou.
+ * An unknown value falls back to the default **and warns**. Falling back silently would let a
+ * typo (`VOICE_BACKEND=livekt`) run the whole server on the old backend
+ * with everyone thinking it migrated.
  *
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {'legacy'|'livekit'}
@@ -199,14 +199,14 @@ function resolveBackend(env = process.env) {
     return /** @type {'legacy'|'livekit'} */ (raw);
   }
   console.warn(
-    `[voice] VOICE_BACKEND='${raw}' não é um backend conhecido ` +
-    `(${Object.keys(BACKENDS).join(', ')}); usando '${DEFAULT_BACKEND}'.`
+    `[voice] VOICE_BACKEND='${raw}' is not a known backend ` +
+    `(${Object.keys(BACKENDS).join(', ')}); using '${DEFAULT_BACKEND}'.`
   );
   return DEFAULT_BACKEND;
 }
 
 /**
- * Os endpoints admitidos pelo backend em vigor.
+ * The endpoints allowed by the backend in effect.
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {VoiceEndpoint[]}
  */
@@ -215,12 +215,12 @@ function activeEndpoints(env = process.env) {
 }
 
 /**
- * True quando o áudio ainda passa dentro do processo do servidor de jogo.
+ * True when audio still goes through the game server's process.
  *
- * Esta é a **única** pergunta que o `voip-service` precisa fazer para saber se
- * deve se comportar como relay, e ela é sobre uma propriedade do transporte —
- * não sobre qual endpoint está ativo. É essa diferença que mantém a decisão
- * CEF-vs-nativo fora do resto do código.
+ * This is the **only** question `voip-service` needs to ask to know whether it
+ * should behave as a relay, and it is about a property of the transport —
+ * not about which endpoint is active. That difference is what keeps the
+ * CEF-vs-native decision out of the rest of the code.
  *
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {boolean}
@@ -230,12 +230,12 @@ function relaysAudioThroughGameServer(env = process.env) {
 }
 
 /**
- * True quando algum endpoint ativo ainda não tem implementação.
+ * True when some active endpoint does not have an implementation yet.
  *
- * Existe para o boot poder dizer isso em voz alta. Ligar `VOICE_BACKEND=livekit`
- * hoje é pedir um caminho que ainda não captura áudio; o servidor deve subir
- * assim mesmo (é o que torna o spike possível) e deve ser explícito sobre o que
- * a pessoa acabou de ligar.
+ * It exists so boot can say so out loud. Turning on `VOICE_BACKEND=livekit`
+ * today means asking for a path that does not capture audio yet; the server should start
+ * anyway (that is what makes the spike possible) and should be explicit about what
+ * the person just turned on.
  *
  * @param {NodeJS.ProcessEnv} [env]
  * @returns {boolean}
@@ -245,7 +245,7 @@ function hasUnimplementedEndpoint(env = process.env) {
 }
 
 /**
- * Resumo legível do estado da voz, para o log de boot e diagnóstico.
+ * Human-readable summary of the voice state, for the boot log and diagnostics.
  * @param {NodeJS.ProcessEnv} [env]
  */
 function describeBackend(env = process.env) {

@@ -398,7 +398,7 @@ async function handlePlayerDowned(actorId, killerId) {
 
   console.log(`[death-service] Player Actor ${actorId.toString(16)} caiu. Estado: DOWNED.`);
   characterState.set(character.characterId, STATES.DOWNED, { downedAt: Date.now() });
-  commands.broadcastProximityMessage(actorId, '* O corpo cai ao chão, ferido e sangrando.', 1500);
+  commands.broadcastProximityMessage(actorId, '* The body falls to the ground, wounded and bleeding.', 1500);
   panelRefreshBus.requestRefresh(actorId, 'status');
 
   // Registra a autoria no instante em que ela é conhecida. Guardar junto do
@@ -595,7 +595,7 @@ async function bleedOut(actorId, characterId) {
     await transactionService.removeGold({ characterId, amount: penalty, reason: 'death_penalty', module: 'death' });
   }
 
-  commands.broadcastProximityMessage(actorId, '* O corpo para de se mexer.', 1500);
+  commands.broadcastProximityMessage(actorId, '* The body stops moving.', 1500);
   panelRefreshBus.requestRefresh(actorId, 'status');
 
   // Morte permanente: o personagem não respawna, é aposentado. Mesmo caminho do

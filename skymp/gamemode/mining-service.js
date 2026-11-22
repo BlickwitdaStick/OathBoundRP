@@ -1,47 +1,47 @@
 /**
  * mining-service.js
  *
- * **Minerador MVP.** O primeiro consumidor real do Profession Core e do
- * Resource Node Framework — e o primeiro módulo do projeto a registrar uma
- * interação de alvo `object` no `core/interaction-registry.js`.
+ * **Miner MVP.** The first real consumer of the Profession Core and the
+ * Resource Node Framework — and the first module in the project to register an
+ * `object`-target interaction in `core/interaction-registry.js`.
  *
- * ─── Como a checagem de distância deixou de ser um gap ───────────────────────
+ * ─── How the distance check stopped being a gap ─────────────────────────────
  *
- * A primeira versão deste arquivo tinha `/minerar <formDesc>` como comando de
- * chat: o jogador digitava o FormDesc à mão, e nada verificava se ele estava
- * perto do veio. Esse comando nunca existiu por acidente — era a forma mais
- * simples de entregar profissão + ferramenta + entrega atômica + XP,
- * deixando a distância documentada como gap bloqueante até este módulo poder
- * usar o Interaction Framework (`docs/gameplay/MINING.md` §1, versão anterior).
+ * The first version of this file had `/minerar <formDesc>` as a chat
+ * command: the player typed the FormDesc by hand, and nothing checked whether they were
+ * close to the vein. That command did not exist by accident — it was the simplest
+ * way to deliver profession + tool + atomic delivery + XP,
+ * leaving distance documented as a blocking gap until this module could
+ * use the Interaction Framework (`docs/gameplay/MINING.md` §1, previous version).
  *
- * A correção não foi "adicionar uma checagem de distância" — foi trocar a
- * interface errada pela certa. `core/interaction-targets.js` agora resolve
- * alvo `object`: o CLIENTE reporta o FormId do que está mirando (não uma
- * string digitada), o `core/interaction-service.js` mede a distância com
- * `target.assertRange` (o mesmo mecanismo genérico que já protegia `player`)
- * ANTES de `execute` rodar, e só resolve a ação se o veio estiver dentro de
+ * The fix was not "add a distance check" — it was swapping the wrong
+ * interface for the right one. `core/interaction-targets.js` now resolves
+ * `object` targets: the CLIENT reports the FormId of what it is aiming at (not a
+ * typed string), `core/interaction-service.js` measures distance with
+ * `target.assertRange` (the same generic mechanism that already protected `player`)
+ * BEFORE `execute` runs, and only resolves the action if the vein is within
  * `mining.maxDistance`.
  *
- * ⚠️ **`mp.get(formId, 'locationalData')` contra uma `MpObjectReference`
- * comum é [DOC] em `types/mp.d.ts`, mas nunca foi validado em jogo por este
- * projeto** (decisão tomada com o usuário: confiar na documentação oficial e
- * implementar, marcando como assumido). Validar manualmente em servidor real
- * antes de tirar `ENABLE_MINING_SERVICE` do desligado por padrão.
+ * ⚠️ **`mp.get(formId, 'locationalData')` against an ordinary `MpObjectReference`
+ * is [DOC] in `types/mp.d.ts`, but it has never been validated in game by this
+ * project** (decision made with the user: trust the official documentation and
+ * implement, marking it as assumed). Validate manually on a real server
+ * before taking `ENABLE_MINING_SERVICE` out of off-by-default.
  *
- * ─── O que É real aqui ───────────────────────────────────────────────────────
+ * ─── What IS real here ──────────────────────────────────────────────────────
  *
- * - Distância via Interaction Framework (`mining.maxDistance`, ver acima).
- * - Menu só mostra "Minerar" se o FormId mirado tiver uma linha ativa em
- *   `resource_nodes` (`canSee`) — mas quem decide de verdade é sempre
- *   `resource-node-service.consume()`, revalidado no `execute`.
- * - Checa ferramenta (picareta) via `Actor.GetItemCount` — client-trusted só
- *   para decidir se a ação COMEÇA, nunca o que o jogador recebe (mesma
- *   ressalva que `jobs-service.js` já documentava para o machado de lenhador).
- * - Entrega do minério é 100% `resource-node-service.consume()`, que já é
- *   atômico com o decremento do nó (nenhum item nasce fora do banco). O gate
- *   de profissão/rank também é dele — não duplicado aqui.
- * - Anti-spam por `characterId` (não `actorId`, que é slot reciclável) — mesmo
- *   padrão de `jobs-service.activeGatherers`.
+ * - Distance via the Interaction Framework (`mining.maxDistance`, see above).
+ * - The menu only shows "Mine" if the aimed FormId has an active row in
+ *   `resource_nodes` (`canSee`) — but what really decides is always
+ *   `resource-node-service.consume()`, revalidated in `execute`.
+ * - Checks the tool (pickaxe) via `Actor.GetItemCount` — client-trusted only
+ *   to decide whether the action STARTS, never what the player receives (same
+ *   caveat `jobs-service.js` already documented for the woodcutter's axe).
+ * - Ore delivery is 100% `resource-node-service.consume()`, which is already
+ *   atomic with the node decrement (no item is born outside the DB). The
+ *   profession/rank gate is also its job — not duplicated here.
+ * - Anti-spam by `characterId` (not `actorId`, which is a recyclable slot) — same
+ *   pattern as `jobs-service.activeGatherers`.
  */
 
 'use strict';
@@ -57,24 +57,24 @@ const MODULE = 'mining';
 const PROFESSION_CODE = 'miner';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Diagnóstico de runtime — ENABLE_MINING_RUNTIME_DIAGNOSTICS
+// Runtime diagnostics — ENABLE_MINING_RUNTIME_DIAGNOSTICS
 //
-// Existe só para a homologação registrada em
-// docs/research/MINING_RUNTIME_VALIDATION_REPORT.md: correlacionar, por uma
-// única linha de log por estágio, o que o cliente reportou como alvo, o que
-// `mp.get(formId,'locationalData')` devolveu de verdade em servidor real, o
-// resultado da checagem de ferramenta e o resultado de `consume()` — sem
-// precisar instrumentar cada arquivo na hora do teste manual.
+// Exists only for the acceptance testing recorded in
+// docs/research/MINING_RUNTIME_VALIDATION_REPORT.md: correlating, with a
+// single log line per stage, what the client reported as the target, what
+// `mp.get(formId,'locationalData')` really returned on a real server, the
+// result of the tool check and the result of `consume()` — without
+// having to instrument each file during the manual test.
 //
-// Mesmo padrão de flag do resto do projeto (`process.env.X === 'true'`, ver
-// `voip-service.js` e `VOIP_DEBUG_EXPOSE_TICKET`). Desligado por padrão: como
-// todo módulo `lab`, isto não deve rodar em produção — é andaime de teste, não
-// gameplay. Não muda NENHUM resultado de `canSee`/`execute`; só observa.
+// Same flag pattern as the rest of the project (`process.env.X === 'true'`, see
+// `voip-service.js` and `VOIP_DEBUG_EXPOSE_TICKET`). Off by default: like
+// every `lab` module, this must not run in production — it is test scaffolding, not
+// gameplay. It changes NO `canSee`/`execute` result; it only observes.
 //
-// `correlationId` agrupa as linhas de uma mesma tentativa de minerar: gerado
-// uma vez por `execute()`, carregado em todo `_diag()` daquela chamada. Não
-// loga posição/coordenada do jogador em texto (só do alvo, que é público —
-// veio de mineração não é dado sensível de personagem).
+// `correlationId` groups the lines of a single mining attempt: generated
+// once per `execute()`, carried in every `_diag()` of that call. It does not
+// log the player's position/coordinates as text (only the target's, which is public —
+// a mining vein is not sensitive character data).
 function _diagnosticsEnabled() {
   return process.env.ENABLE_MINING_RUNTIME_DIAGNOSTICS === 'true';
 }
@@ -88,35 +88,35 @@ function _newCorrelationId(characterId) {
   return `mine-${characterId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Mesmo FormID que jobs-service.js (PARKED) já usava — vetado por aquela
-// rodada, não reinventado aqui.
+// Same FormID jobs-service.js (PARKED) already used — vetted in that
+// round, not reinvented here.
 const ITEM_PICKAXE = 0x000e3c16;
 
 /**
- * Chaveado por `characterId`, nunca por `actorId` — o SkyMP reaproveita
- * `actorId` entre sessões, e a chave errada já produziu bug real neste
- * projeto (ver o comentário equivalente em `jobs-service.js` e em
+ * Keyed by `characterId`, never by `actorId` — SkyMP reuses
+ * `actorId` across sessions, and the wrong key has already produced a real bug in this
+ * project (see the equivalent comment in `jobs-service.js` and in
  * `commands.js:activeCharacters`).
  * @type {Set<number>}
  */
 const activeGatherers = new Set();
 
 const FAILURE_MESSAGES = Object.freeze({
-  depleted: 'Este veio está esgotado. Volte mais tarde.',
-  node_disabled: 'Este veio não está disponível.',
-  not_found: 'Não há nada para minerar aqui.',
-  profession_required: 'Você precisa ser Minerador para isso.',
-  rank_too_low: 'Seu rank de Minerador ainda não é suficiente para este veio.',
-  invalid_character: 'Personagem inválido.',
-  invalid_form_desc: 'Alvo inválido.',
-  invalid_request_id: 'Tentativa inválida.',
-  cooldown: 'Este veio ainda está se recuperando para você.'
+  depleted: 'This vein is depleted. Come back later.',
+  node_disabled: 'This vein is not available.',
+  not_found: 'There is nothing to mine here.',
+  profession_required: 'You need to be a Miner to do that.',
+  rank_too_low: 'Your Miner rank is not high enough for this vein yet.',
+  invalid_character: 'Invalid character.',
+  invalid_form_desc: 'Invalid target.',
+  invalid_request_id: 'Invalid attempt.',
+  cooldown: 'This vein is still recovering for you.'
 });
 
 /**
- * `mp.getDescFromId` é [USO] mas já é a forma padrão deste gamemode de
- * converter FormId→FormDesc (ver `core/papyrus.js`); sem `mp`, não há como
- * saber o FormDesc, e o chamador trata `null` como "não é um veio".
+ * `mp.getDescFromId` is [USO] but it is already this gamemode's standard way of
+ * converting FormId→FormDesc (see `core/papyrus.js`); without `mp`, there is no way to
+ * know the FormDesc, and the caller treats `null` as "not a vein".
  * @param {number} formId
  * @returns {string|null}
  */
@@ -136,8 +136,8 @@ async function _nodeAt(formId) {
 }
 
 /**
- * Client-trusted só para decidir se a ação COMEÇA — o que o jogador recebe é
- * inteiramente decidido por `resource-node-service.consume()`, no banco.
+ * Client-trusted only to decide whether the action STARTS — what the player receives is
+ * entirely decided by `resource-node-service.consume()`, in the DB.
  * @param {number} actorId
  * @returns {boolean}
  */
@@ -148,24 +148,24 @@ function _hasPickaxe(actorId) {
 }
 
 /**
- * Registra `mining.mine` no Interaction Framework. Chamado do `initialize()`
- * do módulo — precisa do framework pronto, daí `dependencies: ['interaction']`
- * em `phase0-basic.js`.
+ * Registers `mining.mine` in the Interaction Framework. Called from the module's
+ * `initialize()` — it needs the framework ready, hence `dependencies: ['interaction']`
+ * in `phase0-basic.js`.
  */
 function registerMiningInteractions() {
   interactionRegistry.register({
     id: 'mining.mine',
     module: MODULE,
     target: interactionRegistry.TARGET_TYPES.OBJECT,
-    label: 'Minerar',
-    // Alcance físico do veio, medido pelo servidor via `target.assertRange`
-    // antes de `execute` rodar — é isto que fecha o gap de distância.
+    label: 'Mine',
+    // The vein's physical range, measured by the server via `target.assertRange`
+    // before `execute` runs — this is what closes the distance gap.
     distance: serverOptions.get('mining.maxDistance'),
     idempotent: true,
     audit: interactionRegistry.AUDIT_LEVELS.ECONOMY,
     policyAction: 'mining',
-    // Só aparece no menu se o FormId mirado for de fato um veio ativo. Quem
-    // decide de verdade continua sendo `consume()`, revalidado abaixo.
+    // Only shows up in the menu if the aimed FormId really is an active vein. What
+    // really decides is still `consume()`, revalidated below.
     canSee: async ctx => {
       const no = await _nodeAt(ctx.target.formId);
       if (_diagnosticsEnabled()) {
@@ -185,13 +185,13 @@ function registerMiningInteractions() {
 
       if (activeGatherers.has(ctx.characterId)) {
         _diag(correlationId, 'blocked_concurrent', {});
-        return { message: 'Você já está ocupado fazendo algo.' };
+        return { message: 'You are already busy doing something.' };
       }
 
       const temPicareta = _hasPickaxe(ctx.actorId);
-      _diag(correlationId, 'tool_check', { hasPickaxe: temPicareta, source: 'Actor.GetItemCount (client-trusted, só decide inicio)' });
+      _diag(correlationId, 'tool_check', { hasPickaxe: temPicareta, source: 'Actor.GetItemCount (client-trusted, only decides the start)' });
       if (!temPicareta) {
-        return { message: 'Você precisa de uma picareta.' };
+        return { message: 'You need a pickaxe.' };
       }
 
       const formDesc = _formDescOf(ctx.target.formId);
@@ -210,11 +210,11 @@ function registerMiningInteractions() {
         _diag(correlationId, 'resource_node_consume', { ok: resultado.ok, code: resultado.code || null, data: resultado.data || null });
 
         if (!resultado.ok) {
-          return { message: FAILURE_MESSAGES[resultado.code] || 'Não foi possível minerar agora.' };
+          return { message: FAILURE_MESSAGES[resultado.code] || 'Could not mine right now.' };
         }
 
         if (resultado.replay) {
-          return { message: 'Esta mineração já foi processada.', data: resultado.data };
+          return { message: 'This mining attempt was already processed.', data: resultado.data };
         }
 
         const xpPorColeta = serverOptions.get('mining.xpPerGather');
@@ -229,7 +229,7 @@ function registerMiningInteractions() {
         }
 
         return {
-          message: `Você minerou ${resultado.data.yield}x (restam ${resultado.data.capacity}/${resultado.data.maxCapacity} no veio).`,
+          message: `You mined ${resultado.data.yield}x (${resultado.data.capacity}/${resultado.data.maxCapacity} left in the vein).`,
           data: resultado.data
         };
       } finally {
@@ -255,30 +255,30 @@ async function registerPhysicalAnchors() {
 }
 
 /**
- * Confere, por reflexão real do VM Papyrus do servidor (`mp._sp3ListMethods`,
+ * Checks, through real reflection of the server's Papyrus VM (`mp._sp3ListMethods`,
  * `[UPSTREAM CODE]` `ScampServer::SP3ListMethods` → `GetPapyrusVm().ListMethods`),
- * se `GetItemCount` está registrado nas classes que `_hasPickaxe` chama.
+ * whether `GetItemCount` is registered on the classes `_hasPickaxe` calls.
  *
- * Existe para responder em milissegundos, sem precisar de um jogador
- * conectado nem de teste manual, a pergunta que
- * `docs/research/SKYMP_INTEGRATION_AUDIT.md` (achado nº 5, `BOUND-006`)
- * deixou em aberto: `Actor.GetItemCount` está mesmo disponível neste
- * servidor, do jeito que ele está configurado hoje (`archives` vazio,
- * `skymp/server/data/scripts/` sem `Actor.pex`)? Isto distingue
- * **PAPYRUS FUNCTION NOT AVAILABLE** (a classe/método não está no VM — é
- * questão de configuração de archive, resolve-se carregando o `.pex`) de
- * **PAPYRUS FUNCTION AVAILABLE BUT CALL FAILED** (o método existe, o problema
- * é outro — argumento errado, `self` inválido, etc.) — as duas produzem o
- * mesmo sintoma para quem só olha o resultado de `_hasPickaxe`, mas pedem
- * correção completamente diferente.
+ * It exists to answer in milliseconds, without needing a connected player
+ * or a manual test, the question that
+ * `docs/research/SKYMP_INTEGRATION_AUDIT.md` (finding #5, `BOUND-006`)
+ * left open: is `Actor.GetItemCount` really available on this
+ * server, the way it is configured today (empty `archives`,
+ * `skymp/server/data/scripts/` without `Actor.pex`)? This distinguishes
+ * **PAPYRUS FUNCTION NOT AVAILABLE** (the class/method is not in the VM — it is an
+ * archive configuration matter, solved by loading the `.pex`) from
+ * **PAPYRUS FUNCTION AVAILABLE BUT CALL FAILED** (the method exists, the problem
+ * is something else — wrong argument, invalid `self`, etc.) — both produce the
+ * same symptom for whoever only looks at `_hasPickaxe`'s result, but call for a
+ * completely different fix.
  *
- * Só roda com a flag de diagnóstico ligada — é reflexão, não gameplay, e
- * `_sp3*` só existe em servidor real (sem `mp`, não há o que checar).
+ * It only runs with the diagnostics flag on — it is reflection, not gameplay, and
+ * `_sp3*` only exists on a real server (without `mp`, there is nothing to check).
  */
 function _diagnoseItemCountAvailability() {
   if (!_diagnosticsEnabled()) return;
   if (typeof mp === 'undefined' || typeof mp._sp3ListMethods !== 'function') {
-    _diag('boot', 'itemcount_availability_check_skipped', { reason: 'mp._sp3ListMethods indisponivel (sem mp real, ou versao do SkyMP sem introspeccao _sp3)' });
+    _diag('boot', 'itemcount_availability_check_skipped', { reason: 'mp._sp3ListMethods unavailable (no real mp, or a SkyMP version without _sp3 introspection)' });
     return;
   }
   for (const className of ['Actor', 'ObjectReference']) {
@@ -298,7 +298,7 @@ async function initMiningService() {
   _diagnoseItemCountAvailability();
 }
 
-/** Espelha o padrão de `market-stalls-service.shutdownMarketStallsService`. */
+/** Mirrors the pattern of `market-stalls-service.shutdownMarketStallsService`. */
 function shutdownMiningService() {
   interactionRegistry.unregisterModule(MODULE);
 }
@@ -312,7 +312,7 @@ module.exports = {
   registerMiningInteractions,
   registerPhysicalAnchors,
   FAILURE_MESSAGES,
-  // Exposto só para teste.
+  // Exposed only for tests.
   activeGatherers,
   _diagnoseItemCountAvailability
 };

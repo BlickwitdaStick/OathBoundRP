@@ -682,7 +682,7 @@ async function notifyStolenProvenance(officerActorId, targetCharacterId) {
   for (const item of stolenItems) {
     notify(
       officerActorId,
-      `[Proveniencia] 0x${item.baseId.toString(16)} (${item.status}) — Este item pertence a ${item.originalOwnerName}!`
+      `[Provenance] 0x${item.baseId.toString(16)} (${item.status}) — This item belongs to ${item.originalOwnerName}!`
     );
   }
 }
@@ -711,7 +711,7 @@ async function notifyMakerSignatures(officerActorId, targetCharacterId) {
     const dedicatoria = item.signatureText ? `"${item.signatureText}"` : '(no dedication)';
     notify(
       officerActorId,
-      `[Assinatura] 0x${item.baseId.toString(16)} — trabalho de ${item.makerName} ${dedicatoria}`
+      `[Signature] 0x${item.baseId.toString(16)} — made by ${item.makerName} ${dedicatoria}`
     );
   }
 }

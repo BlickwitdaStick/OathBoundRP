@@ -1,35 +1,35 @@
 /**
  * resource-node-service.js
  *
- * **O Resource Node Framework.** Um nó de recurso (veio de minério, árvore) com
- * capacidade, regeneração calculada sob demanda, e uma única operação de
- * escrita — `consume` — que decrementa o nó e entrega o item numa única
- * transação. Nenhuma mineração, corte de árvore ou caça mora aqui: isto é o
- * motor genérico que uma profissão concreta (Minerador, Lenhador) vai chamar
- * depois de já ter checado distância, ferramenta e sessão de coleta — nenhuma
- * dessas três checagens é deste arquivo.
+ * **The Resource Node Framework.** A resource node (ore vein, tree) with
+ * capacity, regeneration computed on demand, and a single write
+ * operation — `consume` — that decrements the node and delivers the item in a single
+ * transaction. No mining, tree felling or hunting lives here: this is the
+ * generic engine a concrete profession (Miner, Lumberjack) will call
+ * after having already checked distance, tool and gathering session — none
+ * of those three checks belongs to this file.
  *
- * ─── Por que `consume` entrega o item na MESMA transação que decrementa o nó ─
+ * ─── Why `consume` delivers the item in the SAME transaction that decrements the node ─
  *
- * Se fossem duas transações (decrementa nó, depois `transactionService
- * .giveItem`), uma falha entre as duas deixaria o nó mais pobre e o jogador
- * de mãos vazias — recurso destruído sem ninguém receber. `core
- * /transaction-service.js` já resolve exatamente esse problema para quem
- * precisa commitar dois efeitos juntos: exporta `tx.*`, primitivas que
- * participam da transação **do chamador** em vez de abrir a própria. É o
- * mesmo padrão que `crafting-service.js` usa para consumir ingrediente e
- * entregar resultado numa tacada.
+ * If they were two transactions (decrement the node, then `transactionService
+ * .giveItem`), a failure between the two would leave the node poorer and the player
+ * empty-handed — a resource destroyed with nobody receiving it. `core
+ * /transaction-service.js` already solves exactly that problem for whoever
+ * needs to commit two effects together: it exports `tx.*`, primitives that
+ * take part in the **caller's** transaction instead of opening their own. It is the
+ * same pattern `crafting-service.js` uses to consume ingredients and
+ * deliver the result in one go.
  *
- * ─── Concorrência: por que travar por `id` já é suficiente ──────────────────
+ * ─── Concurrency: why locking by `id` is enough ─────────────────────────────
  *
- * Ao contrário de `profession-service.grantProfession` (que precisa travar
- * TODAS as linhas ativas do personagem para contar contra um limite),
- * `consume` só precisa da linha do PRÓPRIO nó: `SELECT ... WHERE id = ? FOR
- * UPDATE` serializa dois jogadores disputando o mesmo veio — o segundo lê a
- * capacidade já decrementada pelo primeiro, não a obsoleta. É o §25 do
- * briefing de profissões ("nem capacity = -1 nem duplicação"), resolvido pelo
- * mesmo mecanismo que `core/transaction-service._applyGoldDelta` já usa para
- * ouro.
+ * Unlike `profession-service.grantProfession` (which has to lock
+ * ALL of the character's active rows to count against a limit),
+ * `consume` only needs the node's OWN row: `SELECT ... WHERE id = ? FOR
+ * UPDATE` serializes two players fighting over the same vein — the second reads the
+ * capacity already decremented by the first, not the stale one. It is §25 of the
+ * professions briefing ("neither capacity = -1 nor duplication"), solved by the
+ * same mechanism `core/transaction-service._applyGoldDelta` already uses for
+ * gold.
  */
 
 'use strict';
@@ -44,10 +44,10 @@ const { isValidType } = require('./core/resource-node-registry');
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Hex SEM prefixo `0x`, dois-pontos, nome do arquivo — a convenção do CLAUDE.md
- * do projeto ("célula e base são '162e2:Skyrim.esm'"). Validada aqui pelo
- * mesmo motivo que o documento a registra: um `0x162e2` não lança erro em
- * lugar nenhum do Papyrus, só deixa de funcionar em jogo.
+ * Hex WITHOUT the `0x` prefix, a colon, the file name — the project's CLAUDE.md
+ * convention ("cell and base are '162e2:Skyrim.esm'"). Validated here for the
+ * same reason the document records it: a `0x162e2` throws no error
+ * anywhere in Papyrus, it just stops working in game.
  */
 const FORM_DESC_SHAPE = /^[0-9a-f]{1,8}:[^:]+\.(esm|esp|esl)$/i;
 
@@ -72,10 +72,10 @@ function _isPositiveInt(v) {
 }
 
 /**
- * Capacidade atual, calculada — nunca gravada aqui. `elapsedMs` desde
- * `last_updated_at`, convertido em unidades por `regen_per_hour`, arredondado
- * para baixo (regenerar 0.9 de uma unidade não é regenerar nada), somado à
- * capacidade gravada, com teto em `max_capacity`.
+ * Current capacity, computed — never written here. `elapsedMs` since
+ * `last_updated_at`, converted into units by `regen_per_hour`, rounded
+ * down (regenerating 0.9 of a unit is regenerating nothing), added to the
+ * stored capacity, capped at `max_capacity`.
  *
  * @param {{current_capacity:number, max_capacity:number, regen_per_hour:number, last_updated_at:Date|string}} row
  * @param {number} nowMs
@@ -109,23 +109,23 @@ function _rowToState(row, nowMs) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Criação / administração
+// Creation / administration
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Registra um nó novo. Não passa por capability nem admin-action nesta fase —
- * não existe hoje nenhuma ferramenta em jogo para posicionar nó (isso é
- * trabalho de uma fase futura, quando Minerador precisar de verdade); até lá
- * isto é chamado por script de seed, sob revisão, como `crafting_recipes` já é
- * semeado por `seed-forging.sql`.
+ * Registers a new node. It goes through no capability or admin-action in this phase —
+ * there is no in-game tool today to place a node (that is
+ * work for a future phase, when Miner really needs it); until then
+ * this is called by a seed script, under review, the same way `crafting_recipes` is
+ * seeded by `seed-forging.sql`.
  *
  * @param {object} opts
  * @param {string} opts.formDesc
- * @param {string} opts.type um de core/resource-node-registry.NODE_TYPES
+ * @param {string} opts.type one of core/resource-node-registry.NODE_TYPES
  * @param {number} opts.resourceBaseId
  * @param {number} opts.maxCapacity
- * @param {number} [opts.yieldPerAction] padrão 1
- * @param {number} [opts.regenPerHour] padrão 0
+ * @param {number} [opts.yieldPerAction] default 1
+ * @param {number} [opts.regenPerHour] default 0
  * @param {string|null} [opts.requiredProfession]
  * @param {number|null} [opts.requiredRank]
  * @param {object} [dependencies]
@@ -174,8 +174,8 @@ async function setNodeEnabled(formDesc, enabled, dependencies = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Estado atual do nó, com a capacidade JÁ recalculada — leitura pura, não
- * grava nada. @param {string} formDesc @param {object} [dependencies]
+ * Current state of the node, with the capacity ALREADY recomputed — a pure read, it
+ * writes nothing. @param {string} formDesc @param {object} [dependencies]
  */
 async function getNode(formDesc, dependencies = {}) {
   const deps = _deps(dependencies);
@@ -183,7 +183,7 @@ async function getNode(formDesc, dependencies = {}) {
   return rows.length > 0 ? _rowToState(rows[0], Date.now()) : null;
 }
 
-/** Lista mínima para descoberta física pelo prompt; não expõe recompensa. */
+/** Minimal list for physical discovery by the prompt; does not expose the reward. */
 async function listEnabledNodes(dependencies = {}) {
   const deps = _deps(dependencies);
   const rows = await deps.db.query(
@@ -199,21 +199,21 @@ async function listEnabledNodes(dependencies = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Consome uma coleta do nó e entrega o item, atomicamente.
+ * Consumes one gather from the node and delivers the item, atomically.
  *
- * Resultado tipado, mesma convenção de `profession-service.js`: `{ok:true,
- * data}` para sucesso, `{ok:false, code}` para recusa esperada (nó esgotado,
- * desativado, gate de profissão/rank), e LANÇA para falha de infraestrutura.
+ * Typed result, same convention as `profession-service.js`: `{ok:true,
+ * data}` for success, `{ok:false, code}` for an expected refusal (depleted node,
+ * disabled, profession/rank gate), and it THROWS for an infrastructure failure.
  *
  * @param {object} opts
  * @param {number} opts.characterId
- * @param {number} [opts.actorId] necessário só para refletir no cliente (ver
- *   `transactionService.tx.applyToClient`); omitido, o item fica correto no
- *   banco e é reconciliado no próximo login, mesmo comportamento de
+ * @param {number} [opts.actorId] only needed to reflect it on the client (see
+ *   `transactionService.tx.applyToClient`); if omitted, the item is correct in the
+ *   DB and reconciled on the next login, same behavior as
  *   `transaction-service.giveItem`.
  * @param {string} opts.formDesc
- * @param {string} opts.requestId identificador opaco da tentativa
- * @param {number} [opts.cooldownMs] intervalo autoritativo por personagem/nó
+ * @param {string} opts.requestId opaque identifier of the attempt
+ * @param {number} [opts.cooldownMs] authoritative interval per character/node
  * @param {object} [dependencies]
  */
 async function consume(opts, dependencies = {}) {
@@ -287,12 +287,12 @@ async function consume(opts, dependencies = {}) {
     const nowMs = Date.now();
     const capacidadeAtual = _computeCapacity(row, nowMs);
     if (capacidadeAtual < row.yield_per_action) {
-      // Ainda grava a capacidade recalculada — sem isso, um nó parado (sem
-      // ninguém tentando colher) nunca avança `last_updated_at`, e a próxima
-      // tentativa recalcularia desde um instante cada vez mais antigo. Isso é
-      // inofensivo matematicamente (o cálculo é sempre "desde o último valor
-      // gravado", não "desde sempre"), mas gravar aqui mantém o dado em disco
-      // honesto para quem consultar `getNode` direto no banco.
+      // Still writes the recomputed capacity — without it, an idle node (with
+      // nobody trying to harvest) never advances `last_updated_at`, and the next
+      // attempt would recompute from an ever older instant. That is
+      // mathematically harmless (the calculation is always "since the last stored
+      // value", not "since forever"), but writing here keeps the data on disk
+      // honest for whoever queries `getNode` directly in the DB.
       await conn.query(
         'UPDATE resource_nodes SET current_capacity = ?, last_updated_at = ? WHERE id = ?',
         [capacidadeAtual, new Date(nowMs), row.id]
@@ -307,7 +307,7 @@ async function consume(opts, dependencies = {}) {
       [novaCapacidade, new Date(nowMs), row.id]
     );
 
-    // Mesma transação: o recurso só sai do nó se o item entrar no inventário.
+    // Same transaction: the resource only leaves the node if the item enters the inventory.
     await deps.transactionService.tx.applyInventoryDelta(conn, characterId, row.resource_base_id, row.yield_per_action);
     await deps.transactionService.tx.recordInventoryLedger(conn, {
       characterId,
@@ -329,8 +329,8 @@ async function consume(opts, dependencies = {}) {
 
     await conn.commit();
 
-    // Depois do commit, igual a `transaction-service.giveItem` — banco é a
-    // fonte de verdade, cliente é reconciliado se isto falhar.
+    // After the commit, same as `transaction-service.giveItem` — the DB is the
+    // source of truth, the client is reconciled if this fails.
     deps.transactionService.tx.applyToClient(actorId, row.resource_base_id, row.yield_per_action);
 
     return {
@@ -358,7 +358,7 @@ module.exports = {
   getNode,
   listEnabledNodes,
   consume,
-  // Exposto só para teste.
+  // Exposed only for tests.
   _computeCapacity,
   _rowToState
 };

@@ -1,54 +1,54 @@
 /**
  * profession-service.js
  *
- * **O Profession Core.** Concessão, revogação, suspensão, rank e XP de
- * profissão de personagem — e nada de gameplay.
+ * **The Profession Core.** Granting, revoking, suspending, rank and XP of a
+ * character's profession — and no gameplay.
  *
- * ─── O que este arquivo explicitamente NÃO faz ──────────────────────────────
+ * ─── What this file explicitly does NOT do ──────────────────────────────────
  *
- * Nenhuma mineração, corte de árvore, caça, crafting ou contrato mora aqui.
- * `core/profession-registry.js` já documenta a diferença entre uma profissão
- * estar REGISTRADA (existe no catálogo), ESTAR ENABLED (pode ser concedida) e
- * ter GAMEPLAY IMPLEMENTADO (existe automação por trás) — este arquivo lida só
- * com a primeira e a segunda. As treze profissões desta fase não têm a
- * terceira. Minerador já possui um consumidor separado (`mining-service.js`),
- * sem colocar gameplay dentro deste núcleo.
+ * No mining, tree felling, hunting, crafting or contracts live here.
+ * `core/profession-registry.js` already documents the difference between a profession
+ * being REGISTERED (it exists in the catalog), being ENABLED (it can be granted) and
+ * having IMPLEMENTED GAMEPLAY (there is automation behind it) — this file only deals
+ * with the first and the second. The thirteen professions of this phase do not have the
+ * third. Miner already has a separate consumer (`mining-service.js`),
+ * without putting gameplay inside this core.
  *
- * ─── Onde fica a decisão "pode fazer isso agora?" ───────────────────────────
+ * ─── Where the "can they do this now?" decision lives ───────────────────────
  *
- * NÃO aqui. Quem decide "este cargo pode conceder profissão?" é
- * `core/permissions.js`, através do pipeline em `admin-actions.js` — este
- * arquivo é o SERVIÇO DE DOMÍNIO que o pipeline chama depois de já ter
- * decidido isso, exatamente como `admin-service.giveItemAdmin` é chamado pela
- * ação `inventory.grant`. Por isso nenhuma função aqui recebe `role` ou
- * `actorId`: elas recebem `characterId`, já resolvido.
+ * NOT here. What decides "can this role grant a profession?" is
+ * `core/permissions.js`, through the pipeline in `admin-actions.js` — this
+ * file is the DOMAIN SERVICE the pipeline calls after it has already
+ * decided that, exactly like `admin-service.giveItemAdmin` is called by the
+ * `inventory.grant` action. That is why no function here receives `role` or
+ * `actorId`: they receive an already resolved `characterId`.
  *
- * A única checagem de autorização que VIVE aqui é `moduleRegistry
- * .isEnabled('profession')` — não é uma permissão de cargo, é o interruptor de
- * "este servidor ligou o framework" (§17 do briefing: "nunca habilitar
- * automaticamente em produção"). Ela é verificada nesta camada, e não só no
- * `precondition` do admin-action, porque este módulo pode um dia ganhar um
- * segundo consumidor (ResourceNode) que não passa pelo pipeline — e o
- * interruptor precisa valer para os dois.
+ * The only authorization check that LIVES here is `moduleRegistry
+ * .isEnabled('profession')` — it is not a role permission, it is the switch for
+ * "this server turned the framework on" (§17 of the briefing: "never enable
+ * automatically in production"). It is checked in this layer, and not only in the
+ * admin-action's `precondition`, because this module may one day get a
+ * second consumer (ResourceNode) that does not go through the pipeline — and the
+ * switch has to apply to both.
  *
- * ─── Resultado tipado, não booleano (mesma convenção de core/economy-service) ─
+ * ─── Typed result, not a boolean (same convention as core/economy-service) ─
  *
- * Toda função de escrita devolve `{ok:true, data}` ou `{ok:false, code,
- * message}` para recusa ESPERADA (profissão já ativa, limite atingido, rank
- * fora da faixa). Erro de infraestrutura (banco fora do ar) LANÇA. Os dois
- * nunca se confundem: a diferença é a que já custou caro neste projeto em
- * outro serviço (Achado 7 de `ECONOMY_FRAMEWORK_AUDIT.md`) — timeout de rede
- * virando "profissão negada" seria a mesma classe de bug.
+ * Every write function returns `{ok:true, data}` or `{ok:false, code,
+ * message}` for an EXPECTED refusal (profession already active, limit reached, rank
+ * out of range). An infrastructure error (DB down) THROWS. The two
+ * are never confused: the difference is one that already cost dearly in this project in
+ * another service (Finding 7 of `ECONOMY_FRAMEWORK_AUDIT.md`) — a network timeout
+ * turning into "profession denied" would be the same class of bug.
  *
- * ─── Concorrência ────────────────────────────────────────────────────────────
+ * ─── Concurrency ─────────────────────────────────────────────────────────────
  *
- * `grantProfession` e `reactivateProfession` travam as linhas ATIVAS do
- * personagem (`SELECT ... WHERE character_id = ? AND status = 'active' FOR
- * UPDATE`) antes de contar contra `profession.maxPerCharacter`. Sob
- * REPEATABLE READ (padrão do InnoDB), isso toma next-key lock sobre a faixa do
- * índice `idx_charprof_character` — duas concessões concorrentes para o MESMO
- * personagem serializam, então nenhuma delas dá 4 profissões com o limite em 3.
- * Ver o comentário equivalente em `core/transaction-service.js
+ * `grantProfession` and `reactivateProfession` lock the character's ACTIVE
+ * rows (`SELECT ... WHERE character_id = ? AND status = 'active' FOR
+ * UPDATE`) before counting against `profession.maxPerCharacter`. Under
+ * REPEATABLE READ (InnoDB's default), that takes a next-key lock over the range of the
+ * `idx_charprof_character` index — two concurrent grants for the SAME
+ * character serialize, so neither of them ends up with 4 professions when the limit is 3.
+ * See the equivalent comment in `core/transaction-service.js
  * ._applyGoldDelta`.
  */
 
@@ -60,19 +60,19 @@ const moduleRegistry = require('./core/module-registry');
 const serverOptions = require('./core/server-options');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vocabulário
+// Vocabulary
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MODULE_ID = 'profession';
 
 /**
- * `active`   — a profissão autoriza gameplay futuro e conta contra o limite.
- * `suspended`— staff tirou temporariamente; NÃO autoriza gameplay, NÃO conta
- *              contra o limite enquanto suspensa, mas o histórico (rank/XP)
- *              fica. Só volta a `active` por `reactivateProfession`.
- * `revoked`  — encerrada. A linha NÃO é apagada (§8 do briefing): rank/XP
- *              ficam como histórico, e `grantProfession` sobre um código
- *              revogado reaproveita a mesma linha em vez de inserir outra.
+ * `active`   — the profession authorizes future gameplay and counts against the limit.
+ * `suspended`— staff took it away temporarily; it does NOT authorize gameplay, does NOT count
+ *              against the limit while suspended, but the history (rank/XP)
+ *              stays. It only goes back to `active` through `reactivateProfession`.
+ * `revoked`  — ended. The row is NOT deleted (§8 of the briefing): rank/XP
+ *              stay as history, and `grantProfession` on a revoked
+ *              code reuses the same row instead of inserting another.
  */
 const STATUS = Object.freeze({
   ACTIVE: 'active',
@@ -81,9 +81,9 @@ const STATUS = Object.freeze({
 });
 
 /**
- * Teto de XP em INT UNSIGNED da coluna, mesma lógica de `MAX_GOLD` em
- * `core/transaction-service.js`: um incremento que estourasse a coluna
- * satura em silêncio no modo não-estrito do MySQL em vez de falhar.
+ * XP cap of the column's INT UNSIGNED, same logic as `MAX_GOLD` in
+ * `core/transaction-service.js`: an increment that overflowed the column
+ * saturates silently in MySQL's non-strict mode instead of failing.
  */
 const MAX_XP = 2147483647;
 
@@ -128,14 +128,14 @@ function _isPositiveInt(v) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Todas as linhas do personagem, qualquer status. Quem quer só as ativas
- * filtra o resultado — a API não esconde histórico de quem pediu tudo.
+ * Every row of the character, any status. Whoever only wants the active ones
+ * filters the result — the API does not hide history from whoever asked for everything.
  * @param {number} characterId
  * @param {object} [dependencies]
  */
 async function getCharacterProfessions(characterId, dependencies = {}) {
   const deps = _deps(dependencies);
-  if (!_isPositiveInt(characterId)) throw new Error('[profession-service] characterId inválido');
+  if (!_isPositiveInt(characterId)) throw new Error('[profession-service] invalid characterId');
   const rows = await deps.db.query(
     'SELECT * FROM character_professions WHERE character_id = ? ORDER BY profession_code',
     [characterId]
@@ -146,7 +146,7 @@ async function getCharacterProfessions(characterId, dependencies = {}) {
 /** @param {number} characterId @param {string} professionCode @param {object} [dependencies] */
 async function getProfessionState(characterId, professionCode, dependencies = {}) {
   const deps = _deps(dependencies);
-  if (!_isPositiveInt(characterId)) throw new Error('[profession-service] characterId inválido');
+  if (!_isPositiveInt(characterId)) throw new Error('[profession-service] invalid characterId');
   const rows = await deps.db.query(
     'SELECT * FROM character_professions WHERE character_id = ? AND profession_code = ?',
     [characterId, professionCode]
@@ -155,9 +155,9 @@ async function getProfessionState(characterId, professionCode, dependencies = {}
 }
 
 /**
- * `true` apenas quando a profissão está ATIVA — suspensa não autoriza
- * gameplay (§8 do briefing), então não conta como "tem a profissão" para
- * quem for consultar isto antes de liberar uma ação futura.
+ * `true` only when the profession is ACTIVE — a suspended one does not authorize
+ * gameplay (§8 of the briefing), so it does not count as "has the profession" for
+ * whoever checks this before allowing a future action.
  * @param {number} characterId @param {string} professionCode @param {object} [dependencies]
  */
 async function hasProfession(characterId, professionCode, dependencies = {}) {
@@ -166,12 +166,12 @@ async function hasProfession(characterId, professionCode, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Concessão
+// Granting
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Conta quantas profissões ATIVAS o personagem tem, travando as linhas
- * envolvidas — deve ser chamada dentro da transação do chamador.
+ * Counts how many ACTIVE professions the character has, locking the
+ * rows involved — it must be called inside the caller's transaction.
  * @param {object} conn
  * @param {number} characterId
  */
@@ -184,12 +184,12 @@ async function _lockActiveCount(conn, characterId) {
 }
 
 /**
- * Concede uma profissão. Se já existir uma linha REVOGADA para o mesmo par
- * (character, profissão), reaproveita a linha — rank e XP antigos voltam a
- * valer. Isto é uma decisão explícita, não a única leitura possível do §8 do
- * briefing: a alternativa (zerar rank/XP num "recomeço") é razoável também.
- * Documentado em docs/gameplay/PROFESSION_FRAMEWORK.md §"Reconceder após
- * revogar" para quem quiser trocar o comportamento.
+ * Grants a profession. If a REVOKED row already exists for the same pair
+ * (character, profession), it reuses the row — the old rank and XP become
+ * valid again. This is an explicit decision, not the only possible reading of §8 of the
+ * briefing: the alternative (zeroing rank/XP for a "fresh start") is reasonable too.
+ * Documented in docs/gameplay/PROFESSION_FRAMEWORK.md §"Regranting after
+ * revoking" for whoever wants to change the behavior.
  *
  * @param {object} opts
  * @param {number} opts.characterId
@@ -262,22 +262,22 @@ async function grantProfession(opts, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Revogação / suspensão / reativação
+// Revoking / suspending / reactivating
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Transição de status genérica: trava a linha, confere o status de origem
- * exigido e escreve o novo. As quatro operações de ciclo de vida
- * (revoke/suspend/reactivate) são a mesma forma com origem/destino
- * diferentes — uma função só evita quatro cópias do mesmo `FOR UPDATE`.
+ * Generic status transition: locks the row, checks the required source
+ * status and writes the new one. The four lifecycle operations
+ * (revoke/suspend/reactivate) are the same shape with different
+ * source/destination — a single function avoids four copies of the same `FOR UPDATE`.
  *
  * @param {object} opts
  * @param {number} opts.characterId
  * @param {string} opts.professionCode
- * @param {string[]} opts.fromStatuses status de origem aceitos
+ * @param {string[]} opts.fromStatuses accepted source statuses
  * @param {string} opts.toStatus
- * @param {string} opts.wrongStatusCode código de recusa se o status atual não bate
- * @param {boolean} [opts.recheckCapacity] confere o limite antes de escrever (reativação)
+ * @param {string} opts.wrongStatusCode refusal code if the current status does not match
+ * @param {boolean} [opts.recheckCapacity] checks the limit before writing (reactivation)
  * @param {object} deps
  */
 async function _transition(opts, deps) {
@@ -349,9 +349,9 @@ async function suspendProfession(opts, dependencies = {}) {
 }
 
 /**
- * Volta uma profissão SUSPENSA para ativa. Reconta contra
- * `profession.maxPerCharacter` — suspender uma e conceder outra até o limite,
- * depois reativar a primeira, não pode furar o teto por trás.
+ * Returns a SUSPENDED profession to active. It recounts against
+ * `profession.maxPerCharacter` — suspending one and granting another up to the limit,
+ * then reactivating the first, must not sneak past the cap.
  * @param {{characterId:number, professionCode:string}} opts @param {object} [dependencies]
  */
 async function reactivateProfession(opts, dependencies = {}) {
@@ -425,25 +425,25 @@ async function setProfessionRank(opts, dependencies = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Ajusta o XP de profissão. `amount` negativo só é aceito quando
- * `staffCharacterId` está presente — é o que a §10 do briefing pede
- * ("rejeitar negativo se operação não for administrativa explícita"), e é
- * verificado AQUI, não só na camada de admin action, porque esta função é a
- * API pública que um consumidor futuro (ResourceNode, crafting) vai chamar
- * direto, sem passar pelo pipeline — e o convite para dar XP negativo sem
- * motivo administrativo não pode depender de quem está chamando lembrar de
- * checar isso de novo.
+ * Adjusts profession XP. A negative `amount` is only accepted when
+ * `staffCharacterId` is present — that is what §10 of the briefing asks for
+ * ("reject negatives unless the operation is explicitly administrative"), and it is
+ * checked HERE, not only in the admin action layer, because this function is the
+ * public API a future consumer (ResourceNode, crafting) will call
+ * directly, without going through the pipeline — and the invitation to give negative XP without
+ * an administrative reason must not depend on the caller remembering to
+ * check it again.
  *
- * XP nunca fica negativo: um decremento maior que o saldo zera em vez de
- * lançar, porque "staff tirou XP demais por engano" é uma correção normal, não
- * um erro de programação.
+ * XP never goes negative: a decrement larger than the balance zeroes it instead of
+ * throwing, because "staff took away too much XP by mistake" is a normal correction, not
+ * a programming error.
  *
  * @param {object} opts
  * @param {number} opts.characterId
  * @param {string} opts.professionCode
- * @param {number} opts.amount inteiro, != 0
- * @param {string} [opts.context] de onde veio o ganho (ex: 'admin_adjust'; 'gather' em fases futuras)
- * @param {number|null} [opts.staffCharacterId] presença = ajuste administrativo, autoriza amount negativo
+ * @param {number} opts.amount integer, != 0
+ * @param {string} [opts.context] where the gain came from (e.g. 'admin_adjust'; 'gather' in future phases)
+ * @param {number|null} [opts.staffCharacterId] presence = administrative adjustment, allows a negative amount
  * @param {object} [dependencies]
  */
 async function addProfessionXp(opts, dependencies = {}) {
@@ -498,13 +498,13 @@ async function addProfessionXp(opts, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comando de jogador — só leitura, só a própria ficha
+// Player command — read only, only one's own sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * `/profissoes` — o jogador vê as próprias profissões. Sem capability: não é
- * ação de staff, é leitura da própria ficha, do mesmo jeito que `/status` (em
- * `commands.js`) não pede permissão para o jogador ver o próprio personagem.
+ * `/professions` — the player sees their own professions. No capability: it is not a
+ * staff action, it is reading one's own sheet, the same way `/status` (in
+ * `commands.js`) asks no permission for the player to see their own character.
  */
 function commandDefs() {
   return [
@@ -513,11 +513,11 @@ function commandDefs() {
       description: 'Show your professions',
       usage: '/professions',
       handler: async (actorId) => {
-        // `sendNotification` (não `mp.sendChatMessage`, que não existe nesta
-        // API) é o único caminho de notificação individual do gamemode — ver
-        // commands.js. `require` preguiçoso pelo mesmo motivo do resto do
-        // arquivo: commands.js registra este comando, então importá-lo no
-        // topo fecharia o ciclo.
+        // `sendNotification` (not `mp.sendChatMessage`, which does not exist in this
+        // API) is the gamemode's only individual notification path — see
+        // commands.js. A lazy `require` for the same reason as the rest of the
+        // file: commands.js registers this command, so importing it at the
+        // top would close the cycle.
         const commands = require('./commands');
         const personagem = commands.getActiveCharacterData(actorId);
         if (!personagem) return;
@@ -552,6 +552,6 @@ module.exports = {
   setProfessionRank,
   addProfessionXp,
   commandDefs,
-  // Exposto só para teste.
+  // Exposed only for tests.
   _rowToState
 };

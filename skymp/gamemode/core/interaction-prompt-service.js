@@ -1,19 +1,19 @@
 /**
  * core/interaction-prompt-service.js
  *
- * Aquisição compartilhada de alvo físico para o Interaction Framework.
+ * Shared physical-target acquisition for the Interaction Framework.
  *
- * O cliente informa somente o FormID que está sob a mira. O servidor escolhe
- * o tipo, resolve o alvo e calcula as ações disponíveis. Proximidade continua
- * sendo validada pelo `interaction-service`, mas nunca escolhe o alvo.
+ * The client only reports the FormID under the crosshair. The server picks
+ * the type, resolves the target and computes the available actions. Proximity is still
+ * validated by `interaction-service`, but it never picks the target.
  *
- * Esta implementação foi desenhada após estudar o subsistema público de
- * interações do Vengeful Realms. Ela não copia o patch: preserva nosso
- * registry, nossos resolvedores, o gateway CEF e o pipeline query/execute.
+ * This implementation was designed after studying Vengeful Realms' public
+ * interaction subsystem. It does not copy the patch: it keeps our
+ * registry, our resolvers, the CEF gateway and the query/execute pipeline.
  *
- * O prompt reage a `crosshairRefChanged`; não consulta a mira continuamente.
- * A execução usa exclusivamente o `mp.onActivate` nativo através do barramento
- * compartilhado. O snippet não captura E e não concorre com o Skyrim.
+ * The prompt reacts to `crosshairRefChanged`; it does not poll the crosshair continuously.
+ * Execution uses only the native `mp.onActivate` through the shared
+ * bus. The snippet does not capture E and does not compete with Skyrim.
  */
 
 'use strict';
@@ -28,7 +28,7 @@ const PROPERTY = 'interactionPrompt';
 const EVENT_SOURCE = '_interactionExactTarget';
 const SERVER_TARGET_THROTTLE_MS = 75;
 
-/** A property apenas transporta a decisão do servidor para a CEF. */
+/** The property only carries the server's decision to the CEF. */
 const SNIPPET_DO_CLIENTE = `
   if (ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
     const payload = JSON.stringify(ctx.value || { targetId: null });
@@ -39,9 +39,9 @@ const SNIPPET_DO_CLIENTE = `
 `;
 
 /**
- * Executa no Skyrim Platform por jogador. Lê a mira tanto para atualizar o
- * prompt quanto no instante do E. O segundo read evita executar com o alvo que
- * estava sob a mira no tick anterior.
+ * Runs in Skyrim Platform per player. Reads the crosshair both to update the
+ * prompt and at the instant E is pressed. The second read avoids executing with the target that
+ * was under the crosshair on the previous tick.
  */
 const SNIPPET_DA_FONTE = `
   if (!ctx.state.interactionExactTarget) {
@@ -89,7 +89,7 @@ const SNIPPET_DA_FONTE = `
     sendPromptTarget(exactTarget());
   };
 
-  // O evento não garante snapshot da mira que já existia na instalação.
+  // The event does not guarantee a snapshot of a crosshair that already existed at install time.
   ctx.sp.once('update', refreshCurrentTarget);
 
   ctx.sp.on('crosshairRefChanged', (event) => {
@@ -115,7 +115,7 @@ let _initialized = false;
 let _unsubscribeCharacterRemoved = null;
 const ACTIVATION_SUBSCRIBER = 'interaction-prompt';
 
-/** Geração por ator impede resposta async antiga de substituir a mira atual. */
+/** A per-actor generation stops an old async response from replacing the current crosshair. */
 const _generationByActor = new Map();
 const _lastPayloadByActor = new Map();
 const _lastTargetEventAt = new Map();
@@ -137,9 +137,9 @@ function _actions(result) {
 }
 
 /**
- * O tipo não vem do cliente. Um FormID de personagem carregado só pode seguir
- * pelo resolvedor `player`; todo o restante é sondado como `object` e somente
- * sobrevive se alguma interação registrada passar por resolução/canSee.
+ * The type does not come from the client. A loaded character's FormID can only go
+ * through the `player` resolver; everything else is probed as `object` and only
+ * survives if some registered interaction passes resolution/canSee.
  */
 async function resolveExactTarget(actorId, rawTargetId, options = {}) {
   if (!_interactionService) return null;
@@ -159,7 +159,7 @@ async function resolveExactTarget(actorId, rawTargetId, options = {}) {
   return {
     targetId,
     targetType,
-    label: actions.length === 1 ? actions[0].label : 'Interagir',
+    label: actions.length === 1 ? actions[0].label : 'Interact',
     count: actions.length,
     sections: result.sections
   };
@@ -200,8 +200,8 @@ async function handleClientEvent(actorId, payload) {
   }
 
   if (payload.kind === 'inspect') {
-    // Evento de cliente precisa consumir o rate limit de query. O snapshot de
-    // ações segue no modal para a CEF não disparar uma segunda consulta.
+    // A client event must consume the query rate limit. The actions snapshot
+    // goes along in the modal so the CEF does not fire a second query.
     const exact = await resolveExactTarget(actorId, payload.targetFormId, { consumeRateLimit: true });
     if (!exact || typeof _sendModal !== 'function') return;
     _sendModal(actorId, 'interaction:open', {
@@ -213,8 +213,8 @@ async function handleClientEvent(actorId, payload) {
 }
 
 /**
- * Decide sincronamente se a ativação pertence ao framework e agenda a
- * resolução autoritativa. Nunca bloqueia portas/objetos vanilla desconhecidos.
+ * Decides synchronously whether the activation belongs to the framework and schedules the
+ * authoritative resolution. Never blocks unknown vanilla doors/objects.
  */
 function handleNativeActivation(targetId, casterId) {
   const parsedTarget = parseFormId(targetId);
@@ -228,7 +228,7 @@ function handleNativeActivation(targetId, casterId) {
   if (knownPlayer && _lookKeysActive()) return false;
 
   handleClientEvent(parsedCaster, { kind: 'inspect', targetFormId: parsedTarget }).catch(err => {
-    console.error('[interaction-prompt] ativacao nativa falhou:', err.message);
+    console.error('[interaction-prompt] native activation failed:', err.message);
   });
   return false;
 }
@@ -249,13 +249,13 @@ function initInteractionPromptService() {
     throw new Error('[interaction-prompt] mp.makeEventSource indisponivel');
   }
   if (!_interactionService || typeof _sendModal !== 'function') {
-    throw new Error('[interaction-prompt] dependencias nao configuradas');
+    throw new Error('[interaction-prompt] dependencies not configured');
   }
 
   mp.makeEventSource(EVENT_SOURCE, SNIPPET_DA_FONTE);
   mp[EVENT_SOURCE] = (actorId, payload) => {
     handleClientEvent(actorId, payload).catch(err => {
-      console.error('[interaction-prompt] evento de alvo exato falhou:', err.message);
+      console.error('[interaction-prompt] exact-target event failed:', err.message);
     });
   };
   activationEvents.subscribe(ACTIVATION_SUBSCRIBER, handleNativeActivation);
@@ -263,7 +263,7 @@ function initInteractionPromptService() {
     _unsubscribeCharacterRemoved = commands.onCharacterRemoved(clearActor);
   }
   _initialized = true;
-  console.log('[interaction-prompt] alvo exato por crosshair + E ativo em LAB; validacao in-game pendente.');
+  console.log('[interaction-prompt] exact target via crosshair + E active in LAB; in-game validation pending.');
 }
 
 function shutdownInteractionPromptService() {

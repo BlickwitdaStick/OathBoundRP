@@ -1,40 +1,40 @@
 /**
  * debt-service.js
  *
- * Dívida como **registro selado e legível**, nunca como cobrança automática.
+ * Debt as a **sealed, readable record**, never as automatic collection.
  *
- * ⚠️ PARKED: não é registrado no `core/module-registry.js` e não roda em
- * produção. Ver `PARKED_SERVICES_DECISION.md` e a Fase 0.
+ * ⚠️ PARKED: it is not registered in `core/module-registry.js` and does not run in
+ * production. See `PARKED_SERVICES_DECISION.md` and Phase 0.
  *
- * Desenho: `docs/gameplay/DEBT_SYSTEM.md`
- * Decisão: `docs/technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md` §2.8 e §4.4
- * Conceito: Mereth Roleplay — sem licença e sem código público; reimplementado
- * a partir da ideia (`docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md` §4).
+ * Design: `docs/gameplay/DEBT_SYSTEM.md`
+ * Decision: `docs/technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md` §2.8 and §4.4
+ * Concept: Mereth Roleplay — no license and no public code; reimplemented
+ * from the idea (`docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md` §4).
  *
- * ─── O que este serviço NÃO faz, e por quê ──────────────────────────────────
+ * ─── What this service does NOT do, and why ─────────────────────────────────
  *
- * Ele **não** debita ninguém sozinho. Não vigia saldo, não confisca ouro que
- * entra, não bloqueia ação, não emite mandado, não aplica juros.
+ * It does **not** debit anyone by itself. It does not watch balances, does not seize incoming
+ * gold, does not block actions, does not issue warrants, does not charge interest.
  *
- * A alternativa — abater a dívida no instante em que o devedor recebe ouro —
- * foi considerada e rejeitada no ADR 004 §4.4. Ela remove a cena: ninguém
- * precisa cobrar, então ninguém cobra, e o servidor vira o agiota no lugar do
- * outro jogador. Inadimplência precisa ser **material de RP** para guildas,
- * tribunais e crime (briefing §11), não trabalho de moderação.
+ * The alternative — paying down the debt the moment the debtor receives gold —
+ * was considered and rejected in ADR 004 §4.4. It removes the scene: nobody
+ * needs to collect, so nobody collects, and the server becomes the loan shark instead of the
+ * other player. Default needs to be **RP material** for guilds,
+ * courts and crime (briefing §11), not moderation work.
  *
- * O que o serviço garante é o oposto: que a dívida exista de forma que qualquer
- * um possa ler, que o pagamento mova septims de verdade pelo `economy-service`,
- * e que `remaining` só caia porque houve pagamento ou perdão registrado.
+ * What the service guarantees is the opposite: that the debt exists in a way anyone
+ * can read, that payment moves real septims through `economy-service`,
+ * and that `remaining` only drops because a payment or forgiveness was recorded.
  *
- * ─── Estados ────────────────────────────────────────────────────────────────
+ * ─── States ─────────────────────────────────────────────────────────────────
  *
- *   active ──► paid       (remaining chegou a zero por pagamento)
- *          ──► forgiven   (o credor abriu mão do saldo restante)
- *          ──► defaulted  (declarado inadimplente — é um RÓTULO, não um confisco)
+ *   active ──► paid       (remaining reached zero through payment)
+ *          ──► forgiven   (the creditor gave up the remaining balance)
+ *          ──► defaulted  (declared in default — it is a LABEL, not a seizure)
  *
- * `defaulted` não move dinheiro e não é terminal para o pagamento: uma dívida
- * marcada como inadimplente ainda pode ser quitada, e voltar para `active` é
- * consequência de pagar, não uma transição separada.
+ * `defaulted` moves no money and is not terminal for payment: a debt
+ * marked as in default can still be paid off, and going back to `active` is a
+ * consequence of paying, not a separate transition.
  */
 
 const database = require('./database');
@@ -49,7 +49,7 @@ const STATUS = Object.freeze({
   FORGIVEN: 'forgiven'
 });
 
-/** Estados em que ainda se pode pagar. `paid` e `forgiven` estão fechados. */
+/** States in which payment is still possible. `paid` and `forgiven` are closed. */
 const PAYABLE = Object.freeze([STATUS.ACTIVE, STATUS.DEFAULTED]);
 
 const ORIGINS = Object.freeze(['fine', 'contract', 'rent', 'tax', 'manual']);
@@ -66,7 +66,7 @@ function normalizeText(value, max) {
 }
 
 async function _safeRollback(conn) {
-  try { await conn.rollback(); } catch { /* preserva o erro original */ }
+  try { await conn.rollback(); } catch { /* keep the original error */ }
 }
 
 async function _withTransaction(dependencies, fn) {
@@ -110,11 +110,11 @@ async function _findPaymentReplay(conn, idempotencyKey) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Registra uma dívida. Não move dinheiro — dívida é o registro de que o
- * dinheiro **não** se moveu.
+ * Records a debt. It moves no money — a debt is the record that the
+ * money **did not** move.
  *
- * `idempotencyKey` é obrigatória e UNIQUE porque a origem típica é um evento
- * repetível: a mesma multa reenviada não pode virar duas dívidas.
+ * `idempotencyKey` is mandatory and UNIQUE because the typical source is a
+ * repeatable event: the same fine resent must not become two debts.
  *
  * @param {object} request
  * @param {number} request.debtorCharacterId
@@ -143,7 +143,7 @@ async function open(request, dependencies = {}) {
   if (!reason) return { ok: false, code: 'invalid_reason' };
   if (!ORIGINS.includes(originType)) return { ok: false, code: 'invalid_origin' };
   if (!idempotencyKey) return { ok: false, code: 'invalid_idempotency_key' };
-  // Dever a si mesmo não é dívida, é erro de cálculo de quem chamou.
+  // Owing yourself is not a debt, it is a calculation error by the caller.
   if (creditor.type === 'character' && Number(creditor.ref) === debtorCharacterId) {
     return { ok: false, code: 'self_debt' };
   }
@@ -169,10 +169,10 @@ async function open(request, dependencies = {}) {
     return { ok: true, replayed: false, debtId: insert.insertId, remaining: amount };
   };
 
-  // A variante em transação do chamador existe por um caso concreto: a multa da
-  // guarda precisa gravar a cobrança, a linha em `fines` e a dívida **juntas**.
-  // Abrir uma transação própria aqui faria um crash no meio deixar uma multa
-  // sem a dívida que ela originou — que é a metade não corrigida do Achado 8.
+  // The variant inside the caller's transaction exists for a concrete case: the guard's
+  // fine has to write the charge, the `fines` row and the debt **together**.
+  // Opening its own transaction here would let a crash in the middle leave a fine
+  // without the debt it originated — which is the unfixed half of Finding 8.
   return dependencies.conn ? escrever(dependencies.conn) : _withTransaction(dependencies, escrever);
 }
 
@@ -181,16 +181,16 @@ async function open(request, dependencies = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Paga uma dívida, total ou parcialmente.
+ * Pays a debt, fully or partially.
  *
- * O septim se move **primeiro**, pelo `economy-service`, e `remaining` só cai
- * depois — na mesma transação. A ordem é o ponto: se o abatimento viesse antes,
- * uma falha no pagamento deixaria a dívida menor sem ninguém ter recebido nada,
- * que é a mesma classe do bug da multa (`ECONOMY_FRAMEWORK_AUDIT.md` Achado 8).
+ * The septims move **first**, through `economy-service`, and `remaining` only drops
+ * afterwards — in the same transaction. The order is the point: if the reduction came first,
+ * a payment failure would leave the debt smaller without anyone having received anything,
+ * which is the same class as the fine bug (`ECONOMY_FRAMEWORK_AUDIT.md` Finding 8).
  *
- * Pagamento parcial é permitido de propósito — "o trabalhador recebe o que
- * existe; o resto continua registrado" é o comportamento que transforma
- * inadimplência em cena em vez de bloqueio.
+ * Partial payment is allowed on purpose — "the worker receives what
+ * exists; the rest stays on record" is the behavior that turns
+ * default into a scene instead of a block.
  */
 async function pay(request, dependencies = {}) {
   const economy = dependencies.economy || economyService;
@@ -218,9 +218,9 @@ async function pay(request, dependencies = {}) {
       return { ok: false, code: 'debt_closed', status: debt.status };
     }
     const remaining = Number(debt.remaining);
-    // Pagar mais do que se deve não é generosidade, é erro de UI: o excedente
-    // não teria onde ser registrado e a dívida ficaria com `remaining` negativo,
-    // que o CHECK do banco recusaria de qualquer forma.
+    // Paying more than owed is not generosity, it is a UI error: the surplus
+    // would have nowhere to be recorded and the debt would end up with a negative `remaining`,
+    // which the DB's CHECK would refuse anyway.
     if (amount > remaining) return { ok: false, code: 'amount_exceeds_remaining', remaining };
 
     const moved = await economy.transferInTransaction(conn, {
@@ -243,11 +243,11 @@ async function pay(request, dependencies = {}) {
 }
 
 /**
- * Perdoa parte ou todo o saldo. Não move septim — o credor abre mão.
+ * Forgives part or all of the balance. No septim moves — the creditor gives it up.
  *
- * Só o credor pode perdoar, e quando o credor é institucional (cidade, facção)
- * quem chama já resolveu a autorização: este arquivo não sabe quem manda numa
- * cidade, e duplicar essa regra aqui criaria dois lugares para mantê-la.
+ * Only the creditor can forgive, and when the creditor is institutional (city, faction)
+ * the caller has already resolved authorization: this file does not know who rules a
+ * city, and duplicating that rule here would create two places to maintain it.
  */
 async function forgive(request, dependencies = {}) {
   const economy = dependencies.economy || economyService;
@@ -282,12 +282,12 @@ async function forgive(request, dependencies = {}) {
 }
 
 /**
- * Grava a amortização e fecha a dívida se ela zerou.
+ * Records the payment and closes the debt if it reached zero.
  *
- * `remaining = remaining - ?` sob a trava, com `AND remaining >= ?`: mesmo
- * padrão do débito de saldo. A guarda no `WHERE` é redundante com a checagem
- * feita acima, e existe para que um caminho futuro que esqueça a checagem
- * receba `affectedRows = 0` em vez de gravar dívida negativa.
+ * `remaining = remaining - ?` under the lock, with `AND remaining >= ?`: same
+ * pattern as the balance debit. The guard in the `WHERE` is redundant with the check
+ * done above, and it exists so that a future path that forgets the check
+ * gets `affectedRows = 0` instead of writing a negative debt.
  */
 async function _applyReduction(conn, params) {
   const restante = params.remaining - params.amount;
@@ -304,7 +304,7 @@ async function _applyReduction(conn, params) {
     ]
   );
   if (update.affectedRows !== 1) {
-    throw new Error(`[debt] amortizacao recusada para divida ${params.debt.id}`);
+    throw new Error(`[debt] payment refused for debt ${params.debt.id}`);
   }
 
   await conn.query(
@@ -325,10 +325,10 @@ async function _applyReduction(conn, params) {
 }
 
 /**
- * Marca inadimplência. **Rótulo, não confisco**: nenhum septim se move, nenhum
- * item é tomado, nenhuma ação do jogador é bloqueada. O que muda é que a
- * dívida passa a aparecer como `defaulted` para quem consultar — e o que se faz
- * com essa informação é papel de guilda, tribunal e jogador.
+ * Marks default. **A label, not a seizure**: no septim moves, no
+ * item is taken, no player action is blocked. What changes is that the
+ * debt starts showing up as `defaulted` to whoever looks it up — and what is done
+ * with that information is the job of guilds, courts and players.
  */
 async function markDefaulted(request, dependencies = {}) {
   const debtId = positiveId(request?.debtId);
@@ -346,7 +346,7 @@ async function markDefaulted(request, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Leitura — a parte que faz a dívida ser "legível por qualquer jogador"
+// Reading — the part that makes debt "readable by any player"
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function listByDebtor(debtorCharacterId, dependencies = {}) {

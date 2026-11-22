@@ -1,104 +1,104 @@
 /**
- * core/hit-events.js — agressão relatada pelo cliente, agregada em episódios
+ * core/hit-events.js — client-reported aggression, aggregated into episodes
  *
- * ─── Atribuição de origem (LICENSE_AND_AFFILIATION_POLICY.md §4) ────────────
+ * ─── Attribution (LICENSE_AND_AFFILIATION_POLICY.md §4) ─────────────────────
  *
- *   Projeto : alekcey0211/red-house-public — build pública do Red House (SkyMP)
- *   Autor   : alekcey0211 e colaboradores
- *   Licença : GPL-3.0. Compatível com a AGPL-3.0-or-later deste projeto pela
- *             GPLv3 §13; o conjunto continua distribuído sob AGPL.
+ *   Project : alekcey0211/red-house-public — public build of Red House (SkyMP)
+ *   Author  : alekcey0211 and contributors
+ *   License : GPL-3.0. Compatible with this project's AGPL-3.0-or-later through
+ *             GPLv3 §13; the combined work is still distributed under the AGPL.
  *   Commit  : 65c66bb3e1b9f5765ed5fc036d69d75e3afbb53d (branch `master`,
- *             01/11/2021 — repositório parado, último push em 16/11/2021)
- *   Arquivo : functions-lib/src/events/_onHit.ts
- *   Estudo  : docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md §4.1
+ *             2021-11-01 — repository inactive, last push on 2021-11-16)
+ *   File    : functions-lib/src/events/_onHit.ts
+ *   Study   : docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md §4.1
  *
- *   **O que foi adaptado é técnica, não código.** Nenhuma linha foi copiada:
- *   o que veio de lá é (a) saber que `mp.makeEventSource` é o caminho para o
- *   evento de hit, já que o SkyMP recusou expor o pacote ao gamemode
- *   (issue #1338); (b) o formato do payload que o snippet de cliente monta a
- *   partir de `ctx.sp.on('hit', ...)`; e (c) os dois detalhes que economizam a
- *   depuração óbvia — `0x14` é o jogador local, e
- *   `ctx.getFormIdInServerFormat()` é obrigatório.
+ *   **What was adapted is technique, not code.** No line was copied:
+ *   what came from there is (a) knowing that `mp.makeEventSource` is the path to the
+ *   hit event, since SkyMP declined to expose the packet to the gamemode
+ *   (issue #1338); (b) the shape of the payload the client snippet builds
+ *   from `ctx.sp.on('hit', ...)`; and (c) the two details that save the
+ *   obvious debugging — `0x14` is the local player, and
+ *   `ctx.getFormIdInServerFormat()` is mandatory.
  *
- *   A forma do snippet é praticamente ditada pela API do Skyrim Platform, então
- *   escrever do zero saiu mais rápido que portar. **A agregação em episódio, o
- *   descarte de dano em si mesmo e a recusa a calcular dano são deste projeto**
- *   e não têm equivalente lá — ver as duas seções abaixo.
+ *   The shape of the snippet is practically dictated by the Skyrim Platform API, so
+ *   writing it from scratch was faster than porting. **Aggregating into episodes,
+ *   discarding self-damage and refusing to compute damage are this project's own**
+ *   and have no equivalent there — see the two sections below.
  *
- *   Registrado também no CHANGELOG.md, seção `[Não lançado]`.
+ *   Also recorded in CHANGELOG.md, section `[Unreleased]`.
  *
- * ─── O que isto é, e o que NÃO é ────────────────────────────────────────────
+ * ─── What this is, and what it is NOT ───────────────────────────────────────
  *
- * É **evidência**, não enforcement. O evento vem de `mp.makeEventSource`, que
- * injeta JS no cliente — e o `CONTRIBUTING.md` §3.6 é explícito: eventos de
- * cliente são *"uma dica, não uma prova. Aceitável para detectar morte;
- * inaceitável para conceder item ou ouro"*.
+ * It is **evidence**, not enforcement. The event comes from `mp.makeEventSource`, which
+ * injects JS into the client — and `CONTRIBUTING.md` §3.6 is explicit: client
+ * events are *"a hint, not proof. Acceptable for detecting death;
+ * unacceptable for granting items or gold"*.
  *
- * É aqui que nos separamos do Red House, de onde veio a técnica
- * (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1). Eles recalculam o dano no
- * servidor a partir deste evento e aplicam no ActorValue. Nós não: quem manda
- * o evento é a máquina do jogador, então usar isso pra decidir dano entregaria
- * o combate a quem controla o cliente. O que ganhamos é o que o evento serve
- * pra ser — um rastro de quem atacou quem, pra staff arbitrar denúncia de RDM.
+ * This is where we part ways with Red House, where the technique came from
+ * (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1). They recompute damage on the
+ * server from this event and apply it to the ActorValue. We do not: whoever sends
+ * the event is the player's machine, so using it to decide damage would hand
+ * combat to whoever controls the client. What we get is what the event is good
+ * for — a trail of who attacked whom, for staff to arbitrate RDM reports.
  *
- * ─── O que substitui ────────────────────────────────────────────────────────
+ * ─── What it replaces ───────────────────────────────────────────────────────
  *
- * O `checkDamageSpike` do `death-service.js`: uma heurística que chama de
- * agressão qualquer queda de 25 pontos de vida num tick de 2 s. Ela não
- * distingue combate de queda de penhasco, não sabe quem bateu, e só existe
- * porque estava pendurada no polling que queremos remover.
+ * `checkDamageSpike` in `death-service.js`: a heuristic that called any
+ * 25-point health drop within a 2 s tick aggression. It could not
+ * tell combat from falling off a cliff, did not know who hit, and only existed
+ * because it hung off the polling we want to remove.
  *
- * ─── Por que agrega em episódio, e não grava golpe a golpe ──────────────────
+ * ─── Why it aggregates into episodes instead of recording hit by hit ────────
  *
- * Uma briga de trinta segundos entre duas pessoas gera dezenas de eventos. O
- * Red House podia tratar cada um isoladamente porque o uso deles era efêmero
- * (aplicar dano e esquecer); o nosso é persistente. Gravar linha por golpe em
- * `audit_logs` inutilizaria a tabela justamente na hora em que a staff mais
- * precisa dela — e "sete linhas iguais" responde pior à pergunta *"o que
- * aconteceu ali?"* do que uma só dizendo "A bateu em B sete vezes, duas com
- * power attack, ao longo de doze segundos".
+ * A thirty-second fight between two people produces dozens of events.
+ * Red House could treat each one in isolation because their use was ephemeral
+ * (apply damage and forget); ours is persistent. Writing one row per hit to
+ * `audit_logs` would make the table useless exactly when staff need it
+ * most — and "seven identical rows" answers the question *"what
+ * happened there?"* worse than a single one saying "A hit B seven times, two with
+ * power attacks, over twelve seconds".
  *
- * O episódio fecha por silêncio (`JANELA_MS` sem golpe novo entre aquele par).
+ * The episode closes on silence (`JANELA_MS` with no new hit between that pair).
  *
- * ─── Estado de validação ────────────────────────────────────────────────────
+ * ─── Validation status ──────────────────────────────────────────────────────
  *
- * `mp.makeEventSource` foi confirmada num servidor real em 06/08/2026 — existe
- * e aceita o registro. **O snippet de cliente NÃO foi exercitado**: ele só roda
- * quando alguém conecta, o que é a Fase 0. Até lá, este módulo é código que
- * registra corretamente um evento que ninguém viu chegar.
+ * `mp.makeEventSource` was confirmed on a real server on 2026-08-06 — it exists
+ * and accepts the registration. **The client snippet has NOT been exercised**: it only runs
+ * when someone connects, which is Phase 0. Until then, this module is code that
+ * correctly registers an event nobody has seen arrive.
  *
- * Os dois detalhes abaixo vieram do Red House e economizam a depuração óbvia:
+ * The two details below came from Red House and save the obvious debugging:
  *
- *   - **`0x14` é o jogador local.** O cliente se reporta com esse FormID; o
- *     servidor precisa trocar pelo `pcFormId` que recebe junto, senão todo
- *     golpe do próprio jogador aponta pro form errado.
- *   - **`ctx.getFormIdInServerFormat()` é obrigatório.** FormID de cliente e de
- *     servidor são espaços diferentes; mandar o número cru daria outro objeto.
+ *   - **`0x14` is the local player.** The client reports itself with that FormID; the
+ *     server must swap it for the `pcFormId` it receives alongside, otherwise every
+ *     hit by the player themselves points at the wrong form.
+ *   - **`ctx.getFormIdInServerFormat()` is mandatory.** Client and server FormIDs
+ *     are different spaces; sending the raw number would yield another object.
  */
 
 const NOME_DO_EVENTO = '_onHitReported';
 
-/** Silêncio que fecha um episódio entre um par. */
+/** Silence that closes an episode between a pair. */
 const JANELA_MS = 10_000;
 
-/** Teto de golpes contados por episódio — o número exato deixa de importar. */
+/** Cap on hits counted per episode — past it the exact number stops mattering. */
 const MAX_GOLPES_POR_EPISODIO = 200;
 
 /**
- * O trecho que roda NO CLIENTE, dentro do Skyrim Platform.
+ * The snippet that runs ON THE CLIENT, inside Skyrim Platform.
  *
- * Escrito como string porque é isso que `makeEventSource` recebe: o corpo é
- * serializado e injetado no cliente. Nada aqui tem acesso ao escopo deste
- * arquivo — só ao `ctx` que o SkyMP fornece.
+ * Written as a string because that is what `makeEventSource` takes: the body is
+ * serialized and injected into the client. Nothing here has access to this
+ * file's scope — only to the `ctx` that SkyMP provides.
  *
- * Mantido curto de propósito: cada linha aqui roda no loop do jogo da máquina
- * de outra pessoa, e não há como depurar remotamente. A agregação, o
- * throttling e toda a decisão ficam do lado do servidor.
+ * Kept short on purpose: every line here runs in the game loop on someone
+ * else's machine, and there is no way to debug it remotely. Aggregation,
+ * throttling and every decision stay on the server side.
  */
 const SNIPPET_DO_CLIENTE = `
   ctx.sp.on('hit', (e) => {
     try {
-      // \`agressor\` com essa grafia e o que o Skyrim Platform entrega.
+      // \`agressor\` (aggressor) with that spelling is what Skyrim Platform delivers.
       var alvo = e.target && ctx.getFormIdInServerFormat(e.target.getFormID());
       var quemBateu = e.agressor && ctx.getFormIdInServerFormat(e.agressor.getFormID());
       if (!alvo || !quemBateu) return;
@@ -111,17 +111,17 @@ const SNIPPET_DO_CLIENTE = `
         isHitBlocked: !!e.isHitBlocked
       });
     } catch (err) {
-      // Um erro aqui roda no cliente e nao tem pra onde ir. Engolir e o
-      // certo: derrubar o snippet mataria o rastro de todos os golpes
-      // seguintes daquele jogador.
+      // An error here runs on the client and has nowhere to go. Swallowing it is
+      // right: crashing the snippet would kill the trail of every following
+      // hit from that player.
     }
   });
 `;
 
-/** FormID com que o cliente se refere a si mesmo. */
+/** FormID the client uses to refer to itself. */
 const JOGADOR_LOCAL = 0x14;
 
-/** `${agressor}:${alvo}` → episódio aberto */
+/** `${agressor}:${alvo}` (aggressor:target) → open episode */
 const _episodios = new Map();
 
 let _aoFecharEpisodio = null;
@@ -129,23 +129,23 @@ let _timerDeVarredura = null;
 let _registrado = false;
 
 /**
- * Normaliza o FormID que o cliente reportou.
+ * Normalizes the FormID the client reported.
  *
- * O cliente manda `0x14` para si mesmo — é o form do jogador local dentro do
- * processo dele. Do lado do servidor esse número não identifica ninguém, então
- * troca pelo `pcFormId`, que é quem de fato mandou o evento.
+ * The client sends `0x14` for itself — it is the local player's form inside its
+ * own process. On the server side that number identifies nobody, so
+ * it is swapped for `pcFormId`, which is who actually sent the event.
  */
 function _resolverAtor(formId, pcFormId) {
   return formId === JOGADOR_LOCAL ? pcFormId : formId;
 }
 
 /**
- * Contabiliza um golpe. Exportada para teste — é a regra de agregação, e ela
- * precisa ser exercitável sem cliente, sem servidor e sem relógio real.
+ * Counts a hit. Exported for tests — it is the aggregation rule, and it
+ * must be exercisable without a client, a server or a real clock.
  *
- * @param {number} pcFormId  quem mandou o evento
- * @param {object} evento    o payload do snippet
- * @param {number} [agora]   injetável no teste
+ * @param {number} pcFormId  who sent the event
+ * @param {object} evento    the snippet's payload
+ * @param {number} [agora]   injectable in tests
  */
 function registrarGolpe(pcFormId, evento, agora = Date.now()) {
   if (!evento || typeof evento !== 'object') return null;
@@ -154,8 +154,8 @@ function registrarGolpe(pcFormId, evento, agora = Date.now()) {
   const alvo = _resolverAtor(Number(evento.target), pcFormId);
 
   if (!Number.isFinite(agressor) || !Number.isFinite(alvo)) return null;
-  // Dano em si mesmo (queda, veneno, fogo amigo do proprio feitico) nao e
-  // agressao entre pessoas e nao interessa a arbitragem de RDM.
+  // Self-damage (falling, poison, friendly fire from one's own spell) is not
+  // aggression between people and does not matter for RDM arbitration.
   if (agressor === alvo) return null;
 
   const chave = `${agressor}:${alvo}`;
@@ -187,8 +187,8 @@ function registrarGolpe(pcFormId, evento, agora = Date.now()) {
 }
 
 /**
- * Fecha os episódios sem golpe novo há `JANELA_MS` e entrega ao assinante.
- * Exportada para teste pelo mesmo motivo de `registrarGolpe`.
+ * Closes the episodes with no new hit for `JANELA_MS` and hands them to the subscriber.
+ * Exported for tests for the same reason as `registrarGolpe`.
  */
 function fecharEpisodiosVencidos(agora = Date.now()) {
   const fechados = [];
@@ -203,7 +203,7 @@ function fecharEpisodiosVencidos(agora = Date.now()) {
       try {
         _aoFecharEpisodio(ep);
       } catch (err) {
-        console.error('[hit-events] Assinante falhou ao receber episodio:', err.message);
+        console.error('[hit-events] Subscriber failed while receiving an episode:', err.message);
       }
     }
   }
@@ -211,29 +211,29 @@ function fecharEpisodiosVencidos(agora = Date.now()) {
 }
 
 /**
- * Registra o event source e começa a varrer episódios vencidos.
+ * Registers the event source and starts sweeping expired episodes.
  *
  * @param {(episodio: object) => void} aoFecharEpisodio
- * @returns {boolean} se o registro aconteceu
+ * @returns {boolean} whether the registration happened
  */
 function start(aoFecharEpisodio) {
   _aoFecharEpisodio = aoFecharEpisodio || null;
 
   if (!_timerDeVarredura) {
-    // A varredura e barata: percorre um Map pequeno, sem tocar Papyrus nem
-    // banco. Nao tem relacao com o polling de 2 s que estamos removendo.
+    // The sweep is cheap: it walks a small Map, without touching Papyrus or the
+    // DB. It has nothing to do with the 2 s polling we are removing.
     _timerDeVarredura = setInterval(() => {
       try {
         fecharEpisodiosVencidos();
       } catch (err) {
-        console.error('[hit-events] Falha ao fechar episodios:', err.message);
+        console.error('[hit-events] Failed to close episodes:', err.message);
       }
     }, JANELA_MS);
     if (typeof _timerDeVarredura.unref === 'function') _timerDeVarredura.unref();
   }
 
   if (typeof mp === 'undefined' || typeof mp.makeEventSource !== 'function') {
-    console.warn('[hit-events] mp.makeEventSource indisponivel — nenhum golpe sera reportado.');
+    console.warn('[hit-events] mp.makeEventSource unavailable — no hits will be reported.');
     return false;
   }
   if (_registrado) return true;
@@ -244,14 +244,14 @@ function start(aoFecharEpisodio) {
       try {
         registrarGolpe(pcFormId, evento);
       } catch (err) {
-        console.error('[hit-events] Falha ao registrar golpe:', err.message);
+        console.error('[hit-events] Failed to record a hit:', err.message);
       }
     };
     _registrado = true;
-    console.log('[hit-events] Evento de agressao registrado (evidencia, nao enforcement).');
+    console.log('[hit-events] Aggression event registered (evidence, not enforcement).');
     return true;
   } catch (err) {
-    console.error('[hit-events] Falha ao registrar o event source:', err.message);
+    console.error('[hit-events] Failed to register the event source:', err.message);
     return false;
   }
 }

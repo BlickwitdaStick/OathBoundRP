@@ -1,46 +1,46 @@
 /**
  * core/papyrus.js
  *
- * Helpers para atravessar a ponte Papyrus.
+ * Helpers for crossing the Papyrus bridge.
  *
- * ─── Por que isto existe ─────────────────────────────────────────────────────
+ * ─── Why this exists ─────────────────────────────────────────────────────────
  *
- * O parâmetro `self` de `mp.callPapyrusFunction('method', ...)` — e qualquer
- * argumento que seja uma referência de objeto — precisa ser um **objeto**
- * `{ type, desc }`, nunca o FormID numérico:
+ * The `self` parameter of `mp.callPapyrusFunction('method', ...)` — and any
+ * argument that is an object reference — must be an **object**
+ * `{ type, desc }`, never the numeric FormID:
  *
  *     mp.callPapyrusFunction('method', 'Actor', 'IsDead', actorRef(id), []);
  *
- * Isso não é preferência de estilo. Os nove testes oficiais do SkyMP
- * (`misc/tests/` no repositório upstream) usam **exclusivamente** essa forma,
- * inclusive para argumentos:
+ * This is not a style preference. SkyMP's nine official tests
+ * (`misc/tests/` in the upstream repository) use **only** that shape,
+ * including for arguments:
  *
  *     mp.callPapyrusFunction("method", "ObjectReference", "RemoveAllItems",
  *         { type: "form", desc: mp.getDescFromId(actorId1) },
  *         [{ type: "form", desc: mp.getDescFromId(actorId2) }, false, false]);
  *
- * Até 05/08/2026 este gamemode misturava as duas formas: 2 arquivos usavam
- * objeto e 22 pontos passavam o FormID cru. Como nada nunca foi testado em
- * jogo e a documentação oficial não fala do assunto, ficou anos sem ninguém
- * perceber — e a suíte de testes passava, porque o `mp` mockado aceita
- * qualquer coisa.
+ * Until 2026-08-05 this gamemode mixed both shapes: 2 files used
+ * the object and 22 call sites passed the raw FormID. Since nothing was ever tested in
+ * game and the official documentation says nothing about it, it went unnoticed
+ * for ages — and the test suite passed, because the mocked `mp` accepts
+ * anything.
  *
- * O risco concreto era `core/transaction-service.js`: se a forma crua não
- * funciona, o banco registrava a transação e o item nunca chegava no
- * inventário do jogador.
+ * The concrete risk was `core/transaction-service.js`: if the raw shape does not
+ * work, the DB recorded the transaction and the item never reached the
+ * player's inventory.
  *
  * ─── `form` vs `espm` ────────────────────────────────────────────────────────
  *
- * `type: 'form'`  → referência que existe no mundo (um ator, um objeto colocado)
- * `type: 'espm'`  → registro base vindo de um plugin (o "molde" de um item)
+ * `type: 'form'`  → a reference that exists in the world (an actor, a placed object)
+ * `type: 'espm'`  → a base record coming from a plugin (the "template" of an item)
  *
- * A distinção aparece nos testes oficiais: o ator é `form`, o Gold001 que se
- * adiciona ao inventário dele é `espm`.
+ * The distinction shows up in the official tests: the actor is `form`, the Gold001 that is
+ * added to their inventory is `espm`.
  */
 
 /**
- * Referência a algo que existe no mundo — ator ou objeto colocado.
- * É o que vai no `self` de toda chamada `'method'`.
+ * A reference to something that exists in the world — an actor or a placed object.
+ * It is what goes in the `self` of every `'method'` call.
  *
  * @param {number} formId
  * @returns {{type: 'form', desc: string}}
@@ -50,8 +50,8 @@ function actorRef(formId) {
 }
 
 /**
- * Referência a um registro base de plugin (baseId de item, NPC, etc).
- * Usado como *argumento*, não como `self`.
+ * A reference to a plugin base record (item baseId, NPC, etc).
+ * Used as an *argument*, not as `self`.
  *
  * @param {number} baseId
  * @returns {{type: 'espm', desc: string}}

@@ -1,102 +1,102 @@
 /**
  * core/module-registry.js
  *
- * Registro central do ciclo de vida de módulos.
+ * Central registry of the module lifecycle.
  *
- * Cada módulo declara:
- *   - id: identificador único
- *   - enabledBy: variável de ambiente que ativa o módulo (process.env[enabledBy] === 'true')
- *   - phase: 'core' | 'lab' | 'parked' (informativo, ajuda no diagnóstico)
- *   - dependencies: IDs de outros módulos que devem estar ativos
- *   - commands: lista de comandos registrados (para cleanup automático)
- *   - actions: lista de ações registradas na action-policy
- *   - initialize(path): função de inicialização
- *   - shutdown(): função de desligamento (opcional)
- *   - healthCheck(): função de verificação de saúde (opcional, retorna boolean)
+ * Each module declares:
+ *   - id: unique identifier
+ *   - enabledBy: environment variable that enables the module (process.env[enabledBy] === 'true')
+ *   - phase: 'core' | 'lab' | 'parked' (informational, helps diagnostics)
+ *   - dependencies: IDs of other modules that must be active
+ *   - commands: list of registered commands (for automatic cleanup)
+ *   - actions: list of actions registered in the action-policy
+ *   - initialize(path): initialization function
+ *   - shutdown(): shutdown function (optional)
+ *   - healthCheck(): health check function (optional, returns boolean)
  *
- * Fluxo:
- *   1. Módulos chamam moduleRegistry.register(descriptor) ao carregar
- *   2. phase0-basic.js chama moduleRegistry.bootAll() no startup
- *   3. bootAll() verifica env var, resolve dependências e chama initialize()
- *   4. Comandos são registrados no commandRegistry automaticamente se o módulo estiver ativo
- *   5. Na desconexão/shutdown, shutdown() é chamado e comandos são removidos
+ * Flow:
+ *   1. Modules call moduleRegistry.register(descriptor) when loaded
+ *   2. phase0-basic.js calls moduleRegistry.bootAll() at startup
+ *   3. bootAll() checks the env var, resolves dependencies and calls initialize()
+ *   4. Commands are registered in the commandRegistry automatically if the module is active
+ *   5. On disconnect/shutdown, shutdown() is called and commands are removed
  *
- * ─── Distribuição de eventos de jogo: ADIADA, e por quê ─────────────────────
+ * ─── Game-event distribution: POSTPONED, and why ────────────────────────────
  *
- * O sistema de módulos do Red House distribui eventos de jogo (`onHit`,
- * `onCellChange`) para qualquer módulo que queira escutar — não só para quem o
- * evento foi originalmente escrito. Este registry só tem ciclo de vida
- * (`initialize`/`shutdown`/`healthCheck`), e o estudo registrou aquilo como
- * "um dia pode valer"
- * (`docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1, "Outras coisas
- * que aprendemos").
+ * Red House's module system distributes game events (`onHit`,
+ * `onCellChange`) to any module that wants to listen — not only to whoever the
+ * event was originally written for. This registry only has a lifecycle
+ * (`initialize`/`shutdown`/`healthCheck`), and the study recorded that as
+ * "might be worth it one day"
+ * (`docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1, "Other things
+ * we learned").
  *
- * **Avaliado em 06/08/2026 e deliberadamente não feito.** O censo dos seis
- * módulos registrados hoje (`phase0-basic.js`):
+ * **Evaluated on 2026-08-06 and deliberately not done.** The census of the six
+ * modules registered today (`phase0-basic.js`):
  *
- *   | módulo        | evento de jogo que escutaria |
+ *   | module        | game event it would listen to |
  *   |---------------|------------------------------|
- *   | death         | hit — e só ele                |
- *   | governance    | nenhum                        |
- *   | market-stalls | nenhum                        |
- *   | player-panel  | nenhum (faz polling de Papyrus e assina o panel-refresh-bus, que é interno, não evento de jogo) |
- *   | voip          | nenhum                        |
- *   | npc-cleaner   | nenhum                        |
+ *   | death         | hit — and only that           |
+ *   | governance    | none                          |
+ *   | market-stalls | none                          |
+ *   | player-panel  | none (it polls Papyrus and subscribes to the panel-refresh-bus, which is internal, not a game event) |
+ *   | voip          | none                          |
+ *   | npc-cleaner   | none                          |
  *
- * **Um consumidor, um tipo de evento.** `core/hit-events.js` entrega o episódio
- * direto ao assinante que o `death-service` passa em `hitEvents.start(cb)` —
- * uma linha, sem indireção. Um despacho genérico aqui trocaria essa linha por
- * um barramento que serve a um só, e o `descriptor.on = { hit, cellChange }`
- * teria uma chave viva e uma morta desde o primeiro dia.
+ * **One consumer, one event type.** `core/hit-events.js` hands the episode
+ * directly to the subscriber `death-service` passes in `hitEvents.start(cb)` —
+ * one line, no indirection. A generic dispatch here would swap that line for
+ * a bus that serves a single consumer, and `descriptor.on = { hit, cellChange }`
+ * would have one live key and one dead one from day one.
  *
- * `onCellChange` **não tem consumidor nenhum**, nem sequer um: `safe-zones.js`
- * consulta `mp.get(actorId, 'locationalData')` sob demanda — é leitura de
- * property, servida do cache do servidor, sem o custo de ida ao Papyrus —, e o
- * sistema de território que motivaria o evento está em "Pós-Alfa" no
- * `HEAVY_RP_GAMEPLAY_SYSTEMS_BACKLOG.md`. Construir a distribuição por causa
- * dele seria construir infraestrutura para uma feature que ainda não passou
- * pelas 15 perguntas da Constituição §15.
+ * `onCellChange` **has no consumer at all**, not even one: `safe-zones.js`
+ * queries `mp.get(actorId, 'locationalData')` on demand — it is a property
+ * read, served from the server's cache, without the cost of a Papyrus round trip —, and the
+ * territory system that would motivate the event is in "Post-Alpha" in
+ * `HEAVY_RP_GAMEPLAY_SYSTEMS_BACKLOG.md`. Building the distribution because of
+ * it would be building infrastructure for a feature that has not yet gone through
+ * the 15 questions of Constitution §15.
  *
- * O precedente do próprio projeto diz o mesmo: quando um segundo consumidor
- * apareceu de verdade — governança precisando avisar o painel —, a resposta foi
- * `core/panel-refresh-bus.js`, um barramento pequeno e nomeado, não um canal
- * genérico no registry. Serve de modelo se um terceiro caso aparecer.
+ * The project's own precedent says the same: when a second consumer
+ * really showed up — governance needing to notify the panel —, the answer was
+ * `core/panel-refresh-bus.js`, a small, named bus, not a generic
+ * channel in the registry. It serves as the model if a third case shows up.
  *
- * **O gatilho para reabrir isto**, para quem chegar aqui depois: um segundo
- * módulo que precise de um evento de jogo já capturado por outro. Aí o desenho
- * é `descriptor.on = { hit: fn, cellChange: fn }` opcional no `register()`,
- * despachado a partir de onde o evento já é capturado hoje
- * (`core/hit-events.js`), com teste no padrão do resto deste arquivo. Até lá,
- * generalizar seria abstração prematura — a mesma que a §15 pede para evitar na
- * camada de mecânica de mundo, pelo mesmo motivo.
+ * **The trigger for reopening this**, for whoever gets here later: a second
+ * module that needs a game event already captured by another one. Then the design
+ * is an optional `descriptor.on = { hit: fn, cellChange: fn }` in `register()`,
+ * dispatched from where the event is already captured today
+ * (`core/hit-events.js`), with a test following the pattern of the rest of this file. Until then,
+ * generalizing would be premature abstraction — the same one §15 asks to avoid in the
+ * world-mechanics layer, for the same reason.
  */
 
 const commandRegistry = require('./command-registry');
 const interactionRegistry = require('./interaction-registry');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ciclo de vida (13/08/2026)
+// Lifecycle (2026-08-13)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Estados possíveis de um módulo.
+ * Possible states of a module.
  *
- * ─── Por que isto deixou de ser um `Set` ────────────────────────────────────
+ * ─── Why this stopped being a `Set` ─────────────────────────────────────────
  *
- * Até aqui o estado era "está em `_active` ou não". Dois estados, para cinco
- * situações distintas — e duas delas se confundiam de um jeito que importa:
- * um módulo **desligado por env flag** e um módulo que **falhou ao
- * inicializar** respondiam a mesma coisa a `isEnabled()`, que é `false`.
+ * Until now the state was "it is in `_active` or not". Two states, for five
+ * distinct situations — and two of them got confused in a way that matters:
+ * a module **disabled by env flag** and a module that **failed to
+ * initialize** gave the same answer to `isEnabled()`, which is `false`.
  *
- * A diferença é operacional. O primeiro é o estado normal de todo módulo `lab`
- * deste servidor; o segundo é um incidente. Um servidor com `governance`
- * quebrado no boot parecia, para qualquer código e para o `list()`, um servidor
- * que simplesmente não quis governança.
+ * The difference is operational. The first is the normal state of every `lab` module
+ * on this server; the second is an incident. A server with `governance`
+ * broken at boot looked, to any code and to `list()`, like a server
+ * that simply did not want governance.
  *
- * `FAILED` também é o estado que o Interaction Framework precisa distinguir: um
- * módulo que registrou interações e depois falhou deixaria ações no menu
- * apontando para um serviço que nunca inicializou. É por isso que `bootAll`
- * limpa o registro de interações de quem falha.
+ * `FAILED` is also the state the Interaction Framework needs to distinguish: a
+ * module that registered interactions and then failed would leave actions in the menu
+ * pointing to a service that never initialized. That is why `bootAll`
+ * clears the interactions registered by whoever fails.
  */
 const STATES = Object.freeze({
   REGISTERED: 'REGISTERED',
@@ -113,32 +113,32 @@ const STATES = Object.freeze({
 // Registro interno
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Mapa de id → descriptor completo
+// Map of id → full descriptor
 const _modules = new Map();
 
-// Módulos que foram inicializados com sucesso
+// Modules that were initialized successfully
 const _active = new Set();
 
-// Mapa de id → um de STATES
+// Map of id → one of STATES
 const _states = new Map();
 
 /**
- * Ordena os módulos de forma que toda dependência venha antes de quem depende
- * dela, independentemente da ordem em que foram registrados.
+ * Orders the modules so that every dependency comes before whoever depends
+ * on it, regardless of the order in which they were registered.
  *
- * ─── O bug que isto conserta ────────────────────────────────────────────────
+ * ─── The bug this fixes ─────────────────────────────────────────────────────
  *
- * `bootAll` percorria `_modules` na ordem de inserção e checava
- * `dependencies.filter(dep => !_active.has(dep))` — ou seja, uma dependência só
- * contava como satisfeita se **já tivesse sido inicializada numa iteração
- * anterior**. Funcionava porque `phase0-basic.js` registra `governance` antes de
- * `market-stalls`. Mover aquele bloco vinte linhas para cima desligava o módulo
- * com "dependências não ativas: governance" — uma mensagem correta sobre um
- * estado que não deveria existir.
+ * `bootAll` walked `_modules` in insertion order and checked
+ * `dependencies.filter(dep => !_active.has(dep))` — meaning a dependency only
+ * counted as satisfied if it **had already been initialized in a previous
+ * iteration**. It worked because `phase0-basic.js` registers `governance` before
+ * `market-stalls`. Moving that block twenty lines up disabled the module
+ * with "inactive dependencies: governance" — a correct message about a
+ * state that should not exist.
  *
- * Ciclo é erro de quem programa, não condição de runtime: os módulos envolvidos
- * são nomeados e ficam de fora do boot, em vez de o servidor travar ou de a
- * ordem virar sorte.
+ * A cycle is a programmer error, not a runtime condition: the modules involved
+ * are named and left out of boot, instead of the server hanging or the
+ * order becoming luck.
  *
  * @returns {{ordered: string[], cycles: string[]}}
  */
@@ -155,13 +155,13 @@ function topologicalOrder() {
       return false;
     }
     const mod = _modules.get(id);
-    if (!mod) return true; // dependência para módulo não registrado: tratada no boot
+    if (!mod) return true; // dependency on an unregistered module: handled at boot
 
     visitState.set(id, 'visiting');
     path.push(id);
     let ok = true;
-    // Obrigatórias e opcionais entram na ordenação: a opcional não é exigida
-    // para ligar, mas se estiver ligada precisa estar pronta antes.
+    // Required and optional ones go into the ordering: the optional one is not required
+    // to switch on, but if it is on it has to be ready first.
     for (const dep of [...mod.dependencies, ...mod.optionalDependencies]) {
       if (!visit(dep, path)) ok = false;
     }
@@ -176,20 +176,20 @@ function topologicalOrder() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API Pública
+// Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Registra um módulo no registry.
- * Deve ser chamado no carregamento do arquivo do módulo, antes do bootAll().
+ * Registers a module in the registry.
+ * Must be called when the module file loads, before bootAll().
  *
  * @param {object} descriptor
- * @param {string}   descriptor.id           - ID único do módulo (ex: 'woodcutting')
- * @param {string}   descriptor.enabledBy    - Nome da env var que ativa este módulo
- * @param {string}   [descriptor.phase]      - 'core' | 'lab' | 'parked' (padrão: 'parked')
- * @param {string}   [descriptor.version]    - versão do módulo (informativa, aparece no diagnóstico)
- * @param {string[]} [descriptor.dependencies] - IDs de módulos obrigatórios
- * @param {string[]} [descriptor.optionalDependencies] - IDs consultados só se estiverem ativos
+ * @param {string}   descriptor.id           - unique module ID (e.g. 'woodcutting')
+ * @param {string}   descriptor.enabledBy    - name of the env var that enables this module
+ * @param {string}   [descriptor.phase]      - 'core' | 'lab' | 'parked' (default: 'parked')
+ * @param {string}   [descriptor.version]    - module version (informational, shows up in diagnostics)
+ * @param {string[]} [descriptor.dependencies] - IDs of required modules
+ * @param {string[]} [descriptor.optionalDependencies] - IDs consulted only if they are active
  * @param {object[]} [descriptor.commands]   - [{ name, handler, opts }]
  * @param {Function} descriptor.initialize   - async () => void
  * @param {Function} [descriptor.shutdown]   - async () => void
@@ -202,10 +202,10 @@ function register(descriptor) {
     phase = 'parked',
     version = '0.0.0',
     dependencies = [],
-    // Declarar o que é opcional tira a decisão de dentro de uma função de
-    // domínio. O caso real é o `governance`, que consulta `economy-regional` se
-    // ele estiver ligado e resolvia isso com `isEnabled()` + `require` dentro de
-    // um `try`, no meio de `getInteractionActions`.
+    // Declaring what is optional takes the decision out of a domain
+    // function. The real case is `governance`, which consults `economy-regional` if
+    // it is on and used to solve that with `isEnabled()` + `require` inside
+    // a `try`, in the middle of `getInteractionActions`.
     optionalDependencies = [],
     commands = [],
     initialize,
@@ -213,10 +213,10 @@ function register(descriptor) {
     healthCheck = () => true
   } = descriptor;
 
-  if (!id) throw new Error('[module-registry] Módulo sem id');
-  if (!enabledBy) throw new Error(`[module-registry] Módulo '${id}' sem enabledBy`);
-  if (typeof initialize !== 'function') throw new Error(`[module-registry] Módulo '${id}' sem função initialize`);
-  if (_modules.has(id)) throw new Error(`[module-registry] Módulo '${id}' registrado duas vezes`);
+  if (!id) throw new Error('[module-registry] Module has no id');
+  if (!enabledBy) throw new Error(`[module-registry] Module '${id}' has no enabledBy`);
+  if (typeof initialize !== 'function') throw new Error(`[module-registry] Module '${id}' has no initialize function`);
+  if (_modules.has(id)) throw new Error(`[module-registry] Module '${id}' registered twice`);
 
   _modules.set(id, {
     id, enabledBy, phase, version,
@@ -227,7 +227,7 @@ function register(descriptor) {
 }
 
 /**
- * Verifica se um módulo está ativo (foi inicializado com sucesso).
+ * Checks whether a module is active (was initialized successfully).
  * @param {string} id
  * @returns {boolean}
  */
@@ -263,8 +263,8 @@ function unavailableCommand(command) {
 /**
  * Estado atual de um módulo, ou `null` se ele nem foi registrado.
  *
- * Diferente de `isEnabled`, isto distingue **desligado por flag** de **falhou
- * ao inicializar** — os dois respondem `false` ali, e só um é incidente.
+ * Unlike `isEnabled`, this tells **disabled by flag** apart from **failed
+ * to initialize** — both answer `false` there, and only one is an incident.
  *
  * @param {string} id
  * @returns {string|null}
@@ -274,19 +274,19 @@ function getState(id) {
 }
 
 /**
- * Inicializa todos os módulos registrados cujas env vars estejam ativas.
- * Resolve dependências e registra comandos automaticamente.
+ * Initializes every registered module whose env vars are on.
+ * Resolves dependencies and registers commands automatically.
  *
- * Deve ser chamado UMA VEZ no boot (phase0-basic.js).
+ * Must be called ONCE at boot (phase0-basic.js).
  */
 async function bootAll() {
-  console.log('[module-registry] Iniciando boot de módulos...');
+  console.log('[module-registry] Starting module boot...');
 
   const results = { enabled: [], disabled: [], failed: [], order: [] };
 
   const { ordered, cycles } = topologicalOrder();
   for (const cycle of cycles) {
-    console.error(`[module-registry] CICLO de dependência: ${cycle}. Módulos envolvidos ficam de fora do boot.`);
+    console.error(`[module-registry] Dependency CYCLE: ${cycle}. The modules involved are left out of boot.`);
   }
   results.order = ordered;
 
@@ -295,20 +295,20 @@ async function bootAll() {
     const shouldEnable = process.env[mod.enabledBy] === 'true';
 
     if (!shouldEnable) {
-      console.log(`[module-registry] [${mod.phase.toUpperCase()}] ${id}: DESATIVADO (${mod.enabledBy}=false ou não definido)`);
+      console.log(`[module-registry] [${mod.phase.toUpperCase()}] ${id}: DISABLED (${mod.enabledBy}=false or not set)`);
       _states.set(id, STATES.DISABLED);
       results.disabled.push(id);
       rememberUnavailable(mod, id);
       continue;
     }
 
-    // Dependências obrigatórias. A ordenação topológica acima já garante que
-    // toda dependência foi *tentada* antes desta linha, então um `_active`
-    // vazio aqui significa que ela está desligada ou falhou — nunca que ainda
-    // não chegou a vez dela, que era o modo de falha antigo.
+    // Required dependencies. The topological ordering above already guarantees
+    // every dependency was *attempted* before this line, so an empty `_active`
+    // here means it is disabled or failed — never that its turn has not
+    // come yet, which was the old failure mode.
     const missingDeps = mod.dependencies.filter(dep => !_active.has(dep));
     if (missingDeps.length > 0) {
-      console.error(`[module-registry] ${id}: FALHOU — dependências não ativas: ${missingDeps.join(', ')}`);
+      console.error(`[module-registry] ${id}: FAILED — inactive dependencies: ${missingDeps.join(', ')}`);
       _states.set(id, STATES.FAILED);
       results.failed.push({ id, reason: `dependências ausentes: ${missingDeps.join(', ')}` });
       rememberUnavailable(mod, id);
@@ -336,19 +336,19 @@ async function bootAll() {
       _states.set(id, STATES.RUNNING);
       const inativas = mod.optionalDependencies.filter(dep => !_active.has(dep));
       console.log(
-        `[module-registry] [${mod.phase.toUpperCase()}] ${id}@${mod.version}: ATIVO ` +
-        `(${mod.commands.length} comandos registrados` +
-        `${inativas.length > 0 ? `, opcionais inativas: ${inativas.join(', ')}` : ''})`
+        `[module-registry] [${mod.phase.toUpperCase()}] ${id}@${mod.version}: ACTIVE ` +
+        `(${mod.commands.length} commands registered` +
+        `${inativas.length > 0 ? `, inactive optional deps: ${inativas.join(', ')}` : ''})`
       );
       results.enabled.push(id);
     } catch (err) {
-      // Um módulo que falhou no meio do `initialize` pode já ter registrado
-      // interações. Deixá-las no registro é pior que a falha em si: elas
-      // aparecem no menu e executam contra um serviço que nunca inicializou.
+      // A module that failed in the middle of `initialize` may have already registered
+      // interactions. Leaving them in the registry is worse than the failure itself: they
+      // show up in the menu and run against a service that never initialized.
       const orfas = interactionRegistry.unregisterModule(id);
       console.error(
-        `[module-registry] ${id}: FALHOU ao inicializar:`, err.message +
-        (orfas > 0 ? ` (${orfas} interações órfãs removidas)` : '')
+        `[module-registry] ${id}: FAILED to initialize:`, err.message +
+        (orfas > 0 ? ` (${orfas} orphaned interactions removed)` : '')
       );
       _states.set(id, STATES.FAILED);
       results.failed.push({ id, reason: err.message });
@@ -356,25 +356,25 @@ async function bootAll() {
     }
   }
 
-  console.log(`[module-registry] Boot concluído: ${results.enabled.length} ativos, ${results.disabled.length} desativados, ${results.failed.length} com falha`);
+  console.log(`[module-registry] Boot complete: ${results.enabled.length} active, ${results.disabled.length} disabled, ${results.failed.length} failed`);
   if (results.failed.length > 0) {
-    console.error('[module-registry] Módulos com falha:', results.failed.map(f => `${f.id} (${f.reason})`).join('; '));
+    console.error('[module-registry] Failed modules:', results.failed.map(f => `${f.id} (${f.reason})`).join('; '));
   }
 
   return results;
 }
 
 /**
- * Desliga todos os módulos ativos ordenadamente.
+ * Shuts down every active module in order.
  *
- * Ordem inversa à do boot: quem depende de alguém desliga antes de quem é
- * dependido. Sem isso, `governance` poderia sair enquanto `market-stalls` — que
- * o consome — ainda atende pedido.
+ * Reverse boot order: whoever depends on someone shuts down before whoever is
+ * depended on. Without this, `governance` could leave while `market-stalls` — which
+ * consumes it — is still serving requests.
  *
- * Chamado no shutdown do servidor.
+ * Called on server shutdown.
  */
 async function shutdownAll() {
-  console.log('[module-registry] Iniciando shutdown de módulos...');
+  console.log('[module-registry] Starting module shutdown...');
   const { ordered } = topologicalOrder();
   for (const id of [...ordered].reverse()) {
     const mod = _modules.get(id);
@@ -385,16 +385,16 @@ async function shutdownAll() {
       for (const cmdDef of mod.commands) {
         commandRegistry.unregister(cmdDef.name);
       }
-      // E as interações registradas. Automático pelo mesmo motivo que os
-      // comandos são: um módulo que precisa lembrar de limpar acaba esquecendo,
-      // e o resultado é uma ação no menu apontando para um serviço desligado.
+      // And the registered interactions. Automatic for the same reason the
+      // commands are: a module that has to remember to clean up ends up forgetting,
+      // and the result is a menu action pointing to a shut-down service.
       interactionRegistry.unregisterModule(id);
       await mod.shutdown();
       _active.delete(id);
       _states.set(id, STATES.STOPPED);
-      console.log(`[module-registry] ${id}: desligado`);
+      console.log(`[module-registry] ${id}: shut down`);
     } catch (err) {
-      console.error(`[module-registry] Erro ao desligar ${id}:`, err.message);
+      console.error(`[module-registry] Error shutting down ${id}:`, err.message);
       _states.set(id, STATES.FAILED);
       _active.delete(id);
     }
@@ -402,8 +402,8 @@ async function shutdownAll() {
 }
 
 /**
- * Executa healthCheck em todos os módulos ativos.
- * Retorna relatório para diagnóstico.
+ * Runs healthCheck on every active module.
+ * Returns a report for diagnostics.
  */
 function healthCheckAll() {
   const report = [];
@@ -420,7 +420,7 @@ function healthCheckAll() {
 }
 
 /**
- * Lista todos os módulos registrados com seu status.
+ * Lists every registered module with its status.
  */
 function list() {
   return Array.from(_modules.values()).map(mod => ({
@@ -430,14 +430,14 @@ function list() {
     state: _states.get(mod.id) || STATES.REGISTERED,
     enabled: _active.has(mod.id),
     enabledBy: mod.enabledBy,
-    envValue: process.env[mod.enabledBy] || 'não definido',
+    envValue: process.env[mod.enabledBy] || 'not set',
     dependencies: mod.dependencies,
     optionalDependencies: mod.optionalDependencies,
     commandCount: mod.commands.length
   }));
 }
 
-/** Só para teste: devolve o registry ao estado vazio entre casos. */
+/** Test only: resets the registry to empty between cases. */
 function _reset() {
   _modules.clear();
   _active.clear();

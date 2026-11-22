@@ -168,8 +168,8 @@ describe('safe-zones — cellId fora do formato FormDesc é recusado, alto', () 
     assert.deepStrictEqual(zonas, [], 'a zona nao pode entrar na lista ativa');
     assert.strictEqual(logs.length, 1);
     assert.match(logs[0], /\[safe-zones\]/);
-    assert.match(logs[0], /cellId invalido/);
-    assert.match(logs[0], /IGNORADA/);
+    assert.match(logs[0], /invalid cellId/);
+    assert.match(logs[0], /IGNORED/);
     // O aviso precisa dizer o que fazer, não só que está errado.
     assert.match(logs[0], /162e2:Skyrim\.esm/, 'o log deve sugerir a forma certa');
   });
@@ -178,14 +178,14 @@ describe('safe-zones — cellId fora do formato FormDesc é recusado, alto', () 
     const { zonas, erros: logs } = carregar('162e2');
     restaurar();
     assert.deepStrictEqual(zonas, []);
-    assert.match(logs[0], /cellId invalido/);
+    assert.match(logs[0], /invalid cellId/);
   });
 
   it('hex inválido antes do ":" é recusado', () => {
     const { zonas, erros: logs } = carregar('templo:Skyrim.esm');
     restaurar();
     assert.deepStrictEqual(zonas, []);
-    assert.match(logs[0], /nao e hexadecimal/);
+    assert.match(logs[0], /is not hexadecimal/);
   });
 
   it('arquivo vazio depois do ":" é recusado', () => {

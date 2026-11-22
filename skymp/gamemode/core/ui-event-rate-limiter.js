@@ -1,24 +1,24 @@
 /**
- * Contador por emissor e tipo de evento da CEF.
+ * Counter per sender and event type from the CEF.
  *
- * Por padrao ele apenas mede: o limite fica desligado ate existirem metricas de
- * uma sessao real. Quando a operacao definir os dois valores de ambiente, o
- * mesmo componente passa a rejeitar de forma deterministica e auditavel.
+ * By default it only measures: the limit stays off until there are metrics from
+ * a real session. Once operations set both environment values, the
+ * same component starts rejecting deterministically and auditably.
  *
- * ─── Política por tipo (13/08/2026) ─────────────────────────────────────────
+ * ─── Per-type policy (2026-08-13) ───────────────────────────────────────────
  *
- * O teto global continua sendo o padrão, e continua desligado. O que passou a
- * existir é a possibilidade de um tipo ter o seu.
+ * The global cap is still the default, and still off. What now
+ * exists is the possibility of a type having its own.
  *
- * O caso que forçou isso são os dois eventos do Interaction Framework, que têm
- * perfis opostos: `interaction:query` acontece toda vez que alguém mira em
- * alguém — dezenas por minuto, barato, sem efeito colateral —, e
- * `interaction:execute` move ouro e inventário — unidades por minuto, caro,
- * irreversível. Um teto único ou estrangula a consulta ou libera a execução.
+ * The case that forced this is the two Interaction Framework events, which have
+ * opposite profiles: `interaction:query` happens every time someone aims at
+ * someone — dozens per minute, cheap, no side effects —, and
+ * `interaction:execute` moves gold and inventory — a handful per minute, expensive,
+ * irreversible. A single cap either chokes the query or lets execution through.
  *
- * A política é **opcional e por tipo**: sem entrada no mapa, o tipo cai no
- * comportamento global de sempre. Isso mantém a disciplina que este arquivo já
- * tinha — medir antes de limitar — para todo tipo que ainda não foi medido.
+ * The policy is **optional and per type**: with no entry in the map, the type falls back to the
+ * usual global behavior. That keeps the discipline this file already
+ * had — measure before limiting — for every type that has not been measured yet.
  */
 
 const DEFAULT_WINDOW_MS = 60_000;
@@ -48,8 +48,8 @@ function createUiEventRateLimiter({
   const resolvedWindowMs = positiveIntegerOr(windowMs, DEFAULT_WINDOW_MS);
   const resolvedMaxEvents = positiveIntegerOrZero(maxEvents);
 
-  // Resolvida uma vez no construtor, e não a cada evento: o caminho quente é
-  // uma leitura de `Map`, não uma reinterpretação de configuração.
+  // Resolved once in the constructor, not on every event: the hot path is
+  // a `Map` read, not a reinterpretation of configuration.
   /** @type {Map<string, {maxEvents: number, windowMs: number}>} */
   const resolvedPolicies = new Map();
   for (const [type, policy] of Object.entries(policies || {})) {

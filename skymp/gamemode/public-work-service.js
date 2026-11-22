@@ -321,16 +321,16 @@ function createPublicWorkService(overrides = {}) {
 
   function message(code) {
     return ({
-      active_run: 'Você já possui um trabalho público ativo.',
-      cooldown: 'Você precisa aguardar antes de aceitar outro trabalho deste grupo.',
-      no_active_run: 'Você não possui trabalho público ativo.',
-      wrong_origin: 'Esta não é a origem atribuída à sua carga.',
-      wrong_destination: 'Este não é o destino atribuído à sua carga.',
-      cargo_required: 'Você precisa coletar a carga na origem primeiro.',
-      expired: 'O prazo deste trabalho terminou.',
-      unknown_work: 'Este trabalho não está disponível.',
-      idempotency_conflict: 'Este identificador de ação pertence a outra operação.'
-    })[code] || 'Não foi possível realizar esta ação agora.';
+      active_run: 'You already have an active public work job.',
+      cooldown: 'You must wait before accepting another job from this group.',
+      no_active_run: 'You do not have an active public work job.',
+      wrong_origin: 'This is not the pickup point assigned to your cargo.',
+      wrong_destination: 'This is not the destination assigned to your cargo.',
+      cargo_required: 'You must pick up the cargo at the origin first.',
+      expired: 'The deadline for this job has passed.',
+      unknown_work: 'This job is not available.',
+      idempotency_conflict: 'This action identifier belongs to another operation.'
+    })[code] || 'Could not perform this action right now.';
   }
 
   function registerInteractions() {
@@ -338,7 +338,7 @@ function createPublicWorkService(overrides = {}) {
     for (const definition of workRegistry.list()) {
       interactions.register({
         id: `public_work.accept_${definition.code}`, module: MODULE,
-        target: interactions.TARGET_TYPES.OBJECT, section: 'Trabalhos públicos',
+        target: interactions.TARGET_TYPES.OBJECT, section: 'Public work',
         label: definition.label, distance, idempotent: true,
         policyAction: 'public_work',
         audit: interactions.AUDIT_LEVELS.GAMEPLAY,
@@ -348,7 +348,7 @@ function createPublicWorkService(overrides = {}) {
           if (targetFormDesc(ctx.target.formId) !== definition.boardFormDesc) return { message: message('unknown_work') };
           const result = await acceptWork({ characterId: ctx.characterId, workCode: definition.code, requestId: ctx.requestId });
           return { message: result.ok
-            ? `Trabalho aceito. Vá até ${definition.originLabel}.`
+            ? `Job accepted. Go to ${definition.originLabel}.`
             : message(result.code), data: result.ok ? { runId: result.run.id } : undefined };
         }
       });
@@ -356,7 +356,7 @@ function createPublicWorkService(overrides = {}) {
 
     interactions.register({
       id: 'public_work.pickup', module: MODULE, target: interactions.TARGET_TYPES.OBJECT,
-      section: 'Trabalhos públicos', label: 'Coletar carga', distance, idempotent: true,
+      section: 'Public work', label: 'Pick up cargo', distance, idempotent: true,
       policyAction: 'public_work',
       audit: interactions.AUDIT_LEVELS.GAMEPLAY,
       canSee: async ctx => {
@@ -365,13 +365,13 @@ function createPublicWorkService(overrides = {}) {
       },
       execute: async ctx => {
         const result = await pickupCargo({ characterId: ctx.characterId, targetFormDesc: targetFormDesc(ctx.target.formId), requestId: ctx.requestId });
-        return { message: result.ok ? `Carga coletada. Entregue em ${result.run.destinationLabel}.` : message(result.code) };
+        return { message: result.ok ? `Cargo picked up. Deliver it to ${result.run.destinationLabel}.` : message(result.code) };
       }
     });
 
     interactions.register({
       id: 'public_work.deliver', module: MODULE, target: interactions.TARGET_TYPES.OBJECT,
-      section: 'Trabalhos públicos', label: 'Entregar carga', distance, idempotent: true,
+      section: 'Public work', label: 'Deliver cargo', distance, idempotent: true,
       policyAction: 'public_work',
       audit: interactions.AUDIT_LEVELS.ECONOMY,
       canSee: async ctx => {
@@ -380,13 +380,13 @@ function createPublicWorkService(overrides = {}) {
       },
       execute: async ctx => {
         const result = await completeWork({ characterId: ctx.characterId, targetFormDesc: targetFormDesc(ctx.target.formId), requestId: ctx.requestId });
-        return { message: result.ok ? `Entrega concluída. Você recebeu ${result.rewardAmount || result.run.rewardAmount} septims.` : message(result.code) };
+        return { message: result.ok ? `Delivery complete. You received ${result.rewardAmount || result.run.rewardAmount} septims.` : message(result.code) };
       }
     });
 
     interactions.register({
       id: 'public_work.cancel', module: MODULE, target: interactions.TARGET_TYPES.OBJECT,
-      section: 'Trabalhos públicos', label: 'Cancelar trabalho atual', distance,
+      section: 'Public work', label: 'Cancel current job', distance,
       policyAction: 'public_work',
       audit: interactions.AUDIT_LEVELS.GAMEPLAY,
       canSee: async ctx => {
@@ -397,10 +397,10 @@ function createPublicWorkService(overrides = {}) {
       execute: async ctx => {
         const formDesc = targetFormDesc(ctx.target.formId);
         if (!workRegistry.list().some(definition => definition.boardFormDesc === formDesc)) {
-          return { message: 'Aproxime-se de um quadro de trabalhos públicos.' };
+          return { message: 'Get closer to a public work board.' };
         }
         const result = await cancelRun({ characterId: ctx.characterId });
-        return { message: result.ok ? 'Trabalho público cancelado. A carga foi invalidada.' : message(result.code) };
+        return { message: result.ok ? 'Public work job cancelled. The cargo was voided.' : message(result.code) };
       }
     });
   }

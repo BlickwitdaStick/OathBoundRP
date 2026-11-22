@@ -1,10 +1,10 @@
 /**
- * Dono único de `mp.onActivate`, com múltiplos assinantes nomeados.
+ * Sole owner of `mp.onActivate`, with multiple named subscribers.
  *
- * O hook do SkyMP é síncrono: somente o booleano exato `false` bloqueia o
- * processamento vanilla. Assinantes que precisam de banco devem decidir em
- * O(1) se reconhecem o FormID, iniciar o trabalho assíncrono por conta própria
- * e retornar `false` imediatamente quando consumirem a ativação.
+ * The SkyMP hook is synchronous: only the exact boolean `false` blocks
+ * vanilla processing. Subscribers that need the DB must decide in
+ * O(1) whether they recognize the FormID, start the async work on their own
+ * and return `false` immediately when they consume the activation.
  */
 'use strict';
 
@@ -18,8 +18,8 @@ function _dispatch(targetId, casterId) {
       if (handler(targetId, casterId) === false) consumed = true;
     } catch (err) {
       console.error(
-        `[activation-events] Assinante '${name}' lancou em onActivate: ${err.message}. ` +
-        'Os demais assinantes continuam e a excecao NAO bloqueia a ativacao vanilla.'
+        `[activation-events] Subscriber '${name}' threw in onActivate: ${err.message}. ` +
+        'The other subscribers keep running and the exception does NOT block the vanilla activation.'
       );
     }
   }
@@ -30,8 +30,8 @@ function _installHook() {
   if (_hookInstalled || typeof mp === 'undefined') return;
   if (typeof mp.onActivate === 'function') {
     throw new Error(
-      '[activation-events] mp.onActivate ja possui handler direto. ' +
-      'Migre o consumidor para activationEvents.subscribe(<nome>, fn).'
+      '[activation-events] mp.onActivate already has a direct handler. ' +
+      'Migrate the consumer to activationEvents.subscribe(<name>, fn).'
     );
   }
   mp.onActivate = (targetId, casterId) => _dispatch(targetId, casterId);
@@ -40,13 +40,13 @@ function _installHook() {
 
 function subscribe(name, handler) {
   if (typeof name !== 'string' || !name.trim()) {
-    throw new Error('[activation-events] subscribe exige nome nao-vazio');
+    throw new Error('[activation-events] subscribe requires a non-empty name');
   }
   if (typeof handler !== 'function') {
-    throw new Error(`[activation-events] subscribe('${name}') exige funcao`);
+    throw new Error(`[activation-events] subscribe('${name}') requires a function`);
   }
   if (_subscribers.has(name)) {
-    throw new Error(`[activation-events] '${name}' ja esta inscrito em onActivate`);
+    throw new Error(`[activation-events] '${name}' is already subscribed to onActivate`);
   }
   _subscribers.set(name, handler);
   _installHook();

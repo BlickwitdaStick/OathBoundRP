@@ -54,7 +54,7 @@ const RATE_LIMIT_MS = 2000;
 // uma falha interna. Tudo o que não casa aqui vira uma frase genérica e o
 // detalhe fica no log — antes, um erro de SQL ia inteiro pra tela de quem
 // clicou em comprar, com nome de tabela e coluna junto.
-const ERROS_DE_REGRA = /indisponivel|propria barraca|Ouro insuficiente|Estoque insuficiente|nao possui/i;
+const ERROS_DE_REGRA = /unavailable|your own stall|Insufficient gold|Insufficient stock|does not own/i;
 const VISUAL_CONFIG_PATH = path.resolve(__dirname, '../config/market-stalls.visual.json');
 
 const PERMISSIONS = Object.freeze({
@@ -69,7 +69,7 @@ let initialized = false;
 let visualConfig = {
   enabled: false,
   defaultStallBaseId: null,
-  fallbackDisplayName: 'Barraca de Comerciante',
+  fallbackDisplayName: 'Merchant Stall',
   scale: 1.0
 };
 
@@ -374,19 +374,19 @@ async function placeStall(actorId, name) {
   if (!character) return;
 
   if (isRateLimited(character.characterId, 'stall_place')) {
-    notify(actorId, 'Aguarde antes de usar este comando novamente.');
+    notify(actorId, 'Wait before using this command again.');
     return;
   }
 
   const title = String(name || '').trim().slice(0, 96);
   if (!title) {
-    notify(actorId, 'Uso: /stallplace <nome>');
+    notify(actorId, 'Usage: /stallplace <name>');
     return;
   }
 
   const action = actionPolicy.canPerform(character.characterId, 'stall_place');
   if (!action.allowed) {
-    notify(actorId, action.reason || 'Acao bloqueada.');
+    notify(actorId, action.reason || 'Action blocked.');
     return;
   }
 
@@ -407,12 +407,12 @@ async function placeStall(actorId, name) {
       [character.characterId]
     );
     if ((active[0]?.total || 0) >= MAX_STALLS_PER_CHARACTER) {
-      throw new Error('Voce ja possui o limite de barracas ativas.');
+      throw new Error('You already have the maximum number of active stalls.');
     }
 
     const license = await hasActiveLicense(character.characterId, cityId);
     if (cityId && !license) {
-      throw new Error('Voce precisa de licenca ativa nessa cidade para montar barraca.');
+      throw new Error('You need an active license in this city to set up a stall.');
     }
 
     // Verifica distancia de barracas na mesma cell
@@ -424,7 +424,7 @@ async function placeStall(actorId, name) {
     );
     for (const stall of nearby) {
       if (distance(stall, { pos_x: loc.pos[0], pos_y: loc.pos[1], pos_z: loc.pos[2] }) < MIN_STALL_DISTANCE) {
-        throw new Error('Ha outra barraca muito proxima deste ponto.');
+        throw new Error('There is another stall too close to this spot.');
       }
     }
 
@@ -438,7 +438,7 @@ async function placeStall(actorId, name) {
 
     await conn.commit();
     await audit(actorId, 'stall:place', `stallId=${result.insertId} city=${cityId} name=${title}`, result.insertId);
-    notify(actorId, `Barraca montada: ${title} (#${result.insertId}).`);
+    notify(actorId, `Stall set up: ${title} (#${result.insertId}).`);
   } catch (err) {
     await conn.rollback();
     notify(actorId, err.message);
@@ -452,7 +452,7 @@ async function packStall(actorId, stallIdRaw) {
   if (!character) return;
 
   if (isRateLimited(character.characterId, 'stall_pack')) {
-    notify(actorId, 'Aguarde antes de usar este comando novamente.');
+    notify(actorId, 'Wait before using this command again.');
     return;
   }
 
@@ -472,12 +472,12 @@ async function packStall(actorId, stallIdRaw) {
     stall = stallRows[0];
     if (!stall) {
       await conn.rollback();
-      notify(actorId, 'Barraca ativa nao encontrada.');
+      notify(actorId, 'Active stall not found.');
       return;
     }
     if (stall.owner_character_id !== character.characterId && !admin.hasPermission(actorId, 'manage_staff')) {
       await conn.rollback();
-      notify(actorId, 'Apenas o dono pode recolher esta barraca.');
+      notify(actorId, 'Only the owner can pack up this stall.');
       return;
     }
 
@@ -522,7 +522,7 @@ async function packStall(actorId, stallIdRaw) {
   } catch (err) {
     await conn.rollback();
     console.error('[market-stalls] packStall transaction failed:', err.message);
-    notify(actorId, 'Erro ao recolher barraca.');
+    notify(actorId, 'Error packing up the stall.');
     return;
   } finally {
     conn.release();
@@ -545,7 +545,7 @@ async function packStall(actorId, stallIdRaw) {
     }
   }
   await audit(actorId, 'stall:pack', `stallId=${stallId}`, stallId);
-  notify(actorId, 'Barraca recolhida e estoque devolvido ao dono.');
+  notify(actorId, 'Stall packed up and stock returned to the owner.');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -561,13 +561,13 @@ async function addItem(actorId, stallIdRaw, baseIdRaw, countRaw, priceRaw, label
   if (!character) return;
 
   if (isRateLimited(character.characterId, 'stall_add')) {
-    notify(actorId, 'Aguarde antes de usar este comando novamente.');
+    notify(actorId, 'Wait before using this command again.');
     return;
   }
 
   const manageAction = actionPolicy.canPerform(character.characterId, 'stall_manage');
   if (!manageAction.allowed) {
-    notify(actorId, manageAction.reason || 'Acao bloqueada.');
+    notify(actorId, manageAction.reason || 'Action blocked.');
     return;
   }
 
@@ -578,11 +578,11 @@ async function addItem(actorId, stallIdRaw, baseIdRaw, countRaw, priceRaw, label
   const label = String(labelParts || '').trim().slice(0, 96) || null;
 
   if (!stallId || !Number.isFinite(baseId) || count <= 0 || price <= 0) {
-    notify(actorId, 'Uso: /stalladd <stallId> <baseId> <count> <price> <rotulo>');
+    notify(actorId, 'Usage: /stalladd <stallId> <baseId> <count> <price> <label>');
     return;
   }
   if (price > MAX_PRICE) {
-    notify(actorId, `Preco maximo permitido: ${MAX_PRICE}g.`);
+    notify(actorId, `Maximum allowed price: ${MAX_PRICE}g.`);
     return;
   }
 
@@ -593,7 +593,7 @@ async function addItem(actorId, stallIdRaw, baseIdRaw, countRaw, priceRaw, label
   // reclamacao de compra, muito depois, sem nada no log ligando as duas coisas.
   const vereditoDoItem = require('./core/espm').pareceItem(baseId);
   if (!vereditoDoItem.ok) {
-    notify(actorId, `Item invalido: ${vereditoDoItem.motivo}.`);
+    notify(actorId, `Invalid item: ${vereditoDoItem.motivo}.`);
     return;
   }
 
@@ -627,7 +627,7 @@ async function addItem(actorId, stallIdRaw, baseIdRaw, countRaw, priceRaw, label
     const stall = rows[0];
     if (!stall || stall.owner_character_id !== character.characterId) {
       await conn.rollback();
-      notify(actorId, 'Barraca ativa nao encontrada ou voce nao e o dono.');
+      notify(actorId, 'Active stall not found or you are not the owner.');
       return;
     }
 
@@ -652,7 +652,7 @@ async function addItem(actorId, stallIdRaw, baseIdRaw, countRaw, priceRaw, label
     await conn.rollback();
     const regra = ERROS_DE_REGRA.test(err.message);
     if (!regra) console.error('[market-stalls] addItem transaction failed:', err.message);
-    notify(actorId, regra ? err.message : 'Erro ao listar item.');
+    notify(actorId, regra ? err.message : 'Error listing the item.');
     return;
   } finally {
     conn.release();
@@ -663,7 +663,7 @@ async function addItem(actorId, stallIdRaw, baseIdRaw, countRaw, priceRaw, label
   transactionService.tx.applyToClient(actorId, baseId, -count);
 
   await audit(actorId, 'stall:item_add', `stallId=${stallId} baseId=0x${baseId.toString(16)} count=${count} price=${price}`, stallId);
-  notify(actorId, 'Item anunciado na barraca.');
+  notify(actorId, 'Item listed on the stall.');
 }
 
 async function removeItem(actorId, itemIdRaw) {
@@ -671,13 +671,13 @@ async function removeItem(actorId, itemIdRaw) {
   if (!character) return;
 
   if (isRateLimited(character.characterId, 'stall_remove')) {
-    notify(actorId, 'Aguarde antes de usar este comando novamente.');
+    notify(actorId, 'Wait before using this command again.');
     return;
   }
 
   const manageAction = actionPolicy.canPerform(character.characterId, 'stall_manage');
   if (!manageAction.allowed) {
-    notify(actorId, manageAction.reason || 'Acao bloqueada.');
+    notify(actorId, manageAction.reason || 'Action blocked.');
     return;
   }
 
@@ -702,7 +702,7 @@ async function removeItem(actorId, itemIdRaw) {
     item = rows[0];
     if (!item || item.owner_character_id !== character.characterId) {
       await conn.rollback();
-      notify(actorId, 'Item de barraca nao encontrado ou voce nao e o dono.');
+      notify(actorId, 'Stall item not found or you are not the owner.');
       return;
     }
 
@@ -725,7 +725,7 @@ async function removeItem(actorId, itemIdRaw) {
   } catch (err) {
     await conn.rollback();
     console.error('[market-stalls] removeItem transaction failed:', err.message);
-    notify(actorId, 'Erro ao remover item.');
+    notify(actorId, 'Error removing the item.');
     return;
   } finally {
     conn.release();
@@ -733,7 +733,7 @@ async function removeItem(actorId, itemIdRaw) {
 
   transactionService.tx.applyToClient(actorId, item.base_id, item.count);
   await audit(actorId, 'stall:item_remove', `itemId=${itemId}`, item.stall_id);
-  notify(actorId, 'Item removido da barraca e devolvido.');
+  notify(actorId, 'Item removed from the stall and returned.');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -753,10 +753,10 @@ async function listStalls(actorId) {
      LIMIT 12`
   );
   if (rows.length === 0) {
-    notify(actorId, 'Nenhuma barraca ativa.');
+    notify(actorId, 'No active stalls.');
     return;
   }
-  notify(actorId, rows.map(r => `#${r.id} ${r.name} (${r.items} itens)`).join(' | '));
+  notify(actorId, rows.map(r => `#${r.id} ${r.name} (${r.items} items)`).join(' | '));
 }
 
 async function listItems(actorId, stallIdRaw) {
@@ -769,7 +769,7 @@ async function listItems(actorId, stallIdRaw) {
     [stallId]
   );
   if (rows.length === 0) {
-    notify(actorId, 'Barraca sem itens listados.');
+    notify(actorId, 'This stall has no listed items.');
     return;
   }
   notify(actorId, rows.map(r => `#${r.id} ${r.label || `0x${Number(r.base_id).toString(16)}`} x${r.count} ${r.price}g`).join(' | '));
@@ -785,18 +785,18 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
 
   const idempotencyKey = normalizePurchaseRequestId(requestId);
   if (!idempotencyKey) {
-    notify(actorId, 'Solicitacao de compra invalida.');
+    notify(actorId, 'Invalid purchase request.');
     return;
   }
 
   if (isRateLimited(buyer.characterId, 'stall_buy', idempotencyKey)) {
-    notify(actorId, 'Aguarde antes de usar este comando novamente.');
+    notify(actorId, 'Wait before using this command again.');
     return;
   }
 
   const buyAction = actionPolicy.canPerform(buyer.characterId, 'stall_buy');
   if (!buyAction.allowed) {
-    notify(actorId, buyAction.reason || 'Acao bloqueada.');
+    notify(actorId, buyAction.reason || 'Action blocked.');
     return;
   }
 
@@ -812,7 +812,7 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
     const replay = await findPurchaseReplay(conn, idempotencyKey);
     if (replay) {
       await conn.commit();
-      notify(actorId, `Compra #${replay.id} ja havia sido confirmada.`);
+      notify(actorId, `Purchase #${replay.id} was already confirmed.`);
       return { ok: true, replayed: true, saleId: replay.id };
     }
 
@@ -826,10 +826,10 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
     );
     const item = rows[0];
     if (!item || item.stall_status !== 'active' || item.status !== 'listed' || item.count < count) {
-      throw new Error('Item indisponivel.');
+      throw new Error('Item unavailable.');
     }
     if (item.owner_character_id === buyer.characterId) {
-      throw new Error('Voce nao pode comprar da propria barraca.');
+      throw new Error('You cannot buy from your own stall.');
     }
 
     const total = item.price * count;
@@ -882,8 +882,8 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
     });
     if (!pagamento.ok) {
       throw new Error(pagamento.code === 'insufficient_funds'
-        ? `Ouro insuficiente: tem ${pagamento.balance}, precisa ${total}`
-        : `Pagamento recusado: ${pagamento.code}`);
+        ? `Insufficient gold: have ${pagamento.balance}, need ${total}`
+        : `Payment refused: ${pagamento.code}`);
     }
 
     if (taxAmount > 0 && item.city_id) {
@@ -896,7 +896,7 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
         actorCharacterId: buyer.characterId,
         idempotencyKey: `${idempotencyKey}_tax`
       });
-      if (!imposto.ok) throw new Error(`Imposto recusado: ${imposto.code}`);
+      if (!imposto.ok) throw new Error(`Tax refused: ${imposto.code}`);
     }
 
     // Estoque da barraca — dominio deste modulo, nao do transaction-service.
@@ -938,7 +938,7 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
     // mensagens de regra continuam passando (o jogador precisa saber que o
     // ouro nao bastou); o resto vira uma frase generica e o detalhe fica no log.
     console.error(`[market-stalls] Compra falhou (stall=${stallId} item=${itemId} comprador=${buyer.characterId}):`, err.message);
-    notify(actorId, ERROS_DE_REGRA.test(err.message) ? err.message : 'Nao foi possivel concluir a compra.');
+    notify(actorId, ERROS_DE_REGRA.test(err.message) ? err.message : 'Could not complete the purchase.');
     return;
   } finally {
     conn.release();
@@ -947,13 +947,13 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
   // Aplicar no cliente APOS commit (BD e fonte de verdade)
   addItemToClient(actorId, itemForClient.baseId, itemForClient.count);
   await audit(actorId, 'stall:buy', `stallId=${stallId} itemId=${itemId} count=${count} total=${itemForClient.total} tax=${itemForClient.taxAmount} key=${idempotencyKey}`, stallId);
-  notify(actorId, `Compra concluida por ${itemForClient.total}g.`);
+  notify(actorId, `Purchase complete for ${itemForClient.total}g.`);
 
   // Notificar o vendedor (se online)
   try {
     const sellerActorId = commands.getActiveActorByCharacterId(itemForClient.sellerCharId);
     if (sellerActorId) {
-      notify(sellerActorId, `Vendido: x${count} por ${itemForClient.total}g (taxa: ${itemForClient.taxAmount}g).`);
+      notify(sellerActorId, `Sold: x${count} for ${itemForClient.total}g (tax: ${itemForClient.taxAmount}g).`);
     }
   } catch (_) { /* vendedor offline, ignora */ }
   return { ok: true, replayed: false };
@@ -965,7 +965,7 @@ async function buyItem(actorId, stallIdRaw, itemIdRaw, countRaw, requestId) {
 
 async function issueLicense(actorId, targetActorRaw, cityId, daysRaw) {
   if (!await hasStallPermission(actorId, PERMISSIONS.STALL_ISSUE_LICENSE, cityId)) {
-    notify(actorId, 'Sem permissao para emitir licenca.');
+    notify(actorId, 'You are not allowed to issue licenses.');
     return;
   }
   const targetActorId = parseActorId(targetActorRaw);
@@ -973,7 +973,7 @@ async function issueLicense(actorId, targetActorRaw, cityId, daysRaw) {
   const issuer = getCharacter(actorId);
   const days = Math.min(parsePositiveInt(daysRaw, 7), 90);
   if (!target || !cityId) {
-    notify(actorId, 'Uso: /stalllicense <actorId> <cityId> <dias>');
+    notify(actorId, 'Usage: /stalllicense <actorId> <cityId> <days>');
     return;
   }
 
@@ -984,8 +984,8 @@ async function issueLicense(actorId, targetActorRaw, cityId, daysRaw) {
     [target.characterId, cityId, days, issuer?.characterId || null]
   );
   await audit(actorId, 'license:issue', `target=${target.characterId} city=${cityId} days=${days}`);
-  notify(actorId, 'Licenca emitida.');
-  notify(targetActorId, `Voce recebeu uma licenca de comerciante em ${cityId} por ${days} dias.`);
+  notify(actorId, 'License issued.');
+  notify(targetActorId, `You received a merchant license in ${cityId} for ${days} days.`);
 }
 
 async function inspectStall(actorId, stallIdRaw) {
@@ -993,11 +993,11 @@ async function inspectStall(actorId, stallIdRaw) {
   const rows = await db.query('SELECT * FROM market_stalls WHERE id = ?', [stallId]);
   const stall = rows[0];
   if (!stall) {
-    notify(actorId, 'Barraca nao encontrada.');
+    notify(actorId, 'Stall not found.');
     return;
   }
   if (!await hasStallPermission(actorId, PERMISSIONS.STALL_INSPECT, stall.city_id)) {
-    notify(actorId, 'Sem permissao para fiscalizar barracas.');
+    notify(actorId, 'You are not allowed to inspect stalls.');
     return;
   }
 
@@ -1007,7 +1007,7 @@ async function inspectStall(actorId, stallIdRaw) {
      WHERE stall_id = ? AND status = 'listed'`,
     [stallId]
   );
-  notify(actorId, `Barraca #${stall.id} ${stall.name} | status=${stall.status} | licenca=${license ? 'ativa' : 'ausente'} | itens=${items.length}`);
+  notify(actorId, `Stall #${stall.id} ${stall.name} | status=${stall.status} | license=${license ? 'active' : 'none'} | items=${items.length}`);
 }
 
 async function suspendStall(actorId, stallIdRaw, reason) {
@@ -1015,16 +1015,16 @@ async function suspendStall(actorId, stallIdRaw, reason) {
   const rows = await db.query('SELECT * FROM market_stalls WHERE id = ?', [stallId]);
   const stall = rows[0];
   if (!stall) {
-    notify(actorId, 'Barraca nao encontrada.');
+    notify(actorId, 'Stall not found.');
     return;
   }
   if (!await hasStallPermission(actorId, PERMISSIONS.STALL_SUSPEND, stall.city_id)) {
-    notify(actorId, 'Sem permissao para suspender barracas.');
+    notify(actorId, 'You are not allowed to suspend stalls.');
     return;
   }
   await db.query('UPDATE market_stalls SET status = ?, updated_at = NOW() WHERE id = ?', ['suspended', stallId]);
-  await audit(actorId, 'stall:suspend', `stallId=${stallId} reason=${reason || 'sem motivo'}`, stallId);
-  notify(actorId, 'Barraca suspensa.');
+  await audit(actorId, 'stall:suspend', `stallId=${stallId} reason=${reason || 'no reason'}`, stallId);
+  notify(actorId, 'Stall suspended.');
 }
 
 /**
@@ -1045,11 +1045,11 @@ async function confiscateItem(actorId, itemIdRaw, reason) {
   );
   const item = rows[0];
   if (!item) {
-    notify(actorId, 'Item nao encontrado.');
+    notify(actorId, 'Item not found.');
     return;
   }
   if (!await hasStallPermission(actorId, PERMISSIONS.STALL_CONFISCATE, item.city_id)) {
-    notify(actorId, 'Sem permissao para confiscar.');
+    notify(actorId, 'You are not allowed to confiscate.');
     return;
   }
 
@@ -1057,12 +1057,12 @@ async function confiscateItem(actorId, itemIdRaw, reason) {
   await db.query(
     `INSERT INTO confiscations (target_character_id, officer_character_id, base_id, count, reason)
      VALUES (?, ?, ?, ?, ?)`,
-    [item.owner_character_id, getCharacter(actorId)?.characterId || null, item.base_id, item.count, reason || 'confisco de barraca']
+    [item.owner_character_id, getCharacter(actorId)?.characterId || null, item.base_id, item.count, reason || 'stall confiscation']
   ).catch((err) => {
     console.error('[market-stalls] Failed to record confiscation:', err.message);
   });
-  await audit(actorId, 'stall:item_confiscate', `itemId=${itemId} owner=${item.owner_character_id} baseId=0x${Number(item.base_id).toString(16)} count=${item.count} reason=${reason || 'sem motivo'}`, item.stall_id);
-  notify(actorId, 'Item confiscado da barraca (destruido permanentemente).');
+  await audit(actorId, 'stall:item_confiscate', `itemId=${itemId} owner=${item.owner_character_id} baseId=0x${Number(item.base_id).toString(16)} count=${item.count} reason=${reason || 'no reason'}`, item.stall_id);
+  notify(actorId, 'Item confiscated from the stall (permanently destroyed).');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1116,7 +1116,7 @@ async function expireStalls() {
 
     // Notificar dono se online
     if (ownerActorId) {
-      notify(ownerActorId, `Sua barraca #${stall.id} expirou. Itens devolvidos ao inventario.`);
+      notify(ownerActorId, `Your stall #${stall.id} expired. Items returned to your inventory.`);
     }
 
     await audit(0, 'stall:expire', `stallId=${stall.id} owner=${stall.owner_character_id} items=${items.length}`, stall.id);
@@ -1322,32 +1322,32 @@ function registerStallInteractions() {
 
   interactionRegistry.register({
     ...comum,
-    id: 'stall.view', label: 'Ver vitrine', order: 10,
+    id: 'stall.view', label: 'View wares', order: 10,
     // Ler uma vitrine não é evento de arbitragem. Gravar isso encheria
     // `audit_logs` de linhas que ninguém vai consultar — §20 do pedido.
     audit: interactionRegistry.AUDIT_LEVELS.TRACE,
     execute: async ctx => {
       const stall = await stallDoAlvo(ctx.target.characterId);
-      if (!stall) throw new Error('Barraca nao esta mais ativa.');
+      if (!stall) throw new Error('This stall is no longer active.');
       return listItems(ctx.actorId, stall.id);
     }
   });
 
   interactionRegistry.register({
     ...comum,
-    id: 'stall.buy', label: 'Comprar item', order: 20,
+    id: 'stall.buy', label: 'Buy item', order: 20,
     audit: interactionRegistry.AUDIT_LEVELS.ECONOMY,
     // Compra move ouro e item. O `requestId` já existia no payload e era
     // descartado; agora ele deduplica de verdade, e `buyItem` continua
     // recebendo-o para a idempotência de banco (migration v13).
     idempotent: true,
     schema: {
-      itemId: { type: 'int', label: 'ID do item na vitrine', min: 1, required: true },
-      count: { type: 'int', label: 'Quantidade', min: 1, default: 1 }
+      itemId: { type: 'int', label: 'Item ID on display', min: 1, required: true },
+      count: { type: 'int', label: 'Quantity', min: 1, default: 1 }
     },
     execute: async ctx => {
       const stall = await stallDoAlvo(ctx.target.characterId);
-      if (!stall) throw new Error('Barraca nao esta mais ativa.');
+      if (!stall) throw new Error('This stall is no longer active.');
       return buyItem(ctx.actorId, stall.id, ctx.data.itemId, ctx.data.count, ctx.requestId);
     }
   });
@@ -1380,13 +1380,13 @@ function registerStallInteractions() {
     id: 'stall.pack',
     target: interactionRegistry.TARGET_TYPES.SELF,
     section: 'barraca',
-    label: 'Recolher barraca',
+    label: 'Pack up stall',
     order: 30,
     audit: interactionRegistry.AUDIT_LEVELS.GAMEPLAY,
     canSee: async ctx => Boolean(await temBarracaAtiva(ctx.actorId)),
     execute: async ctx => {
       const stall = await temBarracaAtiva(ctx.actorId);
-      if (!stall) throw new Error('Voce nao tem barraca ativa.');
+      if (!stall) throw new Error('You do not have an active stall.');
       return packStall(ctx.actorId, stall.id);
     }
   });
@@ -1396,11 +1396,11 @@ function registerStallInteractions() {
     id: 'stall.remove',
     target: interactionRegistry.TARGET_TYPES.SELF,
     section: 'barraca',
-    label: 'Remover item anunciado',
+    label: 'Remove listed item',
     order: 31,
     audit: interactionRegistry.AUDIT_LEVELS.GAMEPLAY,
     schema: {
-      itemId: { type: 'int', label: 'ID do item anunciado', min: 1, required: true }
+      itemId: { type: 'int', label: 'Listed item ID', min: 1, required: true }
     },
     canSee: async ctx => Boolean(await temBarracaAtiva(ctx.actorId)),
     execute: async ctx => removeItem(ctx.actorId, ctx.data.itemId)
@@ -1409,9 +1409,9 @@ function registerStallInteractions() {
 
 async function initMarketStallsService() {
   loadVisualConfig();
-  actionPolicy.registerAction('stall_place', ['gameplay'], 'Montar barraca');
-  actionPolicy.registerAction('stall_manage', ['gameplay', 'trade'], 'Gerenciar barraca');
-  actionPolicy.registerAction('stall_buy', ['gameplay', 'trade'], 'Comprar em barraca');
+  actionPolicy.registerAction('stall_place', ['gameplay'], 'Set up stall');
+  actionPolicy.registerAction('stall_manage', ['gameplay', 'trade'], 'Manage stall');
+  actionPolicy.registerAction('stall_buy', ['gameplay', 'trade'], 'Buy at stall');
   registerStallInteractions();
 
   // Verificacao periodica de barracas expiradas (5 minutos)

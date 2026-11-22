@@ -147,6 +147,6 @@ describe('market-stalls-service — stall.pack/stall.remove no menu de interaç�
   it('execute de stall.pack lanca quando a barraca some entre canSee e execute', async () => {
     const pack = interactionRegistry.get('stall.pack');
     barracaAtiva = null;
-    await assert.rejects(() => pack.execute(ctxFor(OWNER_ACTOR_ID)), /nao tem barraca ativa/i);
+    await assert.rejects(() => pack.execute(ctxFor(OWNER_ACTOR_ID)), /do not have an active stall/i);
   });
 });

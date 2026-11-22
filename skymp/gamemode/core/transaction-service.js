@@ -1,14 +1,14 @@
 /**
  * core/transaction-service.js
  *
- * Serviço de transações atômicas para inventário e ouro.
- * TODA mudança de item ou ouro de personagem DEVE passar por aqui.
+ * Atomic transaction service for inventory and gold.
+ * EVERY change to a character's items or gold MUST go through here.
  *
- * Garante:
- * - Consistência: BD e cliente sempre em sincronia dentro de uma transação
- * - Atomicidade: BEGIN/COMMIT/ROLLBACK via mysql2
- * - Auditoria: ledger em inventory_transactions e gold_transactions
- * - Idempotência: idempotency_key previne duplicatas em retries
+ * Guarantees:
+ * - Consistency: DB and client always in sync within a transaction
+ * - Atomicity: BEGIN/COMMIT/ROLLBACK via mysql2
+ * - Auditing: ledger in inventory_transactions and gold_transactions
+ * - Idempotency: idempotency_key prevents duplicates on retries
  */
 
 const db = require('../database');
@@ -16,36 +16,36 @@ const crypto = require('crypto');
 const { actorRef, baseRef } = require('./papyrus');
 
 /**
- * Gera um UUID v4 simples usando o módulo nativo crypto.
+ * Generates a simple UUID v4 using the native crypto module.
  */
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
 }
 
 /**
- * Registra uma transação de item no ledger.
- * @param {object} conn - Conexão com transação ativa
+ * Records an item transaction in the ledger.
+ * @param {object} conn - Connection with an active transaction
  * @param {object} opts
  * @param {number|null} opts.characterId
  * @param {number} opts.baseId
- * @param {number} opts.delta - positivo = ganhou, negativo = perdeu
+ * @param {number} opts.delta - positive = gained, negative = lost
  * @param {string} opts.reason
  * @param {string} opts.module
  * @param {string|null} [opts.idempotencyKey]
- * @param {string} [opts.ownerType] - padrão `character` (migration v14)
- * @param {string|number} [opts.ownerRef] - padrão o próprio `characterId`
- * @param {string} [opts.counterpartyType] - o outro lado do movimento
+ * @param {string} [opts.ownerType] - default `character` (migration v14)
+ * @param {string|number} [opts.ownerRef] - default the `characterId` itself
+ * @param {string} [opts.counterpartyType] - the other side of the movement
  * @param {string|number} [opts.counterpartyRef]
- * @param {string} [opts.transferId] - UUID compartilhado pelas pernas da mesma transferência
+ * @param {string} [opts.transferId] - UUID shared by the legs of the same transfer
  */
 async function _recordInventoryLedger(conn, opts) {
   const txId = uuid();
 
-  // `owner_*` e `counterparty_*` entraram na migration v14 (Inventory
-  // Framework). Quem não passa nada continua gravando exatamente a linha de
-  // antes: dono `character`, ref igual ao `character_id`, contraparte nula.
-  // É o que mantém `giveItem`/`removeItem` e os chamadores das primitivas
-  // inalterados enquanto o `core/inventory.js` nomeia os dois lados.
+  // `owner_*` and `counterparty_*` came in with migration v14 (Inventory
+  // Framework). Whoever passes nothing keeps writing exactly the same row as
+  // before: owner `character`, ref equal to `character_id`, null counterparty.
+  // That is what keeps `giveItem`/`removeItem` and the callers of the primitives
+  // unchanged while `core/inventory.js` names both sides.
   const ownerType = opts.ownerType || 'character';
   const ownerRef = opts.ownerRef !== undefined && opts.ownerRef !== null
     ? String(opts.ownerRef)
@@ -70,31 +70,31 @@ async function _recordInventoryLedger(conn, opts) {
 }
 
 /**
- * Registra uma transação de ouro no ledger.
+ * Records a gold transaction in the ledger.
  *
- * `owner_*` e `counterparty_*` entraram na migration v15 (Economy Framework),
- * com exatamente a forma que a v14 deu ao ledger de item e pelo mesmo motivo:
- * uma venda gravava `-100` no comprador e `+95` no vendedor sem nada ligando as
- * duas linhas (`ECONOMY_FRAMEWORK_AUDIT.md` Achado 1).
+ * `owner_*` and `counterparty_*` came in with migration v15 (Economy Framework),
+ * with exactly the shape v14 gave the item ledger and for the same reason:
+ * a sale wrote `-100` on the buyer and `+95` on the seller with nothing linking the
+ * two rows (`ECONOMY_FRAMEWORK_AUDIT.md` Finding 1).
  *
- * Quem não passa nada continua gravando exatamente a linha de antes: titular
- * `character`, ref igual ao `character_id`, contraparte nula. É o que mantém
- * `addGold`/`removeGold` e os chamadores das primitivas inalterados enquanto o
- * `core/economy-service.js` nomeia os dois lados.
+ * Whoever passes nothing keeps writing exactly the same row as before: holder
+ * `character`, ref equal to `character_id`, null counterparty. That is what keeps
+ * `addGold`/`removeGold` and the callers of the primitives unchanged while
+ * `core/economy-service.js` names both sides.
  *
- * @param {object} conn conexão com transação ativa
+ * @param {object} conn connection with an active transaction
  * @param {object} opts
- * @param {number|null} [opts.characterId] preenchido quando o titular é personagem
- * @param {number} opts.delta positivo credita, negativo debita
+ * @param {number|null} [opts.characterId] set when the holder is a character
+ * @param {number} opts.delta positive credits, negative debits
  * @param {string} opts.reason
  * @param {string} opts.module
  * @param {string} [opts.idempotencyKey]
- * @param {string} [opts.ownerType] padrão `character`
- * @param {string|number} [opts.ownerRef] padrão o próprio `characterId`
- * @param {string} [opts.counterpartyType] o outro lado do movimento
+ * @param {string} [opts.ownerType] default `character`
+ * @param {string|number} [opts.ownerRef] default the `characterId` itself
+ * @param {string} [opts.counterpartyType] the other side of the movement
  * @param {string|number} [opts.counterpartyRef]
- * @param {string} [opts.transferId] UUID compartilhado pelas pernas da mesma transferência
- * @param {number} [opts.actorCharacterId] quem pediu o movimento, se não for o titular
+ * @param {string} [opts.transferId] UUID shared by the legs of the same transfer
+ * @param {number} [opts.actorCharacterId] who asked for the movement, if not the holder
  */
 async function _recordGoldLedger(conn, opts) {
   const txId = uuid();
@@ -124,87 +124,87 @@ async function _recordGoldLedger(conn, opts) {
 }
 
 /**
- * Tabelas de pilha `(dono, base_id, count)` que este arquivo sabe escrever.
+ * Stack tables `(owner, base_id, count)` this file knows how to write.
  *
- * ─── Por que é uma lista fechada, e não um parâmetro ────────────────────────
+ * ─── Why it is a closed list, and not a parameter ───────────────────────────
  *
- * `_applyStackDelta` monta SQL com o nome da tabela e da coluna interpolados —
- * um placeholder `?` não funciona para identificador. Uma lista fechada aqui é
- * o que torna essa interpolação segura por construção: nenhum nome vindo de
- * módulo, de configuração ou de payload chega ao SQL. Um dono novo entra
- * editando este objeto, sob revisão, que é o mesmo critério da lista de origens
- * do `core/inventory-owner.js`.
+ * `_applyStackDelta` builds SQL with the table and column names interpolated —
+ * a `?` placeholder does not work for identifiers. A closed list here is
+ * what makes that interpolation safe by construction: no name coming from a
+ * module, configuration or payload reaches the SQL. A new owner comes in by
+ * editing this object, under review, which is the same criterion as the list of sources
+ * in `core/inventory-owner.js`.
  *
- * `market_stall_items` **não está aqui de propósito**: ela carrega preço,
- * rótulo e status por anúncio, então não é uma pilha. Ver
+ * `market_stall_items` **is not here on purpose**: it carries price,
+ * label and status per listing, so it is not a stack. See
  * `docs/research/INVENTORY_TRADE_CRAFTING_AUDIT.md` §1.1.
  */
 const STACK_TABLES = Object.freeze({
   character_inventory: 'character_id',
   container_inventory: 'container_id',
-  // Depot Service (migration-v20-depot-service.sql): armazém regional, mesma
-  // forma (dono, base_id, count) das duas tabelas acima. Depósito/saque
-  // atômico é duas chamadas de `applyStackDelta` (character_inventory +
-  // depot_inventory) na mesma transação do chamador — ver core/depot-service.js.
+  // Depot Service (migration-v20-depot-service.sql): regional storage, same
+  // shape (owner, base_id, count) as the two tables above. An atomic deposit/withdrawal
+  // is two `applyStackDelta` calls (character_inventory +
+  // depot_inventory) in the caller's same transaction — see core/depot-service.js.
   depot_inventory: 'depot_id'
 });
 
 /**
- * O maior valor que cabe em `count INT` do MySQL.
+ * The largest value that fits in MySQL's `count INT`.
  *
- * A guarda existe porque `UPDATE ... SET count = count + ?` no modo não-estrito
- * satura silenciosamente em vez de falhar: um jogador com 2.147.483.000 flechas
- * recebendo mais 1.000 ficaria com 2.147.483.647, e a diferença viraria item
- * destruído sem nenhuma linha explicando. Melhor recusar a operação.
+ * The guard exists because `UPDATE ... SET count = count + ?` in non-strict mode
+ * saturates silently instead of failing: a player with 2,147,483,000 arrows
+ * receiving 1,000 more would end up with 2,147,483,647, and the difference would become a
+ * destroyed item without any row explaining it. Better to refuse the operation.
  */
 const MAX_STACK_COUNT = 2147483647;
 
 /**
- * Atualiza uma tabela de pilha dentro de uma transação **do chamador**.
- * Não cria nem destrói a transação, apenas executa queries.
+ * Updates a stack table inside the **caller's** transaction.
+ * It neither creates nor destroys the transaction, it only runs queries.
  *
- * Generalizada em 13/08/2026: era `character_inventory` fixa, e o
- * `core/inventory.js` precisa da mesma semântica (o `FOR UPDATE`, a recusa por
- * estoque insuficiente, o `DELETE` quando zera) para container. Duas cópias
- * disso é o defeito que a exportação das primitivas `tx.*` existe para não ter.
+ * Generalized on 2026-08-13: it used to be hardwired to `character_inventory`, and
+ * `core/inventory.js` needs the same semantics (the `FOR UPDATE`, the refusal on
+ * insufficient stock, the `DELETE` when it hits zero) for containers. Two copies
+ * of this is the defect that exporting the `tx.*` primitives exists to avoid.
  *
- * ─── Validação ─────────────────────────────────────────────────────────────
+ * ─── Validation ────────────────────────────────────────────────────────────
  *
- * Ela é nova e é o §6 da auditoria: as funções públicas (`giveItem`,
- * `removeItem`) checavam `count <= 0`, e esta primitiva — que é a exportada,
- * usada direto por crafting e barraca — não checava nada. `delta = NaN` caía no
- * ramo de remoção, passava pela comparação (`x < NaN` é sempre `false`) e
- * escrevia `count = NaN`.
+ * It is new and it is §6 of the audit: the public functions (`giveItem`,
+ * `removeItem`) checked `count <= 0`, and this primitive — the exported one,
+ * used directly by crafting and stalls — checked nothing. `delta = NaN` fell into the
+ * removal branch, passed the comparison (`x < NaN` is always `false`) and
+ * wrote `count = NaN`.
  *
- * @param {object} conn conexão com transação ativa
- * @param {string} table uma chave de `STACK_TABLES`
- * @param {number} ownerId valor da coluna de dono
+ * @param {object} conn connection with an active transaction
+ * @param {string} table a key of `STACK_TABLES`
+ * @param {number} ownerId value of the owner column
  * @param {number} baseId FormID
- * @param {number} delta positivo credita, negativo debita; zero é recusado
+ * @param {number} delta positive credits, negative debits; zero is refused
  */
 async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
   const ownerColumn = STACK_TABLES[table];
   if (!ownerColumn) {
-    throw new Error(`[transaction] tabela de pilha desconhecida: ${JSON.stringify(table)}`);
+    throw new Error(`[transaction] unknown stack table: ${JSON.stringify(table)}`);
   }
   if (!Number.isSafeInteger(ownerId) || ownerId <= 0) {
-    throw new Error(`[transaction] dono invalido em ${table}: ${JSON.stringify(ownerId)}`);
+    throw new Error(`[transaction] invalid owner in ${table}: ${JSON.stringify(ownerId)}`);
   }
   if (!Number.isSafeInteger(baseId) || baseId <= 0) {
-    throw new Error(`[transaction] baseId invalido: ${JSON.stringify(baseId)}`);
+    throw new Error(`[transaction] invalid baseId: ${JSON.stringify(baseId)}`);
   }
-  // `delta = 0` é recusado, não ignorado: ele chegaria aqui vindo de um cálculo
-  // que deu errado em algum lugar, e gravar uma linha de ledger com delta zero
-  // esconderia esse erro atrás de uma operação "bem-sucedida".
+  // `delta = 0` is refused, not ignored: it would get here from a calculation
+  // that went wrong somewhere, and writing a ledger row with a zero delta
+  // would hide that error behind a "successful" operation.
   if (!Number.isSafeInteger(delta) || delta === 0) {
-    throw new Error(`[transaction] delta invalido para 0x${Number(baseId).toString(16)}: ${JSON.stringify(delta)}`);
+    throw new Error(`[transaction] invalid delta for 0x${Number(baseId).toString(16)}: ${JSON.stringify(delta)}`);
   }
 
-  // FOR UPDATE trava a linha (ou o gap, se ainda não existir) dentro da transação
-  // ativa em conn — uma segunda chamada concorrente pra mesma (dono, base_id)
-  // bloqueia aqui até o commit/rollback da primeira, em vez de ler o mesmo valor
-  // obsoleto e sobrescrever (o bug original permitia duplicar/perder itens quando
-  // duas operações rodavam em paralelo, ex: stall_add + stall_pack).
+  // FOR UPDATE locks the row (or the gap, if it does not exist yet) inside the
+  // active transaction in conn — a second concurrent call for the same (owner, base_id)
+  // blocks here until the first one commits/rolls back, instead of reading the same stale
+  // value and overwriting it (the original bug allowed duplicating/losing items when
+  // two operations ran in parallel, e.g. stall_add + stall_pack).
   const [rows] = await conn.query(
     `SELECT count FROM ${table} WHERE ${ownerColumn} = ? AND base_id = ? FOR UPDATE`,
     [ownerId, baseId]
@@ -213,7 +213,7 @@ async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
   if (delta > 0) {
     const atual = rows.length > 0 ? Number(rows[0].count) : 0;
     if (atual + delta > MAX_STACK_COUNT) {
-      throw new Error(`Pilha cheia: ${atual} + ${delta} passa do limite de ${MAX_STACK_COUNT}`);
+      throw new Error(`Stack full: ${atual} + ${delta} exceeds the limit of ${MAX_STACK_COUNT}`);
     }
     if (rows.length > 0) {
       await conn.query(
@@ -227,13 +227,13 @@ async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
       );
     }
   } else {
-    // Remove itens (delta é negativo)
+    // Remove items (delta is negative)
     if (rows.length === 0) {
-      throw new Error(`Dono ${ownerId} não possui item 0x${baseId.toString(16)}`);
+      throw new Error(`Owner ${ownerId} does not own item 0x${baseId.toString(16)}`);
     }
     const currentCount = Number(rows[0].count);
     const remove = Math.abs(delta);
-    if (currentCount < remove) throw new Error(`Estoque insuficiente: tem ${currentCount}, precisa ${remove}`);
+    if (currentCount < remove) throw new Error(`Insufficient stock: have ${currentCount}, need ${remove}`);
     const newCount = currentCount - remove;
     if (newCount <= 0) {
       await conn.query(`DELETE FROM ${table} WHERE ${ownerColumn} = ? AND base_id = ?`, [ownerId, baseId]);
@@ -247,9 +247,9 @@ async function _applyStackDelta(conn, table, ownerId, baseId, delta) {
 }
 
 /**
- * Atualiza `character_inventory` dentro de uma transação ativa.
- * Continua sendo o nome que crafting e barraca chamam; hoje é um apelido de
- * `_applyStackDelta` com a tabela do personagem.
+ * Updates `character_inventory` inside an active transaction.
+ * It is still the name crafting and stalls call; today it is an alias of
+ * `_applyStackDelta` with the character table.
  */
 /**
  * Gold001. Gold is `characters.gold` (moved with addGold/removeGold); the
@@ -268,61 +268,61 @@ async function _applyInventoryDelta(conn, characterId, baseId, delta) {
 }
 
 /**
- * O maior valor que cabe em `characters.gold INT` do MySQL.
+ * The largest value that fits in MySQL's `characters.gold INT`.
  *
- * Existe pelo mesmo motivo que `MAX_STACK_COUNT`: `gold = gold + ?` no modo
- * não-estrito satura em silêncio em vez de falhar, e a diferença vira
- * patrimônio destruído sem nenhuma linha explicando. A assimetria — teto para
- * item, nenhum para ouro — era o Achado 4 de `ECONOMY_FRAMEWORK_AUDIT.md`.
+ * It exists for the same reason as `MAX_STACK_COUNT`: `gold = gold + ?` in
+ * non-strict mode saturates silently instead of failing, and the difference becomes
+ * destroyed wealth without any row explaining it. The asymmetry — a cap for
+ * items, none for gold — was Finding 4 of `ECONOMY_FRAMEWORK_AUDIT.md`.
  */
 const MAX_GOLD = 2147483647;
 
 /**
- * Atualiza o ouro do personagem dentro de uma transação **do chamador**.
+ * Updates the character's gold inside the **caller's** transaction.
  *
- * ─── Validação ──────────────────────────────────────────────────────────────
+ * ─── Validation ─────────────────────────────────────────────────────────────
  *
- * Ela é nova e é o Achado 3 da auditoria de economia — o mesmo defeito que o §6
- * da auditoria de inventário corrigiu para item e não propagou para dinheiro. A
- * versão anterior não validava nada: `delta = NaN` caía fora do ramo de débito
- * (`NaN < 0` é `false`), chegava ao `UPDATE` e gravava `gold = gold + NaN`, que
- * o MySQL não-estrito grava como `0` — **o patrimônio do jogador zerava em
- * silêncio**. É a mesma classe do bug que o `/setgold` já teve.
+ * It is new and it is Finding 3 of the economy audit — the same defect that §6
+ * of the inventory audit fixed for items and did not carry over to money. The
+ * previous version validated nothing: `delta = NaN` fell outside the debit branch
+ * (`NaN < 0` is `false`), reached the `UPDATE` and wrote `gold = gold + NaN`, which
+ * non-strict MySQL stores as `0` — **the player's wealth silently became
+ * zero**. It is the same class as the bug `/setgold` once had.
  *
- * `delta = 0` é recusado, não ignorado, pela mesma razão do caminho de item:
- * ele chegaria aqui vindo de um cálculo que deu errado, e gravar uma linha de
- * ledger com delta zero esconderia esse erro atrás de uma operação
- * "bem-sucedida".
+ * `delta = 0` is refused, not ignored, for the same reason as the item path:
+ * it would get here from a calculation that went wrong, and writing a
+ * ledger row with a zero delta would hide that error behind a
+ * "successful" operation.
  *
- * ─── Por que o SELECT agora acontece nos dois sentidos ──────────────────────
+ * ─── Why the SELECT now happens in both directions ──────────────────────────
  *
- * Antes, só o débito lia a linha. O crédito ia direto ao `UPDATE`, o que tinha
- * três consequências: creditar um personagem inexistente afetava 0 linhas sem
- * ninguém checar, não havia como recusar estouro do `INT`, e a ordem em que as
- * linhas eram travadas dependia do sentido da operação — que é o que produz o
- * deadlock de compra cruzada (Achado 10). Ler sempre custa uma query e resolve
- * os três; a ordenação canônica de travas fica a cargo do `economy-service`.
+ * Before, only the debit read the row. The credit went straight to the `UPDATE`, which had
+ * three consequences: crediting a nonexistent character affected 0 rows without
+ * anyone checking, there was no way to refuse an `INT` overflow, and the order in which
+ * rows were locked depended on the direction of the operation — which is what produces the
+ * cross-purchase deadlock (Finding 10). Always reading costs one query and solves
+ * all three; the canonical lock ordering is `economy-service`'s job.
  */
 async function _applyGoldDelta(conn, characterId, delta) {
   if (!Number.isSafeInteger(characterId) || characterId <= 0) {
-    throw new Error(`[transaction] personagem invalido para ouro: ${JSON.stringify(characterId)}`);
+    throw new Error(`[transaction] invalid character for gold: ${JSON.stringify(characterId)}`);
   }
   if (!Number.isSafeInteger(delta) || delta === 0) {
-    throw new Error(`[transaction] delta de ouro invalido: ${JSON.stringify(delta)}`);
+    throw new Error(`[transaction] invalid gold delta: ${JSON.stringify(delta)}`);
   }
 
-  // FOR UPDATE serializa operações concorrentes do mesmo personagem — sem isso,
-  // duas remoções simultâneas podem ambas ler o saldo antigo, ambas passar na
-  // checagem de saldo suficiente, e o UPDATE relativo (gold = gold + ?) deixar
-  // o saldo negativo mesmo assim.
+  // FOR UPDATE serializes concurrent operations on the same character — without it,
+  // two simultaneous removals could both read the old balance, both pass the
+  // sufficient-balance check, and the relative UPDATE (gold = gold + ?) would still leave
+  // the balance negative.
   const [rows] = await conn.query('SELECT gold FROM characters WHERE id = ? FOR UPDATE', [characterId]);
-  if (rows.length === 0) throw new Error(`Personagem ${characterId} não encontrado`);
+  if (rows.length === 0) throw new Error(`Character ${characterId} not found`);
   const atual = Number(rows[0].gold);
 
   if (delta < 0) {
-    if (atual + delta < 0) throw new Error(`Ouro insuficiente: tem ${atual}, precisa ${Math.abs(delta)}`);
+    if (atual + delta < 0) throw new Error(`Insufficient gold: have ${atual}, need ${Math.abs(delta)}`);
   } else if (atual + delta > MAX_GOLD) {
-    throw new Error(`Patrimonio cheio: ${atual} + ${delta} passa do limite de ${MAX_GOLD}`);
+    throw new Error(`Wealth cap reached: ${atual} + ${delta} exceeds the limit of ${MAX_GOLD}`);
   }
 
   await conn.query('UPDATE characters SET gold = gold + ? WHERE id = ?', [delta, characterId]);
@@ -388,20 +388,20 @@ async function _deliverToCharacter(actorId, characterId, baseId, count) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API Pública
+// Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Concede um item ao personagem (BD + cliente + ledger).
+ * Grants an item to the character (DB + client + ledger).
  *
  * @param {object} opts
- * @param {number} opts.actorId      - Actor SkyMP (para aplicar no cliente)
- * @param {number} opts.characterId  - ID do personagem no banco
- * @param {number} opts.baseId       - FormID nativo do Skyrim
- * @param {number} opts.count        - Quantidade a conceder (positivo)
- * @param {string} opts.reason       - Motivo (ex: 'admin_give', 'woodcutting')
- * @param {string} opts.module       - Módulo de origem (ex: 'admin', 'jobs')
- * @param {string} [opts.idempotencyKey] - Chave única para prevenir duplicatas
+ * @param {number} opts.actorId      - SkyMP actor (to apply on the client)
+ * @param {number} opts.characterId  - character ID in the database
+ * @param {number} opts.baseId       - native Skyrim FormID
+ * @param {number} opts.count        - quantity to grant (positive)
+ * @param {string} opts.reason       - reason (e.g. 'admin_give', 'woodcutting')
+ * @param {string} opts.module       - source module (e.g. 'admin', 'jobs')
+ * @param {string} [opts.idempotencyKey] - unique key to prevent duplicates
  * @returns {Promise<boolean>}
  */
 async function giveItem(opts) {
@@ -411,7 +411,7 @@ async function giveItem(opts) {
   // goes up and the gold sync puts it in the inventory.
   if (baseId === GOLD_ITEM_ID) return addGold({ characterId, amount: count, reason, module: mod, idempotencyKey });
 
-  // Verificação de idempotência antes da transação
+  // Idempotency check before the transaction
   if (idempotencyKey) {
     const existing = await db.query(
       'SELECT transaction_id FROM inventory_transactions WHERE idempotency_key = ?',
@@ -434,7 +434,7 @@ async function giveItem(opts) {
     return true;
   } catch (err) {
     await conn.rollback();
-    console.error(`[transaction] giveItem falhou: char=${characterId} item=0x${baseId.toString(16)}:`, err.message);
+    console.error(`[transaction] giveItem failed: char=${characterId} item=0x${baseId.toString(16)}:`, err.message);
     return false;
   } finally {
     conn.release();
@@ -442,7 +442,7 @@ async function giveItem(opts) {
 }
 
 /**
- * Remove um item do personagem (BD + cliente + ledger).
+ * Removes an item from the character (DB + client + ledger).
  *
  * @param {object} opts
  * @param {number} opts.actorId
@@ -481,7 +481,7 @@ async function removeItem(opts) {
     return true;
   } catch (err) {
     await conn.rollback();
-    console.error(`[transaction] removeItem falhou: char=${characterId} item=0x${baseId.toString(16)}:`, err.message);
+    console.error(`[transaction] removeItem failed: char=${characterId} item=0x${baseId.toString(16)}:`, err.message);
     return false;
   } finally {
     conn.release();
@@ -489,17 +489,17 @@ async function removeItem(opts) {
 }
 
 /**
- * Transferência atômica de item + ouro entre dois personagens (para trade).
- * Executa tudo em uma única transação: BD é a fonte de verdade.
+ * Atomic transfer of item + gold between two characters (for trading).
+ * Runs everything in a single transaction: the DB is the source of truth.
  *
  * @param {object} opts
  * @param {number} opts.fromActorId
  * @param {number} opts.fromCharacterId
  * @param {number} opts.toActorId
  * @param {number} opts.toCharacterId
- * @param {number} opts.baseId         - Item a transferir (0 se só ouro)
- * @param {number} opts.itemCount      - Quantidade do item
- * @param {number} opts.goldAmount     - Ouro a transferir (0 se só item)
+ * @param {number} opts.baseId         - item to transfer (0 if gold only)
+ * @param {number} opts.itemCount      - item quantity
+ * @param {number} opts.goldAmount     - gold to transfer (0 if item only)
  * @param {string} opts.reason
  * @param {string} opts.module
  * @param {string} [opts.idempotencyKey]
@@ -547,7 +547,7 @@ async function transfer(opts) {
 
     await conn.commit();
 
-    // Aplicar no cliente após COMMIT
+    // Apply on the client after COMMIT
     if (itemCount > 0 && baseId > 0) {
       _applyToClient(fromActorId, baseId, -itemCount);
       await _deliverToCharacter(toActorId, toCharacterId, baseId, itemCount);
@@ -557,7 +557,7 @@ async function transfer(opts) {
     return true;
   } catch (err) {
     await conn.rollback();
-    console.error(`[transaction] transfer falhou:`, err.message);
+    console.error(`[transaction] transfer failed:`, err.message);
     return false;
   } finally {
     conn.release();
@@ -565,10 +565,10 @@ async function transfer(opts) {
 }
 
 /**
- * Concede ouro a um personagem (BD + ledger), atômico via _applyGoldDelta.
+ * Grants gold to a character (DB + ledger), atomic via _applyGoldDelta.
  * @param {object} opts
  * @param {number} opts.characterId
- * @param {number} opts.amount - positivo
+ * @param {number} opts.amount - positive
  * @param {string} opts.reason
  * @param {string} opts.module
  * @param {string} [opts.idempotencyKey]
@@ -576,7 +576,7 @@ async function transfer(opts) {
  */
 async function addGold(opts) {
   const { characterId, amount, reason, module: mod, idempotencyKey } = opts;
-  if (amount <= 0) throw new Error('amount deve ser positivo');
+  if (amount <= 0) throw new Error('amount must be positive');
 
   if (idempotencyKey) {
     const existing = await db.query('SELECT transaction_id FROM gold_transactions WHERE idempotency_key = ?', [idempotencyKey]);
@@ -596,7 +596,7 @@ async function addGold(opts) {
     return true;
   } catch (err) {
     await conn.rollback();
-    console.error(`[transaction] addGold falhou: char=${characterId}:`, err.message);
+    console.error(`[transaction] addGold failed: char=${characterId}:`, err.message);
     return false;
   } finally {
     conn.release();
@@ -604,12 +604,12 @@ async function addGold(opts) {
 }
 
 /**
- * Remove ouro de um personagem (BD + ledger), atômico via _applyGoldDelta —
- * rejeita (retorna false) se o saldo for insuficiente, sem deixar o saldo negativo
- * mesmo sob concorrência (a linha é travada com FOR UPDATE dentro da transação).
+ * Removes gold from a character (DB + ledger), atomic via _applyGoldDelta —
+ * refuses (returns false) if the balance is insufficient, without leaving the balance negative
+ * even under concurrency (the row is locked with FOR UPDATE inside the transaction).
  * @param {object} opts
  * @param {number} opts.characterId
- * @param {number} opts.amount - positivo
+ * @param {number} opts.amount - positive
  * @param {string} opts.reason
  * @param {string} opts.module
  * @param {string} [opts.idempotencyKey]
@@ -617,7 +617,7 @@ async function addGold(opts) {
  */
 async function removeGold(opts) {
   const { characterId, amount, reason, module: mod, idempotencyKey } = opts;
-  if (amount <= 0) throw new Error('amount deve ser positivo');
+  if (amount <= 0) throw new Error('amount must be positive');
 
   if (idempotencyKey) {
     const existing = await db.query('SELECT transaction_id FROM gold_transactions WHERE idempotency_key = ?', [idempotencyKey]);
@@ -645,8 +645,8 @@ async function removeGold(opts) {
 }
 
 /**
- * Verifica se o personagem possui quantidade suficiente de item.
- * Usa o banco como fonte de verdade (não o inventário do cliente).
+ * Checks whether the character has enough of an item.
+ * Uses the database as the source of truth (not the client's inventory).
  */
 async function hasItem(characterId, baseId, minCount = 1) {
   const rows = await db.query(
@@ -657,7 +657,7 @@ async function hasItem(characterId, baseId, minCount = 1) {
 }
 
 /**
- * Retorna o ouro atual do personagem.
+ * Returns the character's current gold.
  */
 async function getGold(characterId) {
   const rows = await db.query('SELECT gold FROM characters WHERE id = ?', [characterId]);
@@ -668,49 +668,49 @@ module.exports = {
   giveItem, removeItem, transfer, hasItem, getGold, addGold, removeGold,
 
   /**
-   * Primitivas que participam de uma transação **do chamador**.
+   * Primitives that take part in the **caller's** transaction.
    *
-   * ─── Por que isto é exportado ─────────────────────────────────────────────
+   * ─── Why this is exported ─────────────────────────────────────────────────
    *
-   * As funções públicas acima abrem a própria conexão e a própria transação.
-   * Isso é o certo pra quase tudo, e errado pra uma operação que precisa
-   * commitar junto com outra coisa: a compra em barraca move ouro, baixa
-   * estoque, credita o vendedor, cobra imposto da cidade e entrega o item —
-   * ou tudo acontece, ou nada acontece. Chamar `removeGold()` seguido de
-   * `giveItem()` ali seriam duas transações independentes, e uma falha no meio
-   * deixaria o comprador sem ouro e sem item.
+   * The public functions above open their own connection and their own transaction.
+   * That is right for almost everything, and wrong for an operation that must
+   * commit together with something else: a stall purchase moves gold, lowers
+   * stock, credits the seller, charges the city's tax and delivers the item —
+   * either all of it happens, or none of it does. Calling `removeGold()` followed by
+   * `giveItem()` there would be two independent transactions, and a failure in the middle
+   * would leave the buyer with neither gold nor item.
    *
-   * Antes desta exportação o `market-stalls-service` resolvia isso escrevendo
-   * o próprio SQL de ouro e de inventário dentro da transação dele — atômico e
-   * com ledger, mas era uma segunda implementação de "como mexer em ouro",
-   * fora do arquivo que existe pra ser a única. O `FOR UPDATE` do saldo e a
-   * proteção contra saldo negativo estavam duplicados; qualquer correção aqui
-   * não alcançava lá.
+   * Before this export, `market-stalls-service` solved that by writing
+   * its own gold and inventory SQL inside its transaction — atomic and
+   * with a ledger, but it was a second implementation of "how to touch gold",
+   * outside the file that exists to be the only one. The balance `FOR UPDATE` and the
+   * negative-balance protection were duplicated; any fix here
+   * did not reach there.
    *
-   * ─── Contrato ────────────────────────────────────────────────────────────
+   * ─── Contract ────────────────────────────────────────────────────────────
    *
-   * - Quem chama **abre, commita e faz rollback** da transação. Estas funções
-   *   não fazem nenhuma das três.
-   * - Elas lançam em caso de regra violada (saldo insuficiente, estoque
-   *   insuficiente). O `rollback` é responsabilidade do chamador.
-   * - `applyGoldDelta` e `applyInventoryDelta` trancam a linha com `FOR UPDATE`
-   *   antes de ler, então duas operações concorrentes no mesmo personagem
-   *   serializam em vez de ambas lerem o valor obsoleto.
-   * - Mudança de saldo ou de item **sem** o `record*Ledger` correspondente é
-   *   ouro ou item sem rastro. Sempre chame os dois.
-   * - `applyToClient` é a **única** que roda depois do `commit`, nunca dentro
-   *   da transação: o banco é a fonte de verdade, e o cliente é reconciliado
-   *   no login se essa chamada falhar.
+   * - The caller **opens, commits and rolls back** the transaction. These functions
+   *   do none of the three.
+   * - They throw when a rule is violated (insufficient balance, insufficient
+   *   stock). The `rollback` is the caller's responsibility.
+   * - `applyGoldDelta` and `applyInventoryDelta` lock the row with `FOR UPDATE`
+   *   before reading, so two concurrent operations on the same character
+   *   serialize instead of both reading the stale value.
+   * - A balance or item change **without** the matching `record*Ledger` is
+   *   untraceable gold or items. Always call both.
+   * - `applyToClient` is the **only** one that runs after the `commit`, never inside
+   *   the transaction: the DB is the source of truth, and the client is reconciled
+   *   on login if that call fails.
    *
-   * Use as funções públicas sempre que a operação for isolada; use estas só
-   * quando ela precisar commitar junto com outra coisa.
+   * Use the public functions whenever the operation is isolated; use these only
+   * when it must commit together with something else.
    */
   tx: {
     applyGoldDelta: _applyGoldDelta,
     applyInventoryDelta: _applyInventoryDelta,
-    // Generalização de `applyInventoryDelta` para qualquer tabela de
-    // `STACK_TABLES`. Quem usa é `core/inventory.js`, que precisa da mesma
-    // semântica de lock e de recusa para container.
+    // Generalization of `applyInventoryDelta` to any table in
+    // `STACK_TABLES`. Its user is `core/inventory.js`, which needs the same
+    // locking and refusal semantics for containers.
     applyStackDelta: _applyStackDelta,
     STACK_TABLES,
     MAX_STACK_COUNT,

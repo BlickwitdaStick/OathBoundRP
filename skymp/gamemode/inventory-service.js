@@ -1,17 +1,17 @@
 /**
- * inventory-service.js — projeção do inventário no cliente
+ * inventory-service.js — projecting the inventory onto the client
  *
- * ⚠️ **Este arquivo não é o Inventory Framework.** Desde 13/08/2026, a API
- * central de movimentação de item é `core/inventory.js`, e a documentação dela
- * é `docs/framework/INVENTORY_FRAMEWORK.md`. O que sobrou aqui é a outra
- * metade do assunto: levar o que o banco sabe até a tela do jogador, e os três
- * atalhos históricos (`giveItem`/`removeItem`/`hasItem`) que continuam válidos
- * para o caso de **um dono só**.
+ * ⚠️ **This file is not the Inventory Framework.** Since 2026-08-13, the central
+ * item-movement API is `core/inventory.js`, and its documentation
+ * is `docs/framework/INVENTORY_FRAMEWORK.md`. What remains here is the other
+ * half of the subject: taking what the DB knows to the player's screen, and the three
+ * historical shortcuts (`giveItem`/`removeItem`/`hasItem`) that are still valid
+ * for the **single owner** case.
  *
- * Qual usar:
+ * Which one to use:
  *
- *   - um dono muda (staff dá item, recompensa)      → daqui, ou transaction-service
- *   - **dois** donos (troca, baú, barraca, craft)   → `core/inventory.transfer`
+ *   - one owner changes (staff gives an item, a reward) → from here, or transaction-service
+ *   - **two** owners (trade, chest, stall, craft)       → `core/inventory.transfer`
  *
  * ─── Entrega no login ───────────────────────────────────────────────────────
  *
@@ -104,8 +104,8 @@ async function _consumePending(characterId, baseId, count) {
 }
 
 /**
- * Concede um item ao personagem (usa transaction-service).
- * Wrapper de conveniência para código legado que chama inventory-service diretamente.
+ * Grants an item to the character (uses transaction-service).
+ * Convenience wrapper for legacy code that calls inventory-service directly.
  *
  * @param {number} actorId
  * @param {number} characterId
@@ -120,7 +120,7 @@ async function giveItem(actorId, characterId, baseId, count, reason = 'unknown',
 }
 
 /**
- * Remove um item do personagem (usa transaction-service).
+ * Removes an item from the character (uses transaction-service).
  *
  * @param {number} actorId
  * @param {number} characterId
@@ -135,8 +135,8 @@ async function removeItem(actorId, characterId, baseId, count, reason = 'unknown
 }
 
 /**
- * Verifica se o personagem possui quantidade suficiente de item.
- * Usa o banco como fonte de verdade.
+ * Checks whether the character has enough of an item.
+ * Uses the database as the source of truth.
  *
  * @param {number} characterId
  * @param {number} baseId

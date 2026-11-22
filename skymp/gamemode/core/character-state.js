@@ -1,32 +1,32 @@
 /**
  * core/character-state.js
  *
- * Máquina de estados de personagens.
+ * Character state machine.
  *
- * Estados possíveis:
- *   NORMAL      - Sem restrições
- *   BUSY        - Em animação canalizada (minerar, pescar, etc.)
- *   DOWNED      - Abatido, aguardando socorro (persistente no BD)
- *   DEAD        - Morto (transição para DOWNED após estabilização falhar)
- *   RESTRAINED  - Algemado/amarrado (persistente no BD via character_restraints)
- *   SURRENDERED - Rendeu-se voluntariamente (sessão; ver core/crime-service.js
- *                 `crime.surrender` — vulnerável a `crime.rob` enquanto durar)
- *   IMPRISONED  - Na prisão (persistente no BD via prison_records)
- *   IN_TRADE    - Em negociação com outro jogador
- *   IN_CRAFT    - Em processo de fabricação
- *   IN_DIALOG   - Em diálogo/menu com NPC ou sistema
- *   DISCONNECTED - Sessão encerrada (removido do cache em memória)
+ * Possible states:
+ *   NORMAL      - No restrictions
+ *   BUSY        - In a channeled animation (mining, fishing, etc.)
+ *   DOWNED      - Downed, waiting for help (persisted in the DB)
+ *   DEAD        - Dead (transition to DOWNED after stabilization fails)
+ *   RESTRAINED  - Cuffed/tied (persisted in the DB via character_restraints)
+ *   SURRENDERED - Surrendered voluntarily (session; see core/crime-service.js
+ *                 `crime.surrender` — vulnerable to `crime.rob` while it lasts)
+ *   IMPRISONED  - In prison (persisted in the DB via prison_records)
+ *   IN_TRADE    - Trading with another player
+ *   IN_CRAFT    - In the middle of crafting
+ *   IN_DIALOG   - In a dialogue/menu with an NPC or system
+ *   DISCONNECTED - Session ended (removed from the in-memory cache)
  *
- * Estratégia de persistência:
- *   - Estados de SESSÃO (BUSY, IN_TRADE, IN_CRAFT, IN_DIALOG): apenas memória.
- *     Resetam automaticamente na desconexão.
- *   - Estados DURÁVEIS (IMPRISONED, RESTRAINED, DOWNED): carregados do banco no login,
- *     persistidos imediatamente ao setar.
+ * Persistence strategy:
+ *   - SESSION states (BUSY, IN_TRADE, IN_CRAFT, IN_DIALOG): memory only.
+ *     Reset automatically on disconnect.
+ *   - DURABLE states (IMPRISONED, RESTRAINED, DOWNED): loaded from the DB on login,
+ *     persisted immediately when set.
  */
 
 const db = require('../database');
 
-// Estados válidos
+// Valid states
 const STATES = Object.freeze({
   NORMAL:       'NORMAL',
   BUSY:         'BUSY',
@@ -41,10 +41,10 @@ const STATES = Object.freeze({
   DISCONNECTED: 'DISCONNECTED'
 });
 
-// Estados que sobrevivem a restarts (carregados do BD no login)
+// States that survive restarts (loaded from the DB on login)
 const DURABLE_STATES = new Set([STATES.IMPRISONED, STATES.RESTRAINED, STATES.DOWNED]);
 
-// Cache em memória: characterId → { state, metadata, setAt }
+// In-memory cache: characterId → { state, metadata, setAt }
 const _stateCache = new Map();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,14 +52,14 @@ const _stateCache = new Map();
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Carrega o estado durável de um personagem do banco de dados.
- * Chamado no login (whitelist.js).
+ * Loads a character's durable state from the database.
+ * Called on login (whitelist.js).
  * @param {number} characterId
  * @returns {Promise<{state: string, metadata: object}>}
  */
 async function _loadDurableState(characterId) {
   try {
-    // Verifica prisão ativa
+    // Check for an active prison sentence
     const imprisoned = await db.query(
       `SELECT id, crime_summary, sentence_minutes, time_served_minutes, cell_id
        FROM prison_records
@@ -82,23 +82,23 @@ async function _loadDurableState(characterId) {
       return { state: STATES.RESTRAINED, metadata: restrained[0] };
     }
 
-    // Estado padrão
+    // Default state
     return { state: STATES.NORMAL, metadata: {} };
   } catch (err) {
-    console.error(`[character-state] Erro ao carregar estado durável para char ${characterId}:`, err.message);
+    console.error(`[character-state] Error loading durable state for char ${characterId}:`, err.message);
     return { state: STATES.NORMAL, metadata: {} };
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API Pública
+// Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Inicializa o estado de um personagem ao entrar no servidor.
- * Carrega estados duráveis do banco de dados.
+ * Initializes a character's state when they join the server.
+ * Loads durable states from the database.
  * @param {number} characterId
- * @returns {Promise<string>} Estado inicial
+ * @returns {Promise<string>} Initial state
  */
 async function initialize(characterId) {
   const { state, metadata } = await _loadDurableState(characterId);
@@ -108,9 +108,9 @@ async function initialize(characterId) {
 }
 
 /**
- * Retorna o estado atual de um personagem.
+ * Returns a character's current state.
  * @param {number} characterId
- * @returns {string} Estado atual ou NORMAL se não encontrado
+ * @returns {string} Current state, or NORMAL if not found
  */
 function get(characterId) {
   const entry = _stateCache.get(characterId);
@@ -118,7 +118,7 @@ function get(characterId) {
 }
 
 /**
- * Retorna os metadados do estado atual.
+ * Returns the metadata of the current state.
  * @param {number} characterId
  * @returns {object}
  */
@@ -128,9 +128,9 @@ function getMetadata(characterId) {
 }
 
 /**
- * Verifica se o personagem está em um estado específico.
+ * Checks whether the character is in a specific state.
  * @param {number} characterId
- * @param {string|string[]} states - Estado ou lista de estados
+ * @param {string|string[]} states - State or list of states
  * @returns {boolean}
  */
 function is(characterId, states) {
@@ -140,17 +140,17 @@ function is(characterId, states) {
 }
 
 /**
- * Define o estado de um personagem.
- * Estados duráveis (IMPRISONED, RESTRAINED, DOWNED) são persistidos no BD automaticamente via
- * seus próprios serviços (governance-service, death-service). Este método apenas atualiza o cache.
+ * Sets a character's state.
+ * Durable states (IMPRISONED, RESTRAINED, DOWNED) are persisted to the DB automatically by
+ * their own services (governance-service, death-service). This method only updates the cache.
  *
  * @param {number} characterId
- * @param {string} newState - Um dos STATES válidos
- * @param {object} [metadata] - Dados adicionais sobre o estado
+ * @param {string} newState - One of the valid STATES
+ * @param {object} [metadata] - Extra data about the state
  */
 function set(characterId, newState, metadata = {}) {
   if (!/** @type {any} */ (Object.values(STATES)).includes(newState)) {
-    throw new Error(`[character-state] Estado inválido: ${newState}`);
+    throw new Error(`[character-state] Invalid state: ${newState}`);
   }
   const previous = get(characterId);
   _stateCache.set(characterId, { state: newState, metadata, setAt: Date.now() });
@@ -158,8 +158,8 @@ function set(characterId, newState, metadata = {}) {
 }
 
 /**
- * Reseta o estado de um personagem para NORMAL (apenas estados de sessão).
- * Não afeta estados duráveis que devem ser resolvidos pelos seus próprios serviços.
+ * Resets a character's state to NORMAL (session states only).
+ * Does not touch durable states, which must be resolved by their own services.
  * @param {number} characterId
  */
 function reset(characterId) {
@@ -167,13 +167,13 @@ function reset(characterId) {
   if (!/** @type {any} */ (DURABLE_STATES).has(current)) {
     set(characterId, STATES.NORMAL, {});
   } else {
-    console.log(`[character-state] char=${characterId} mantém estado durável ${current} no reset`);
+    console.log(`[character-state] char=${characterId} keeps durable state ${current} on reset`);
   }
 }
 
 /**
- * Remove o personagem do cache ao desconectar.
- * Estados duráveis já estão no banco de dados.
+ * Removes the character from the cache on disconnect.
+ * Durable states are already in the database.
  * @param {number} characterId
  */
 function cleanup(characterId) {

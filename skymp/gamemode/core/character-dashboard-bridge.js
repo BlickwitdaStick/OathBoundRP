@@ -1,31 +1,31 @@
 /**
  * core/character-dashboard-bridge.js
  *
- * Tarefa 11, objetivo 3 (redesenhado). O brief original pedia um "Character
- * Dashboard" novo com abas de Identidade/Finanças/Profissões/Gestos — mas
- * `player-panel-service.js` + `skymp/ui/player-panel.js`/`.css` JÁ SÃO
- * isso: nome, ouro real (`transactionService.getGold`), social, governança,
- * abas de verdade, aberto por `/painel`. Construir um componente novo
- * duplicaria um sistema que já funciona.
+ * Task 11, objective 3 (redesigned). The original brief asked for a new "Character
+ * Dashboard" with Identity/Finances/Professions/Gestures tabs — but
+ * `player-panel-service.js` + `skymp/ui/player-panel.js`/`.css` ALREADY ARE
+ * that: name, real gold (`transactionService.getGold`), social, governance,
+ * real tabs, opened with `/panel`. Building a new component would
+ * duplicate a system that already works.
  *
- * Este arquivo é só a PONTE: registra `TARGET_TYPES.SELF` no Interaction
- * Framework (o resolvedor de `player` recusa `targetActorId === actorId` de
- * propósito — `interaction-targets.js` linha ~102, citando
- * `CORE_FRAMEWORK_AUDIT.md` §6.7a: "interação consigo é painel, não menu
- * contextual") e uma única interação (`character.dashboard`) cujo `execute`
- * só chama `playerPanelService.openPanel(actorId)` — o MESMO código que
- * `/painel` já chama. Zero UI nova, zero leitura de dado duplicada.
+ * This file is only the BRIDGE: it registers `TARGET_TYPES.SELF` in the Interaction
+ * Framework (the `player` resolver refuses `targetActorId === actorId` on
+ * purpose — `interaction-targets.js` line ~102, citing
+ * `CORE_FRAMEWORK_AUDIT.md` §6.7a: "interacting with yourself is a panel, not a
+ * context menu") and a single interaction (`character.dashboard`) whose `execute`
+ * only calls `playerPanelService.openPanel(actorId)` — the SAME code that
+ * `/panel` already calls. Zero new UI, zero duplicated data reads.
  *
- * O adaptador de alvo exato não usa SELF como fallback: E sem alvo físico não
- * faz nada. O painel continua acessível por `/painel` e pelo atalho F2. Este
- * bridge permanece para consumidores que abram explicitamente uma interação
- * SELF, sem misturá-la ao alvo de mundo.
+ * The exact-target adapter does not use SELF as a fallback: E with no physical target does
+ * nothing. The panel stays reachable via `/panel` and the F2 shortcut. This
+ * bridge remains for consumers that explicitly open a SELF
+ * interaction, without mixing it with the world target.
  *
- * TODO: Hook para Profession-Service (PR #34, branch `feat/professions-
- * foundation`, ainda não mergeada em `main`). Quando mergear, o lugar certo
- * pra rank/xp aparecerem é uma aba nova em `player-panel-service.js`
- * (`pushProfession`, mesmo padrão de `pushEconomy`), não aqui — este arquivo
- * não lê dado nenhum, só abre o painel.
+ * TODO: Hook for Profession-Service (PR #34, branch `feat/professions-
+ * foundation`, not yet merged into `main`). When it merges, the right place
+ * for rank/xp to show up is a new tab in `player-panel-service.js`
+ * (`pushProfession`, same pattern as `pushEconomy`), not here — this file
+ * reads no data at all, it only opens the panel.
  */
 
 'use strict';
@@ -40,23 +40,23 @@ const MODULE_ID = 'character-dashboard-bridge';
 function registerInteractions(dependencies) {
   const { targets, openPanel } = dependencies || {};
   if (!targets || typeof targets.registerResolver !== 'function') {
-    throw new Error(`[${MODULE_ID}] precisa de 'targets' (interaction-targets) para registrar o resolvedor SELF.`);
+    throw new Error(`[${MODULE_ID}] needs 'targets' (interaction-targets) to register the SELF resolver.`);
   }
   if (typeof openPanel !== 'function') {
-    throw new Error(`[${MODULE_ID}] precisa de 'openPanel' (player-panel-service) injetado.`);
+    throw new Error(`[${MODULE_ID}] needs 'openPanel' (player-panel-service) injected.`);
   }
 
-  // O alvo é sempre quem pediu — `rawTargetId` não importa, mas o campo
-  // existe na assinatura do resolvedor (`interaction-targets.js`) por
-  // simetria com os outros, não por uso.
+  // The target is always whoever asked — `rawTargetId` does not matter, but the field
+  // exists in the resolver signature (`interaction-targets.js`) for
+  // symmetry with the others, not because it is used.
   targets.registerResolver(interactionRegistry.TARGET_TYPES.SELF, (_rawTargetId, actorId) => ({
     type: interactionRegistry.TARGET_TYPES.SELF,
     id: `self:${actorId}`,
-    label: 'Você',
+    label: 'You',
     actorId
-    // Sem `assertRange`: `buildContext` (`interaction-service.js`) só checa
-    // distância quando o alvo resolvido expõe essa função — de propósito,
-    // pra nunca recusar alguém por "distância até si mesmo".
+    // No `assertRange`: `buildContext` (`interaction-service.js`) only checks
+    // distance when the resolved target exposes that function — on purpose,
+    // so it never refuses someone for "distance to themselves".
   }));
 
   interactionRegistry.register({

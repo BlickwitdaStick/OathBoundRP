@@ -654,7 +654,7 @@ function stopVoipServer() {
 function requestVoiceConnection(actorId) {
   const character = commands.getActiveCharacterData(actorId);
   if (!character) {
-    commands.sendNotification(actorId, 'Seu personagem ainda nao esta carregado.');
+    commands.sendNotification(actorId, 'Your character is not loaded yet.');
     return;
   }
 
@@ -790,7 +790,7 @@ function toggleMuteCommand(actorId) {
     return;
   }
   entry.muted = !entry.muted;
-  commands.sendNotification(actorId, entry.muted ? 'Microfone mudo.' : 'Microfone ativo.');
+  commands.sendNotification(actorId, entry.muted ? 'Microphone muted.' : 'Microphone on.');
 }
 
 function commandDefs() {

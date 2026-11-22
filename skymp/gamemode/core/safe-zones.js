@@ -1,71 +1,71 @@
 /**
- * core/safe-zones.js — zonas onde certas ações não valem
+ * core/safe-zones.js — zones where certain actions do not apply
  *
- * ─── Atribuição de origem (LICENSE_AND_AFFILIATION_POLICY.md §4) ────────────
+ * ─── Attribution (LICENSE_AND_AFFILIATION_POLICY.md §4) ─────────────────────
  *
- *   Projeto : alekcey0211/red-house-public — build pública do Red House (SkyMP)
- *   Autor   : alekcey0211 e colaboradores
- *   Licença : GPL-3.0. Compatível com a AGPL-3.0-or-later deste projeto pela
- *             GPLv3 §13; o conjunto continua distribuído sob AGPL.
+ *   Project : alekcey0211/red-house-public — public build of Red House (SkyMP)
+ *   Author  : alekcey0211 and contributors
+ *   License : GPL-3.0. Compatible with this project's AGPL-3.0-or-later through
+ *             GPLv3 §13; the combined work is still distributed under the AGPL.
  *   Commit  : 65c66bb3e1b9f5765ed5fc036d69d75e3afbb53d (branch `master`,
- *             01/11/2021 — repositório parado, último push em 16/11/2021)
- *   Origem  : `functions-lib/src/` — a checagem da property `isInSafeLocation`
- *             feita por `hitSync` antes de aplicar dano
- *   Estudo  : docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md §4.1
+ *             2021-11-01 — repository inactive, last push on 2021-11-16)
+ *   Origin  : `functions-lib/src/` — the check of the `isInSafeLocation` property
+ *             done by `hitSync` before applying damage
+ *   Study   : docs/technical/REFERENCE_STUDY_SKYMP_RED_HOUSE.md §4.1
  *
- *   **O que foi adaptado é técnica, não código.** Nenhuma linha foi copiada. O
- *   que veio de lá são duas ideias: (a) que lugar pode barrar ação, e não só
- *   estado do personagem; e (b) **a regra dos dois lados** — checar alvo *e*
- *   agressor, senão dá para atirar de dentro da zona para fora dela. Essa
- *   segunda é o achado que valia a leitura, e tem teste próprio aqui.
+ *   **What was adapted is technique, not code.** No line was copied. What
+ *   came from there are two ideas: (a) that a place can block an action, not only
+ *   the character's state; and (b) **the two-sided rule** — check the target *and*
+ *   the aggressor, otherwise you can shoot from inside the zone to outside it. That
+ *   second one is the finding that made the read worthwhile, and it has its own test here.
  *
- *   O resto diverge: lá é uma property booleana por ator, consultada dentro do
- *   cálculo de dano; aqui é config declarativa em disco (célula/raio), com
- *   categorias da `action-policy`, e o veredicto é "esta ação não vale" em vez
- *   de "este dano não se aplica". Coerente com a decisão registrada em
- *   `core/hit-events.js`: o evento de hit é evidência, nunca autoridade.
+ *   The rest diverges: there it is a boolean property per actor, checked inside the
+ *   damage calculation; here it is declarative config on disk (cell/radius), with
+ *   `action-policy` categories, and the verdict is "this action does not apply" instead
+ *   of "this damage is not applied". Consistent with the decision recorded in
+ *   `core/hit-events.js`: the hit event is evidence, never authority.
  *
- *   Registrado também no CHANGELOG.md, seção `[Não lançado]`.
+ *   Also recorded in CHANGELOG.md, section `[Unreleased]`.
  *
- * ─── De onde veio ───────────────────────────────────────────────────────────
+ * ─── Where it came from ─────────────────────────────────────────────────────
  *
- * Do Red House (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1). Antes de aplicar
- * dano, eles checam uma property `isInSafeLocation` **nos dois lados** — alvo e
- * agressor — e, se qualquer um estiver em zona segura, o dano não acontece. O
- * evento ainda é registrado; só não machuca.
+ * From Red House (`REFERENCE_STUDY_SKYMP_RED_HOUSE.md` §4.1). Before applying
+ * damage, they check an `isInSafeLocation` property **on both sides** — target and
+ * aggressor — and, if either one is in a safe zone, the damage does not happen. The
+ * event is still recorded; it just does not hurt.
  *
- * Checar os dois lados é o detalhe que importa: proteger só o alvo deixa o
- * agressor atirar de dentro da zona segura para fora dela, que é o abuso
- * óbvio. Este módulo mantém a mesma regra, e o teste cobre esse caso.
+ * Checking both sides is the detail that matters: protecting only the target lets the
+ * aggressor shoot from inside the safe zone to outside it, which is the obvious
+ * abuse. This module keeps the same rule, and the test covers that case.
  *
- * ─── O que este arquivo faz, e o que deliberadamente não faz ────────────────
+ * ─── What this file does, and what it deliberately does not do ──────────────
  *
- * Ele responde **onde** alguém está e **o que aquele lugar proíbe**. Não decide
- * quais lugares existem: isso vem de `skymp/config/safe-zones.json`, e a lista
- * nasce vazia.
+ * It answers **where** someone is and **what that place forbids**. It does not decide
+ * which places exist: that comes from `skymp/config/safe-zones.json`, and the list
+ * starts out empty.
  *
- * Zona segura é mecânica de mundo, e a Constituição §15 pede que mecânica de
- * mundo responda 15 perguntas antes de existir. Estas continuam em aberto e
- * são de quem desenha o servidor, não de quem escreve o módulo:
+ * A safe zone is a world mechanic, and Constitution §15 asks that world
+ * mechanics answer 15 questions before they exist. These remain open and
+ * belong to whoever designs the server, not to whoever writes the module:
  *
- *   - Uma cidade sob trégua é zona segura, ou trégua é acordo IC que a guarda
- *     faz cumprir? (a segunda gera história; a primeira gera regra)
- *   - Zona segura protege de roubo, ou só de dano?
- *   - O que acontece com quem já está em combate e entra numa? Fugir para
- *     dentro de uma zona segura é tática legítima ou exploit?
- *   - A área de spawn precisa ser permanente, ou só até o personagem sair da
- *     primeira cena?
+ *   - Is a city under truce a safe zone, or is a truce an IC agreement the guard
+ *     enforces? (the second creates stories; the first creates rules)
+ *   - Does a safe zone protect from theft, or only from damage?
+ *   - What happens to someone already in combat who walks into one? Is fleeing
+ *     into a safe zone a legitimate tactic or an exploit?
+ *   - Does the spawn area need to be permanent, or only until the character leaves the
+ *     first scene?
  *
- * Enquanto `zones` estiver vazia, este módulo responde "não há zona nenhuma" e
- * nada muda — mesmo padrão do `npc-cleaner.js`, pelo mesmo motivo: config
- * ausente não pode virar comportamento surpresa.
+ * While `zones` is empty, this module answers "there is no zone" and
+ * nothing changes — same pattern as `npc-cleaner.js`, for the same reason: missing
+ * config must not turn into surprise behavior.
  *
- * ─── Custo ──────────────────────────────────────────────────────────────────
+ * ─── Cost ───────────────────────────────────────────────────────────────────
  *
- * `mp.get(actorId, 'locationalData')` é leitura de **property**, servida do
- * cache do servidor — não é ida ao Papyrus, então não paga os 13–35 ms que o
- * Red House mediu. Por isso dá pra consultar a cada ação sem orçamento
- * especial. Se um dia isso mudar, o cache entra aqui e em nenhum outro lugar.
+ * `mp.get(actorId, 'locationalData')` is a **property** read, served from the
+ * server's cache — it is not a Papyrus round trip, so it does not pay the 13–35 ms that
+ * Red House measured. That is why it can be checked on every action without a special
+ * budget. If that ever changes, the cache goes here and nowhere else.
  */
 
 const fs = require('fs');
@@ -73,7 +73,7 @@ const path = require('path');
 
 const CONFIG_PATH = path.resolve(__dirname, '..', '..', 'config', 'safe-zones.json');
 
-/** Categorias da action-policy que uma zona pode proibir. */
+/** action-policy categories a zone can forbid. */
 const CATEGORIAS_VALIDAS = new Set([
   'gameplay', 'combat', 'trade', 'craft', 'gather', 'work', 'move', 'move_world', 'use_item', 'speak_rp', 'sell'
 ]);
@@ -81,54 +81,54 @@ const CATEGORIAS_VALIDAS = new Set([
 let _zonas = null;
 
 /**
- * `cellId` precisa ser um `FormDesc`, não um hexadecimal.
+ * `cellId` must be a `FormDesc`, not a hexadecimal number.
  *
- * **[DOC]** `FormDesc.cpp` (`SKYMP_UPSTREAM_REFERENCE.md` §8.5): `ToString()` é
- * `shortFormId` em hex **sem prefixo `0x`**, `:`, nome do arquivo —
- * `"162e2:Skyrim.esm"`. É essa string que `locationalData.cellOrWorldDesc`
- * devolve, e é contra ela que `zoneOf` compara por igualdade.
+ * **[DOC]** `FormDesc.cpp` (`SKYMP_UPSTREAM_REFERENCE.md` §8.5): `ToString()` is
+ * `shortFormId` in hex **without the `0x` prefix**, `:`, file name —
+ * `"162e2:Skyrim.esm"`. That is the string `locationalData.cellOrWorldDesc`
+ * returns, and it is what `zoneOf` compares against for equality.
  *
- * ─── Por que isto precisa ser barulhento ────────────────────────────────────
+ * ─── Why this needs to be loud ──────────────────────────────────────────────
  *
- * `FormDesc::FromString` **não valida**: sem `:` ela não falha, apenas cai no
- * ramo sem arquivo e resolve para a faixa de forms gerados pelo servidor. Do
- * lado de cá o efeito é ainda mais quieto — `"0x162e2" !== "162e2:Skyrim.esm"`
- * é só uma comparação de string que nunca casa. A zona carrega, aparece nos
- * logs como ativa, e **nunca dispara**.
+ * `FormDesc::FromString` **does not validate**: without `:` it does not fail, it just falls into the
+ * no-file branch and resolves to the range of server-generated forms. On
+ * our side the effect is even quieter — `"0x162e2" !== "162e2:Skyrim.esm"`
+ * is just a string comparison that never matches. The zone loads, shows up in the
+ * logs as active, and **never fires**.
  *
- * Uma zona segura que falha assim falha **aberta**: a proteção não existe e não
- * há erro em lugar nenhum. É o mesmo modo de falha do `safeRadius` fantasma já
- * catalogado no `npc-cleaner`, e o oposto do que o cabeçalho deste arquivo diz
- * querer — *"config ausente não pode virar comportamento surpresa"*. Config
- * **presente e errada** é pior, porque quem escreveu acha que criou uma regra.
+ * A safe zone that fails like this fails **open**: the protection does not exist and there is
+ * no error anywhere. It is the same failure mode as the phantom `safeRadius` already
+ * catalogued in `npc-cleaner`, and the opposite of what this file's header says it
+ * wants — *"missing config must not turn into surprise behavior"*. Config that is
+ * **present and wrong** is worse, because whoever wrote it thinks they created a rule.
  *
- * O exemplo em `safe-zones.example.json` trazia `"0x162e2"` até 09/08/2026, ou
- * seja: quem copiasse o exemplo — o caminho esperado — cairia exatamente aqui.
+ * The example in `safe-zones.example.json` had `"0x162e2"` until 2026-08-09, which
+ * means: whoever copied the example — the expected path — would land exactly here.
  *
  * @param {string} cellId
- * @returns {string|null} o motivo da recusa, ou `null` se estiver bem formado
+ * @returns {string|null} the reason for rejection, or `null` if it is well formed
  */
 function motivoDeCellIdInvalido(cellId) {
   if (/^0x/i.test(cellId)) {
-    return `comeca com '0x' — FormDesc e hex SEM prefixo (use '${cellId.replace(/^0x/i, '')}:Skyrim.esm')`;
+    return `starts with '0x' — FormDesc is hex WITHOUT a prefix (use '${cellId.replace(/^0x/i, '')}:Skyrim.esm')`;
   }
   const partes = cellId.split(':');
   if (partes.length !== 2) {
-    return `nao tem a forma '<hex>:<arquivo.esm>' — sem o ':' o servidor resolve para outra faixa de FormID, em silencio`;
+    return `does not have the shape '<hex>:<file.esm>' — without the ':' the server silently resolves to another FormID range`;
   }
   const [hex, arquivo] = partes;
   if (!/^[0-9a-f]+$/i.test(hex)) {
-    return `'${hex}' antes do ':' nao e hexadecimal`;
+    return `'${hex}' before the ':' is not hexadecimal`;
   }
   if (!arquivo.trim()) {
-    return `falta o nome do arquivo depois do ':'`;
+    return `the file name after the ':' is missing`;
   }
   return null;
 }
 
 /**
- * Lê a configuração. Ausência de arquivo não é erro — a lista vazia é o
- * estado correto até alguém desenhar as zonas.
+ * Reads the configuration. A missing file is not an error — the empty list is the
+ * correct state until someone designs the zones.
  *
  * @returns {{id: string, cellId: string, pos: number[]|null, radius: number|null, blocks: string[], label: string}[]}
  */
@@ -139,10 +139,10 @@ function loadZones() {
   try {
     bruto = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   } catch (err) {
-    // Config quebrada não pode virar "tudo é zona segura" nem "nada é":
-    // a primeira desliga o combate do servidor, a segunda remove a proteção
-    // sem avisar. Fica inerte e grita.
-    console.error(`[safe-zones] ${CONFIG_PATH} nao e JSON valido (${err.message}). Nenhuma zona ativa.`);
+    // Broken config must not turn into "everything is a safe zone" nor "nothing is":
+    // the first turns off combat on the server, the second removes protection
+    // without warning. It stays inert and screams.
+    console.error(`[safe-zones] ${CONFIG_PATH} is not valid JSON (${err.message}). No zone active.`);
     return [];
   }
 
@@ -150,16 +150,16 @@ function loadZones() {
 }
 
 /**
- * A validação em si, separada da leitura de disco.
+ * The validation itself, separate from reading the disk.
  *
- * Existe separada pelo mesmo motivo do `sweepOnce(policy = loadPolicy())` do
- * `npc-cleaner`: dá para exercitar config malformada sem escrever em
- * `skymp/config/safe-zones.json`, que é o caminho real do servidor. Um teste que
- * precisasse criar aquele arquivo deixaria, se falhasse no meio, uma config de
- * zona segura ativa para trás — que é justamente a classe de surpresa que este
- * módulo existe para não causar.
+ * It is separate for the same reason as `sweepOnce(policy = loadPolicy())` in
+ * `npc-cleaner`: malformed config can be exercised without writing to
+ * `skymp/config/safe-zones.json`, which is the server's real path. A test that
+ * had to create that file would, if it failed midway, leave an active safe zone
+ * config behind — which is exactly the kind of surprise this
+ * module exists not to cause.
  *
- * @param {object} bruto  o conteúdo já desserializado de `safe-zones.json`
+ * @param {object} bruto  the already-deserialized contents of `safe-zones.json`
  * @returns {{id: string, cellId: string, pos: number[]|null, radius: number|null, blocks: string[], label: string}[]}
  */
 function parseZones(bruto) {
@@ -169,21 +169,21 @@ function parseZones(bruto) {
   const zonas = [];
   for (const z of bruto.zones) {
     if (!z || typeof z.cellId !== 'string' || !z.cellId.trim()) {
-      console.error('[safe-zones] Zona sem cellId ignorada:', JSON.stringify(z));
+      console.error('[safe-zones] Zone without cellId ignored:', JSON.stringify(z));
       continue;
     }
 
     const cellId = z.cellId.trim();
     const motivo = motivoDeCellIdInvalido(cellId);
     if (motivo) {
-      // Mesma disciplina da categoria desconhecida logo abaixo: a zona sai da
-      // lista em vez de entrar inerte. As duas coisas protegem tanto quanto
-      // (nenhuma), mas so uma delas aparece.
+      // Same discipline as the unknown category right below: the zone leaves the
+      // list instead of entering inert. Both protect equally
+      // (not at all), but only one of them is visible.
       console.error(
-        `[safe-zones] Zona '${z.id || cellId}' tem cellId invalido: '${cellId}' — ${motivo}. ` +
-        `Esperado o formato FormDesc '<hex sem 0x>:<arquivo.esm>', como '162e2:Skyrim.esm'. ` +
-        `Zona IGNORADA: um cellId que nao casa nunca dispara, e uma zona segura que ` +
-        `falha em silencio falha ABERTA.`
+        `[safe-zones] Zone '${z.id || cellId}' has an invalid cellId: '${cellId}' — ${motivo}. ` +
+        `Expected the FormDesc format '<hex without 0x>:<file.esm>', such as '162e2:Skyrim.esm'. ` +
+        `Zone IGNORED: a cellId that never matches never fires, and a safe zone that ` +
+        `fails silently fails OPEN.`
       );
       continue;
     }
@@ -191,15 +191,15 @@ function parseZones(bruto) {
     const blocks = Array.isArray(z.blocks) ? z.blocks.filter(b => CATEGORIAS_VALIDAS.has(b)) : [];
     const invalidas = Array.isArray(z.blocks) ? z.blocks.filter(b => !CATEGORIAS_VALIDAS.has(b)) : [];
     if (invalidas.length > 0) {
-      // Mesma logica do admin-service.hasPermission: categoria que nao existe
-      // e uma regra que quem escreveu acha que criou e nao criou.
+      // Same logic as admin-service.hasPermission: a category that does not exist
+      // is a rule whoever wrote it thinks they created, and did not.
       console.error(
-        `[safe-zones] Zona '${z.id || z.cellId}' lista categoria(s) desconhecida(s): ${invalidas.join(', ')}. ` +
-        `Validas: ${[...CATEGORIAS_VALIDAS].join(', ')}. Ignoradas.`
+        `[safe-zones] Zone '${z.id || z.cellId}' lists unknown categories: ${invalidas.join(', ')}. ` +
+        `Valid: ${[...CATEGORIAS_VALIDAS].join(', ')}. Ignored.`
       );
     }
     if (blocks.length === 0) {
-      console.error(`[safe-zones] Zona '${z.id || z.cellId}' nao proibe nada — ignorada.`);
+      console.error(`[safe-zones] Zone '${z.id || z.cellId}' forbids nothing — ignored.`);
       continue;
     }
 
@@ -210,9 +210,9 @@ function parseZones(bruto) {
       id: String(z.id || cellId),
       label: String(z.label || z.id || cellId),
       cellId,
-      // Sem pos/radius validos, a zona e a CELULA INTEIRA. E grosseiro de
-      // proposito: "a taverna toda" e uma decisao mais facil de acertar que um
-      // raio em unidades do Skyrim, e nao exige medir nada in-game.
+      // Without a valid pos/radius, the zone is the WHOLE CELL. It is coarse on
+      // purpose: "the whole tavern" is an easier decision to get right than a
+      // radius in Skyrim units, and it does not require measuring anything in game.
       pos: temRaio ? z.pos.map(Number) : null,
       radius: temRaio ? raio : null,
       blocks
@@ -221,7 +221,7 @@ function parseZones(bruto) {
   return zonas;
 }
 
-/** Recarrega do disco. Chamado no boot; exposto pra teste e pra staff. */
+/** Reloads from disk. Called on boot; exposed for tests and staff. */
 function reload() {
   _zonas = loadZones();
   return _zonas;
@@ -233,7 +233,7 @@ function zones() {
 }
 
 /**
- * A zona que contém o ator, ou `null`.
+ * The zone that contains the actor, or `null`.
  *
  * @param {number} actorId
  * @returns {object|null}
@@ -247,7 +247,7 @@ function zoneOf(actorId) {
   try {
     loc = mp.get(actorId, 'locationalData');
   } catch (err) {
-    console.error('[safe-zones] Falha ao ler locationalData:', err.message);
+    console.error('[safe-zones] Failed to read locationalData:', err.message);
     return null;
   }
   if (!loc) return null;
@@ -272,12 +272,12 @@ function zoneOf(actorId) {
 /**
  * @typedef {object} VeredictoDeZona
  * @property {boolean} blocked
- * @property {object} [zone]  a zona que barrou
- * @property {'actor'|'target'} [side]  de quem é a proteção (só em blocksBetween)
+ * @property {object} [zone]  the zone that blocked it
+ * @property {'actor'|'target'} [side]  whose protection it is (only in blocksBetween)
  */
 
 /**
- * A categoria está proibida para este ator, pelo lugar onde ele está?
+ * Is the category forbidden for this actor, because of where they are?
  *
  * @param {number} actorId
  * @param {string} categoria
@@ -290,14 +290,14 @@ function blocksCategory(actorId, categoria) {
 }
 
 /**
- * A regra dos dois lados: uma ação entre duas pessoas é barrada se QUALQUER
- * uma delas estiver protegida.
+ * The two-sided rule: an action between two people is blocked if EITHER
+ * of them is protected.
  *
- * É o que impede o abuso óbvio — ficar dentro da zona segura atirando para
- * fora. O Red House já fazia assim, e o motivo é o mesmo aqui.
+ * It is what prevents the obvious abuse — standing inside the safe zone shooting
+ * outward. Red House already did it this way, and the reason is the same here.
  *
- * @param {number} actorId    quem age
- * @param {number} targetActorId  quem sofre
+ * @param {number} actorId    who acts
+ * @param {number} targetActorId  who is acted upon
  * @param {string} categoria
  * @returns {VeredictoDeZona}
  */
@@ -321,6 +321,6 @@ module.exports = {
   zoneOf,
   blocksCategory,
   blocksBetween,
-  // Só pra teste: injeta zonas sem precisar de arquivo em disco.
+  // Test only: injects zones without needing a file on disk.
   _setZones: (z) => { _zonas = z; }
 };

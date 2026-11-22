@@ -1,49 +1,49 @@
 /**
  * contracts-service.js
  *
- * Contratos entre jogadores: alguém publica trabalho, alguém aceita, o servidor
- * move os septims e mantém o registro. Sem arbitragem automática, sem fila de
- * staff, sem NPC.
+ * Contracts between players: someone posts work, someone accepts it, the server
+ * moves the septims and keeps the record. No automatic arbitration, no staff
+ * queue, no NPC.
  *
- * Registrado em `phase0-basic.js` como módulo `contracts` (fase `lab`,
- * `ENABLE_CONTRACTS_SERVICE`, nasce desligado). Continua sem UI CEF —
- * os comandos de chat no fim deste arquivo (`commandDefs()`) são a interface
- * inteira — e continua sem arbitragem automática: `dispute` trava o escrow e
- * espera decisão humana. Nada aqui foi visto num servidor com gente dentro
- * até 20/08/2026; validar em bancada antes de tirar a flag do desligado em
- * produção. Ver `PARKED_SERVICES_DECISION.md` para o histórico da decisão de
- * deixar parado, e `docs/technical/FASE_0_ROTEIRO.md` para o estado geral do
- * projeto quanto a testar em servidor real.
+ * Registered in `phase0-basic.js` as the `contracts` module (phase `lab`,
+ * `ENABLE_CONTRACTS_SERVICE`, off by default). It still has no CEF UI —
+ * the chat commands at the end of this file (`commandDefs()`) are the whole
+ * interface — and still has no automatic arbitration: `dispute` locks the escrow and
+ * waits for a human decision. Nothing here had been seen on a server with people in it
+ * as of 2026-08-20; validate it on the bench before taking the flag out of off in
+ * production. See `PARKED_SERVICES_DECISION.md` for the history of the decision to
+ * leave it parked, and `docs/technical/FASE_0_ROTEIRO.md` for the overall state of the
+ * project regarding testing on a real server.
  *
- * Desenho: `docs/gameplay/CONTRACTS.md`
- * Decisão de economia: `docs/technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md`
- * Origem do conceito: Mereth Roleplay — **sem licença e sem código público**,
- * então isto é reimplementação a partir da ideia publicada, não port
+ * Design: `docs/gameplay/CONTRACTS.md`
+ * Economy decision: `docs/technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md`
+ * Origin of the concept: Mereth Roleplay — **no license and no public code**,
+ * so this is a reimplementation from the published idea, not a port
  * (`docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md` §4).
  *
- * ─── A máquina ─────────────────────────────────────────────────────────────
+ * ─── The machine ────────────────────────────────────────────────────────────
  *
- *              ┌──────────► cancelled   (criador desiste; escrow devolvido)
+ *              ┌──────────► cancelled   (creator gives up; escrow refunded)
  *              │
- *   open ──────┼──────────► expired     (prazo venceu; escrow devolvido)
+ *   open ──────┼──────────► expired     (deadline passed; escrow refunded)
  *     │        │
  *     ▼        │
- *   accepted ──┘──────────► expired     (prazo venceu; escrow devolvido)
+ *   accepted ──┘──────────► expired     (deadline passed; escrow refunded)
  *     │
  *     ▼
- *   delivered ────────────► settled     (escrow → trabalhador)
+ *   delivered ────────────► settled     (escrow → worker)
  *     │
- *     └────────────────────► disputed   (escrow FICA travado; ninguém recebe)
+ *     └────────────────────► disputed   (escrow STAYS locked; nobody gets paid)
  *
- * ─── As três regras que não se negociam ────────────────────────────────────
+ * ─── The three non-negotiable rules ────────────────────────────────────────
  *
- * 1. **Escrow trava no post.** `open` só existe com o valor já fora do bolso do
- *    criador. Uma falha na criação produz SEM CONTRATO, nunca um contrato que
- *    ninguém pode pagar.
- * 2. **Expiração nunca toca trabalho entregue.** `delivered` e `disputed` estão
- *    fora da varredura. Sem isso, deixar expirar depois de receber é o exploit.
- * 3. **`disputed` não decide nada.** O escrow fica travado e a staff resolve
- *    fora do automático. Consequência irreversível não se automatiza
+ * 1. **Escrow locks at posting.** `open` only exists with the value already out of the
+ *    creator's pocket. A failure during creation produces NO CONTRACT, never a contract that
+ *    nobody can pay.
+ * 2. **Expiry never touches delivered work.** `delivered` and `disputed` are
+ *    outside the sweep. Without that, letting it expire after receiving the work is the exploit.
+ * 3. **`disputed` decides nothing.** The escrow stays locked and staff resolve it
+ *    outside the automation. Irreversible consequences are not automated
  *    (briefing §11).
  */
 
@@ -55,16 +55,16 @@ const commands = require('./commands');
 const MODULE = 'contracts';
 
 /**
- * Categorias do briefing §9. A lista é aberta por edição, não por payload: um
- * `category` vindo da UI que não esteja aqui é recusado, porque ela vira
- * filtro de listagem e rótulo de RP, e um valor livre transforma a listagem em
- * lixo.
+ * Categories from briefing §9. The list is open through editing, not through the payload: a
+ * `category` coming from the UI that is not here is refused, because it becomes a
+ * listing filter and an RP label, and a free-form value turns the listing into
+ * garbage.
  *
- * Acrescentar uma categoria é **só** editar esta lista — o framework não
- * verifica o trabalho de nenhuma delas. Verificação por contagem de item existe
- * para entrega de item (`core/inventory.js`); "matou o bandido" e "escoltou a
- * caravana" são confirmação humana do criador, e fingir o contrário seria
- * prometer uma onisciência que o servidor não tem.
+ * Adding a category is **only** editing this list — the framework does not
+ * verify the work of any of them. Verification by item count exists
+ * for item delivery (`core/inventory.js`); "killed the bandit" and "escorted the
+ * caravan" are human confirmations by the creator, and pretending otherwise would be
+ * promising an omniscience the server does not have.
  */
 const CATEGORIES = Object.freeze([
   'mercenary', 'caravan', 'delivery', 'bodyguard', 'crafting',
@@ -81,10 +81,10 @@ const STATUS = Object.freeze({
   DISPUTED: 'disputed'
 });
 
-/** Estados que a varredura de expiração pode tocar. Ver regra 2 do cabeçalho. */
+/** States the expiry sweep may touch. See rule 2 in the header. */
 const EXPIRABLE = Object.freeze([STATUS.OPEN, STATUS.ACCEPTED]);
 
-/** Janela padrão entre `delivered` e o acerto automático. */
+/** Default window between `delivered` and automatic settlement. */
 const REVIEW_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 const MIN_REWARD = 1;
@@ -109,7 +109,7 @@ function normalizeKey(value) {
 }
 
 async function _safeRollback(conn) {
-  try { await conn.rollback(); } catch { /* preserva o erro original */ }
+  try { await conn.rollback(); } catch { /* keep the original error */ }
 }
 
 async function _withTransaction(dependencies, fn) {
@@ -131,9 +131,9 @@ async function _withTransaction(dependencies, fn) {
 }
 
 /**
- * Lê e trava o contrato. Tudo que muda estado passa por aqui primeiro — é a
- * trava que faz "aceitar" e "cancelar" simultâneos serializarem em vez de
- * ambos lerem `open`.
+ * Reads and locks the contract. Everything that changes state goes through here first — it is the
+ * lock that makes a simultaneous "accept" and "cancel" serialize instead of
+ * both reading `open`.
  */
 async function _lockContract(conn, contractId) {
   const [rows] = await conn.query(
@@ -146,9 +146,9 @@ async function _lockContract(conn, contractId) {
 }
 
 /**
- * Grava a transição. `idempotency_key` é UNIQUE, então o mesmo pedido reenviado
- * não gera dois eventos — e a consulta abaixo faz o replay devolver o resultado
- * original em vez de `invalid_status` (o Achado 7 da auditoria de economia).
+ * Writes the transition. `idempotency_key` is UNIQUE, so the same request resent
+ * does not create two events — and the query below makes the replay return the
+ * original result instead of `invalid_status` (Finding 7 of the economy audit).
  */
 async function _recordEvent(conn, params) {
   await conn.query(
@@ -169,19 +169,19 @@ async function _findEventReplay(conn, idempotencyKey) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Criação
+// Creation
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Publica um contrato. O escrow é financiado **antes** da linha em `contracts`
- * existir, na mesma transação: se o criador não tem o ouro, não sobra contrato.
+ * Posts a contract. The escrow is funded **before** the row in `contracts`
+ * exists, in the same transaction: if the creator does not have the gold, no contract is left.
  *
  * @param {object} request
  * @param {number} request.creatorCharacterId
  * @param {string} request.title
  * @param {string} [request.description]
  * @param {string} [request.category]
- * @param {number} request.reward septims travados no escrow
+ * @param {number} request.reward septims locked in escrow
  * @param {number} [request.expiresInMs]
  * @param {string} [request.idempotencyKey]
  */
@@ -213,10 +213,10 @@ async function create(request, dependencies = {}) {
   const expiresAt = expiresInMs ? new Date(now + expiresInMs) : null;
 
   return _withTransaction(dependencies, async conn => {
-    // O evento de criação é gravado por último, então encontrá-lo prova que a
-    // criação inteira commitou. É o mesmo marcador de replay que todas as
-    // outras transições usam — um segundo mecanismo só para `create` seria
-    // mais uma coisa capaz de discordar das demais.
+    // The creation event is written last, so finding it proves the whole
+    // creation committed. It is the same replay marker all the
+    // other transitions use — a second mechanism just for `create` would be
+    // one more thing capable of disagreeing with the rest.
     const prior = await _findEventReplay(conn, `${idempotencyKey}~open`);
     if (prior) {
       return { ok: true, replayed: true, contractId: prior.contract_id };
@@ -232,8 +232,8 @@ async function create(request, dependencies = {}) {
       idempotencyKey: `${idempotencyKey}~escrow`
     }, dependencies);
 
-    // Fail-closed: o valor não travou, então não nasce contrato nenhum. É a
-    // diferença entre "sem contrato" e "contrato que ninguém pode pagar".
+    // Fail-closed: the value did not lock, so no contract is born. It is the
+    // difference between "no contract" and "a contract nobody can pay".
     if (!escrow.ok) return escrow;
 
     const [insert] = await conn.query(
@@ -255,16 +255,16 @@ async function create(request, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Transições que não mexem em dinheiro
+// Transitions that do not touch money
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Fábrica das transições simples. Todas têm a mesma forma: trava o contrato,
- * checa replay, checa estado e autor, grava evento e atualiza a linha.
+ * Factory for the simple transitions. They all have the same shape: lock the contract,
+ * check replay, check state and author, write the event and update the row.
  *
- * Centralizar isso não é economia de digitação — é o que garante que nenhuma
- * transição esqueça o `FOR UPDATE` ou a checagem de replay, que são as duas
- * coisas cuja ausência não aparece em teste sequencial.
+ * Centralizing this is not about saving keystrokes — it is what guarantees no
+ * transition forgets the `FOR UPDATE` or the replay check, which are the two
+ * things whose absence does not show up in sequential tests.
  */
 function makeTransition(config) {
   return async function transition(request, dependencies = {}) {
@@ -295,10 +295,10 @@ function makeTransition(config) {
       const patch = config.patch(contract, actorCharacterId, now);
       const columns = Object.keys(patch);
       const setClause = ['status = ?', ...columns.map(c => `${c} = ?`)].join(', ');
-      // O `AND status = ?` é redundante com a checagem acima **sob a trava** — e
-      // é de propósito: se alguém remover o `FOR UPDATE` de `_lockContract`, a
-      // atualização passa a afetar 0 linhas em vez de sobrescrever a transição
-      // de outra transação.
+      // The `AND status = ?` is redundant with the check above **under the lock** — and
+      // that is on purpose: if someone removes the `FOR UPDATE` from `_lockContract`, the
+      // update starts affecting 0 rows instead of overwriting another
+      // transaction's transition.
       await conn.query(
         `UPDATE contracts SET ${setClause} WHERE id = ? AND status = ?`,
         [config.to, ...columns.map(c => patch[c]), contractId, config.from]
@@ -315,9 +315,9 @@ function makeTransition(config) {
 }
 
 /**
- * Aceitar. O criador não pode aceitar o próprio contrato — sem essa regra, o
- * contrato vira uma forma de mover ouro para si mesmo com um carimbo de
- * legitimidade, que é exatamente o que um sistema de lavagem procura.
+ * Accept. The creator cannot accept their own contract — without that rule, the
+ * contract becomes a way to move gold to yourself with a stamp of
+ * legitimacy, which is exactly what a laundering scheme looks for.
  */
 const accept = makeTransition({
   from: STATUS.OPEN,
@@ -328,8 +328,8 @@ const accept = makeTransition({
 });
 
 /**
- * Declarar entrega. Só quem aceitou. Abre a janela de revisão — passada ela sem
- * disputa, o acerto é automático.
+ * Declare delivery. Only whoever accepted. Opens the review window — once it passes with no
+ * dispute, settlement is automatic.
  */
 const deliver = makeTransition({
   from: STATUS.ACCEPTED,
@@ -343,29 +343,29 @@ const deliver = makeTransition({
 });
 
 /**
- * Contestar a entrega. **Não decide nada**: o escrow continua travado e nenhum
- * dos dois recebe até alguém de fora resolver. É a única saída de `delivered`
- * que não move dinheiro, e é assim de propósito — automatizar "quem tem razão"
- * é a consequência irreversível que o briefing §11 proíbe.
+ * Dispute the delivery. **It decides nothing**: the escrow stays locked and neither
+ * of the two gets paid until someone outside resolves it. It is the only exit from `delivered`
+ * that does not move money, and it is that way on purpose — automating "who is right"
+ * is the irreversible consequence briefing §11 forbids.
  */
 const dispute = makeTransition({
   from: STATUS.DELIVERED,
   to: STATUS.DISPUTED,
   reason: 'disputed',
   authorize: (contract, actor) => (contract.creator_character_id !== actor ? 'not_the_creator' : null),
-  // Nada além do status muda: `closed_at` fica nulo porque o contrato **não**
-  // fechou — o escrow continua travado esperando decisão humana.
+  // Nothing but the status changes: `closed_at` stays null because the contract did **not**
+  // close — the escrow stays locked waiting for a human decision.
   patch: () => ({})
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Transições que movem dinheiro
+// Transitions that move money
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Fecha o contrato liberando o escrow. É o corpo comum de `settle`, `cancel` e
- * `expire` — os três são "muda o status e esvazia o escrow para alguém", e a
- * única diferença é quem recebe e a partir de qual estado.
+ * Closes the contract by releasing the escrow. It is the common body of `settle`, `cancel` and
+ * `expire` — all three are "change the status and empty the escrow to someone", and the
+ * only difference is who receives it and from which state.
  */
 async function _closeWithEscrow(conn, params, dependencies) {
   const economy = dependencies.economy || economyService;
@@ -400,11 +400,11 @@ async function _closeWithEscrow(conn, params, dependencies) {
 }
 
 /**
- * Acerto: o escrow vai para quem trabalhou.
+ * Settlement: the escrow goes to whoever did the work.
  *
- * Quem pode pedir: o criador (a qualquer momento depois de `delivered`) ou o
- * servidor, pela varredura, depois da janela de revisão. O trabalhador **não**
- * pode se pagar — seria declarar entrega e sacar na mesma respiração.
+ * Who can ask for it: the creator (at any moment after `delivered`) or the
+ * server, through the sweep, after the review window. The worker **cannot**
+ * pay themselves — that would be declaring delivery and cashing out in the same breath.
  */
 async function settle(request, dependencies = {}) {
   const contractId = positiveId(request?.contractId);
@@ -445,10 +445,10 @@ async function settle(request, dependencies = {}) {
 }
 
 /**
- * Cancelar. Só enquanto `open` — depois que alguém aceitou, cancelar
- * unilateralmente deixaria o trabalhador com trabalho feito e sem recurso. Um
- * contrato aceito que dá errado sai por `expired` (o prazo) ou por acordo fora
- * do sistema.
+ * Cancel. Only while `open` — once someone accepted, cancelling
+ * unilaterally would leave the worker with work done and no recourse. An
+ * accepted contract that goes wrong exits through `expired` (the deadline) or through an agreement outside
+ * the system.
  */
 async function cancel(request, dependencies = {}) {
   const contractId = positiveId(request?.contractId);
@@ -484,13 +484,13 @@ async function cancel(request, dependencies = {}) {
 }
 
 /**
- * Expira um contrato e devolve o escrow ao criador.
+ * Expires a contract and refunds the escrow to the creator.
  *
- * ─── A regra que protege o trabalhador ─────────────────────────────────────
+ * ─── The rule that protects the worker ─────────────────────────────────────
  *
- * `EXPIRABLE` não inclui `delivered` nem `disputed`. Sem isso, o criador que
- * recebeu o trabalho só precisa esperar o relógio para reaver o ouro — é o
- * exploit óbvio, e a defesa contra ele é uma lista, não um comentário.
+ * `EXPIRABLE` does not include `delivered` or `disputed`. Without that, a creator who
+ * received the work only needs to wait out the clock to get the gold back — it is the
+ * obvious exploit, and the defense against it is a list, not a comment.
  */
 async function expire(request, dependencies = {}) {
   const contractId = positiveId(request?.contractId);
@@ -524,8 +524,8 @@ async function expire(request, dependencies = {}) {
 }
 
 /**
- * Varredura. Uma transação por contrato de propósito: uma transação para todos
- * transformaria uma linha problemática em nenhuma expiração processada.
+ * Sweep. One transaction per contract on purpose: one transaction for all of them
+ * would turn a single problematic row into no expiry processed at all.
  */
 async function sweepExpired(dependencies = {}) {
   const db = dependencies.db || database;
@@ -539,8 +539,8 @@ async function sweepExpired(dependencies = {}) {
 
   const processed = [];
   for (const row of rows) {
-    // A chave deriva do contrato, então reexecutar a varredura no mesmo minuto
-    // não expira duas vezes nem devolve o escrow duas vezes.
+    // The key derives from the contract, so rerunning the sweep in the same minute
+    // neither expires twice nor refunds the escrow twice.
     const result = await expire({
       contractId: row.id,
       idempotencyKey: `sweep-expire-${row.id}`
@@ -551,9 +551,9 @@ async function sweepExpired(dependencies = {}) {
 }
 
 /**
- * Acerto automático dos entregues cuja janela de revisão venceu sem disputa.
- * É o outro lado da varredura: sem ele, um criador que some deixa o trabalhador
- * com o ouro travado para sempre.
+ * Automatic settlement of delivered contracts whose review window passed with no dispute.
+ * It is the other side of the sweep: without it, a creator who disappears leaves the worker
+ * with the gold locked forever.
  */
 async function sweepReviewed(dependencies = {}) {
   const db = dependencies.db || database;
@@ -609,10 +609,10 @@ async function history(contractId, dependencies = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Comandos de chat — a interface inteira, sem UI CEF (mesmo padrão de
-// `trade-service.commandDefs()`). Cada handler resolve `actorId` → `characterId`
-// pelo `commands.js` e gera sua própria `idempotencyKey`: um duplo clique ou um
-// reenvio de rede vira replay, nunca uma segunda transição.
+// Chat commands — the whole interface, no CEF UI (same pattern as
+// `trade-service.commandDefs()`). Each handler resolves `actorId` → `characterId`
+// through `commands.js` and generates its own `idempotencyKey`: a double click or a
+// network resend becomes a replay, never a second transition.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _characterIdFor(actorId) {
@@ -624,33 +624,33 @@ function _notify(actorId, message) {
   commands.sendNotification(actorId, message);
 }
 
-/** Tradução dos `code` de retorno para mensagem de jogador. */
+/** Translation of the return `code`s into player messages. */
 const _ERROR_MESSAGES = Object.freeze({
-  invalid_creator: 'Personagem não carregado.',
-  invalid_actor: 'Personagem não carregado.',
-  invalid_title: 'Título inválido (até 96 caracteres).',
-  invalid_reward: 'Recompensa inválida.',
-  invalid_category: `Categoria inválida. Use: ${CATEGORIES.join(', ')}.`,
-  invalid_description: 'Descrição inválida.',
-  invalid_idempotency_key: 'Falha interna, tente de novo.',
-  invalid_expiry: 'Prazo inválido.',
-  invalid_contract: 'Uso: informe o número do contrato.',
-  contract_not_found: 'Contrato não encontrado.',
-  invalid_status: 'Este contrato não está nesse estado agora.',
-  creator_cannot_accept: 'Você não pode aceitar o próprio contrato.',
-  not_the_worker: 'Só quem aceitou o contrato pode fazer isso.',
-  not_the_creator: 'Só o criador do contrato pode fazer isso.',
-  not_yet_expired: 'Este contrato ainda não venceu.',
-  not_expirable: 'Este contrato não pode expirar agora.',
-  review_window_open: 'A janela de revisão ainda não fechou.',
-  insufficient_funds: 'Ouro insuficiente para travar a recompensa no escrow.'
+  invalid_creator: 'Character not loaded.',
+  invalid_actor: 'Character not loaded.',
+  invalid_title: 'Invalid title (up to 96 characters).',
+  invalid_reward: 'Invalid reward.',
+  invalid_category: `Invalid category. Use: ${CATEGORIES.join(', ')}.`,
+  invalid_description: 'Invalid description.',
+  invalid_idempotency_key: 'Internal error, please try again.',
+  invalid_expiry: 'Invalid deadline.',
+  invalid_contract: 'Usage: provide the contract number.',
+  contract_not_found: 'Contract not found.',
+  invalid_status: 'This contract is not in that state right now.',
+  creator_cannot_accept: 'You cannot accept your own contract.',
+  not_the_worker: 'Only whoever accepted the contract can do that.',
+  not_the_creator: 'Only the contract\'s creator can do that.',
+  not_yet_expired: 'This contract has not expired yet.',
+  not_expirable: 'This contract cannot expire right now.',
+  review_window_open: 'The review window has not closed yet.',
+  insufficient_funds: 'Not enough gold to lock the reward in escrow.'
 });
 
 function _reply(actorId, result, successMessage) {
   if (result.ok) {
-    _notify(actorId, result.replayed ? 'Ação já registrada anteriormente.' : successMessage(result));
+    _notify(actorId, result.replayed ? 'Action already recorded.' : successMessage(result));
   } else {
-    _notify(actorId, _ERROR_MESSAGES[result.code] || `Não foi possível: ${result.code}`);
+    _notify(actorId, _ERROR_MESSAGES[result.code] || `Could not do that: ${result.code}`);
   }
   return result;
 }
@@ -668,18 +668,18 @@ function commandDefs() {
       usage: '/contractcreate <category> <reward> <title>',
       handler: async (actorId, args) => {
         const creatorCharacterId = _characterIdFor(actorId);
-        if (!creatorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!creatorCharacterId) return _notify(actorId, 'Character not loaded.');
 
         const partes = String(args || '').trim().split(/\s+/);
         const category = partes[0];
         const reward = Number.parseInt(partes[1], 10);
         const title = partes.slice(2).join(' ');
         if (!category || !title || !Number.isFinite(reward)) {
-          return _notify(actorId, 'Uso: /contratocriar <categoria> <recompensa> <titulo>');
+          return _notify(actorId, 'Usage: /contractcreate <category> <reward> <title>');
         }
 
         const result = await create({ creatorCharacterId, title, category, reward, idempotencyKey: uuid() });
-        return _reply(actorId, result, r => `Contrato #${r.contractId} publicado. ${r.reward} septims travados no escrow.`);
+        return _reply(actorId, result, r => `Contract #${r.contractId} posted. ${r.reward} septims locked in escrow.`);
       }
     },
     {
@@ -688,12 +688,12 @@ function commandDefs() {
       usage: '/contractaccept <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoaceitar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractaccept <id>');
 
         const result = await accept({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} aceito.`);
+        return _reply(actorId, result, () => `Contract #${contractId} accepted.`);
       }
     },
     {
@@ -702,13 +702,13 @@ function commandDefs() {
       usage: '/contractdeliver <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoentregar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractdeliver <id>');
 
         const result = await deliver({ contractId, actorCharacterId, idempotencyKey: uuid() });
         return _reply(actorId, result, () =>
-          `Entrega do contrato #${contractId} declarada. O criador tem ${Math.round(REVIEW_WINDOW_MS / 3_600_000)}h para revisar antes do acerto automático.`
+          `Delivery of contract #${contractId} declared. The creator has ${Math.round(REVIEW_WINDOW_MS / 3_600_000)}h to review before automatic settlement.`
         );
       }
     },
@@ -718,12 +718,12 @@ function commandDefs() {
       usage: '/contractdispute <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratocontestar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractdispute <id>');
 
         const result = await dispute({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} contestado. A staff vai revisar — o escrow fica travado.`);
+        return _reply(actorId, result, () => `Contract #${contractId} disputed. Staff will review it — the escrow stays locked.`);
       }
     },
     {
@@ -732,12 +732,12 @@ function commandDefs() {
       usage: '/contractsettle <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoacertar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractsettle <id>');
 
         const result = await settle({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} acertado.`);
+        return _reply(actorId, result, () => `Contract #${contractId} settled.`);
       }
     },
     {
@@ -746,12 +746,12 @@ function commandDefs() {
       usage: '/contractcancel <id>',
       handler: async (actorId, args) => {
         const actorCharacterId = _characterIdFor(actorId);
-        if (!actorCharacterId) return _notify(actorId, 'Personagem não carregado.');
+        if (!actorCharacterId) return _notify(actorId, 'Character not loaded.');
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratocancelar <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractcancel <id>');
 
         const result = await cancel({ contractId, actorCharacterId, idempotencyKey: uuid() });
-        return _reply(actorId, result, () => `Contrato #${contractId} cancelado. Escrow devolvido.`);
+        return _reply(actorId, result, () => `Contract #${contractId} cancelled. Escrow refunded.`);
       }
     },
     {
@@ -760,7 +760,7 @@ function commandDefs() {
       usage: '/contracts',
       handler: async (actorId) => {
         const abertos = await listOpen();
-        if (abertos.length === 0) return _notify(actorId, 'Nenhum contrato aberto no momento.');
+        if (abertos.length === 0) return _notify(actorId, 'No open contracts right now.');
         const linhas = abertos
           .slice(0, 10)
           .map(c => `#${c.id} [${c.category}] ${c.title} — ${c.reward} septims`)
@@ -774,9 +774,9 @@ function commandDefs() {
       usage: '/contractinfo <id>',
       handler: async (actorId, args) => {
         const contractId = _parseContractId(args);
-        if (!contractId) return _notify(actorId, 'Uso: /contratoinfo <id>');
+        if (!contractId) return _notify(actorId, 'Usage: /contractinfo <id>');
         const contrato = await getContract(contractId);
-        if (!contrato) return _notify(actorId, 'Contrato não encontrado.');
+        if (!contrato) return _notify(actorId, 'Contract not found.');
         return _notify(
           actorId,
           `#${contrato.id} [${contrato.category}] ${contrato.title} — ${contrato.reward} septims — status: ${contrato.status}`
@@ -787,10 +787,10 @@ function commandDefs() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Varredura periódica — expiração e acerto automático. Sem isto, `sweepExpired`
-// e `sweepReviewed` são funções que ninguém chama: um contrato vencido ficaria
-// travado até algum código externo lembrar de rodar a varredura à mão. Mesmo
-// padrão de `market-stalls-service._expirationTimer`.
+// Periodic sweep — expiry and automatic settlement. Without this, `sweepExpired`
+// and `sweepReviewed` are functions nobody calls: an expired contract would stay
+// locked until some external code remembered to run the sweep by hand. Same
+// pattern as `market-stalls-service._expirationTimer`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -805,7 +805,7 @@ async function _sweepTick() {
       console.log(`[contracts] Varredura: ${expirados.processed.length} expirados, ${acertados.processed.length} acertados automaticamente.`);
     }
   } catch (err) {
-    console.error('[contracts] Falha na varredura periódica:', err.message);
+    console.error('[contracts] Periodic sweep failed:', err.message);
   }
 }
 
@@ -827,6 +827,6 @@ module.exports = {
   listOpen, getContract, history,
   STATUS, CATEGORIES, EXPIRABLE, REVIEW_WINDOW_MS,
   commandDefs, initContractsService, shutdownContractsService,
-  // Exposto só para teste.
+  // Exposed only for tests.
   SWEEP_INTERVAL_MS
 };

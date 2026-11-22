@@ -1,71 +1,71 @@
 /**
  * core/profession-registry.js
  *
- * O catálogo de profissões, e nada além dele.
+ * The profession catalog, and nothing else.
  *
- * ─── O que este arquivo NÃO é ───────────────────────────────────────────────
+ * ─── What this file is NOT ──────────────────────────────────────────────────
  *
- * Não fala com o banco, não conhece `characterId`, não sabe o que é um grant.
- * Isso é `profession-service.js`. Este arquivo responde uma pergunta só: "que
- * profissões existem, e em que estado está cada uma?" — do mesmo jeito que
- * `core/module-registry.js` responde "que módulos existem?" sem saber o que
- * cada módulo faz por dentro.
+ * It does not talk to the database, does not know `characterId`, does not know what a grant is.
+ * That is `profession-service.js`. This file answers a single question: "which
+ * professions exist, and what state is each one in?" — the same way that
+ * `core/module-registry.js` answers "which modules exist?" without knowing what
+ * each module does internally.
  *
  * ─── `registered` × `enabled` × `gameplayImplemented` ───────────────────────
  *
- * Três flags porque são três perguntas diferentes, e confundi-las é o que a
- * Fase 0 pediu para evitar (§4 do briefing de profissões):
+ * Three flags because they are three different questions, and mixing them up is what
+ * Phase 0 asked to avoid (§4 of the professions briefing):
  *
- *   - `registered`           — a profissão está no catálogo. Sempre `true` para
- *                               quem `get()`/`list()` devolve; a distinção existe
- *                               só para `isRegistered()` sobre um código que
- *                               ninguém registrou.
- *   - `enabled`               — a profissão pode ser concedida HOJE. É o
- *                               interruptor administrativo: uma profissão
- *                               desativada aqui nega `grantProfession` mesmo que
- *                               esteja no catálogo.
- *   - `gameplayImplemented`   — existe sistema automatizado por trás (nó de
- *                               recurso, receita, contrato). Minerador possui
- *                               o primeiro loop, ainda atrás de feature flag.
- *                               `miner` não significa que existe mineração —
- *                               significa que um staff já pode designar alguém
- *                               como minerador para fins de RP e progressão,
- *                               antes de qualquer ResourceNode existir.
+ *   - `registered`           — the profession is in the catalog. Always `true` for
+ *                               whatever `get()`/`list()` returns; the distinction exists
+ *                               only for `isRegistered()` on a code that
+ *                               nobody registered.
+ *   - `enabled`               — the profession can be granted TODAY. It is the
+ *                               administrative switch: a profession
+ *                               disabled here refuses `grantProfession` even if
+ *                               it is in the catalog.
+ *   - `gameplayImplemented`   — there is an automated system behind it (resource
+ *                               node, recipe, contract). Miner has
+ *                               the first loop, still behind a feature flag.
+ *                               `miner` does not mean mining exists —
+ *                               it means staff can already designate someone
+ *                               as a miner for RP and progression purposes,
+ *                               before any ResourceNode exists.
  *
- * `grantProfession` (em `profession-service.js`) checa `enabled`, nunca
- * `gameplayImplemented`. Exigir gameplay implementado para conceder a profissão
- * inverteria a ordem natural do RP: a guilda aceita o aprendiz antes de existir
- * automação nenhuma para o trabalho dele.
+ * `grantProfession` (in `profession-service.js`) checks `enabled`, never
+ * `gameplayImplemented`. Requiring implemented gameplay to grant the profession
+ * would invert the natural order of RP: the guild takes on the apprentice before any
+ * automation exists for their work.
  *
- * ─── Por que isto é um registry e não uma constante exportada ───────────────
+ * ─── Why this is a registry and not an exported constant ───────────────────
  *
- * Duas razões, e a primeira é a que importa agora: `_reset()` +
- * `registerBuiltins()` dá aos testes o mesmo isolamento que
- * `core/module-registry.js` já tem. A segunda é o objetivo declarado da §33 do
- * briefing — permitir profissão nova sem tocar o núcleo — que só existe se
- * houver um `register()` para ela entrar, em vez de um array que cada consumidor
- * precisaria re-exportar e concatenar.
+ * Two reasons, and the first is the one that matters now: `_reset()` +
+ * `registerBuiltins()` gives tests the same isolation that
+ * `core/module-registry.js` already has. The second is the stated goal of §33 of the
+ * briefing — allowing a new profession without touching the core — which only exists if
+ * there is a `register()` for it to come in through, instead of an array every consumer
+ * would need to re-export and concatenate.
  */
 
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Forma do código
+// Code shape
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Minúsculo, com `_` entre palavras — a mesma forma de `module-registry` ids. */
+/** Lowercase, with `_` between words — the same shape as `module-registry` ids. */
 const CODE_SHAPE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 /**
- * Categorias conhecidas. Fechada pelo mesmo motivo que `core/audit-event.js`
- * fecha `CATEGORIES`: categoria livre vira, em seis meses, quatro grafias para a
- * mesma coisa.
+ * Known categories. Closed for the same reason `core/audit-event.js`
+ * closes `CATEGORIES`: a free-form category becomes, in six months, four spellings of the
+ * same thing.
  */
 const CATEGORIES = Object.freeze({
-  gathering: 'Extrai recurso bruto do mundo (minério, madeira, caça, colheita).',
-  crafting: 'Transforma recurso bruto em produto (fundição, forja, curtume, cozinha, encantamento).',
-  service: 'Presta serviço a outro jogador ou à cidade (tratador de cavalos, taberneiro, mensageiro).',
-  institutional: 'Cargo ligado a uma instituição do mundo, não a uma cadeia econômica.'
+  gathering: 'Gathers raw resources from the world (ore, wood, game, crops).',
+  crafting: 'Turns raw resources into goods (smelting, smithing, tanning, cooking, enchanting).',
+  service: 'Provides a service to other players or the city (stablehand, innkeeper, courier).',
+  institutional: 'A post tied to an institution of the world, not to an economic chain.'
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,20 +86,20 @@ const CATEGORIES = Object.freeze({
 const _professions = new Map();
 
 /**
- * Registra uma profissão no catálogo.
+ * Registers a profession in the catalog.
  *
  * @param {object} descriptor
- * @param {string} descriptor.code                 identificador estável, ex: `'miner'`
- * @param {string} descriptor.label                nome exibido, ex: `'Minerador'`
- * @param {string} descriptor.category             uma chave de `CATEGORIES`
+ * @param {string} descriptor.code                 stable identifier, e.g. `'miner'`
+ * @param {string} descriptor.label                display name, e.g. `'Miner'`
+ * @param {string} descriptor.category             a key of `CATEGORIES`
  * @param {string} [descriptor.description]
- * @param {boolean} [descriptor.enabled]            padrão `true`
- * @param {boolean} [descriptor.gameplayImplemented] padrão `false`
+ * @param {boolean} [descriptor.enabled]            default `true`
+ * @param {boolean} [descriptor.gameplayImplemented] default `false`
  */
 function register(descriptor) {
   const erro = (msg) => { throw new Error(`[profession-registry] ${msg}`); };
 
-  if (!descriptor || typeof descriptor !== 'object') erro('descritor ausente');
+  if (!descriptor || typeof descriptor !== 'object') erro('missing descriptor');
   const {
     code, label, category,
     description = '',
@@ -108,13 +108,13 @@ function register(descriptor) {
   } = descriptor;
 
   if (!CODE_SHAPE.test(String(code))) {
-    erro(`code inválido '${code}': esperado minúsculo, '_' entre palavras (ex: 'stablehand')`);
+    erro(`invalid code '${code}': expected lowercase, '_' between words (e.g. 'stablehand')`);
   }
-  if (!label || typeof label !== 'string') erro(`profissão '${code}' sem label`);
+  if (!label || typeof label !== 'string') erro(`profession '${code}' has no label`);
   if (!CATEGORIES[category]) {
-    erro(`profissão '${code}' com categoria '${category}' fora do catálogo. Conhecidas: ${Object.keys(CATEGORIES).join(', ')}.`);
+    erro(`profession '${code}' has category '${category}', which is not in the catalog. Known: ${Object.keys(CATEGORIES).join(', ')}.`);
   }
-  if (_professions.has(code)) erro(`profissão '${code}' registrada duas vezes`);
+  if (_professions.has(code)) erro(`profession '${code}' registered twice`);
 
   _professions.set(code, Object.freeze({
     code, label, category, description,
@@ -128,7 +128,7 @@ function get(code) {
   return _professions.get(code) || null;
 }
 
-/** Todas as profissões registradas, em ordem estável (a de registro). */
+/** Every registered profession, in a stable order (registration order). */
 function list() {
   return [..._professions.values()];
 }
@@ -151,9 +151,9 @@ function isGameplayImplemented(code) {
 }
 
 /**
- * A checagem que `grantProfession` faz antes de qualquer coisa. Devolve motivo
- * nomeado — nunca um booleano só — pelo mesmo argumento de `core/permissions.js
- * .decide`: um `false` mudo obriga quem chama a adivinhar a causa.
+ * The check `grantProfession` runs before anything else. It returns a named
+ * reason — never a bare boolean — for the same reason as `core/permissions.js
+ * .decide`: a silent `false` forces the caller to guess the cause.
  *
  * @param {unknown} code
  * @returns {{ok:true, profession: object}|{ok:false, reason:'unknown_profession'|'profession_disabled'}}
@@ -165,51 +165,51 @@ function validate(code) {
   return { ok: true, profession: p };
 }
 
-/** Só para teste: devolve o registry ao estado vazio. */
+/** Test only: resets the registry to empty. */
 function _reset() {
   _professions.clear();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Catálogo inicial (§4 do briefing de profissões)
+// Initial catalog (§4 of the professions briefing)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * As treze profissões planejadas. O Minerador é o primeiro gameplay concreto,
- * sobre o Resource Node Framework; os demais permanecem apenas no catálogo.
+ * The thirteen planned professions. Miner is the first concrete gameplay,
+ * on top of the Resource Node Framework; the rest remain catalog-only.
  *
- * `guard` merece a nota que a §11 do briefing pediu: isto é uma ETIQUETA de
- * ocupação/RP, não a autoridade da guarda. Quem decide o que um guarda IC pode
- * fazer — revistar, prender, multar — continua sendo `governance-service.js`
- * (facções e cargos), e este catálogo não concede nenhum desses poderes. Um
- * personagem pode ter `profession = 'guard'` sem cargo nenhum em `governance`, e
- * vice-versa; as duas coisas não se falam nesta fase, de propósito. Ver
+ * `guard` deserves the note §11 of the briefing asked for: this is an occupation/RP
+ * LABEL, not the guard's authority. What an IC guard may
+ * do — search, arrest, fine — is still decided by `governance-service.js`
+ * (factions and posts), and this catalog grants none of those powers. A
+ * character can have `profession = 'guard'` with no post at all in `governance`, and
+ * vice versa; the two do not talk to each other in this phase, on purpose. See
  * `docs/gameplay/PROFESSION_FRAMEWORK.md` §"Guard × governance".
  *
  * @type {ReadonlyArray<{code:string,label:string,category:string,description?:string,gameplayImplemented?:boolean}>}
  */
 const BUILTIN_PROFESSIONS = Object.freeze([
-  { code: 'miner', label: 'Minerador', category: 'gathering', gameplayImplemented: true },
-  { code: 'lumberjack', label: 'Lenhador', category: 'gathering' },
-  { code: 'hunter', label: 'Caçador', category: 'gathering' },
-  { code: 'farmer', label: 'Fazendeiro', category: 'gathering' },
-  { code: 'smelter', label: 'Fundidor', category: 'crafting' },
-  { code: 'blacksmith', label: 'Ferreiro', category: 'crafting' },
-  { code: 'tanner', label: 'Curtidor', category: 'crafting' },
-  { code: 'enchanter', label: 'Encantador', category: 'crafting' },
-  { code: 'cook', label: 'Cozinheiro', category: 'crafting' },
-  { code: 'stablehand', label: 'Tratador de Cavalos', category: 'service' },
-  { code: 'innkeeper', label: 'Taberneiro', category: 'service' },
-  { code: 'courier', label: 'Mensageiro', category: 'service' },
+  { code: 'miner', label: 'Miner', category: 'gathering', gameplayImplemented: true },
+  { code: 'lumberjack', label: 'Lumberjack', category: 'gathering' },
+  { code: 'hunter', label: 'Hunter', category: 'gathering' },
+  { code: 'farmer', label: 'Farmer', category: 'gathering' },
+  { code: 'smelter', label: 'Smelter', category: 'crafting' },
+  { code: 'blacksmith', label: 'Blacksmith', category: 'crafting' },
+  { code: 'tanner', label: 'Tanner', category: 'crafting' },
+  { code: 'enchanter', label: 'Enchanter', category: 'crafting' },
+  { code: 'cook', label: 'Cook', category: 'crafting' },
+  { code: 'stablehand', label: 'Stablehand', category: 'service' },
+  { code: 'innkeeper', label: 'Innkeeper', category: 'service' },
+  { code: 'courier', label: 'Courier', category: 'service' },
   {
     code: 'guard',
-    label: 'Guarda',
+    label: 'Guard',
     category: 'institutional',
-    description: 'Ocupação/RP. NÃO é a autoridade da guarda — essa é governance-service.js.'
+    description: 'Occupation/RP. NOT the guard authority — that lives in governance-service.js.'
   }
 ]);
 
-/** Registra as treze, pulando quem já estiver lá (idempotente, para reload/teste). */
+/** Registers all thirteen, skipping any already present (idempotent, for reload/tests). */
 function registerBuiltins() {
   for (const p of BUILTIN_PROFESSIONS) {
     if (!_professions.has(p.code)) {

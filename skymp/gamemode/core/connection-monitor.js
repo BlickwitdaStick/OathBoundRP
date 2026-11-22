@@ -1,8 +1,8 @@
 /**
- * Monitora o ciclo de conexao que a API atual do SkyMP expoe somente por
- * polling. A verificacao de whitelist e assincrona, portanto cada conexao tem
- * uma sessao propria: uma resposta antiga jamais pode limpar uma reconexao no
- * mesmo userId.
+ * Monitors the connection lifecycle, which the current SkyMP API only exposes through
+ * polling. The whitelist check is asynchronous, so each connection has
+ * its own session: an old response must never clean up a reconnection on the
+ * same userId.
  */
 
 const DEFAULT_MAX_USER_ID = 10;
@@ -44,16 +44,16 @@ function createConnectionMonitor({
 }) {
   if (!mp || typeof mp.isConnected !== 'function' || typeof mp.getUserActor !== 'function' ||
     typeof mp.getActorsByProfileId !== 'function' || typeof mp.kick !== 'function') {
-    throw new Error('[connection-monitor] mp invalido');
+    throw new Error('[connection-monitor] invalid mp');
   }
   if (!whitelist || typeof whitelist.checkWhitelist !== 'function') {
-    throw new Error('[connection-monitor] whitelist invalida');
+    throw new Error('[connection-monitor] invalid whitelist');
   }
   if (!commands || typeof commands.removeActiveCharacter !== 'function') {
-    throw new Error('[connection-monitor] commands invalido');
+    throw new Error('[connection-monitor] invalid commands');
   }
   if (!playerPanel || typeof playerPanel.cleanup !== 'function') {
-    throw new Error('[connection-monitor] playerPanel invalido');
+    throw new Error('[connection-monitor] invalid playerPanel');
   }
 
   const userLimit = positiveIntegerOr(maxUserId, DEFAULT_MAX_USER_ID);
@@ -117,8 +117,8 @@ function createConnectionMonitor({
           return;
         }
         logger.log(`[phase0] User ${userId} was rejected by database check.`);
-        // checkWhitelist ja solicita o kick nas recusas conhecidas. Aqui so
-        // garantimos a limpeza local sem disparar uma segunda acao de rede.
+        // checkWhitelist already requests the kick on known refusals. Here we only
+        // guarantee the local cleanup without firing a second network action.
         reject(userId, session, 'rejected', false);
       })
       .catch(err => {
@@ -135,8 +135,8 @@ function createConnectionMonitor({
     try {
       const actorId = mp.getUserActor(userId);
       if (!actorId) {
-        // A engine pode anunciar a conexao antes de publicar o ator. Nao marcar
-        // como concluido permite a proxima passada verificar o mesmo jogador.
+        // The engine may announce the connection before publishing the actor. Not marking
+        // it as done lets the next pass check the same player.
         return;
       }
       session.actorId = actorId;
@@ -183,8 +183,8 @@ function createConnectionMonitor({
         }
 
         if (session) {
-          // Remover antes da limpeza invalida qualquer promise de whitelist ainda
-          // em voo. Se o userId for reutilizado, ela nao alcanca a nova sessao.
+          // Removing it before the cleanup invalidates any whitelist promise still
+          // in flight. If the userId is reused, it does not reach the new session.
           sessions.delete(userId);
           metrics.disconnections++;
           logger.log(`[phase0] Disconnection detected! User ID: ${userId}`);

@@ -16,10 +16,10 @@ const SECRET_KEY_PATTERN = /ticket|token|session|authorization|masterkey|secret|
 
 function generate(kind, randomBytes = crypto.randomBytes) {
   const spec = KINDS[kind];
-  if (!spec) throw new TypeError(`credential kind desconhecido: ${kind}`);
+  if (!spec) throw new TypeError(`unknown credential kind: ${kind}`);
   const entropy = randomBytes(RANDOM_BYTES);
   if (!Buffer.isBuffer(entropy) || entropy.length !== RANDOM_BYTES) {
-    throw new Error(`random source deve devolver ${RANDOM_BYTES} bytes`);
+    throw new Error(`random source must return ${RANDOM_BYTES} bytes`);
   }
   return `hrp_${spec.prefix}_v${VERSION}_${entropy.toString('base64url')}`;
 }
