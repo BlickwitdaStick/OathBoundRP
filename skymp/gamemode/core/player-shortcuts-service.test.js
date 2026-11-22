@@ -268,6 +268,52 @@ describe('player-shortcuts-service: snippet de cliente', () => {
     assert.deepStrictEqual(c.foco, [true, false]);
   });
 
+  // Regression (owner report, 21/11/2026): skills menu open, Enter opens chat
+  // on top, Enter sends — chat:close unfocused the browser while the skills
+  // menu was still on screen: no cursor, every key ignored by the game.
+  function paginaFalsa(abertos) {
+    const enviados = [];
+    const window = { skyrimPlatform: { sendMessage: (m) => enviados.push(m) } };
+    const document = {
+      getElementById: (id) => ({ classList: { contains: (c) => c === 'open' && abertos.includes(id) } })
+    };
+    const rodar = (js) => new Function('window', 'document', js)(window, document); // eslint-disable-line no-new-func
+    return { enviados, rodar };
+  }
+
+  for (const fechou of ['chat:close', 'panel:close', 'admin:close', 'skills:close']) {
+    it(`${fechou} with another panel still open takes the focus back (ui:refocus)`, () => {
+      const c = ctxFalso();
+      c.press(61); // F3 skills menu
+      c.handlers.browserMessage[0]({ arguments: [{ type: fechou, data: {} }] });
+      assert.deepStrictEqual(c.foco, [true, false]);
+      const check = c.executados[c.executados.length - 1];
+      const pagina = paginaFalsa(['skills-panel']);
+      pagina.rodar(check);
+      assert.deepStrictEqual(pagina.enviados, [{ type: 'ui:refocus', data: { panel: 'skills-panel' } }]);
+      c.handlers.browserMessage[0]({ arguments: pagina.enviados });
+      assert.deepStrictEqual(c.foco, [true, false, true], 'the open panel gets its cursor back');
+    });
+  }
+
+  it('closing the last panel leaves the focus with the game', () => {
+    const c = ctxFalso();
+    c.press(60);
+    c.handlers.browserMessage[0]({ arguments: [{ type: 'panel:close', data: {} }] });
+    const pagina = paginaFalsa([]);
+    pagina.rodar(c.executados[c.executados.length - 1]);
+    assert.deepStrictEqual(pagina.enviados, []);
+    assert.deepStrictEqual(c.foco, [true, false]);
+  });
+
+  it('every panel that takes focus is checked, and ui:refocus is claimed for the router', async () => {
+    for (const id of ['skills-panel', 'player-panel', 'admin-panel', 'chat-input-wrap']) {
+      assert.ok(shortcuts.FOCUS_PANEL_IDS.includes(id), id);
+    }
+    assert.strictEqual(await shortcuts.handleFocusUiEvent(ATOR_A, { type: 'ui:refocus', data: {} }), true);
+    assert.strictEqual(await shortcuts.handleFocusUiEvent(ATOR_A, { type: 'ui:other' }), false);
+  });
+
   it('F8 does nothing for non-staff (and before the server said who is staff)', () => {
     for (const opts of [{ staff: false }, {}, { semValor: true }]) {
       const c = ctxFalso(opts);

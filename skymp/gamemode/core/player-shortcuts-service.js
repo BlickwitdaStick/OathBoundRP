@@ -50,6 +50,36 @@ const SCAN_CODE_F2 = keybinds.defaultBindings()['panel.open'];
 const DEFAULT_BINDINGS = keybinds.defaultBindings();
 
 /**
+ * Every CEF element that, while it carries the `open` class, needs the mouse
+ * and keyboard. Panels share ONE browser focus: closing one of them (chat,
+ * F2, F8, F3) used to unfocus the browser even when another was still open —
+ * e.g. chat opened over the skills menu, Enter, and the skills menu stayed on
+ * screen with no cursor, the game ignoring every key. Now each close asks the
+ * page which of these are still open and takes focus back if one is.
+ */
+const FOCUS_PANEL_IDS = Object.freeze([
+  'skills-panel', 'player-panel', 'admin-panel', 'depot-panel',
+  'holdstone-panel', 'interaction-menu', 'chat-input-wrap'
+]);
+
+/** Message the page sends back when a panel is still open after a close. */
+const REFOCUS_MESSAGE = 'ui:refocus';
+
+/** Runs in the CEF page right after a close released focus. */
+const STILL_OPEN_CHECK = `(function () {
+  var ids = ${JSON.stringify(FOCUS_PANEL_IDS)};
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (el && el.classList && el.classList.contains('open')) {
+      if (window.skyrimPlatform && typeof window.skyrimPlatform.sendMessage === 'function') {
+        window.skyrimPlatform.sendMessage({ type: '${REFOCUS_MESSAGE}', data: { panel: ids[i] } });
+      }
+      return;
+    }
+  }
+})()`;
+
+/**
  * Runs on the client (SkyrimPlatform `updateOwner`, executed repeatedly).
  *  - When the property value changes (new `sentAt`), stores the bindings in
  *    `ctx.state` and mirrors them to the CEF (`window.handleKeybindsUpdate`)
@@ -77,10 +107,18 @@ const SNIPPET_DO_CLIENTE = `
 
     // Closing the panel hands the mouse/keyboard back to the game right here
     // on the client, without waiting for the server to flip browserFocused.
+    // Then the page is asked whether another panel is still open; if so it
+    // answers ui:refocus and focus comes back (see FOCUS_PANEL_IDS).
     ctx.sp.on('browserMessage', function (e) {
       var m = e && e.arguments && e.arguments[0];
-      if (m && typeof m === 'object' && (m.type === 'panel:close' || m.type === 'chat:close' || m.type === 'admin:close' || m.type === 'skills:close') && ctx.sp.browser && ctx.sp.browser.setFocused) {
-        ctx.sp.browser.setFocused(false);
+      if (!m || typeof m !== 'object' || !ctx.sp.browser) return;
+      var br = ctx.sp.browser;
+      if (m.type === 'panel:close' || m.type === 'chat:close' || m.type === 'admin:close' || m.type === 'skills:close') {
+        if (br.setFocused) br.setFocused(false);
+        if (br.executeJavaScript) br.executeJavaScript(${JSON.stringify(STILL_OPEN_CHECK)});
+      } else if (m.type === '${REFOCUS_MESSAGE}') {
+        if (br.setVisible) br.setVisible(true);
+        if (br.setFocused) br.setFocused(true);
       }
     });
 
@@ -333,9 +371,17 @@ async function handleChatUiEvent(_actorId, uiEvent) {
   return Boolean(uiEvent && (uiEvent.type === 'chat:open' || uiEvent.type === 'chat:close'));
 }
 
+/** `ui:refocus` is client-only too (the snippet above); claimed for the router. */
+async function handleFocusUiEvent(_actorId, uiEvent) {
+  return Boolean(uiEvent && uiEvent.type === REFOCUS_MESSAGE);
+}
+
 module.exports = {
   PROPERTY,
   handleChatUiEvent,
+  handleFocusUiEvent,
+  FOCUS_PANEL_IDS,
+  REFOCUS_MESSAGE,
   SNIPPET_DO_CLIENTE,
   SCAN_CODE_F2,
   KEYBOARD_DEVICE,

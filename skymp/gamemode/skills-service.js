@@ -120,6 +120,27 @@ const CLIENT_STORE = "((ctx.sp && ctx.sp.storage) ? ctx.sp.storage : (typeof glo
  * does not have the menu already (a newer launcher makes this a no-op).
  */
 const CEF_INJECTOR = `(function (ui) {
+  // A launcher built before the skills menu also has a keybinds.js without
+  // "Open skills menu", so the Controls tab had no row to rebind it (the key
+  // itself works: the server's bindings include it). Add the row.
+  var kb = window.OathboundKeybinds;
+  try {
+    if (kb && kb.ACTIONS && !kb.ACTIONS.some(function (a) { return a && a.id === 'skills.open'; })) {
+      kb.ACTIONS.push({ id: 'skills.open', label: 'Open skills menu', hint: 'Profession, skills, trees and attributes' });
+      if (kb.DEFAULT_BINDINGS && !Object.prototype.hasOwnProperty.call(kb.DEFAULT_BINDINGS, 'skills.open')) kb.DEFAULT_BINDINGS['skills.open'] = 61;
+    }
+  } catch (e) {}
+  // A launcher that already has the menu (0.2.0 to 0.2.4) ships a
+  // skills-panel.js that opens the menu by itself when data arrives, without
+  // focus: data now only reaches a menu the player has open.
+  if (window.SkillsPanel && !window.__obSkillsDataGuard && typeof window.handleSkillsPanelData === 'function') {
+    window.__obSkillsDataGuard = true;
+    var pageHandler = window.handleSkillsPanelData;
+    window.handleSkillsPanelData = function (data) {
+      if (window.SkillsPanel && typeof window.SkillsPanel.isOpen === 'function' && !window.SkillsPanel.isOpen()) return;
+      return pageHandler(data);
+    };
+  }
   if (window.SkillsPanel || !ui || !ui.js) return;
   var style = document.createElement('style');
   style.textContent = ui.css || '';
@@ -302,8 +323,14 @@ const REPORT_SNIPPET = `
 `;
 
 /** Forwards new panel data to the CEF menu (dedupe by sentAt). */
+// The property keeps its last value with the character, so at login the
+// client would see the last session's menu as "new" and open it without
+// focus (no cursor). The first run only records what is already there.
 const PANEL_UPDATE_OWNER_SNIPPET = `
-  ctx.state.skillsPanelSentAt = ctx.state.skillsPanelSentAt || null;
+  if (!ctx.state.skillsPanelSeen) {
+    ctx.state.skillsPanelSeen = true;
+    if (ctx.value) { ctx.state.skillsPanelSentAt = ctx.value.sentAt; return; }
+  }
   if (ctx.value && ctx.value.sentAt !== ctx.state.skillsPanelSentAt && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
     ctx.state.skillsPanelSentAt = ctx.value.sentAt;
     ctx.sp.browser.executeJavaScript('window.handleSkillsPanelData && window.handleSkillsPanelData(' + JSON.stringify(ctx.value) + ')');

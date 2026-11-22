@@ -341,3 +341,59 @@ test('Tab → Skills: the vanilla StatsMenu is closed and the F3 menu opens inst
   assert.match(s, /handlePlayerShortcutKey\("skills:open"\)/);
   assert.match(s, /> 3000/, 'gives up instead of looping');
 });
+
+// Regression (owner report, 21/11/2026): the skills menu ended up on screen
+// without a cursor, and its key had no row in the Controls tab.
+test('skills menu data: the value left from the last session does not open the menu at login', () => {
+  const calls = [];
+  const ctx = { state: {}, value: { sentAt: 1 }, sp: { browser: { executeJavaScript: (s) => calls.push(s) } } };
+  const run = () => new Function('ctx', service.PANEL_UPDATE_OWNER_SNIPPET)(ctx);
+  run();
+  assert.equal(calls.length, 0, 'stored value from before login is only recorded');
+  ctx.value = { sentAt: 2 };
+  run();
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /handleSkillsPanelData/);
+  run();
+  assert.equal(calls.length, 1, 'same sentAt is not delivered twice');
+});
+
+function fakeInjectorWindow({ withSkillsPanel, skillsOpen = false }) {
+  const received = [];
+  const window = {
+    OathboundKeybinds: {
+      ACTIONS: [{ id: 'panel.open' }, { id: 'admin.open' }],
+      DEFAULT_BINDINGS: { 'panel.open': 60, 'admin.open': 66 }
+    }
+  };
+  if (withSkillsPanel) {
+    window.SkillsPanel = { isOpen: () => skillsOpen };
+    window.handleSkillsPanelData = (d) => received.push(d);
+  }
+  const document = { head: { appendChild() {} }, body: { appendChild() {} }, getElementById: () => ({}), createElement: () => ({ setAttribute() {} }) };
+  const inject = new Function('window', 'document', `return ${service.CEF_INJECTOR}`)(window, document);
+  return { window, received, inject, setOpen: (v) => { skillsOpen = v; } };
+}
+
+test('injector: a launcher without the skills keybind gets the Controls row', () => {
+  const f = fakeInjectorWindow({ withSkillsPanel: true });
+  f.inject({ js: '', css: '' });
+  const ids = f.window.OathboundKeybinds.ACTIONS.map(a => a.id);
+  assert.deepEqual(ids, ['panel.open', 'admin.open', 'skills.open']);
+  assert.equal(f.window.OathboundKeybinds.DEFAULT_BINDINGS['skills.open'], 61);
+  f.inject({ js: '', css: '' });
+  assert.equal(f.window.OathboundKeybinds.ACTIONS.length, 3, 'never added twice');
+});
+
+test('injector: on a launcher that has the menu, data only reaches an open menu', () => {
+  const f = fakeInjectorWindow({ withSkillsPanel: true });
+  f.inject({ js: '', css: '' });
+  f.window.handleSkillsPanelData({ sentAt: 1 });
+  assert.equal(f.received.length, 0, 'closed menu is not reopened without focus');
+  f.setOpen(true);
+  f.window.handleSkillsPanelData({ sentAt: 2 });
+  assert.deepEqual(f.received, [{ sentAt: 2 }]);
+  f.inject({ js: '', css: '' });
+  f.window.handleSkillsPanelData({ sentAt: 3 });
+  assert.equal(f.received.length, 2, 'wrapped once');
+});

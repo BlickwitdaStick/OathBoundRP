@@ -254,20 +254,36 @@
     sendUiEvent('skills:close', {});
   }
 
+  // Server data only fills a menu the player opened (F3 / Tab → Skills), which
+  // also focused the browser. It used to open the menu itself, so the value
+  // re-delivered at login, or the answer to `skills:open` arriving after the
+  // player had already closed it, put the menu on screen with no cursor.
   window.handleSkillsPanelData = (data) => {
     state.data = typeof normalizePayload === 'function' ? normalizePayload(data) : data;
-    if (!state.open) {
-      state.open = true;
-      const panel = $('skills-panel');
-      if (panel) { panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false'); }
-    }
-    render();
+    if (state.open) render();
   };
 
   window.openSkillsPanel = openPanel;
 
+  /** Scan code of the "Open skills menu" keybind (F3 until the server says otherwise). */
+  function skillsKeyCode() {
+    const binds = typeof window.getKeybinds === 'function' ? window.getKeybinds() : null;
+    return binds && Object.prototype.hasOwnProperty.call(binds, 'skills.open') ? binds['skills.open'] : 61;
+  }
+
   window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && state.open) closePanel();
+    if (!state.open || event.defaultPrevented) return;
+    if (event.key === 'Escape') { closePanel(); return; }
+    // While the menu has focus the game ignores keys, so its own key closes it
+    // from here (same as F2 for the player panel). Not while typing.
+    const t = event.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const code = skillsKeyCode();
+    const KB = window.OathboundKeybinds;
+    if (KB && code !== null && code !== undefined && KB.scanCodeFromDomCode(event.code) === code) {
+      event.preventDefault();
+      closePanel();
+    }
   });
 
   window.SkillsPanel = { open: openPanel, close: closePanel, isOpen: () => state.open };

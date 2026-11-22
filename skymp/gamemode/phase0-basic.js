@@ -533,10 +533,12 @@ moduleRegistry.register({
     // Aba Controls do painel: keybinds:get / keybinds:set / keybinds:reset.
     uiEventRouter.register('keybinds', playerShortcutsService.handleUiEvent);
     uiEventRouter.register('chat', playerShortcutsService.handleChatUiEvent);
+    uiEventRouter.register('ui', playerShortcutsService.handleFocusUiEvent);
   },
   shutdown: async () => {
     uiEventRouter.unregister('keybinds');
     uiEventRouter.unregister('chat');
+    uiEventRouter.unregister('ui');
     playerShortcutsService.shutdownPlayerShortcutsService();
   }
 });
