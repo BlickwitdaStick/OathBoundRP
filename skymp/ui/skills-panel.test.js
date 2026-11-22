@@ -34,6 +34,7 @@ function fakeElement() {
 }
 
 function loadPanel({ binds = null } = {}) {
+  const clock = { now: 1000000 };
   const panel = fakeElement();
   const sent = [];
   const keyListeners = [];
@@ -49,14 +50,16 @@ function loadPanel({ binds = null } = {}) {
       createElement: () => fakeElement()
     },
     sendUiEvent: (type, data) => sent.push({ type, data }),
-    normalizePayload: (d) => d
+    normalizePayload: (d) => d,
+    Date: { now: () => clock.now }
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'skills-panel.js'), 'utf8'), context);
-  const key = (code, key = '') => {
-    const event = { code, key, target: null, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  const key = (code, key = '', { repeat = false } = {}) => {
+    const event = { code, key, repeat, target: null, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
     for (const fn of keyListeners) fn(event);
   };
-  return { window, panel, sent, key };
+  const later = () => { clock.now += 1000; };
+  return { window, panel, sent, key, clock, later };
 }
 
 const DATA = { sentAt: 1, profile: { chosen: false }, catalog: [] };
@@ -80,18 +83,37 @@ test('data fills the menu the player opened', () => {
 test('Esc and the menu\'s own key (F3, or the rebound one) close it and release focus', () => {
   const p = loadPanel();
   p.window.openSkillsPanel();
+  p.later();
   p.key('Escape', 'Escape');
   assert.equal(p.window.SkillsPanel.isOpen(), false);
   assert.equal(p.sent[p.sent.length - 1].type, 'skills:close');
 
   p.window.openSkillsPanel();
+  p.later();
   p.key('F3');
   assert.equal(p.window.SkillsPanel.isOpen(), false, 'F3 by default');
 
   const r = loadPanel({ binds: { 'skills.open': 37 } }); // K
   r.window.openSkillsPanel();
+  r.later();
   r.key('F3');
   assert.equal(r.window.SkillsPanel.isOpen(), true, 'F3 no longer closes once rebound');
   r.key('KeyK');
   assert.equal(r.window.SkillsPanel.isOpen(), false);
+});
+
+// Regression (owner report, 22/11/2026): "the skill menu is no longer
+// opening". The F3 press that opened it reached the page once focus moved and
+// closed it in the same instant.
+test('the key press that opened the menu does not close it again', () => {
+  const p = loadPanel();
+  p.window.openSkillsPanel();
+  p.key('F3');
+  p.key('Escape', 'Escape');
+  assert.equal(p.window.SkillsPanel.isOpen(), true, 'opening F3 / Tab-menu Esc ignored');
+  p.later();
+  p.key('F3', '', { repeat: true });
+  assert.equal(p.window.SkillsPanel.isOpen(), true, 'a held key does not close it');
+  p.key('F3');
+  assert.equal(p.window.SkillsPanel.isOpen(), false, 'a fresh press closes it');
 });

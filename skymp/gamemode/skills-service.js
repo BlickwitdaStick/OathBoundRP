@@ -141,6 +141,26 @@ const CEF_INJECTOR = `(function (ui) {
       return pageHandler(data);
     };
   }
+  // The menu in launcher 0.2.5 closes on its own key (F3) and on Esc, and the
+  // press that opened it (F3, or the Esc taps closing Skyrim's Tab menu) can
+  // reach the page right after focus moves, closing it at once. Swallow those
+  // for a moment after opening (its handler skips prevented events).
+  if (window.SkillsPanel && !window.__obSkillsKeyGuard && typeof window.openSkillsPanel === 'function') {
+    window.__obSkillsKeyGuard = true;
+    var openedAt = 0;
+    var pageOpen = window.openSkillsPanel;
+    window.openSkillsPanel = function () { openedAt = Date.now(); return pageOpen.apply(this, arguments); };
+    if (typeof window.SkillsPanel.open === 'function') {
+      var panelOpen = window.SkillsPanel.open;
+      window.SkillsPanel.open = function () { openedAt = Date.now(); return panelOpen.apply(this, arguments); };
+    }
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('keydown', function (event) {
+        if (!window.SkillsPanel || typeof window.SkillsPanel.isOpen !== 'function' || !window.SkillsPanel.isOpen()) return;
+        if (event.repeat || Date.now() - openedAt < 400) event.preventDefault();
+      }, true);
+    }
+  }
   if (window.SkillsPanel || !ui || !ui.js) return;
   var style = document.createElement('style');
   style.textContent = ui.css || '';
@@ -324,16 +344,15 @@ const REPORT_SNIPPET = `
 
 /** Forwards new panel data to the CEF menu (dedupe by sentAt). */
 // The property keeps its last value with the character, so at login the
-// client would see the last session's menu as "new" and open it without
-// focus (no cursor). The first run only records what is already there.
+// client sees the last session's menu as "new". It is only handed to a menu
+// the player has open (any launcher), so it can never open the menu without
+// focus. Every new value is delivered: dropping the first one seen (an
+// earlier attempt) also dropped the answer to the first F3 of a session, so
+// the menu never filled in.
 const PANEL_UPDATE_OWNER_SNIPPET = `
-  if (!ctx.state.skillsPanelSeen) {
-    ctx.state.skillsPanelSeen = true;
-    if (ctx.value) { ctx.state.skillsPanelSentAt = ctx.value.sentAt; return; }
-  }
   if (ctx.value && ctx.value.sentAt !== ctx.state.skillsPanelSentAt && ctx.sp && ctx.sp.browser && ctx.sp.browser.executeJavaScript) {
     ctx.state.skillsPanelSentAt = ctx.value.sentAt;
-    ctx.sp.browser.executeJavaScript('window.handleSkillsPanelData && window.handleSkillsPanelData(' + JSON.stringify(ctx.value) + ')');
+    ctx.sp.browser.executeJavaScript('window.SkillsPanel && typeof window.SkillsPanel.isOpen === "function" && window.SkillsPanel.isOpen() && window.handleSkillsPanelData && window.handleSkillsPanelData(' + JSON.stringify(ctx.value) + ')');
   }
 `;
 

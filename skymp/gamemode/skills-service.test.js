@@ -344,18 +344,32 @@ test('Tab → Skills: the vanilla StatsMenu is closed and the F3 menu opens inst
 
 // Regression (owner report, 21/11/2026): the skills menu ended up on screen
 // without a cursor, and its key had no row in the Controls tab.
-test('skills menu data: the value left from the last session does not open the menu at login', () => {
+test('skills menu data: every new value is delivered, but only into an open menu', () => {
+  // Regression (22/11/2026): the first value seen after login used to be
+  // dropped, and when that was the answer to the session's first F3 the menu
+  // never filled in.
   const calls = [];
   const ctx = { state: {}, value: { sentAt: 1 }, sp: { browser: { executeJavaScript: (s) => calls.push(s) } } };
   const run = () => new Function('ctx', service.PANEL_UPDATE_OWNER_SNIPPET)(ctx);
   run();
-  assert.equal(calls.length, 0, 'stored value from before login is only recorded');
-  ctx.value = { sentAt: 2 };
-  run();
-  assert.equal(calls.length, 1);
-  assert.match(calls[0], /handleSkillsPanelData/);
+  assert.equal(calls.length, 1, 'first value is delivered');
   run();
   assert.equal(calls.length, 1, 'same sentAt is not delivered twice');
+  ctx.value = { sentAt: 2 };
+  run();
+  assert.equal(calls.length, 2);
+
+  // In the page: a closed menu ignores it (never opens without focus), an open one fills in.
+  const got = [];
+  let open = false;
+  const page = { SkillsPanel: { isOpen: () => open }, handleSkillsPanelData: (d) => got.push(d) };
+  new Function('window', calls[1])(page);
+  assert.equal(got.length, 0, 'closed menu: not opened');
+  open = true;
+  new Function('window', calls[1])(page);
+  assert.deepEqual(got, [{ sentAt: 2 }]);
+  new Function('window', calls[1])({});
+  assert.ok(true, 'a page without the menu yet does not throw');
 });
 
 function fakeInjectorWindow({ withSkillsPanel, skillsOpen = false }) {
@@ -366,13 +380,21 @@ function fakeInjectorWindow({ withSkillsPanel, skillsOpen = false }) {
       DEFAULT_BINDINGS: { 'panel.open': 60, 'admin.open': 66 }
     }
   };
+  const keyListeners = [];
+  window.addEventListener = (type, fn, capture) => { if (type === 'keydown') keyListeners.push({ fn, capture }); };
   if (withSkillsPanel) {
-    window.SkillsPanel = { isOpen: () => skillsOpen };
+    window.SkillsPanel = { isOpen: () => skillsOpen, open: () => { skillsOpen = true; } };
     window.handleSkillsPanelData = (d) => received.push(d);
+    window.openSkillsPanel = () => { skillsOpen = true; };
   }
   const document = { head: { appendChild() {} }, body: { appendChild() {} }, getElementById: () => ({}), createElement: () => ({ setAttribute() {} }) };
   const inject = new Function('window', 'document', `return ${service.CEF_INJECTOR}`)(window, document);
-  return { window, received, inject, setOpen: (v) => { skillsOpen = v; } };
+  const key = (repeat = false) => {
+    const event = { repeat, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const l of keyListeners) l.fn(event);
+    return event;
+  };
+  return { window, received, inject, key, keyListeners, setOpen: (v) => { skillsOpen = v; } };
 }
 
 test('injector: a launcher without the skills keybind gets the Controls row', () => {
@@ -396,4 +418,21 @@ test('injector: on a launcher that has the menu, data only reaches an open menu'
   f.inject({ js: '', css: '' });
   f.window.handleSkillsPanelData({ sentAt: 3 });
   assert.equal(f.received.length, 2, 'wrapped once');
+});
+
+test('injector: on a launcher that has the menu, the opening key press cannot close it', () => {
+  const f = fakeInjectorWindow({ withSkillsPanel: true });
+  f.inject({ js: '', css: '' });
+  f.inject({ js: '', css: '' });
+  assert.equal(f.keyListeners.length, 1, 'installed once');
+  assert.equal(f.keyListeners[0].capture, true, 'runs before the page handler');
+  assert.equal(f.key().defaultPrevented, false, 'closed menu: keys untouched');
+  f.window.openSkillsPanel();
+  assert.equal(f.key().defaultPrevented, true, 'right after opening: swallowed');
+  const realNow = Date.now;
+  try {
+    Date.now = () => realNow() + 1000;
+    assert.equal(f.key().defaultPrevented, false, 'later presses close it as usual');
+    assert.equal(f.key(true).defaultPrevented, true, 'held-key repeats never close it');
+  } finally { Date.now = realNow; }
 });

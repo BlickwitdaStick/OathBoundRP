@@ -232,8 +232,14 @@
     panel.appendChild(shell);
   }
 
+  // The key press that opened the menu (F3, or the Esc taps that close
+  // Skyrim's Tab menu) can reach the page right after focus moves; it must
+  // not close the menu again. Same idea as CHAT_OPEN_GUARD_MS in index.html.
+  const OPEN_KEY_GUARD_MS = 400;
+
   function openPanel() {
     state.open = true;
+    state.openedAt = Date.now();
     const panel = $('skills-panel');
     if (panel) {
       panel.classList.add('open');
@@ -273,6 +279,7 @@
 
   window.addEventListener('keydown', (event) => {
     if (!state.open || event.defaultPrevented) return;
+    if (event.repeat || Date.now() - (state.openedAt || 0) < OPEN_KEY_GUARD_MS) return;
     if (event.key === 'Escape') { closePanel(); return; }
     // While the menu has focus the game ignores keys, so its own key closes it
     // from here (same as F2 for the player panel). Not while typing.
