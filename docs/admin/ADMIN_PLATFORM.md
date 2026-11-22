@@ -1,262 +1,262 @@
 # SkyMP Heavy RP — Control Panel
 
-**Status:** desenho aceito, implementação não iniciada
-**Evidência:** [`ADMIN_PLATFORM_AUDIT.md`](../research/ADMIN_PLATFORM_AUDIT.md)
-**Permissões:** [`RBAC.md`](RBAC.md) · **Moderação:** [`MODERATION_WORKFLOW.md`](MODERATION_WORKFLOW.md)
-**Relação com `docs/skyadmin/`:** aquele diretório é o plano anterior e continua
-válido como intenção. Este documento é o recorte que a auditoria confirmou ser
-construível, e onde os dois divergirem, este ganha (ver auditoria §7).
+**Status:** design accepted, implementation not started
+**Evidence:** [`ADMIN_PLATFORM_AUDIT.md`](../research/ADMIN_PLATFORM_AUDIT.md)
+**Permissions:** [`RBAC.md`](RBAC.md) · **Moderation:** [`MODERATION_WORKFLOW.md`](MODERATION_WORKFLOW.md)
+**Relationship to `docs/skyadmin/`:** that directory is the previous plan and remains
+valid as intent. This document is the slice that the audit confirmed to be
+buildable, and where the two diverge, this one wins (see audit §7).
 
 ---
 
-## 1. O que estamos construindo, e o que não
+## 1. What we are building, and what we are not
 
-O alvo é o equivalente conceitual de um **txAdmin + painel de staff Heavy RP**,
-nativo desta arquitetura. Não é um port: metade do que o txAdmin faz depende de
-um console de servidor que o SkyMP não tem.
+The target is the conceptual equivalent of a **txAdmin + Heavy RP staff panel**,
+native to this architecture. It is not a port: half of what txAdmin does depends on
+a server console that SkyMP does not have.
 
-**Não é:**
+**It is not:**
 
-- um cliente de SQL com interface bonita — nenhuma tela edita tabela direto;
-- um terminal remoto — nenhuma rota executa shell;
-- um segundo produto — evolui dentro de `apps/web`, decisão SA-001 do skyadmin.
+- an SQL client with a pretty interface — no screen edits a table directly;
+- a remote terminal — no route executes a shell;
+- a second product — it evolves inside `apps/web`, skyadmin decision SA-001.
 
 ---
 
-## 2. Módulos e o que os destrava
+## 2. Modules and what unlocks them
 
-Ordem da barra lateral. A coluna **Bloqueio** é a única que importa para
-planejar: ela diz o que precisa existir antes.
+Sidebar order. The **Blocker** column is the only one that matters for
+planning: it says what needs to exist first.
 
-| Módulo | Conteúdo | Bloqueio |
+| Module | Content | Blocker |
 |---|---|---|
-| **Dashboard** | contadores, fila de whitelist, últimas ações, saúde dos serviços | — parcialmente pronto |
-| **Players** | contas, perfil, histórico de sessões, moderação | RBAC |
-| **Characters** | ficha, inventário, patrimônio, notas, aposentadoria | RBAC |
-| **Moderation** | casos, warns, bans, apelações | RBAC + tabelas de caso e ban |
-| **Whitelist** | fila com 5 estados, parecer, revisor | RBAC (o resto existe) |
-| **Staff** | equipe, cargos, permissões, concessão temporária | RBAC |
-| **Economy** | razão, busca de transação, ajuste, congelamento | RBAC |
-| **Factions** | facções, membros, tesouro | RBAC |
-| **Properties** | propriedades e hóspedes | RBAC |
-| **World** | censo de fauna, sonda de cadáver, zonas seguras | RBAC + **ponte de jogo** |
-| **Server** | manutenção, anúncio, capacidade, fila | RBAC + **ponte de jogo** |
-| **Modules** | estado dos módulos do registry | RBAC + **ponte de jogo** |
-| **Logs** | auditoria com filtro; aba de segurança separada | RBAC + `audit_logs` v2 |
-| **Developer** | health, versões, manifesto, drift de schema, crash reports | RBAC |
+| **Dashboard** | counters, whitelist queue, latest actions, service health | — partially ready |
+| **Players** | accounts, profile, session history, moderation | RBAC |
+| **Characters** | sheet, inventory, assets, notes, retirement | RBAC |
+| **Moderation** | cases, warns, bans, appeals | RBAC + case and ban tables |
+| **Whitelist** | queue with 5 states, assessment, reviewer | RBAC (the rest exists) |
+| **Staff** | team, roles, permissions, temporary grants | RBAC |
+| **Economy** | ledger, transaction search, adjustment, freeze | RBAC |
+| **Factions** | factions, members, treasury | RBAC |
+| **Properties** | properties and guests | RBAC |
+| **World** | fauna census, corpse probe, safe zones | RBAC + **game bridge** |
+| **Server** | maintenance, announcement, capacity, queue | RBAC + **game bridge** |
+| **Modules** | state of the registry modules | RBAC + **game bridge** |
+| **Logs** | filtered audit; separate security tab | RBAC + `audit_logs` v2 |
+| **Developer** | health, versions, manifest, schema drift, crash reports | RBAC |
 
-Três módulos — World, Server, Modules — dependem de uma peça que **não existe**:
-um canal entre o painel e o processo do servidor de jogo. Ver §5.
+Three modules — World, Server, Modules — depend on a piece that **does not exist**:
+a channel between the panel and the game server process. See §5.
 
 ---
 
-## 3. Fases
+## 3. Phases
 
-Cada fase é entregável sozinha. Nenhuma depende de sessão em jogo, exceto a 4.
+Each phase can be delivered on its own. None depends on an in-game session, except phase 4.
 
-| Fase | Entrega | Fecha |
+| Phase | Deliverable | Closes |
 |---|---|---|
-| **1 — Fundação** | migration de RBAC, `requirePermission` em todas as rotas, auditoria de negação, sessão em MariaDB, CSRF, helmet/CSP | achados 4.1, 4.3, 4.5, 4.6, 4.9, 4.10 |
-| **2 — Operação de leitura** | Players, Characters, Whitelist com 5 estados, Logs com filtro, Staff | dá à staff um painel utilizável sem nenhuma ação de risco |
-| **3 — Moderação persistente** | casos, warns, ban com motivo/prazo/revogação de sessão, Economy admin, Inventory admin | achados 4.2, 4.4, 4.7 |
-| **4 — Ponte de jogo** | sessões ao vivo, kick pelo painel, anúncio, manutenção | achado 4.8 — exige protocolo novo **e** uma sessão real |
-| **5 — Adiado** | World tools, Reports, Modules toggle | depende da 4 e de demanda observada |
+| **1 — Foundation** | RBAC migration, `requirePermission` on every route, denial auditing, MariaDB session, CSRF, helmet/CSP | findings 4.1, 4.3, 4.5, 4.6, 4.9, 4.10 |
+| **2 — Read operations** | Players, Characters, Whitelist with 5 states, filtered Logs, Staff | gives staff a usable panel without any risky action |
+| **3 — Persistent moderation** | cases, warns, ban with reason/duration/session revocation, Economy admin, Inventory admin | findings 4.2, 4.4, 4.7 |
+| **4 — Game bridge** | live sessions, kick from the panel, announcement, maintenance | finding 4.8 — requires a new protocol **and** a real session |
+| **5 — Deferred** | World tools, Reports, Modules toggle | depends on 4 and on observed demand |
 
-A fase 1 não entrega tela nova. É deliberado: hoje qualquer pessoa em
-`staff_roles` lê a ficha criminal e o Discord ID de todo mundo, e construir tela
-antes de fechar isso aumenta a superfície do problema.
+Phase 1 delivers no new screen. This is deliberate: today anyone in
+`staff_roles` can read everyone's criminal record and Discord ID, and building screens
+before closing that increases the surface of the problem.
 
 ---
 
-## 4. Fluxo de uma ação
+## 4. Flow of an action
 
 ```
-Navegador
+Browser
   └─► Admin API (apps/web)
-        ├─ 1. sessão            → 401 se ausente
-        ├─ 2. RBAC              → 403 se faltar permissão  → AUDITA a negação
-        ├─ 3. validação         → 400; rejeita campo desconhecido
-        ├─ 4. idempotência      → repetição devolve o mesmo resultado
-        └─► Service (transação única)
-              ├─ muta o domínio
-              ├─ grava audit_logs (antes/depois, permissão, request_id)
-              └─ enfileira efeito externo, quando houver
-                    └─► Servidor de jogo, via canal autenticado   [FASE 4]
+        ├─ 1. session           → 401 if absent
+        ├─ 2. RBAC              → 403 if permission missing  → AUDITS the denial
+        ├─ 3. validation        → 400; rejects unknown fields
+        ├─ 4. idempotency       → a repeat returns the same result
+        └─► Service (single transaction)
+              ├─ mutates the domain
+              ├─ writes audit_logs (before/after, permission, request_id)
+              └─ enqueues the external effect, when there is one
+                    └─► Game server, via authenticated channel   [PHASE 4]
 ```
 
-Regras que atravessam todas as fases:
+Rules that cut across every phase:
 
-1. **A UI nunca fala com o banco.** Nem para leitura.
-2. **Mutação de domínio e linha de auditoria são a mesma transação.** Auditoria
-   que pode falhar sozinha não é auditoria.
-3. **Dinheiro e item passam pelos serviços que já existem** — `transaction-service`
-   e nada mais. O painel é só mais um chamador.
-4. **Toda ação 🟡/🔴 exige `reason` não vazio**, validado no servidor.
-5. **Chave de idempotência por tentativa do usuário.** Duplo clique não gera dois
-   bans, e nenhum `retry` de rede gera dois ajustes de ouro.
+1. **The UI never talks to the database.** Not even for reads.
+2. **The domain mutation and the audit row are the same transaction.** An audit
+   that can fail on its own is not an audit.
+3. **Money and items go through the services that already exist** — `transaction-service`
+   and nothing else. The panel is just another caller.
+4. **Every 🟡/🔴 action requires a non-empty `reason`**, validated on the server.
+5. **One idempotency key per user attempt.** A double click does not create two
+   bans, and no network `retry` creates two gold adjustments.
 
 ---
 
-## 5. Ações em jogador conectado — o teto real
+## 5. Actions on a connected player — the real ceiling
 
-A auditoria §4.8 mediu o que a API `mp` oferece. O resumo que decide o escopo:
+Audit §4.8 measured what the `mp` API offers. The summary that decides the scope:
 
-| Ação | Viável? | Como |
+| Action | Viable? | How |
 |---|---|---|
-| **kick** | ✅ | `mp.kick` já é usado por `admin-service` e pelo `connection-monitor` |
-| **teleport** | ✅ | `mp.set(actorId, 'locationalData')`, já usado |
-| **announce** | ✅ | `commands.sendNotification` em varredura |
-| **ban de conta offline** | ✅ | escrita no banco; enforcement já existe em dois pontos |
-| **ban de conta online** | ⚠️ | precisa de kick — logo, precisa da ponte |
-| **warn** | ⚠️ | persiste hoje; entrega in-game precisa da ponte |
-| **freeze** | ❌ | não existe; exigiria Papyrus + observação em sessão real |
-| **spectate** | ❌ | não existe |
-| **mute** | ❌ | não existe; o `voip-service` teria de expor um corte por ator |
-| **ping** | ❌ | **a API `mp` não expõe latência.** Não haverá coluna de ping |
+| **kick** | ✅ | `mp.kick` is already used by `admin-service` and by `connection-monitor` |
+| **teleport** | ✅ | `mp.set(actorId, 'locationalData')`, already used |
+| **announce** | ✅ | `commands.sendNotification` in a sweep |
+| **offline account ban** | ✅ | a database write; enforcement already exists at two points |
+| **online account ban** | ⚠️ | needs a kick — therefore, needs the bridge |
+| **warn** | ⚠️ | persists today; in-game delivery needs the bridge |
+| **freeze** | ❌ | does not exist; would require Papyrus + observation in a real session |
+| **spectate** | ❌ | does not exist |
+| **mute** | ❌ | does not exist; `voip-service` would have to expose a per-actor cutoff |
+| **ping** | ❌ | **the `mp` API does not expose latency.** There will be no ping column |
 
-O painel **não vai listar ação que não funciona**. Um botão cinza com "em breve"
-é melhor que um botão que responde `ok` sem efeito — e a auditoria encontrou uma
-permissão (`ban`) que existe há meses exatamente nesse estado.
+The panel **will not list an action that does not work**. A grayed-out button saying "coming soon"
+is better than a button that answers `ok` with no effect — and the audit found a
+permission (`ban`) that has existed for months in exactly that state.
 
-### 5.1 Painel de sessões ativas
+### 5.1 Active sessions panel
 
-Dados por sessão, e apenas estes:
+Data per session, and only this:
 
-| Campo | Origem | Disponível? |
+| Field | Source | Available? |
 |---|---|---|
-| conta | `game_sessions.account_id` | ✅ |
-| personagem | `commands.getActiveCharacterData(actorId)` | só dentro do gamemode |
+| account | `game_sessions.account_id` | ✅ |
+| character | `commands.getActiveCharacterData(actorId)` | only inside the gamemode |
 | Discord | `discord_identities` | ✅ |
-| `connectedAt` | fila do `game-api` (`markConnected`) | ✅ em memória |
-| célula | `mp.get(actorId, 'locationalData').cellOrWorldDesc` | só dentro do gamemode |
-| estado do personagem | `core/character-state` | só dentro do gamemode |
-| ping | — | ❌ não existe |
+| `connectedAt` | `game-api` queue (`markConnected`) | ✅ in memory |
+| cell | `mp.get(actorId, 'locationalData').cellOrWorldDesc` | only inside the gamemode |
+| character state | `core/character-state` | only inside the gamemode |
+| ping | — | ❌ does not exist |
 
-**Fora do painel, deliberadamente:** IP, `actorId` bruto para cargo sem
-`players.session.view`, e qualquer identidade de personagem que o sistema de
-anonimato protege. Revelar nome real continua sendo `identity.reveal`, um ato
-auditado — uma lista de sessões que mostrasse nome real de graça contornaria
-aquele controle por fora, que é o defeito que o `admin-service.js` gastou trinta
-linhas evitando por dentro.
+**Deliberately outside the panel:** IP, raw `actorId` for a role without
+`players.session.view`, and any character identity that the anonymity system
+protects. Revealing a real name remains `identity.reveal`, an audited
+act — a session list that showed the real name for free would bypass
+that control from the outside, which is the defect that `admin-service.js` spent thirty
+lines avoiding from the inside.
 
-**Sem polling agressivo.** O gamemode já paga polling de 2 s para descobrir
-conexão. O painel recebe um instantâneo empurrado em intervalo fixo, ou consulta
-sob demanda quando a aba está aberta. O painel nunca vira uma segunda carga sobre
-o loop do servidor.
+**No aggressive polling.** The gamemode already pays for 2 s polling to discover
+connections. The panel receives a snapshot pushed at a fixed interval, or queries
+on demand when the tab is open. The panel never becomes a second load on
+the server loop.
 
-### 5.2 O canal, quando existir
+### 5.2 The channel, when it exists
 
-Desenho recomendado, herdado da decisão SA-007 do skyadmin e dos padrões de
-GameAP/Wings: **o processo do jogo abre a conexão de saída** para o painel,
-autenticado, e recebe apenas comandos de um catálogo fechado. O painel nunca
-abre porta no host do jogo.
+Recommended design, inherited from skyadmin decision SA-007 and from the
+GameAP/Wings patterns: **the game process opens the outbound connection** to the panel,
+authenticated, and receives only commands from a closed catalog. The panel never
+opens a port on the game host.
 
-Motivos: o host é Windows, muitas vezes atrás de NAT; uma porta de comando
-exposta no servidor de jogo é a pior superfície possível; e um catálogo fechado
-impede que "payload virou comando" seja sequer expressável.
+Reasons: the host is Windows, often behind NAT; a command port
+exposed on the game server is the worst possible surface; and a closed catalog
+makes "payload became a command" not even expressible.
 
-Isso ainda **não está desenhado em detalhe** — protocolo, autenticação,
-reconexão e confirmação de execução são trabalho de uma sessão própria, e ela só
-faz sentido depois que a Fase 0 tiver tido uma sessão real com jogador conectado.
+This is still **not designed in detail** — protocol, authentication,
+reconnection and execution confirmation are work for a dedicated session, and it only
+makes sense after Phase 0 has had a real session with a connected player.
 
 ---
 
-## 6. Controle de servidor e feature flags
+## 6. Server control and feature flags
 
-### 6.1 O que dá para fazer com segurança
+### 6.1 What can be done safely
 
-| Capacidade | Como funciona hoje | Painel pode? |
+| Capability | How it works today | Can the panel do it? |
 |---|---|---|
-| Capacidade / fila | `QUEUE_CAPACITY` no `.env` do `game-api`, lido no boot | leitura sim; escrita exige endpoint interno novo |
-| Modo manutenção | não existe | construível: uma flag que a fila consulta antes de admitir |
-| Anúncio | não existe | construível na Fase 4 |
-| Estado dos módulos | `ENABLE_*` no `.env`, lido no **carregamento** do gamemode | leitura sim; **toggle a quente não** |
-| Opções de gameplay | `server-options.<env>.json`, validado no boot | leitura sim; escrita a quente não |
-| **Restart do processo** | `launch_server.bat` na mão | **não** |
+| Capacity / queue | `QUEUE_CAPACITY` in the `game-api` `.env`, read at boot | read yes; write requires a new internal endpoint |
+| Maintenance mode | does not exist | buildable: a flag the queue checks before admitting |
+| Announcement | does not exist | buildable in Phase 4 |
+| Module state | `ENABLE_*` in `.env`, read when the gamemode **loads** | read yes; **hot toggle no** |
+| Gameplay options | `server-options.<env>.json`, validated at boot | read yes; hot write no |
+| **Process restart** | `launch_server.bat` by hand | **no** |
 
-**`server.restart` não entra.** Não existe supervisor, não existe drenagem de
-jogadores, não existe rollback se o processo não voltar. Um botão que derruba o
-servidor sem nada disso é a definição de ação irreversível sem aviso, que a
-`CONSTITUICAO.md` §5 proíbe. O gatilho para reabrir é infraestrutura: supervisor
-que garanta que o processo volta, drenagem com aviso, e um teste de restauração
-ensaiado em staging.
+**`server.restart` is out.** There is no supervisor, no player
+draining, no rollback if the process does not come back. A button that takes down the
+server without any of that is the definition of an irreversible action without warning, which
+`CONSTITUICAO.md` §5 forbids. The trigger to reopen it is infrastructure: a supervisor
+that guarantees the process comes back, draining with warning, and a restore test
+rehearsed in staging.
 
-**`modules.toggle` a quente não entra agora.** `core/module-registry` decide
-ligar/desligar por `process.env` no carregamento, e `server-options.js` valida no
-boot e aborta em valor inválido — de propósito. Alternar um módulo em jogo
-significaria `shutdown()` no meio de uma sessão com jogadores dentro, e nenhum
-módulo foi escrito assumindo isso. O painel **exibe** o estado; mudar continua
-sendo `.env` + restart planejado.
+**Hot `modules.toggle` is out for now.** `core/module-registry` decides
+on/off from `process.env` at load time, and `server-options.js` validates at
+boot and aborts on an invalid value — on purpose. Toggling a module in game
+would mean `shutdown()` in the middle of a session with players inside, and no
+module was written assuming that. The panel **displays** the state; changing it remains
+`.env` + a planned restart.
 
-### 6.2 Flags: allowlist, nunca ambiente arbitrário
+### 6.2 Flags: allowlist, never arbitrary environment
 
-Se e quando o painel escrever configuração, vale a regra que o
-`core/server-options.js` já aplica ao arquivo de opções:
+If and when the panel writes configuration, the rule that
+`core/server-options.js` already applies to the options file holds:
 
-1. **Allowlist explícita.** Só entra flag que está numa lista no código, com tipo,
-   intervalo e quem a consome. Não existe "editar variável de ambiente".
-2. **Só entra o que faz alguma coisa.** `server-options.js` mantém
-   `DECLARED_BUT_UNWIRED` com 18 opções justamente porque configuração que
-   *parece* existir e não faz nada é pior que configuração ausente. O painel herda
-   essa disciplina: flag sem consumidor aparece marcada como inerte, ou não aparece.
-3. **Mudança de flag é ação auditada**, com antes/depois, como qualquer outra.
-4. **Nada que seja segredo.** `INTERNAL_API_SECRET`, `SESSION_SECRET`,
-   `MASTER_KEY`, credencial de banco e token do Discord nunca são legíveis nem
-   editáveis pelo painel, em nenhum cargo.
-
----
-
-## 7. Risco e UI
-
-Três níveis, com tratamento visual distinto — 🟢 leitura, 🟡 muta estado
-recuperável, 🔴 irreversível ou de alto impacto. O nível vem de
-`staff_permission_catalog.risk`, o mesmo dado que o RBAC usa, para que UI e
-autorização não possam discordar.
-
-Ação 🔴 — **ban, permakill, ajuste de ouro, remoção de item, congelamento de
-conta, revelação de identidade, mudança de cargo** — exige, sem exceção:
-
-1. cor e posição distintas das ações comuns; nunca adjacente a um botão 🟢;
-2. diálogo que **nomeia o alvo** e descreve a consequência em uma frase
-   ("Este personagem não poderá mais entrar no servidor");
-3. campo de motivo obrigatório, mínimo real, validado no servidor também;
-4. quando houver desfazer, dizer qual é; quando não houver, dizer que não há.
-
-Prioridades da interface, na ordem: **clareza · velocidade · poucos cliques ·
-risco explícito**. Onde os dois últimos brigarem, risco ganha — um clique a mais
-antes de um permakill é o clique mais barato do sistema.
+1. **Explicit allowlist.** Only flags that are in a list in the code, with type,
+   range and who consumes them, are allowed. There is no "edit environment variable".
+2. **Only what does something gets in.** `server-options.js` keeps
+   `DECLARED_BUT_UNWIRED` with 18 options precisely because configuration that
+   *looks like* it exists and does nothing is worse than absent configuration. The panel inherits
+   this discipline: a flag with no consumer shows up marked as inert, or does not show up.
+3. **A flag change is an audited action**, with before/after, like any other.
+4. **Nothing that is a secret.** `INTERNAL_API_SECRET`, `SESSION_SECRET`,
+   `MASTER_KEY`, database credentials and the Discord token are never readable or
+   editable through the panel, for any role.
 
 ---
 
-## 8. Fila de reports — preparação, não construção
+## 7. Risk and UI
 
-`player report`, `bug report`, `RP report` e `staff ticket` compartilham forma:
-alguém abre, alguém triagem, alguém resolve, tudo fica registrado. É o mesmo
-formato dos casos de moderação ([`MODERATION_WORKFLOW.md`](MODERATION_WORKFLOW.md) §2).
+Three levels, with distinct visual treatment — 🟢 read, 🟡 mutates recoverable
+state, 🔴 irreversible or high impact. The level comes from
+`staff_permission_catalog.risk`, the same data the RBAC uses, so that UI and
+authorization cannot disagree.
 
-**Não construir agora.** Uma fila de denúncia sem staff para atendê-la é pior que
-não ter fila: cria expectativa de resposta que ninguém cumpre. O gatilho é
-operacional, não técnico — quando existir staff em escala e denúncia chegando
-por Discord de forma que não caiba mais, a fila nasce reutilizando o modelo de
-caso, e a integração com Discord vem depois disso, nunca antes.
+A 🔴 action — **ban, permakill, gold adjustment, item removal, account
+freeze, identity reveal, role change** — requires, without exception:
 
-Registrado aqui para que quem construir os casos deixe o modelo capaz de receber
-`source` (`staff`, `player_report`, `bug`) sem migration nova.
+1. color and position distinct from common actions; never adjacent to a 🟢 button;
+2. a dialog that **names the target** and describes the consequence in one sentence
+   ("This character will no longer be able to join the server");
+3. a mandatory reason field, with a real minimum, also validated on the server;
+4. when there is an undo, say what it is; when there is none, say so.
+
+Interface priorities, in order: **clarity · speed · few clicks ·
+explicit risk**. Where the last two conflict, risk wins — one extra click
+before a permakill is the cheapest click in the system.
 
 ---
 
-## 9. World tools — o limite que já é conhecido
+## 8. Report queue — preparation, not construction
 
-`fauna-census` e `corpse-probe` existem e são autorizados por `world.probe`. Eles
-são instrumentos de **observação sob demanda**, e continuam assim.
+`player report`, `bug report`, `RP report` and `staff ticket` share a shape:
+someone opens it, someone triages, someone resolves, everything is recorded. It is the same
+format as moderation cases ([`MODERATION_WORKFLOW.md`](MODERATION_WORKFLOW.md) §2).
 
-O que o painel **não** vai fazer: transmitir NPCs continuamente. O gamemode já
-documenta que chamada Papyrus é cara (`CONTRIBUTING.md` §3.8) e que
-`safe-zones.js` consulta posição sob demanda em vez de assinar eventos de célula
-justamente por custo. Um mapa ao vivo de todos os atores inverteria essa decisão
-e faria o painel virar carga sobre o loop do jogo — pelo benefício de uma tela
-que ninguém pediu.
+**Do not build it now.** A report queue without staff to handle it is worse than
+having no queue: it creates an expectation of a response that nobody fulfills. The trigger is
+operational, not technical — when there is staff at scale and reports arriving
+through Discord in a way that no longer fits, the queue is born reusing the case
+model, and the Discord integration comes after that, never before.
 
-Inspeção de entidade, censo de NPC, diagnóstico de cadáver, zonas seguras e
-posição de jogador entram como **consulta pontual, autorizada e auditada**,
-depois da ponte da §5.2.
+Recorded here so that whoever builds the cases leaves the model able to receive
+`source` (`staff`, `player_report`, `bug`) without a new migration.
+
+---
+
+## 9. World tools — the limit that is already known
+
+`fauna-census` and `corpse-probe` exist and are authorized by `world.probe`. They
+are **on-demand observation** instruments, and they stay that way.
+
+What the panel **will not** do: stream NPCs continuously. The gamemode already
+documents that Papyrus calls are expensive (`CONTRIBUTING.md` §3.8) and that
+`safe-zones.js` queries position on demand instead of subscribing to cell events
+precisely because of cost. A live map of every actor would invert that decision
+and turn the panel into a load on the game loop — for the benefit of a screen
+nobody asked for.
+
+Entity inspection, NPC census, corpse diagnostics, safe zones and
+player position come in as a **one-off, authorized and audited query**,
+after the bridge from §5.2.

@@ -1,184 +1,184 @@
-# Regras Heavy RP
+# Heavy RP Rules
 
-## 1. Padrao do Servidor
+## 1. Server Standard
 
-Este e um servidor Heavy RP. Todo jogador deve tratar o mundo, os personagens, as consequencias e as cenas com seriedade.
+This is a Heavy RP server. Every player must treat the world, the characters, the consequences and the scenes seriously.
 
-O objetivo nao e vencer Skyrim. O objetivo e criar historias criveis dentro de Skyrim.
+The goal is not to beat Skyrim. The goal is to create believable stories inside Skyrim.
 
-## 2. Principios Centrais
+## 2. Core Principles
 
-- Permaneca em personagem durante cenas de roleplay.
-- Separe conhecimento do jogador de conhecimento do personagem.
-- De espaco para outros jogadores responderem.
-- Deixe as consequencias importarem.
-- Nao use mecanicas do jogo para quebrar a logica do RP.
-- Nao trate combate como solucao padrao.
-- Respeite decisoes da staff durante cenas ativas e recorra depois se necessario.
+- Stay in character during roleplay scenes.
+- Separate player knowledge from character knowledge.
+- Give other players room to respond.
+- Let consequences matter.
+- Do not use game mechanics to break RP logic.
+- Do not treat combat as the default solution.
+- Respect staff decisions during active scenes and appeal afterwards if needed.
 
-## 3. Requisitos de Personagem
+## 3. Character Requirements
 
-Personagens devem ter:
+Characters must have:
 
-- Nome e sobrenome coerentes com a lore.
-- Historia plausivel.
-- Motivacoes claras.
-- Pelo menos uma fraqueza, falha, divida, medo, dever ou limitacao.
-- Motivo para existir em Skyrim.
-- Potencial de RP alem de combate.
+- A first and last name consistent with the lore.
+- A plausible backstory.
+- Clear motivations.
+- At least one weakness, flaw, debt, fear, duty or limitation.
+- A reason to exist in Skyrim.
+- RP potential beyond combat.
 
-Personagens nao podem comecar como:
+Characters cannot start as:
 
-- Dragonborn.
-- Heroi lendario.
-- Lider de faccao.
-- Campeao Daedrico.
-- Assassino mestre.
-- Mago em nivel de arquimago.
-- Vampiro, lobisomem ou outro conceito sobrenatural sem aprovacao da staff.
-- Realeza, alta nobreza ou figura politica importante sem aprovacao da staff.
+- The Dragonborn.
+- A legendary hero.
+- A faction leader.
+- A Daedric champion.
+- A master assassin.
+- An archmage-level mage.
+- A vampire, werewolf or other supernatural concept without staff approval.
+- Royalty, high nobility or an important political figure without staff approval.
 
-## 4. In Character e Out Of Character
+## 4. In Character and Out Of Character
 
-Use canais in-character para fala e acoes do personagem.
+Use in-character channels for the character's speech and actions.
 
-Use OOC apenas quando necessario. OOC nao deve interromper cenas ativas, exceto em caso de problema tecnico, regra, consentimento ou seguranca.
+Use OOC only when necessary. OOC must not interrupt active scenes, except for a technical problem, a rule issue, consent or safety.
 
-Nao use informacoes OOC dentro do personagem.
+Do not use OOC information in character.
 
 ## 5. Metagaming
 
-Metagaming e usar informacao que seu personagem nao aprendeu em roleplay.
+Metagaming is using information your character did not learn in roleplay.
 
-Exemplos:
+Examples:
 
-- Usar mensagens do Discord para encontrar alguem no jogo.
-- Agir com base em stream, clipe ou informacao da staff.
-- Reconhecer personagens disfarcados sem evidencia in-character.
-- Saber que alguem e criminoso porque o jogador comentou OOC.
+- Using Discord messages to find someone in game.
+- Acting on a stream, clip or staff information.
+- Recognizing disguised characters without in-character evidence.
+- Knowing someone is a criminal because the player mentioned it OOC.
 
 ## 6. Powergaming
 
-Powergaming e forcar resultados, ignorar limites razoaveis ou tornar seu personagem irrealisticamente capaz.
+Powergaming is forcing outcomes, ignoring reasonable limits or making your character unrealistically capable.
 
-Exemplos:
+Examples:
 
-- Declarar que um ataque acertou automaticamente.
-- Escapar de amarras sem metodo plausivel.
-- Ignorar ferimentos.
-- Interpretar personagem sem medo, dor, cansaco ou limites.
-- Forcar outro personagem a aceitar consequencias permanentes sem o processo exigido.
+- Declaring that an attack hit automatically.
+- Escaping restraints without a plausible method.
+- Ignoring injuries.
+- Playing a character with no fear, pain, fatigue or limits.
+- Forcing another character to accept permanent consequences without the required process.
 
 ## 7. Fail RP
 
-Fail RP e comportamento que quebra a seriedade do mundo.
+Fail RP is behavior that breaks the seriousness of the world.
 
-Exemplos:
+Examples:
 
-- Ficar pulando durante cenas serias.
-- Tratar guardas, nobres ou faccoes perigosas como piada sem qualquer medo.
-- Atacar pessoas aleatoriamente sem construcao de RP.
-- Usar girias modernas ou comportamento de meme in-character.
-- Recusar consequencias depois de acoes claramente arriscadas.
+- Jumping around during serious scenes.
+- Treating guards, nobles or dangerous factions as a joke without any fear.
+- Attacking people at random without building RP.
+- Using modern slang or meme behavior in character.
+- Refusing consequences after clearly risky actions.
 
-## 8. Regras de Combate
+## 8. Combat Rules
 
-Combate precisa ter contexto de roleplay.
+Combat needs roleplay context.
 
-Voce precisa de um motivo plausivel para iniciar violencia. Insultos sozinhos nem sempre bastam. A escalada deve fazer sentido para o personagem, o local, as testemunhas, as leis e o risco.
+You need a plausible reason to start violence. Insults alone are not always enough. The escalation must make sense for the character, the location, the witnesses, the laws and the risk.
 
-Proibido:
+Forbidden:
 
 - Random deathmatch.
 - Revenge killing.
-- Bait de combate.
-- Atacar jogadores novos por loot facil.
-- Usar bugs, dessync ou limitacoes da engine para vencer.
-- Voltar para uma luta depois de morrer ou desconectar, salvo aprovacao da staff.
+- Combat baiting.
+- Attacking new players for easy loot.
+- Using bugs, desync or engine limitations to win.
+- Returning to a fight after dying or disconnecting, unless staff approves.
 
-## 9. Ferimento, Morte e Memoria
+## 9. Injury, Death and Memory
 
-Morte nao deve ser casual.
+Death must not be casual.
 
-Quando seu personagem for derrotado, trate o resultado como ferimento, captura, inconsciencia ou morte, dependendo da cena e da decisao da staff.
+When your character is defeated, treat the outcome as injury, capture, unconsciousness or death, depending on the scene and the staff's decision.
 
-Regra padrao:
+Default rule:
 
-- Seu personagem lembra dos eventos ate ficar inconsciente ou claramente incapacitado.
-- Seu personagem nao pode voltar imediatamente ao mesmo conflito depois de derrotado.
-- Ferimentos graves devem afetar o comportamento.
-- Morte permanente exige revisao da staff, consentimento do jogador ou caminho de regra de alto risco previamente aprovado.
+- Your character remembers events until becoming unconscious or clearly incapacitated.
+- Your character cannot immediately return to the same conflict after being defeated.
+- Serious injuries must affect behavior.
+- Permanent death requires staff review, player consent or a previously approved high-risk rule path.
 
-A politica final de morte permanente deve ser definida antes da beta publica.
+The final permanent death policy must be defined before the public beta.
 
-## 10. Crime e Lei
+## 10. Crime and Law
 
-Crime deve ser interpretado com consequencias.
+Crime must be roleplayed with consequences.
 
-Personagens criminosos sao permitidos apenas se criarem cenas, risco e historia. Eles nao podem usar crime como desculpa para violencia aleatoria ou interrupcao constante.
+Criminal characters are allowed only if they create scenes, risk and story. They cannot use crime as an excuse for random violence or constant disruption.
 
-Guardas e faccoes da lei tambem precisam interpretar corretamente. Eles nao podem abusar da autoridade para encerrar todo conflito ou forcar resultados injustos.
+Guards and law factions must also roleplay properly. They cannot abuse authority to shut down every conflict or force unfair outcomes.
 
-## 11. Refem, Tortura e Cenas Sensiveis
+## 11. Hostages, Torture and Sensitive Scenes
 
-Cenas intensas exigem cuidado.
+Intense scenes require care.
 
-A staff pode interromper ou redirecionar cenas que fiquem excessivas, abusivas ou prejudiciais para a comunidade.
+Staff may interrupt or redirect scenes that become excessive, abusive or harmful to the community.
 
-Mutilacao permanente, tortura, escravidao, conteudo sexual ou humilhacao extrema nao sao permitidos sem politica explicita do servidor e aprovacao da staff. Violencia sexual e proibida.
+Permanent mutilation, torture, slavery, sexual content or extreme humiliation are not allowed without an explicit server policy and staff approval. Sexual violence is forbidden.
 
-## 12. Economia e Itens
+## 12. Economy and Items
 
-Nao explore bugs, duplicacao, dessync ou comportamento de mods para ganhar dinheiro ou itens.
+Do not exploit bugs, duplication, desync or mod behavior to gain money or items.
 
-Ganhos suspeitos podem ser removidos pela staff.
+Suspicious gains may be removed by staff.
 
-Itens raros devem ter justificativa de historia. Ter equipamento raro nao torna o personagem imune a consequencias.
+Rare items must have a story justification. Owning rare equipment does not make a character immune to consequences.
 
-## 13. Staff e Reports
+## 13. Staff and Reports
 
-Use o sistema de report ou canal de suporte no Discord para problemas de regra.
+Use the report system or the Discord support channel for rule problems.
 
-Nao pause cenas ativas com longas discussoes OOC, exceto quando houver problema imediato de seguranca, assedio ou exploit.
+Do not pause active scenes with long OOC discussions, except when there is an immediate safety, harassment or exploit problem.
 
-Comandos e punicoes da staff sao logados. Decisoes da staff podem ser recorridas pelo processo correto.
+Staff commands and punishments are logged. Staff decisions can be appealed through the proper process.
 
-## 14. Politica de Cliente e Mods
+## 14. Client and Mod Policy
 
-Jogadores devem usar a build aprovada do cliente e a modlist aprovada.
+Players must use the approved client build and the approved modlist.
 
-Proibido:
+Forbidden:
 
-- Arquivos de cliente modificados.
-- Mods de gameplay nao aprovados.
-- Ferramentas de cheat.
-- Ferramentas de automacao.
-- Edicoes de arquivo que alterem combate, movimento, inventario, visibilidade ou economia.
+- Modified client files.
+- Unapproved gameplay mods.
+- Cheat tools.
+- Automation tools.
+- File edits that alter combat, movement, inventory, visibility or the economy.
 
-## 15. Aplicacao das Regras
+## 15. Rule Enforcement
 
-Acoes possiveis:
+Possible actions:
 
-- Aviso verbal.
-- Aviso registrado.
-- Anulacao de cena.
-- Remocao de item ou moeda.
-- Consequencia no personagem.
-- Suspensao temporaria.
-- Remocao da whitelist.
-- Banimento permanente.
+- Verbal warning.
+- Recorded warning.
+- Scene voided.
+- Item or currency removal.
+- Consequence on the character.
+- Temporary suspension.
+- Removal from the whitelist.
+- Permanent ban.
 
-A gravidade depende de intencao, impacto, historico e cooperacao.
+Severity depends on intent, impact, history and cooperation.
 
-## 16. Padrao de Recurso
+## 16. Appeal Standard
 
-Recursos devem incluir:
+Appeals must include:
 
-- Nome do personagem.
-- Conta/Discord ID.
-- Data e horario.
-- O que aconteceu.
-- Por que a decisao deve ser revisada.
-- Evidencias, se houver.
+- Character name.
+- Account/Discord ID.
+- Date and time.
+- What happened.
+- Why the decision should be reviewed.
+- Evidence, if any.
 
-Assediar staff ou jogadores por causa de recurso pode aumentar a punicao.
+Harassing staff or players over an appeal may increase the punishment.

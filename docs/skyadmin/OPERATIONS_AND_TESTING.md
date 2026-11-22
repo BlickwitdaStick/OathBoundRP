@@ -1,14 +1,14 @@
-# Operação e testes
+# Operations and testing
 
-## Ambientes
+## Environments
 
-| Ambiente | Finalidade | Regras |
+| Environment | Purpose | Rules |
 |---|---|---|
-| Local | desenvolvimento e laboratório | auto-whitelist somente com flag explícita; dados descartáveis |
-| Staging | ensaio de release | `offlineMode=false`, secrets próprios, TLS e banco isolado |
-| Produção | jogadores reais | backups, monitoramento, acesso mínimo e mudança rastreável |
+| Local | development and lab | auto-whitelist only with an explicit flag; disposable data |
+| Staging | release rehearsal | `offlineMode=false`, its own secrets, TLS and an isolated database |
+| Production | real players | backups, monitoring, minimal access and traceable changes |
 
-## Comandos de verificação atuais
+## Current verification commands
 
 ```powershell
 Set-Location skymp/gamemode
@@ -16,28 +16,28 @@ npm test
 npm run typecheck
 ```
 
-Os demais pacotes possuem suas próprias suítes. Antes de alterar contrato entre componentes, rodar os testes de `apps/web`, `apps/game-api`, `apps/bot-discord` e `apps/launcher` também.
+The other packages have their own suites. Before changing a contract between components, also run the tests of `apps/web`, `apps/game-api`, `apps/bot-discord` and `apps/launcher`.
 
 ## Migrations
 
-- Nunca editar migration já aplicada.
-- Nova mudança de schema recebe nova migration versionada em `skymp/packages/database/`.
-- Aplicar schema base e migrations em ordem numérica.
-- Rodar `npm run check:schema:list` no gamemode para validar o inventário; a checagem real exige banco configurado.
-- Backups e restauração devem ser ensaiados no staging antes de qualquer alteração destrutiva.
+- Never edit a migration that has already been applied.
+- A new schema change gets a new versioned migration in `skymp/packages/database/`.
+- Apply the base schema and migrations in numeric order.
+- Run `npm run check:schema:list` in the gamemode to validate the inventory; the real check requires a configured database.
+- Backups and restores must be rehearsed in staging before any destructive change.
 
-## Runbook de incidente administrativo
+## Administrative incident runbook
 
-1. Pausar a ação afetada, não editar linhas manualmente.
-2. Buscar `request_id`, `action_id`, conta alvo e logs correlacionados.
-3. Confirmar estado no banco e no Agent/SkyMP.
-4. Revogar sessão ou aplicar contenção mínima se houver risco ativo.
-5. Registrar causa, correção e teste de regressão.
+1. Pause the affected action; do not edit rows manually.
+2. Look up `request_id`, `action_id`, the target account and correlated logs.
+3. Confirm the state in the database and in the Agent/SkyMP.
+4. Revoke the session or apply minimal containment if there is an active risk.
+5. Record the cause, the fix and a regression test.
 
-## Critério de staging
+## Staging criteria
 
-- Login Discord e fila funcionam com ticket válido.
-- Sessão expirada/revogada retorna falha de login.
-- Whitelist aprovada entra; conta inativa ou banida não entra.
-- Rate limit, CSRF e permissão recusam corretamente.
-- Auditoria contém ator, alvo, ação e resultado.
+- Discord login and the queue work with a valid ticket.
+- An expired/revoked session returns a login failure.
+- An approved whitelist gets in; an inactive or banned account does not.
+- Rate limit, CSRF and permission checks refuse correctly.
+- The audit contains actor, target, action and result.

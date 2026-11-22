@@ -1,123 +1,123 @@
-# Assinatura do Artesão (Maker's Mark) — gamedesign
+# Maker's Mark — game design
 
-**Estado: IMPLEMENTADO (lab), 22/08/2026.** O Nível 1 deste documento (§4)
-está no código: `crafted_item_signatures` (migration-v24), gate de rank em
-`crafting-service.craftItem()`, revista institucional em
-`governance-service.notifyMakerSignatures`. Como todo módulo `lab`, nasce
-atrás de flag (`ENABLE_CRAFTING_SERVICE`) e **nunca rodou com jogador real**
-— só teste automatizado contra banco falso, mesmo estado de Crime/Proveniência
-e Depot. Nível 2 (§4, itens verdadeiramente não-fungíveis) continua proposta,
-não recomendada.
+**Status: IMPLEMENTED (lab), 2026-08-22.** Level 1 of this document (§4)
+is in the code: `crafted_item_signatures` (migration-v24), a rank gate in
+`crafting-service.craftItem()`, institutional search in
+`governance-service.notifyMakerSignatures`. Like every `lab` module, it is born
+behind a flag (`ENABLE_CRAFTING_SERVICE`) and **has never run with a real player**
+— only automated tests against a fake database, the same state as Crime/Provenance
+and Depot. Level 2 (§4, truly non-fungible items) remains a proposal,
+not recommended.
 
-Origem: pedido do dono do projeto em 22/08/2026, motivado pelo sistema de
-Crime/Proveniência (`item_instances`, ver [CRIME_SYSTEM_AUDIT.md](../technical/CRIME_SYSTEM_AUDIT.md))
-— itens roubados carregam proveniência de dono; a ideia complementar é itens
-**criados** carregarem proveniência de autor.
+Origin: a request from the project owner on 2026-08-22, motivated by the
+Crime/Provenance system (`item_instances`, see [CRIME_SYSTEM_AUDIT.md](../technical/CRIME_SYSTEM_AUDIT.md))
+— stolen items carry owner provenance; the complementary idea is that **crafted**
+items carry author provenance.
 
-## 0. O que mudou entre a proposta e a implementação
+## 0. What changed between the proposal and the implementation
 
-- **§6 apontava que o gate `required_profession`/`required_rank` não existia
-  em `main`.** Investigando pra implementar, apareceu inteiro — testado, 606
-  linhas — numa branch órfã (`feat/crafting-profession-integration`,
-  20/08/2026) nunca mesclada. Foi trazido em vez de reimplementado; a
-  migration que ele trazia (`v20`) foi renumerada para `v23` porque `main` já
-  tinha `v20` (Depot) e `v21`/`v22` (Crime) quando o merge aconteceu. Ver o
-  commit de merge e `docs/gameplay/PROFESSION_FRAMEWORK.md`.
-- **`owner_character_id` não é mantido em sincronia com trade/venda/depósito**
-  nesta rodada — nenhum desses três serviços escreve em
-  `crafted_item_signatures`. A revista mostra "quem recebeu no craft", não
-  necessariamente "quem tem o item agora". Registrado no comentário da coluna
-  em `migration-v24-crafted-item-signatures.sql`.
-- **Atomicidade**: a gravação da assinatura NÃO é a mesma transação do
-  `inventory.exchange` do craft — decisão deliberada, ver o cabeçalho de
-  `crafting-service.js` e §4 abaixo.
-- Nenhuma receita de Ferreiro/Encantador/Cozinheiro existe ainda (§9,
-  inalterado) — o teste de integração (`crafting-governance-integration.test.js`)
-  usa uma receita fictícia de `blacksmith` porque nenhuma real está cadastrada
-  em `seed-forging.sql`.
+- **§6 pointed out that the `required_profession`/`required_rank` gate did not exist
+  in `main`.** While investigating in order to implement it, it turned up whole — tested, 606
+  lines — on an orphan branch (`feat/crafting-profession-integration`,
+  2026-08-20) that was never merged. It was brought over instead of reimplemented; the
+  migration it carried (`v20`) was renumbered to `v23` because `main` already
+  had `v20` (Depot) and `v21`/`v22` (Crime) when the merge happened. See the
+  merge commit and `docs/gameplay/PROFESSION_FRAMEWORK.md`.
+- **`owner_character_id` is not kept in sync with trade/sale/deposit**
+  in this round — none of those three services writes to
+  `crafted_item_signatures`. The search shows "who received it at craft time", not
+  necessarily "who has the item now". Recorded in the column comment
+  in `migration-v24-crafted-item-signatures.sql`.
+- **Atomicity**: writing the signature is NOT the same transaction as the craft's
+  `inventory.exchange` — a deliberate decision, see the header of
+  `crafting-service.js` and §4 below.
+- No Blacksmith/Enchanter/Cook recipe exists yet (§9,
+  unchanged) — the integration test (`crafting-governance-integration.test.js`)
+  uses a fictitious `blacksmith` recipe because no real one is registered
+  in `seed-forging.sql`.
 
 ---
 
-## 1. Objetivo
+## 1. Goal
 
-Um artesão com XP/rank suficiente pode marcar um item que fabrica com sua
-assinatura (nome do artesão, ou nome customizado pedido por quem encomendou —
-"para Lydia, de João Ferreiro"). Isso dá textura de RP old-school (ferreiros
-que assinam trabalho) e cria um motivo econômico pra comprar de um artesão
-reconhecido em vez do primeiro NPC/PC que aparece.
+A craftsman with enough XP/rank can mark an item they make with their
+signature (the craftsman's name, or a custom name requested by whoever ordered it —
+"for Lydia, from João the Smith"). This gives old-school RP texture (smiths
+who sign their work) and creates an economic reason to buy from a recognized
+craftsman instead of the first NPC/PC who shows up.
 
-**Escopo confirmado com o dono do projeto**: não é exclusivo do Ferreiro —
-qualquer profissão de `category: 'crafting'` no registry (`smelter`,
-`blacksmith`, `tanner`, `enchanter`, `cook`) é candidata. O gate (rank mínimo)
-é por profissão, não um caso especial de uma só.
+**Scope confirmed with the project owner**: it is not exclusive to the Blacksmith —
+any profession with `category: 'crafting'` in the registry (`smelter`,
+`blacksmith`, `tanner`, `enchanter`, `cook`) is a candidate. The gate (minimum rank)
+is per profession, not a special case for a single one.
 
-## 2. Problema que resolve
+## 2. Problem it solves
 
-Hoje, dois itens do mesmo `baseId` são idênticos em todo lugar do projeto —
-inventário, barraca, depósito. Não existe reputação de artesão: o rank de
-Ferreiro (quando tiver gameplay) afeta o que você pode craftar, nunca quem
-sabe que craftou. "Comprar de um ferreiro bom" não é hoje distinguível de
-"comprar de qualquer um".
+Today, two items with the same `baseId` are identical everywhere in the project —
+inventory, stall, depot. There is no craftsman reputation: the Blacksmith
+rank (when it has gameplay) affects what you can craft, never who
+knows you crafted it. "Buying from a good blacksmith" is today indistinguishable from
+"buying from anyone".
 
-## 3. Por que isto NÃO é barato — o achado principal desta análise
+## 3. Why this is NOT cheap — the main finding of this analysis
 
-Antes de desenhar a API, three fatos do código atual mudam o formato da
-proposta:
+Before designing the API, three facts in the current code change the shape of the
+proposal:
 
-### 3.1 `character_inventory` é puramente fungível, sem exceção
+### 3.1 `character_inventory` is purely fungible, without exception
 
-`migration-v14-inventory-framework.sql` tem
-`UNIQUE (owner, base_id)` — **uma linha por (personagem, item), só com
-contagem**. Não existe, em lugar nenhum do projeto, uma unidade de item com
-identidade própria dentro do inventário normal. Duas espadas de ferro do
-mesmo dono são sempre "2", nunca "esta e aquela".
+`migration-v14-inventory-framework.sql` has
+`UNIQUE (owner, base_id)` — **one row per (character, item), with only a
+count**. Nowhere in the project is there a unit of item with its
+own identity inside the normal inventory. Two iron swords with the
+same owner are always "2", never "this one and that one".
 
-### 3.2 `item_instances` (crime) já resolveu um problema parecido — mas não do jeito que a intuição sugere
+### 3.2 `item_instances` (crime) already solved a similar problem — but not the way intuition suggests
 
-`markItemStolen` (`core/crime-service.js:178-261`) não marca **a unidade
-física roubada**. Ele faz `UPDATE`/`INSERT` numa linha chaveada por
-`(base_id, current_owner_id, status)` — ou seja, "este personagem tem, no
-tipo de item X, uma unidade com proveniência suja", não "o terceiro item da
-pilha é o roubado". Funciona para crime porque a pergunta que a revista
-institucional faz é binária: *"algo neste tipo de item que você carrega é
-roubado?"* — não importa qual das 3 espadas idênticas é a exata.
+`markItemStolen` (`core/crime-service.js:178-261`) does not mark **the physical
+unit that was stolen**. It does an `UPDATE`/`INSERT` on a row keyed by
+`(base_id, current_owner_id, status)` — that is, "this character has, of
+item type X, one unit with dirty provenance", not "the third item in the
+stack is the stolen one". It works for crime because the question the institutional
+search asks is binary: *"is something of this item type you carry
+stolen?"* — it does not matter which of the 3 identical swords is the exact one.
 
-**Assinatura de artesão faz uma pergunta diferente**: não "este item é
-suspeito", mas "qual DESTAS 3 espadas idênticas é a que o João assinou".
-Duas espadas assinadas por dois artesãos diferentes, do mesmo `baseId`, na
-mesma mochila, são o caso normal de uso — e o modelo atual de
-`item_instances` não foi desenhado pra distinguir isso; ele foi desenhado
-deliberadamente para NÃO precisar disso (ver `CRIME_SYSTEM_AUDIT.md` §3,
-"Inventário deixa de ser 100% fungível para o subconjunto de itens
-roubados" — o subconjunto é 1 flag por tipo, não N objetos rastreados).
+**A maker's mark asks a different question**: not "is this item
+suspicious", but "which OF THESE 3 identical swords is the one João signed".
+Two swords signed by two different craftsmen, with the same `baseId`, in the
+same backpack, is the normal use case — and the current `item_instances` model
+was not designed to distinguish that; it was designed
+deliberately NOT to need it (see `CRIME_SYSTEM_AUDIT.md` §3,
+"Inventory stops being 100% fungible for the subset of stolen
+items" — the subset is 1 flag per type, not N tracked objects).
 
-### 3.3 O nome não aparece no jogo em si
+### 3.3 The name does not appear in the game itself
 
-`base_id` é um FormDesc do Skyrim (`"162e2:Skyrim.esm"`-style — ver a
-convenção registrada em memória do projeto). O servidor não controla o nome
-que o cliente Skyrim mostra pra aquele objeto — não existe, hoje, nenhum
-mecanismo (client mod, UI CEF, injeção de nome) que troque "Espada de Ferro"
-por "Espada de Ferro (assinada por João)" na tela do jogador. Isso só é
-visível através de UI própria do projeto — exatamente como a revista
-institucional de crime já faz (ela não muda o nome do item no HUD do Skyrim,
-ela mostra a proveniência numa notificação/painel).
+`base_id` is a Skyrim FormDesc (`"162e2:Skyrim.esm"`-style — see the
+convention recorded in the project's memory). The server does not control the name
+the Skyrim client shows for that object — there is today no
+mechanism (client mod, CEF UI, name injection) that replaces "Iron Sword"
+with "Iron Sword (signed by João)" on the player's screen. It is only
+visible through the project's own UI — exactly as the crime institutional
+search already does (it does not change the item's name in Skyrim's HUD,
+it shows the provenance in a notification/panel).
 
-## 4. Design proposto — dois níveis, escopo crescente
+## 4. Proposed design — two levels, increasing scope
 
-### Nível 1 (recomendado para entregar primeiro): assinatura como metadado do tipo, não do objeto
+### Level 1 (recommended to deliver first): signature as type metadata, not object metadata
 
-Aceita a mesma simplificação que o crime já aceita. Uma tabela nova,
-**desacoplada de `item_instances`** (crime é sobre culpa, isto é sobre
-autoria — misturar as duas faria uma feature de crime carregar uma
-responsabilidade que não é dela):
+Accepts the same simplification crime already accepts. A new table,
+**decoupled from `item_instances`** (crime is about guilt, this is about
+authorship — mixing the two would make a crime feature carry a
+responsibility that is not its own):
 
 ```sql
 CREATE TABLE crafted_item_signatures (
-  id              CHAR(36)     PRIMARY KEY,   -- uuid, mesmo padrão de item_instances.id
+  id              CHAR(36)     PRIMARY KEY,   -- uuid, same pattern as item_instances.id
   base_id         BIGINT       NOT NULL,
   maker_character_id   INT     NOT NULL,
-  owner_character_id   INT     NOT NULL,      -- quem tem hoje (igual a maker até vender/trocar)
-  signature_text  VARCHAR(64)  NULL,           -- nome custom pedido pelo comprador; NULL = usa o nome do artesão
+  owner_character_id   INT     NOT NULL,      -- who has it today (equal to maker until sold/traded)
+  signature_text  VARCHAR(64)  NULL,           -- custom name requested by the buyer; NULL = uses the craftsman's name
   crafted_at      DATETIME     NOT NULL,
   recipe_id       INT          NOT NULL,
   FOREIGN KEY (maker_character_id) REFERENCES characters(id),
@@ -126,121 +126,121 @@ CREATE TABLE crafted_item_signatures (
 );
 ```
 
-Fluxo:
+Flow:
 
-1. `craftItem` ganha `opts.signatureText` opcional.
-2. Gate: só aceito se `professionService.getProfessionState(characterId, recipe.crafting_profession_code)`
-   tiver `status === 'active'` **e** `rank >= profession.signatureMinRank`
-   (novo `server-options`, sugestão: default = `Math.ceil(profession.maxRank / 2)` — rank 2 de 3, não o
-   topo, pra não travar a feature atrás de um teto que hoje nem existe conteúdo pra alcançar).
-3. Craft bem-sucedido com assinatura grava uma linha em
-   `crafted_item_signatures`, na MESMA transação do `inventory.exchange`
-   (mesmo padrão que `crime-service` já usa: proveniência e movimento de
-   item não podem divergir).
-4. Revista/inspeção (reuso do canal que `governance-service.showInventorySnapshot`
-   já expõe para crime) passa a mostrar, por tipo de item que o alvo carrega,
-   se há assinatura conhecida — igual à provenance de crime, mesmo canal de
-   UI, dado diferente.
-5. **Limitação assumida, documentada, igual à do crime**: se o personagem tem
-   2 espadas de ferro, uma assinada e uma não (ou duas assinadas por
-   artesãos diferentes), o sistema sabe que "existe pelo menos uma
-   assinatura entre suas espadas de ferro", não qual unidade física é qual.
-   Suficiente pra flavor de RP ("dizem que uma dessas é trabalho do
-   Balgruuf"), insuficiente pra prova de posse individual peça-a-peça.
+1. `craftItem` gains an optional `opts.signatureText`.
+2. Gate: only accepted if `professionService.getProfessionState(characterId, recipe.crafting_profession_code)`
+   has `status === 'active'` **and** `rank >= profession.signatureMinRank`
+   (new `server-options`, suggested default = `Math.ceil(profession.maxRank / 2)` — rank 2 of 3, not the
+   top, so as not to lock the feature behind a ceiling that today has no content to reach).
+3. A successful craft with a signature writes a row to
+   `crafted_item_signatures`, in the SAME transaction as the `inventory.exchange`
+   (the same pattern `crime-service` already uses: provenance and item movement
+   cannot diverge).
+4. Search/inspection (reusing the channel `governance-service.showInventorySnapshot`
+   already exposes for crime) starts showing, per item type the target carries,
+   whether there is a known signature — like crime provenance, same UI
+   channel, different data.
+5. **Accepted limitation, documented, the same as crime's**: if the character has
+   2 iron swords, one signed and one not (or two signed by
+   different craftsmen), the system knows that "there is at least one
+   signature among your iron swords", not which physical unit is which.
+   Enough for RP flavor ("they say one of these is
+   Balgruuf's work"), not enough for piece-by-piece proof of individual possession.
 
-### Nível 2 (não recomendado agora): objetos verdadeiramente não-fungíveis
+### Level 2 (not recommended now): truly non-fungible objects
 
-Faria `character_inventory` deixar de ser puramente uma contagem para itens
-assinados — cada unidade assinada vira uma linha própria, fora do `count`
-agregado, e teria que se propagar por **todo** consumidor de inventário:
-`trade`, `market-stalls-service`, `depot-service`, `crime-service`. É a
-mesma decisão que o próprio crime system evitou deliberadamente (ver §3.2) —
-reabrir essa fronteira pra uma segunda feature multiplicaria o risco, não
-dividiria. Só faz sentido se um dia o projeto decidir que "item único
-rastreável fisicamente" é uma capacidade central (ex.: itens lendários,
-relíquias de quest), e nesse caso a decisão certa é desenhar isso uma vez
-para servir todos os casos, não uma vez por feature que pedir unicidade.
+It would make `character_inventory` stop being purely a count for signed
+items — each signed unit becomes its own row, outside the aggregated `count`,
+and it would have to propagate through **every** inventory consumer:
+`trade`, `market-stalls-service`, `depot-service`, `crime-service`. It is the
+same decision the crime system itself deliberately avoided (see §3.2) —
+reopening that boundary for a second feature would multiply the risk, not
+divide it. It only makes sense if the project one day decides that "a unique,
+physically traceable item" is a core capability (e.g. legendary items,
+quest relics), and in that case the right decision is to design it once
+to serve all cases, not once per feature that asks for uniqueness.
 
-## 5. Preço de venda — não precisa de mecanismo novo
+## 5. Sale price — no new mechanism needed
 
-`market-stalls-service.addItem` já aceita um `price` arbitrário definido por
-quem lista (`/stalladd <stallId> <baseId> <count> <price> <rotulo>`) — não
-há motor de precificação automática por qualidade no projeto hoje. Um item
-assinado por um artesão reconhecido **já pode** ser listado por mais gold
-hoje, sem mudança nenhuma — é o jogador decidindo, e o mercado (outros
-jogadores) decidindo se paga. A assinatura dá o jogador uma *razão in-game*
-pra esse preço ser crível ("é do Balgruuf, ele é rank 3"), não um multiplicador
-de sistema. **Não implementar** ajuste automático de preço por assinatura —
-seria o motor decidindo valor de RP, papel que é do jogador.
+`market-stalls-service.addItem` already accepts an arbitrary `price` set by
+whoever lists it (`/stalladd <stallId> <baseId> <count> <price> <label>`) — there
+is no automatic quality-based pricing engine in the project today. An item
+signed by a recognized craftsman **can already** be listed for more gold
+today, with no change at all — it is the player deciding, and the market (other
+players) deciding whether to pay. The signature gives the player an *in-game reason*
+for that price to be credible ("it's Balgruuf's, he's rank 3"), not a system
+multiplier. **Do not implement** automatic price adjustment by signature —
+it would be the engine deciding RP value, a role that belongs to the player.
 
-Serviço por encomenda ("faça uma espada com o nome da minha esposa") é
-puramente RP + o `signatureText` do Nível 1 — não precisa de mecanismo de
-contrato novo; se crescer a ponto de precisar de fila/pagamento formal, o
-Contract Framework (`docs/gameplay/CONTRACTS.md`) já existe pra isso e é
-reuso, não feature nova.
+Commissioned work ("make a sword with my wife's name") is
+purely RP + Level 1's `signatureText` — it needs no new contract
+mechanism; if it grows to the point of needing a formal queue/payment, the
+Contract Framework (`docs/gameplay/CONTRACTS.md`) already exists for that and is
+reuse, not a new feature.
 
-## 6. Compatibilidade com sistemas atuais
+## 6. Compatibility with current systems
 
-| Sistema | Impacto |
+| System | Impact |
 |---|---|
-| `profession-service.js` | Só leitura (`getProfessionState`) — nenhuma escrita nova. Precisa do rank/XP real ganhando xp por craft, que **ainda não existe** (`PROFESSION_FRAMEWORK.md` §11: "Curva de XP → level-up" não implementada). Sem isso, `signatureMinRank` só é alcançável por ajuste manual de staff (`profession.xp` capability) — aceitável para lançar em `lab`, mas registrar como dependência real. |
-| `crafting-service.js` | Precisa do gate `required_profession`/`required_rank` por receita para sequer saber QUAL profissão craftou o item. **Este gate não existe em `main` hoje** — `PROFESSION_FRAMEWORK.md` §11 descreve uma `migration-v20-crafting-profession-gate.sql` que, checado agora, não existe: `v20` em `main` é `depot-service`, não crafting-gate. É a mesma advertência já registrada em memória do projeto ("main é subconjunto, não o estado mais avançado" — 3 migrations v20 concorrentes em branches não mescladas). **Pré-requisito real**: localizar/mesclar esse gate antes ou junto desta feature, senão "assinatura de Ferreiro" não sabe distinguir um craft de Ferreiro de um craft de qualquer personagem. |
-| `item_instances` (crime) | Tabela irmã, não reuso direto — ver §4. Se o mesmo item depois for roubado, os dois sistemas convivem: `markItemStolen` continua sem saber de assinatura (não precisa saber), e a revista de guarda passaria a mostrar as duas informações lado a lado (proveniência de posse + autoria), de fontes diferentes. |
-| `market-stalls-service.js` | Nenhuma mudança de schema necessária — preço já é livre (§5). |
-| Contratos (`contracts-service.js`) | Reuso futuro opcional para encomendas formais — nenhuma dependência obrigatória agora. |
-| Skyrim engine / nome do item | Sem mudança — nome visto no jogo continua o do `base_id`. Assinatura só existe nas UIs do próprio projeto. |
+| `profession-service.js` | Read only (`getProfessionState`) — no new writes. It needs the real rank/XP gaining XP per craft, which **does not exist yet** (`PROFESSION_FRAMEWORK.md` §11: "XP curve → level-up" not implemented). Without that, `signatureMinRank` is only reachable by a manual staff adjustment (`profession.xp` capability) — acceptable for launching in `lab`, but record it as a real dependency. |
+| `crafting-service.js` | Needs the per-recipe `required_profession`/`required_rank` gate to even know WHICH profession crafted the item. **This gate does not exist in `main` today** — `PROFESSION_FRAMEWORK.md` §11 describes a `migration-v20-crafting-profession-gate.sql` that, checked now, does not exist: `v20` in `main` is `depot-service`, not crafting-gate. It is the same warning already recorded in the project's memory ("main is a subset, not the most advanced state" — 3 competing v20 migrations on unmerged branches). **Real prerequisite**: locate/merge that gate before or together with this feature, otherwise "Blacksmith signature" cannot distinguish a Blacksmith's craft from any character's craft. |
+| `item_instances` (crime) | Sister table, not direct reuse — see §4. If the same item is later stolen, the two systems coexist: `markItemStolen` still does not know about signatures (it does not need to), and the guard search would show both pieces of information side by side (possession provenance + authorship), from different sources. |
+| `market-stalls-service.js` | No schema change needed — price is already free (§5). |
+| Contracts (`contracts-service.js`) | Optional future reuse for formal commissions — no mandatory dependency now. |
+| Skyrim engine / item name | No change — the name seen in game remains the `base_id`'s. The signature only exists in the project's own UIs. |
 
-## 7. Exploits a considerar (mesmo formato do audit de crime)
+## 7. Exploits to consider (same format as the crime audit)
 
-- **Autoatribuição de assinatura sem craft real**: `signatureText` só pode ser
-  gravado dentro da MESMA transação de um `inventory.exchange` bem-sucedido
-  de `craftItem` — nunca uma escrita solta chamável por comando de jogador.
-- **Falsificar autoria de artesão famoso**: `maker_character_id` vem sempre de
-  `characterId` que efetivamente craftou (mesmo argumento de `craftItem`),
-  nunca de texto livre do cliente — só o `signatureText` (a dedicatória) é
-  livre, nunca o "assinado por". Sanitizar/limitar tamanho do `signatureText`
-  (64 chars, sem controle de formatação) evita abuso de chat injection na
-  revista/UI.
-- **Reputação de artesão sendo usada para golpe** (vender item "assinado por
-  fulano" que na verdade não é): resolvido por construção — a linha em
-  `crafted_item_signatures` só existe se o craft realmente aconteceu por
-  aquele personagem; não há caminho de escrita que permita "carimbar" um
-  item já existente depois do fato.
+- **Self-assigning a signature without a real craft**: `signatureText` can only be
+  written inside the SAME transaction as a successful `inventory.exchange`
+  from `craftItem` — never a loose write callable by a player command.
+- **Forging the authorship of a famous craftsman**: `maker_character_id` always comes from
+  the `characterId` that actually crafted (same argument as `craftItem`),
+  never from free client text — only `signatureText` (the dedication) is
+  free, never the "signed by". Sanitizing/limiting the size of `signatureText`
+  (64 chars, no formatting control) prevents chat injection abuse in the
+  search/UI.
+- **Craftsman reputation used for a scam** (selling an item "signed by
+  so-and-so" that actually is not): solved by construction — the row in
+  `crafted_item_signatures` only exists if the craft really happened by
+  that character; there is no write path that allows "stamping" an
+  existing item after the fact.
 
-## 8. Impacto econômico
+## 8. Economic impact
 
-Nenhuma criação de valor por si só — não altera `characters.gold`,
-`transaction-service`, nem impostos. O efeito econômico é 100% emergente do
-mercado (jogadores pagando mais por reputação), não um multiplicador de
-sistema. Consistente com a linha do projeto de nunca deixar um sistema
-"decidir" valor de RP por conta própria (mesmo princípio que manteve a
-economia regional PARKED até reengenharia).
+No value creation on its own — it does not change `characters.gold`,
+`transaction-service`, or taxes. The economic effect is 100% emergent from the
+market (players paying more for reputation), not a system
+multiplier. Consistent with the project's line of never letting a system
+"decide" RP value on its own (the same principle that kept the
+regional economy PARKED until re-engineering).
 
-## 9. Pré-requisitos — estado em 22/08/2026
+## 9. Prerequisites — state on 2026-08-22
 
-1. ✅ **Gate `required_profession`/`required_rank` em `crafting_recipes`** —
-   trazido de `feat/crafting-profession-integration` para `main`
-   (`migration-v23-crafting-profession-gate.sql`, ver §0).
-2. ❌ **Pelo menos uma receita real de Ferreiro/Encantador/Cozinheiro** —
-   continua sem existir. Fundidor e Curtidor são as únicas com
-   `required_profession` preenchido em `seed-forging.sql`. Forjar uma receita
-   de Ferreiro de verdade continua exigindo um `result_base_id` confirmado,
-   não inventado — nenhum PR deste documento inventou um.
-3. ✅ **XP por craft** (`addProfessionXp` dentro de `craftItem`) — veio
-   junto com o item 1, via `crafting.xpPerCraft`.
-4. ✅ **`crafted_item_signatures`** (Nível 1, §4) e o parâmetro
+1. ✅ **The `required_profession`/`required_rank` gate in `crafting_recipes`** —
+   brought from `feat/crafting-profession-integration` to `main`
+   (`migration-v23-crafting-profession-gate.sql`, see §0).
+2. ❌ **At least one real Blacksmith/Enchanter/Cook recipe** —
+   still does not exist. Smelter and Tanner are the only ones with
+   `required_profession` filled in `seed-forging.sql`. Forging a real
+   Blacksmith recipe still requires a confirmed `result_base_id`,
+   not an invented one — no PR from this document invented one.
+3. ✅ **XP per craft** (`addProfessionXp` inside `craftItem`) — came
+   along with item 1, via `crafting.xpPerCraft`.
+4. ✅ **`crafted_item_signatures`** (Level 1, §4) and the parameter
    `crafting.signatureMinRank` (default 2) — `migration-v24-crafted-item-signatures.sql`.
 
-## 10. O que ficou pendente
+## 10. What remains pending
 
-- **Receita real de Ferreiro** (item 2 acima) — sem ela, a Assinatura do
-  Artesão só é demonstrável hoje via Fundidor/Curtidor (que já têm
-  `required_profession`) ou por teste de integração com receita fictícia
+- **A real Blacksmith recipe** (item 2 above) — without it, the Maker's
+  Mark is only demonstrable today via Smelter/Tanner (which already have
+  `required_profession`) or by an integration test with a fictitious recipe
   (`crafting-governance-integration.test.js`).
-- **`owner_character_id` não segue o item em trade/venda/depósito** (§0) —
-  ligar isso exigiria tocar `trade-service.js`, `market-stalls-service.js` e
-  `core/depot-service.js`, o mesmo "toque todo consumidor de inventário" que
-  o Nível 2 (§4) já descartava como escopo desproporcional. Deixado como
-  limitação conhecida, não como bug.
-- **Nunca rodou com jogador real** — mesmo estado de todo módulo `lab` deste
-  projeto.
+- **`owner_character_id` does not follow the item through trade/sale/deposit** (§0) —
+  wiring that would require touching `trade-service.js`, `market-stalls-service.js` and
+  `core/depot-service.js`, the same "touch every inventory consumer" that
+  Level 2 (§4) already discarded as disproportionate scope. Left as a
+  known limitation, not a bug.
+- **It has never run with a real player** — the same state as every `lab` module in this
+  project.

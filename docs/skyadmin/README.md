@@ -1,40 +1,40 @@
-# SkyAdmin — centro de documentação
+# SkyAdmin — documentation hub
 
-Este diretório é o ponto de entrada para construir o painel administrativo e de staff do SkyMP Heavy RP. Ele não substitui a documentação existente: organiza as decisões e indica a fonte de verdade de cada tema.
+This directory is the entry point for building the administrative and staff panel of SkyMP Heavy RP. It does not replace the existing documentation: it organizes the decisions and points to the source of truth for each topic.
 
-> **Leia antes: [`../research/ADMIN_PLATFORM_AUDIT.md`](../research/ADMIN_PLATFORM_AUDIT.md) (13/08/2026).**
-> Este diretório descreve **intenção**; a auditoria mediu o **estado**. A §7 dela reconcilia marco a marco — dos seis marcos do [plano](IMPLEMENTATION_PLAN.md), só o Marco 1 tem entrega verificável. A única frase deste diretório que descreve o presente é a lista de "Estado atual" logo abaixo.
-> Os desdobramentos da auditoria vivem em [`../admin/`](../admin/ADMIN_PLATFORM.md) e em [ADR 005](../technical/ADR_005_ADMIN_RBAC.md), que decide o RBAC do Marco 2.
+> **Read first: [`../research/ADMIN_PLATFORM_AUDIT.md`](../research/ADMIN_PLATFORM_AUDIT.md) (2026-08-13).**
+> This directory describes **intent**; the audit measured the **state**. Its §7 reconciles milestone by milestone — of the six milestones in the [plan](IMPLEMENTATION_PLAN.md), only Milestone 1 has a verifiable deliverable. The only statement in this directory that describes the present is the "Current state" list just below.
+> The audit's follow-ups live in [`../admin/`](../admin/ADMIN_PLATFORM.md) and in [ADR 005](../technical/ADR_005_ADMIN_RBAC.md), which decides the RBAC for Milestone 2.
 
-## Estado atual
+## Current state
 
-- Base: `apps/web` (Express), `apps/game-api`, `apps/bot-discord`, `apps/launcher`, `skymp/gamemode` e MariaDB.
-- Identidade online: `Discord -> accounts.id -> game session -> profileId SkyMP -> personagem/actor`.
-- Marco AUTH-003 concluído: `whitelist.js` resolve o `profileId` como `accounts.id`; não como Discord ID.
-- Não existe ainda RBAC granular no painel, pipeline unificado de ações, Agent remoto, bans persistentes ou interface operacional completa.
+- Base: `apps/web` (Express), `apps/game-api`, `apps/bot-discord`, `apps/launcher`, `skymp/gamemode` and MariaDB.
+- Online identity: `Discord -> accounts.id -> game session -> SkyMP profileId -> character/actor`.
+- Milestone AUTH-003 complete: `whitelist.js` resolves `profileId` as `accounts.id`, not as a Discord ID.
+- There is still no granular RBAC in the panel, unified action pipeline, remote Agent, persistent bans or complete operations interface.
 
-## Ordem de leitura
+## Reading order
 
-1. [PROJECT_CHARTER.md](PROJECT_CHARTER.md) — escopo, objetivo e limites.
-2. [ARCHITECTURE.md](ARCHITECTURE.md) — arquitetura alvo e contratos.
-3. [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — marcos, entregáveis e critérios de aceite.
-4. [SECURITY_MODEL.md](SECURITY_MODEL.md) — ameaças, controles e regras não negociáveis.
-5. [OPERATIONS_AND_TESTING.md](OPERATIONS_AND_TESTING.md) — execução, migração, testes e staging.
-6. [REFERENCE_CATALOG.md](REFERENCE_CATALOG.md) — referências externas, estudo e engenharia reversa permitida.
-7. [DECISIONS.md](DECISIONS.md) — decisões arquiteturais vigentes.
+1. [PROJECT_CHARTER.md](PROJECT_CHARTER.md) — scope, goal and limits.
+2. [ARCHITECTURE.md](ARCHITECTURE.md) — target architecture and contracts.
+3. [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — milestones, deliverables and acceptance criteria.
+4. [SECURITY_MODEL.md](SECURITY_MODEL.md) — threats, controls and non-negotiable rules.
+5. [OPERATIONS_AND_TESTING.md](OPERATIONS_AND_TESTING.md) — execution, migration, tests and staging.
+6. [REFERENCE_CATALOG.md](REFERENCE_CATALOG.md) — external references, study and permitted reverse engineering.
+7. [DECISIONS.md](DECISIONS.md) — current architectural decisions.
 
-## Fontes existentes que permanecem canônicas
+## Existing sources that remain canonical
 
-| Tema | Documento ou código |
+| Topic | Document or code |
 |---|---|
-| Visão geral do servidor | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
-| Identidade e sessão | [../technical/CHR_001_ACCOUNT_SESSION_CHARACTER_IDENTITY.md](../technical/CHR_001_ACCOUNT_SESSION_CHARACTER_IDENTITY.md), [../technical/ADR_001_ONLINE_PROFILE_ID_IS_ACCOUNT_ID.md](../technical/ADR_001_ONLINE_PROFILE_ID_IS_ACCOUNT_ID.md) |
-| Limites de confiança | [../technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md](../technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md) |
-| Operação do SkyMP | [../technical/OPERATIONS.md](../technical/OPERATIONS.md), [../technical/SKYMP_SERVER_SETUP.md](../technical/SKYMP_SERVER_SETUP.md) |
-| Critério de whitelist | [../staff/WHITELIST_RUBRIC.md](../staff/WHITELIST_RUBRIC.md) |
-| Migrations e schema | `skymp/packages/database/schema.sql` e todas as migrations disponíveis (`v2`–`v28` atualmente) |
-| Regras do servidor | [../rules/HEAVY_RP_RULES.md](../rules/HEAVY_RP_RULES.md) |
+| Server overview | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
+| Identity and session | [../technical/CHR_001_ACCOUNT_SESSION_CHARACTER_IDENTITY.md](../technical/CHR_001_ACCOUNT_SESSION_CHARACTER_IDENTITY.md), [../technical/ADR_001_ONLINE_PROFILE_ID_IS_ACCOUNT_ID.md](../technical/ADR_001_ONLINE_PROFILE_ID_IS_ACCOUNT_ID.md) |
+| Trust boundaries | [../technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md](../technical/AUTH_001_TRUST_BOUNDARY_INVENTORY.md) |
+| SkyMP operations | [../technical/OPERATIONS.md](../technical/OPERATIONS.md), [../technical/SKYMP_SERVER_SETUP.md](../technical/SKYMP_SERVER_SETUP.md) |
+| Whitelist criteria | [../staff/WHITELIST_RUBRIC.md](../staff/WHITELIST_RUBRIC.md) |
+| Migrations and schema | `skymp/packages/database/schema.sql` and all available migrations (currently `v2`–`v28`) |
+| Server rules | [../rules/HEAVY_RP_RULES.md](../rules/HEAVY_RP_RULES.md) |
 
-## Convenção
+## Convention
 
-Toda mudança de comportamento administrativo deve atualizar, no mínimo: contrato de API, permissão exigida, efeito no banco/jogo, auditoria, teste automatizado e este índice quando alterar a arquitetura.
+Every change to administrative behavior must update, at minimum: the API contract, the required permission, the effect on the database/game, auditing, an automated test, and this index when it changes the architecture.

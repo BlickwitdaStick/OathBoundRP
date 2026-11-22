@@ -1,39 +1,39 @@
-# Modelo de segurança
+# Security model
 
-## Regras não negociáveis
+## Non-negotiable rules
 
-- `offlineMode` não é permitido fora do laboratório.
-- Tokens de sessão e tickets são opacos; no banco, apenas hashes.
-- Nunca registrar token, cookie, `masterKey`, segredo Discord ou payload sensível completo.
-- Toda rota mutável exige sessão, CSRF, autorização e validação de entrada.
-- Ações de alto impacto exigem motivo e confirmação na UI.
-- O Agent não expõe porta pública de comando; abre conexão de saída autenticada.
+- `offlineMode` is not allowed outside the lab.
+- Session tokens and tickets are opaque; only hashes are stored in the database.
+- Never log a token, cookie, `masterKey`, Discord secret or a full sensitive payload.
+- Every mutating route requires a session, CSRF, authorization and input validation.
+- High-impact actions require a reason and confirmation in the UI.
+- The Agent does not expose a public command port; it opens an authenticated outbound connection.
 
-## Controles por camada
+## Controls by layer
 
-| Camada | Controle |
+| Layer | Control |
 |---|---|
-| Web | sessão persistente, cookies seguros, CSRF, CSP, rate limit, Helmet |
-| API | schema de entrada, autorização por permissão, idempotência, logs estruturados |
-| Banco | FKs, índices, migrations, transação e mínimo privilégio do usuário SQL |
-| Agent | mTLS ou credencial rotativa, allowlist de comandos, timeout e confirmação |
-| SkyMP | Master API, sessão revogável, whitelist por `account_id` |
+| Web | persistent session, secure cookies, CSRF, CSP, rate limit, Helmet |
+| API | input schema, per-permission authorization, idempotency, structured logs |
+| Database | FKs, indexes, migrations, transactions and least privilege for the SQL user |
+| Agent | mTLS or rotating credential, command allowlist, timeout and confirmation |
+| SkyMP | Master API, revocable session, whitelist by `account_id` |
 
-## Ameaças prioritárias
+## Priority threats
 
-1. Jogador editar `profileId` localmente para assumir outra conta.
-2. Staff sem permissão chamar endpoint manualmente.
-3. Repetição de POST resultar em dois bans, itens ou transferências.
-4. Token vazado em log, URL, crash report ou frontend.
-5. Navegador ou usuário transformar payload em comando no host.
-6. Sessão administrativa roubada por CSRF ou cookie persistente inseguro.
+1. A player edits `profileId` locally to take over another account.
+2. Staff without permission call an endpoint manually.
+3. A repeated POST results in two bans, items or transfers.
+4. A token leaked in a log, URL, crash report or frontend.
+5. The browser or a user turns a payload into a command on the host.
+6. An administrative session stolen via CSRF or an insecure persistent cookie.
 
-## Checklist antes de nova ação
+## Checklist before a new action
 
-- Qual permissão é necessária?
-- Qual é o alvo e como ele é resolvido?
-- O schema rejeita campos extras e valores inválidos?
-- Qual é a chave de idempotência?
-- Há transação e auditoria?
-- Como a ação expira, falha e é revertida?
-- O resultado expõe dados desnecessários?
+- Which permission is required?
+- What is the target and how is it resolved?
+- Does the schema reject extra fields and invalid values?
+- What is the idempotency key?
+- Is there a transaction and an audit entry?
+- How does the action expire, fail and get reverted?
+- Does the result expose unnecessary data?

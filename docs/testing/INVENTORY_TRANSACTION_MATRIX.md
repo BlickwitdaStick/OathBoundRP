@@ -1,204 +1,204 @@
-# Matriz de transações de inventário
+# Inventory transaction matrix
 
-O que está coberto, o que não está, e **por que** cada linha existe.
+What is covered, what is not, and **why** each row exists.
 
-**Data:** 13/08/2026 · Suíte: `npm test` — 716 testes, 169 suítes, 0 falhas.
-Novos nesta rodada: 45 em `core/inventory.test.js`, 25 em
+**Date:** 2026-08-13 · Suite: `npm test` — 716 tests, 169 suites, 0 failures.
+New in this round: 45 in `core/inventory.test.js`, 25 in
 `trade-service.test.js`.
 
-> Companheiro da [`INTERACTION_TEST_MATRIX.md`](INTERACTION_TEST_MATRIX.md).
-> A regra é a mesma: uma linha "coberta" quer dizer que **existe um teste que
-> reprova se a garantia sumir** — verificado por mutação, não por leitura.
+> Companion to [`INTERACTION_TEST_MATRIX.md`](INTERACTION_TEST_MATRIX.md).
+> The rule is the same: a "covered" row means **there is a test that
+> fails if the guarantee disappears** — verified by mutation, not by reading.
 
 ---
 
-## 0. A afirmação central
+## 0. The central claim
 
-Os testes deste framework não perguntam *"a função devolveu `true`?"*. Perguntam:
+The tests of this framework do not ask *"did the function return `true`?"*. They ask:
 
-> **Para todo `transfer_id`, a soma dos `delta` gravados no razão é zero.**
+> **For every `transfer_id`, the sum of the `delta` values written to the ledger is zero.**
 
-Uma checagem de `resultado.ok` passa em qualquer implementação que devolva
-`true`. A soma só fecha se o item tiver mesmo saído de um lugar e entrado em
-outro. Se alguém criar um caminho novo que move item sem gravar as duas pernas,
-`conferirConservacao()` reprova sem saber que aquele caminho existe.
+A `result.ok` check passes on any implementation that returns
+`true`. The sum only balances if the item really left one place and entered
+another. If someone creates a new path that moves items without writing both legs,
+`conferirConservacao()` fails without knowing that path exists.
 
-É a forma herdada do `conferirOuroFecha` da Fase 3, aplicada a item.
+It is the form inherited from Phase 3's `conferirOuroFecha`, applied to items.
 
 ---
 
-## 1. Mutações verificadas
+## 1. Verified mutations
 
-Aplicadas ao código, executadas, revertidas. Não previstas — executadas.
+Applied to the code, executed, reverted. Not predicted — executed.
 
-| Mutação | Reprovou? | Testes que caíram |
+| Mutation | Failed? | Tests that fell |
 |---|---|---|
-| `session.version += 1` removido (mudança de oferta não derruba confirmação) | **sim** | 1 |
-| Perna do dono `system` omitida do razão | **sim** | 1 |
-| Replay de idempotência desligado | **sim** | 1 |
-| Validação de `delta` removida de `applyStackDelta` | **sim** | 4 |
-| Revalidação de distância removida do commit da troca | **sim** | 1 |
-| Validação de item/quantidade ignorada no `exchange` | **sim** | 12 |
+| `session.version += 1` removed (an offer change does not drop the confirmation) | **yes** | 1 |
+| `system` owner leg omitted from the ledger | **yes** | 1 |
+| Idempotency replay turned off | **yes** | 1 |
+| `delta` validation removed from `applyStackDelta` | **yes** | 4 |
+| Distance revalidation removed from the trade commit | **yes** | 1 |
+| Item/quantity validation ignored in `exchange` | **yes** | 12 |
 
-Base limpa antes e depois (`rc=0, fail=0`).
+Clean baseline before and after (`rc=0, fail=0`).
 
 ---
 
-## 2. Transferência
+## 2. Transfer
 
-| Caso | Coberto | Onde |
+| Case | Covered | Where |
 |---|---|---|
-| Transferência simples entre personagens | sim | `core/inventory.test.js` |
-| Merge de pilha (item que o destino já tem) | sim | idem — `applyStackDelta` soma |
-| Split de pilha (mover parte) | sim | idem |
-| Pilha zerada é apagada, não deixada em 0 | sim | idem, via `DELETE` |
-| Duas quantidades do mesmo item no mesmo pedido são somadas | sim | *"soma quantidades do mesmo item"* |
-| Origem igual ao destino é recusada | sim | `SAME_OWNER` |
-| Dono de tipo sem adaptador falha fechado e por nome | sim | `NO_ADAPTER` |
-| Container inexistente recusado **dentro** da transação | sim | `OWNER_NOT_FOUND` |
-| Personagem offline (sem `actorId`) recebe item | sim | *"projeta no cliente só depois do commit"* |
-| Estoque insuficiente não move nada | sim | |
-| Erro de SQL não chega à tela do jogador | sim | |
-| Cliente só é tocado depois do `commit` | sim | |
+| Simple transfer between characters | yes | `core/inventory.test.js` |
+| Stack merge (item the destination already has) | yes | same — `applyStackDelta` adds |
+| Stack split (moving part) | yes | same |
+| A zeroed stack is deleted, not left at 0 | yes | same, via `DELETE` |
+| Two quantities of the same item in the same request are summed | yes | *"sums quantities of the same item"* |
+| Source equal to destination is refused | yes | `SAME_OWNER` |
+| An owner of a type without an adapter fails closed and by name | yes | `NO_ADAPTER` |
+| A nonexistent container refused **inside** the transaction | yes | `OWNER_NOT_FOUND` |
+| An offline character (no `actorId`) receives an item | yes | *"projects to the client only after the commit"* |
+| Insufficient stock moves nothing | yes | |
+| An SQL error does not reach the player's screen | yes | |
+| The client is only touched after the `commit` | yes | |
 
 ---
 
-## 3. Dupe protection — o §9 do pedido, item a item
+## 3. Dupe protection — §9 of the request, item by item
 
-| Cenário | Antes | Agora | Onde |
+| Scenario | Before | Now | Where |
 |---|---|---|---|
-| **Duplo clique** | parcial (só memória) | **sim** | `duplicate: true` devolve o mesmo `transferId`, o item sai uma vez |
-| **Pacote repetido** | parcial | **sim** | idem — a chave sobrevive a restart, é do banco |
-| **Reconexão** | parcial | parcial | `_syncedThisSession` continua por sessão; a fronteira do [ADR_003 §3](../technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md) não fechou |
-| **Disconnect durante transferência** | não | **sim** | `trade-service.test.js`: *"quem saiu no meio cancela"* |
-| **Cancelamento de trade** | não | **sim** | *"cancelar solta os dois lados"* |
-| **Timeout de banco** | não | **sim** | `erroForcado` no INSERT do razão → rollback, nada movido, mensagem genérica |
-| **Duas transferências simultâneas** | parcial (só ouro) | parcial | ver §6 |
-| **Mesmo item vendido e trocado** | não | **sim** | *"quem vendeu o item entre a confirmação e o fechamento não doa nada"* |
-| **Mesmo item craftado e dropado** | não | **sim** | *"craft sem ingrediente não entrega o resultado"* — o `FOR UPDATE` é a mesma proteção |
+| **Double click** | partial (memory only) | **yes** | `duplicate: true` returns the same `transferId`, the item leaves once |
+| **Repeated packet** | partial | **yes** | same — the key survives a restart, it is in the database |
+| **Reconnection** | partial | partial | `_syncedThisSession` is still per session; the boundary of [ADR_003 §3](../technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md) has not closed |
+| **Disconnect during a transfer** | no | **yes** | `trade-service.test.js`: *"whoever leaves midway cancels"* |
+| **Trade cancellation** | no | **yes** | *"cancelling releases both sides"* |
+| **Database timeout** | no | **yes** | `erroForcado` on the ledger INSERT → rollback, nothing moved, generic message |
+| **Two simultaneous transfers** | partial (gold only) | partial | see §6 |
+| **Same item sold and traded** | no | **yes** | *"whoever sold the item between confirmation and closing donates nothing"* |
+| **Same item crafted and dropped** | no | **yes** | *"crafting without the ingredient does not deliver the result"* — the `FOR UPDATE` is the same protection |
 
 ---
 
-## 4. Segurança — o §19 do pedido
+## 4. Security — §19 of the request
 
-| Ataque | Coberto | Resposta |
+| Attack | Covered | Response |
 |---|---|---|
-| Quantidade negativa | sim | `INVALID_QUANTITY`, sem abrir transação |
-| Quantidade zero | sim | `INVALID_QUANTITY` |
-| `NaN` | sim | `INVALID_QUANTITY` / `INVALID_ITEM` |
-| `Infinity` | sim | idem |
-| Fracionário (`1.5`) | sim | idem |
-| Overflow (`2e6` por item) | sim | teto por operação |
-| Overflow de pilha (`INT` do MySQL) | sim | `Pilha cheia`, em vez de saturar em silêncio |
-| FormID desconhecido | sim | `UNKNOWN_FORMID`, quando o `espm` **sabe** que não é item |
-| FormID como string (`"0x10"`) | sim | `INVALID_ITEM` — a API não adivinha base |
-| Container falso | sim | `OWNER_NOT_FOUND`, dentro da transação |
-| Alvo falso (troca) | sim | `requestTrade` recusa ator sem personagem |
-| Spoof de distância | sim | o servidor mede; o cliente não envia distância |
-| Replay de trade | sim | `requestId = sessionId.vN`; `COMMITTING` bloqueia o segundo confirm |
-| Replay de craft | sim | `requestId` sem `Date.now()` |
-| `requestId` duplicado | sim | `duplicate: true`, não executa de novo |
-| Injeção por nome de tabela | sim | `STACK_TABLES` é lista fechada; teste com `'characters; DROP TABLE x'` |
-| Origem de `system` inventada | sim | lista fechada — `presente_de_natal` lança |
+| Negative quantity | yes | `INVALID_QUANTITY`, without opening a transaction |
+| Zero quantity | yes | `INVALID_QUANTITY` |
+| `NaN` | yes | `INVALID_QUANTITY` / `INVALID_ITEM` |
+| `Infinity` | yes | same |
+| Fractional (`1.5`) | yes | same |
+| Overflow (`2e6` per item) | yes | per-operation ceiling |
+| Stack overflow (MySQL `INT`) | yes | `Pilha cheia` ("stack full"), instead of silently saturating |
+| Unknown FormID | yes | `UNKNOWN_FORMID`, when `espm` **knows** it is not an item |
+| FormID as a string (`"0x10"`) | yes | `INVALID_ITEM` — the API does not guess the base |
+| Fake container | yes | `OWNER_NOT_FOUND`, inside the transaction |
+| Fake target (trade) | yes | `requestTrade` refuses an actor without a character |
+| Distance spoofing | yes | the server measures; the client does not send distance |
+| Trade replay | yes | `requestId = sessionId.vN`; `COMMITTING` blocks the second confirm |
+| Craft replay | yes | `requestId` without `Date.now()` |
+| Duplicate `requestId` | yes | `duplicate: true`, does not execute again |
+| Injection via table name | yes | `STACK_TABLES` is a closed list; test with `'characters; DROP TABLE x'` |
+| Invented `system` origin | yes | closed list — `presente_de_natal` throws |
 
 ---
 
-## 5. Troca — o §20 do pedido
+## 5. Trade — §20 of the request
 
-| Caso | Coberto |
+| Case | Covered |
 |---|---|
-| Convite criado, indexado pelos dois lados | sim |
-| Alvo inexistente / si mesmo / inválido | sim |
-| Quem já está numa troca é recusado, dos dois lados | sim |
-| Quem convidou não aceita o próprio convite | sim |
-| Convite expira (45 s) | sim |
-| Sessão expira (3 min) e libera os dois | sim |
-| Ofertar mais do que se tem é recusado na hora | sim |
-| Quantidade negativa remove da própria oferta, sem criar dívida | sim |
-| Teto de tipos por lado | sim |
-| **Mudança de oferta derruba as duas confirmações** | sim |
-| Versão sobe a cada mudança | sim |
-| Troca vazia não fecha | sim |
-| Só o segundo confirm dispara o commit | sim |
-| Commit move os dois lados e encerra a sessão | sim |
-| Conservação (soma zero por `transfer_id`) | sim |
-| Posse revalidada no commit | sim |
-| Saída de um dos lados invalida | sim |
-| Troca de personagem no mesmo ator invalida | sim |
-| Afastar-se invalida (com `mp` medindo de verdade) | sim |
-| Desconexão cancela e não deixa item órfão | sim |
-| `sweep()` encerra tudo | sim |
-| Interação some do menu de quem já negocia | sim |
-| Auditoria da interação é `TRACE` | sim |
+| Invitation created, indexed by both sides | yes |
+| Nonexistent / self / invalid target | yes |
+| Someone already in a trade is refused, on both sides | yes |
+| The inviter does not accept their own invitation | yes |
+| Invitation expires (45 s) | yes |
+| Session expires (3 min) and releases both | yes |
+| Offering more than one has is refused immediately | yes |
+| A negative quantity removes from one's own offer, without creating a debt | yes |
+| Per-side type ceiling | yes |
+| **An offer change drops both confirmations** | yes |
+| Version goes up with each change | yes |
+| An empty trade does not close | yes |
+| Only the second confirm triggers the commit | yes |
+| The commit moves both sides and ends the session | yes |
+| Conservation (zero sum per `transfer_id`) | yes |
+| Possession revalidated at commit | yes |
+| One side leaving invalidates | yes |
+| Swapping characters on the same actor invalidates | yes |
+| Moving away invalidates (with `mp` really measuring) | yes |
+| Disconnection cancels and leaves no orphan item | yes |
+| `sweep()` closes everything | yes |
+| The interaction disappears from the menu of someone already trading | yes |
+| The interaction audit is `TRACE` | yes |
 
 ---
 
-## 6. O que **não** está coberto, e por quê
+## 6. What is **not** covered, and why
 
-### 6.1 Concorrência real
+### 6.1 Real concurrency
 
-Os testes rodam contra um banco em memória de thread única. `FOR UPDATE`,
-gap lock e deadlock **não são exercitados** — o mock não bloqueia.
+The tests run against a single-threaded in-memory database. `FOR UPDATE`,
+gap locks and deadlocks **are not exercised** — the mock does not block.
 
-O que os testes cobrem é que o código **pede** o lock (`SELECT … FOR UPDATE`
-aparece na query) e que a ordem de aquisição é determinística (as operações são
-ordenadas por `(chave do dono, base_id)`, o que torna o ciclo A→B/B→A
-impossível). Que o MariaDB honre isso é premissa, não afirmação.
+What the tests cover is that the code **requests** the lock (`SELECT … FOR UPDATE`
+appears in the query) and that the acquisition order is deterministic (operations are
+sorted by `(owner key, base_id)`, which makes the A→B/B→A cycle
+impossible). That MariaDB honors this is an assumption, not a claim.
 
-**Como fechar:** um teste de integração com banco real e duas conexões
-concorrentes. `RUN_DB_CHECK=1 npm run test:systems` já é o lugar onde esse tipo
-de teste vive neste projeto.
+**How to close it:** an integration test with a real database and two concurrent
+connections. `RUN_DB_CHECK=1 npm run test:systems` is already where this kind
+of test lives in this project.
 
-### 6.2 A migração v14
+### 6.2 Migration v14
 
-`check-schema-drift.js` confere tabela, coluna e índice — e **não reconhece
-`MODIFY COLUMN`**. A mudança de nulabilidade de
-`inventory_transactions.character_id` não aparece como drift se a migração for
-pulada. Conferência manual:
+`check-schema-drift.js` checks tables, columns and indexes — and **does not recognize
+`MODIFY COLUMN`**. The nullability change of
+`inventory_transactions.character_id` does not show up as drift if the migration is
+skipped. Manual check:
 
 ```sql
 SHOW COLUMNS FROM inventory_transactions LIKE 'character_id';
 ```
 
-A consolidação de duplicatas da migração também não tem teste: ela roda uma vez,
-contra dado que talvez não exista.
+The migration's duplicate consolidation has no test either: it runs once,
+against data that may not exist.
 
-### 6.3 Reconciliação cliente → servidor
+### 6.3 Client → server reconciliation
 
-Continua unidirecional. Item pego do chão pelo jogador não vira linha no banco e
-nenhum teste finge que vira. É a fronteira do
-[ADR_003 §3](../technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md), aberta de
-propósito.
+Still one-way. An item picked up from the ground by the player does not become a row in the database and
+no test pretends it does. It is the boundary of
+[ADR_003 §3](../technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md), left open on
+purpose.
 
-### 6.4 Capacidade e peso
+### 6.4 Capacity and weight
 
-Não existem. Não há teste porque não há comportamento.
+They do not exist. There is no test because there is no behavior.
 
-### 6.5 A barraca
+### 6.5 The stall
 
-`addItem`, `packStall` e `removeItem` passaram a mover o inventário **dentro** da
-transação da barraca. `market-stalls-purchase.test.js` e
-`market-stalls-service.test.js` continuam verdes e cobrem a compra, que já era
-o caminho correto. **A atomicidade nova dos outros três não tem teste próprio** —
-a mudança é estrutural (mesmas primitivas, dentro do `BEGIN` que já existia) e
-verificável por leitura, mas isso é mais fraco que os outros itens desta matriz.
+`addItem`, `packStall` and `removeItem` now move inventory **inside** the
+stall transaction. `market-stalls-purchase.test.js` and
+`market-stalls-service.test.js` remain green and cover the purchase, which was already
+the correct path. **The new atomicity of the other three has no test of its own** —
+the change is structural (same primitives, inside the `BEGIN` that already existed) and
+verifiable by reading, but that is weaker than the other items in this matrix.
 
-É a lacuna mais acionável da lista.
+It is the most actionable gap on the list.
 
-### 6.6 Uma sessão real
+### 6.6 A real session
 
-Zero jogadores. 716 testes verdes provam que o código faz o que os testes dizem;
-não provam que o SkyMP se comporta como este projeto assume.
+Zero players. 716 green tests prove that the code does what the tests say;
+they do not prove that SkyMP behaves the way this project assumes.
 
 ---
 
-## 7. Como rodar
+## 7. How to run
 
 ```bash
 npm test
 ```
 
-Só o framework de inventário e a troca:
+Only the inventory framework and trade:
 
 ```bash
 node --test core/inventory.test.js trade-service.test.js

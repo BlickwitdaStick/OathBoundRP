@@ -1,162 +1,162 @@
 # Inventory Framework
 
-**Estado:** implementado, testado (70 testes novos, 6 mutações verificadas) e
-**é o caminho obrigatório** para item que muda de dono. **Nunca rodou numa
-sessão real** — mesmo peso que a frase tem no
+**Status:** implemented, tested (70 new tests, 6 verified mutations) and
+**it is the mandatory path** for an item that changes owner. **It has never run in a real
+session** — the sentence carries the same weight as in
 [`INTERACTION_FRAMEWORK.md`](INTERACTION_FRAMEWORK.md).
 
-Arquivos:
+Files:
 
-| Arquivo | Responsabilidade | Toca `mp`/banco? |
+| File | Responsibility | Touches `mp`/database? |
 |---|---|---|
-| [`core/inventory-owner.js`](../../skymp/gamemode/core/inventory-owner.js) | O vocabulário de "de quem é este item" | **Não** — função pura |
-| [`core/inventory.js`](../../skymp/gamemode/core/inventory.js) | Move item entre donos, numa transação | Banco, por injeção do `transaction-service` |
-| [`core/transaction-service.js`](../../skymp/gamemode/core/transaction-service.js) | Trava linha, recusa estoque insuficiente, grava razão | Sim — é o único que escreve pilha |
+| [`core/inventory-owner.js`](../../skymp/gamemode/core/inventory-owner.js) | The vocabulary of "whose item is this" | **No** — pure function |
+| [`core/inventory.js`](../../skymp/gamemode/core/inventory.js) | Moves items between owners, in one transaction | Database, injected via `transaction-service` |
+| [`core/transaction-service.js`](../../skymp/gamemode/core/transaction-service.js) | Locks rows, refuses insufficient stock, writes the ledger | Yes — it is the only one that writes stacks |
 
 ---
 
-## 1. O problema
+## 1. The problem
 
-`core/transaction-service.js` faz o que promete: `BEGIN`, `SELECT … FOR UPDATE`,
-razão, `idempotency_key`. **Mas ele só sabe falar de um dono: personagem.**
+`core/transaction-service.js` does what it promises: `BEGIN`, `SELECT … FOR UPDATE`,
+ledger, `idempotency_key`. **But it only knows how to talk about one owner: a character.**
 
-Toda vez que um item precisou ir para outro lugar, quem precisou disso escreveu
-o outro lado à mão, fora da transação — três implementações, com a mesma forma
-de defeito que já foi apagada duas vezes neste projeto. Diagnóstico completo em
+Every time an item needed to go somewhere else, whoever needed it wrote
+the other side by hand, outside the transaction — three implementations, with the same shape
+of defect that has already been deleted twice in this project. Full diagnosis in
 [`INVENTORY_TRADE_CRAFTING_AUDIT.md`](../research/INVENTORY_TRADE_CRAFTING_AUDIT.md).
 
 ---
 
-## 2. A regra central
+## 2. The central rule
 
-> **O razão fecha em zero.**
+> **The ledger balances to zero.**
 
-Para todo `transfer_id`, a soma dos `delta` gravados é zero. Item não aparece e
-não some: ele sai de um dono e entra em outro, e os dois lados deixam linha —
-inclusive quando um dos lados é o nada.
+For every `transfer_id`, the sum of the written `delta` values is zero. Items do not appear and
+do not vanish: they leave one owner and enter another, and both sides leave a row —
+including when one of the sides is the void.
 
-É essa propriedade, e não o valor de retorno das funções, que os testes
-afirmam. Uma checagem de `resultado.ok` passa em qualquer implementação que
-devolva `true`; a soma só fecha se o item tiver mesmo se movido.
+It is this property, and not the functions' return values, that the tests
+assert. A `result.ok` check passes on any implementation that
+returns `true`; the sum only balances if the item really moved.
 
 ---
 
-## 3. Qual API usar
+## 3. Which API to use
 
-| Situação | Use |
+| Situation | Use |
 |---|---|
-| Um dono só muda (dar/tirar de um personagem) | `transactionService.giveItem` / `removeItem` |
-| **Dois donos** (troca, baú, barraca, craft) | `inventory.transfer` |
-| Duas ou mais pernas que precisam commitar juntas | `inventory.exchange` |
-| Item nasce ou morre | `inventory.mint` / `inventory.burn` |
-| A operação precisa commitar junto com ouro | as primitivas `tx.*`, na sua transação |
+| Only one owner changes (giving/taking from a character) | `transactionService.giveItem` / `removeItem` |
+| **Two owners** (trade, chest, stall, craft) | `inventory.transfer` |
+| Two or more legs that need to commit together | `inventory.exchange` |
+| An item is created or destroyed | `inventory.mint` / `inventory.burn` |
+| The operation needs to commit together with gold | the `tx.*` primitives, in your transaction |
 
-A última linha é a compra em barraca, e continua sendo a forma certa para ela:
-`market_stall_items` não é uma pilha (carrega preço, rótulo e status por
-anúncio), então a barraca abre a própria transação e usa `tx.*` dentro dela.
+The last row is the stall purchase, and it remains the right form for it:
+`market_stall_items` is not a stack (it carries price, label and status per
+listing), so the stall opens its own transaction and uses `tx.*` inside it.
 
 ---
 
-## 4. O modelo de item
+## 4. The item model
 
-### 4.1 Pilha é o padrão
-
-```
-(dono, base_id, count)
-```
-
-`base_id` é o FormID nativo, **em decimal** no banco. Não há instância, não há
-durabilidade, não há proveniência.
-
-### 4.2 Instância: desenhada, não construída
-
-O §5 do pedido pede o desenho e adverte contra transformar tudo em UUID. O
-desenho é este:
+### 4.1 The stack is the default
 
 ```
-ItemDefinition   base_id → { tipo, empilhável, precisa_instância }   (hoje: core/espm.js)
-ItemInstance     uuid, definição, dono, metadata                     (não existe)
-Stack            (dono, base_id, count)                              (é o que existe)
+(owner, base_id, count)
 ```
 
-**Nenhuma definição opta por instância hoje**, e a tabela não foi criada. Três
-razões, em ordem de peso:
+`base_id` is the native FormID, **in decimal** in the database. There is no instance, no
+durability, no provenance.
 
-1. **O Skyrim nativo não tem o conceito.** `AddItem(baseId, count)` é a única
-   API de entrega. Uma instância no banco não teria como ser projetada no
-   cliente — ela existiria só para o servidor, e o jogador veria uma espada
-   igual a qualquer outra.
-2. **Custa linha por unidade.** 400 flechas viram 400 linhas numa tabela lida no
-   login de todo mundo.
-3. **Nenhum sistema atual lê metadata.** Barraca, governança, craft e morte
-   trabalham com pilha.
+### 4.2 Instance: designed, not built
 
-**O gatilho para construir**, para quem chegar aqui depois: o primeiro requisito
-que precise distinguir duas unidades do mesmo `base_id` — durabilidade,
-"esta espada foi forjada por Fulano", contrabando marcado. Aí a forma é uma
-tabela `item_instances` e um `precisa_instância` na definição, com o adaptador
-roteando por ela. Até lá, construir seria a abstração prematura que o
-`module-registry` recusou em 06/08/2026, pelo mesmo argumento.
+§5 of the request asks for the design and warns against turning everything into a UUID. The
+design is this:
+
+```
+ItemDefinition   base_id → { type, stackable, needs_instance }   (today: core/espm.js)
+ItemInstance     uuid, definition, owner, metadata               (does not exist)
+Stack            (owner, base_id, count)                         (is what exists)
+```
+
+**No definition opts into instances today**, and the table was not created. Three
+reasons, in order of weight:
+
+1. **Native Skyrim does not have the concept.** `AddItem(baseId, count)` is the only
+   delivery API. An instance in the database would have no way of being projected onto the
+   client — it would exist only for the server, and the player would see a sword
+   identical to any other.
+2. **It costs a row per unit.** 400 arrows become 400 rows in a table read at
+   everyone's login.
+3. **No current system reads metadata.** Stall, governance, craft and death
+   work with stacks.
+
+**The trigger to build it**, for whoever gets here later: the first requirement
+that needs to distinguish two units of the same `base_id` — durability,
+"this sword was forged by So-and-so", marked contraband. Then the shape is an
+`item_instances` table and a `needs_instance` in the definition, with the adapter
+routing through it. Until then, building it would be the premature abstraction that the
+`module-registry` refused on 2026-08-06, by the same argument.
 
 ### 4.3 Metadata
 
-O §6 do pedido lista durabilidade, qualidade, `craftedBy`, roubado, nome
-customizado, origem, encantamento, série, expiração.
+§6 of the request lists durability, quality, `craftedBy`, stolen, custom
+name, origin, enchantment, serial, expiration.
 
-Todos dependem de instância (§4.2), **e nenhum é aceito do cliente**. Quando
-existirem, nascem server-side: o `execute` de uma interação recebe `data` já
-saneado pelo `schema`, e um campo não declarado não chega ao módulo — a regra do
-[`INTERACTION_FRAMEWORK.md`](INTERACTION_FRAMEWORK.md) §5 vale aqui sem mudança.
+All of them depend on instances (§4.2), **and none is accepted from the client**. When they
+exist, they are born server-side: an interaction's `execute` receives `data` already
+sanitized by the `schema`, and an undeclared field does not reach the module — the rule of
+[`INTERACTION_FRAMEWORK.md`](INTERACTION_FRAMEWORK.md) §5 applies here unchanged.
 
 ---
 
-## 5. Donos
+## 5. Owners
 
 ```js
 const inventory = require('./core/inventory');
 
-inventory.character(characterId, actorId)   // actorId opcional: só projeta no cliente
-inventory.container(containerId)            // containers.id, não o formDesc
-inventory.system('craft')                   // o nada, com origem nomeada
+inventory.character(characterId, actorId)   // optional actorId: only projects to the client
+inventory.container(containerId)            // containers.id, not the formDesc
+inventory.system('craft')                   // the void, with a named origin
 ```
 
-Sete tipos, **três com armazenamento**:
+Seven types, **three with storage**:
 
-| Tipo | Adaptador | Onde mora |
+| Type | Adapter | Where it lives |
 |---|---|---|
-| `character` | sim | `character_inventory` |
-| `container` | sim | `container_inventory` |
-| `system` | — (é o nada) | só razão |
-| `property` | **não** | hoje uma propriedade *é* um container |
-| `faction` | **não** | não há tabela de item de facção |
-| `corpse` | **não** | `corpse-probe` observa, não guarda |
-| `market` | **não** | `market_stall_items` é oferta, não pilha |
+| `character` | yes | `character_inventory` |
+| `container` | yes | `container_inventory` |
+| `system` | — (it is the void) | ledger only |
+| `property` | **no** | today a property *is* a container |
+| `faction` | **no** | there is no faction item table |
+| `corpse` | **no** | `corpse-probe` observes, it does not store |
+| `market` | **no** | `market_stall_items` is an offer, not a stack |
 
-Um pedido contra um tipo sem adaptador falha com *"Tipo de dono nao
-suportado"* — fechado, nomeado, visível. É o mesmo critério dos seis tipos de
-alvo sem resolvedor no Interaction Framework, pela mesma razão.
+A request against a type without an adapter fails with *"Tipo de dono nao
+suportado"* ("Owner type not supported") — closed, named, visible. It is the same criterion as the six
+target types without a resolver in the Interaction Framework, for the same reason.
 
-Para dar dono a um tipo, do `initialize()` do módulo:
+To give a type an owner, from the module's `initialize()`:
 
 ```js
 inventory.registerAdapter('corpse', {
   applyDelta: (conn, owner, baseId, delta) => /* … */,
   list: (runner, owner) => /* … */,
-  assertOwner: (conn, owner) => /* … */    // opcional
+  assertOwner: (conn, owner) => /* … */    // optional
 });
 ```
 
-O core não precisa saber que ele existe.
+The core does not need to know it exists.
 
-### `system` é uma lista fechada
+### `system` is a closed list
 
-`craft`, `consume`, `gather`, `staff`, `destroy`, `seed`. Um rótulo novo é
-decisão de economia e passa por revisão de código — o que torna *"que caminhos
-criam item neste servidor?"* respondível por leitura.
+`craft`, `consume`, `gather`, `staff`, `destroy`, `seed`. A new label is an
+economy decision and goes through code review — which makes *"which paths
+create items on this server?"* answerable by reading.
 
 ---
 
-## 6. A API
+## 6. The API
 
 ```js
 await inventory.transfer({
@@ -169,7 +169,7 @@ await inventory.transfer({
 });
 ```
 
-Várias pernas numa transação só:
+Several legs in a single transaction:
 
 ```js
 await inventory.exchange({
@@ -181,141 +181,141 @@ await inventory.exchange({
 });
 ```
 
-### O resultado tem forma única
+### The result has a single shape
 
 ```js
 { ok, code, reason, transferId, duplicate, legs, items }
 ```
 
-Não é união discriminada de propósito: o `jsconfig.json` deste pacote roda com
-`strictNullChecks: false` (deliberadamente — ligar `strict` produziria centenas
-de erros no código existente), e sem ele o TypeScript não estreita
-`{ok:true}|{ok:false}`. Uma API cujo uso correto acende o `npm run typecheck` é
-uma API que ensina a ignorar o verificador.
+It is not a discriminated union on purpose: this package's `jsconfig.json` runs with
+`strictNullChecks: false` (deliberately — turning on `strict` would produce hundreds
+of errors in the existing code), and without it TypeScript does not narrow
+`{ok:true}|{ok:false}`. An API whose correct use lights up `npm run typecheck` is
+an API that teaches people to ignore the checker.
 
-`code` é estável e serve para ramificar: `INVALID_QUANTITY`, `INVALID_ITEM`,
+`code` is stable and is meant for branching: `INVALID_QUANTITY`, `INVALID_ITEM`,
 `UNKNOWN_FORMID`, `INVALID_REQUEST_ID`, `SAME_OWNER`, `NO_ADAPTER`, `TOO_MANY`,
 `EMPTY`, `OWNER_NOT_FOUND`, `INSUFFICIENT`, `DB`.
 
-`reason` é a frase que o jogador pode ver. **Erro de banco nunca vira `reason`**
-— vai para o log, e a tela recebe *"Nao foi possivel concluir a operacao."*.
-Mesma correção que a compra em barraca já tinha levado.
+`reason` is the sentence the player may see. **A database error never becomes a `reason`**
+— it goes to the log, and the screen gets *"Nao foi possivel concluir a operacao."* ("The operation could not be completed.").
+The same fix the stall purchase had already received.
 
 ---
 
-## 7. O que o pipeline garante
+## 7. What the pipeline guarantees
 
-### 7.1 Validação, antes de tocar no banco
+### 7.1 Validation, before touching the database
 
-`NaN`, `Infinity`, fracionário, negativo, zero, acima do teto, FormID
-desconhecido, `requestId` malformado, origem igual ao destino, dono sem
-adaptador. Nada disso custa uma conexão do pool.
+`NaN`, `Infinity`, fractional, negative, zero, above the ceiling, unknown
+FormID, malformed `requestId`, source equal to destination, owner without an
+adapter. None of this costs a pool connection.
 
-`core/espm.pareceItem` responde **`ok` quando não sabe** (sem `mp`, servidor
-antigo): é diagnóstico de digitação, não autoridade. Só nega quando a API
-respondeu e respondeu que aquele FormID não vai para inventário.
+`core/espm.pareceItem` answers **`ok` when it does not know** (no `mp`, old
+server): it is a typo diagnostic, not an authority. It only denies when the API
+answered and said that FormID does not go into an inventory.
 
-### 7.2 Ordem global de lock
+### 7.2 Global lock order
 
-Uma transferência A→B e outra B→A ao mesmo tempo travariam em ordem oposta e
-fariam deadlock. As operações são ordenadas por `(chave do dono, base_id)`, o
-que dá a **toda** transferência do servidor a mesma ordem de aquisição — o ciclo
-vira impossível em vez de improvável.
+A transfer A→B and another B→A at the same time would lock in opposite order and
+deadlock. Operations are sorted by `(owner key, base_id)`, which
+gives **every** transfer on the server the same acquisition order — the cycle
+becomes impossible instead of improbable.
 
-Deltas do mesmo `(dono, item)` vindos de pernas diferentes são somados antes:
-uma troca em que os dois lados oferecem a mesma poção mexe numa linha por lado,
-não em duas.
+Deltas for the same `(owner, item)` coming from different legs are summed first:
+a trade in which both sides offer the same potion touches one row per side,
+not two.
 
-### 7.3 Idempotência que sobrevive a restart
+### 7.3 Idempotency that survives a restart
 
-`requestId` é **obrigatório**. A primeira linha de razão usa `requestId#0` como
-âncora, e o replay é conferido **dentro** da transação com `FOR UPDATE`:
+`requestId` is **mandatory**. The first ledger row uses `requestId#0` as the
+anchor, and the replay is checked **inside** the transaction with `FOR UPDATE`:
 
-| Situação | Resposta |
+| Situation | Response |
 |---|---|
-| Primeira chamada | Executa |
-| Segunda, com a mesma chave | `duplicate: true`, devolve o mesmo `transferId`, não executa |
-| Duas concorrentes com a mesma chave | A segunda **espera** e lê o resultado da primeira |
-| Recusa antes do commit | A chave **não é consumida** — o retry corrigido funciona |
+| First call | Executes |
+| Second, with the same key | `duplicate: true`, returns the same `transferId`, does not execute |
+| Two concurrent calls with the same key | The second **waits** and reads the first one's result |
+| Refusal before the commit | The key is **not consumed** — the corrected retry works |
 
-A terceira linha é a correção do §7 da auditoria: `giveItem` conferia a chave
-numa conexão diferente da que abria a transação, então a segunda chamada
-recebia `false` — e um chamador com compensação devolveria item por uma
-operação que tinha dado certo.
+The third row is the fix from audit §7: `giveItem` checked the key
+on a different connection from the one opening the transaction, so the second call
+received `false` — and a caller with compensation would return an item for an
+operation that had succeeded.
 
-Isto é a camada que protege item. A dedup em memória do Interaction Framework
-protege contra duplo clique e continua existindo; as duas resolvem coisas
-diferentes.
+This is the layer that protects items. The Interaction Framework's in-memory dedup
+protects against double clicks and still exists; the two solve different
+things.
 
-### 7.4 O cliente vem depois do commit
+### 7.4 The client comes after the commit
 
-Sempre. Uma falha em `AddItem`/`RemoveItem` deixa o cliente divergente e é
-reconciliada no próximo login — nunca desfaz o que commitou.
-
----
-
-## 8. O que este framework **não** faz
-
-- **Não mede distância.** Quem mede é o pipeline de interação, que já tem ator,
-  alvo e `assertRange`. Medir aqui seria medir num instante diferente do que
-  autorizou. Quem chama revalida imediatamente antes — o `trade-service` faz.
-- **Não checa permissão.** É do módulo que ofereceu a ação. Esta API é o
-  notário, não o juiz.
-- **Não move ouro.** Ouro é `core/transaction-service`. Expor "mexa em ouro
-  também" numa API de item é como o `economy-service` começou.
-- **Não impõe capacidade nem peso.** O contrato do adaptador tem o lugar,
-  nenhum adaptador o implementa, e nenhuma coluna o suporta. Ausente, não
-  simulado.
-- **Não reconcilia o que o cliente tem e o banco não conhece.** É a fronteira do
-  [`ADR_003`](../technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md) §3, e ela
-  continua aberta.
+Always. A failure in `AddItem`/`RemoveItem` leaves the client divergent and is
+reconciled at the next login — it never undoes what was committed.
 
 ---
 
-## 9. Quem já usa
+## 8. What this framework does **not** do
 
-| Chamador | O que mudou |
+- **It does not measure distance.** The interaction pipeline measures it, since it already has actor,
+  target and `assertRange`. Measuring here would be measuring at a different moment from the one that
+  authorized. The caller revalidates immediately before — `trade-service` does.
+- **It does not check permissions.** That belongs to the module that offered the action. This API is the
+  notary, not the judge.
+- **It does not move gold.** Gold is `core/transaction-service`. Exposing "touch gold
+  too" in an item API is how `economy-service` started.
+- **It does not impose capacity or weight.** The adapter contract has the place,
+  no adapter implements it, and no column supports it. Absent, not
+  simulated.
+- **It does not reconcile what the client has and the database does not know.** That is the boundary of
+  [`ADR_003`](../technical/ADR_003_INVENTORY_SOURCE_OF_TRUTH.md) §3, and it
+  remains open.
+
+---
+
+## 9. Who already uses it
+
+| Caller | What changed |
 |---|---|
-| `housing-service.depositItem` | Era `removeItem()` commitado + dois `db.query` soltos. Podia **destruir** item |
-| `housing-service.withdrawItem` | **Não existia.** Um baú em que só se deposita não é um baú |
-| `crafting-service.craftItem` | Consumo e resultado numa `exchange` de duas pernas; a chave de idempotência deixou de conter `Date.now()` |
-| `trade-service` | Reescrito inteiro sobre `exchange` |
-| `market-stalls.addItem` / `packStall` / `removeItem` | A perna do inventário entrou na transação da barraca (continuam usando `tx.*`, não `inventory`, porque a barraca não é pilha) |
+| `housing-service.depositItem` | Was a committed `removeItem()` + two loose `db.query` calls. It could **destroy** items |
+| `housing-service.withdrawItem` | **Did not exist.** A chest you can only deposit into is not a chest |
+| `crafting-service.craftItem` | Consumption and result in a two-leg `exchange`; the idempotency key no longer contains `Date.now()` |
+| `trade-service` | Rewritten entirely on top of `exchange` |
+| `market-stalls.addItem` / `packStall` / `removeItem` | The inventory leg entered the stall transaction (they still use `tx.*`, not `inventory`, because the stall is not a stack) |
 
 ---
 
-## 10. Banco
+## 10. Database
 
 `migration-v14-inventory-framework.sql`:
 
-- `character_id` de `inventory_transactions` passa a aceitar `NULL`;
-- entram `owner_type`, `owner_ref`, `counterparty_type`, `counterparty_ref`,
-  `transfer_id` e dois índices;
-- `container_inventory` ganha `UNIQUE (container_id, base_id)` — o invariante
-  que o código assumia e que nada declarava. `character_inventory` **já
-  tinha**, desde a `migration-v7-indexes.sql`;
-- duplicatas preexistentes no baú são **somadas**, não descartadas: perder
-  estoque de jogador numa migração é pior que a duplicata sendo consertada.
+- `inventory_transactions.character_id` now accepts `NULL`;
+- `owner_type`, `owner_ref`, `counterparty_type`, `counterparty_ref`,
+  `transfer_id` and two indexes are added;
+- `container_inventory` gains `UNIQUE (container_id, base_id)` — the invariant
+  the code assumed and nothing declared. `character_inventory` **already
+  had it**, since `migration-v7-indexes.sql`;
+- pre-existing duplicates in the chest are **summed**, not discarded: losing
+  player stock in a migration is worse than the duplicate being fixed.
 
-⚠️ `check-schema-drift.js` não reconhece `MODIFY COLUMN`. Um banco que pulou
-esta migração não aparece como divergente; conferir à mão com
+⚠️ `check-schema-drift.js` does not recognize `MODIFY COLUMN`. A database that skipped
+this migration does not show up as divergent; check by hand with
 `SHOW COLUMNS FROM inventory_transactions LIKE 'character_id'`.
 
 ---
 
-## 11. O que NÃO está feito
+## 11. What is NOT done
 
-- **Quatro dos sete tipos de dono não têm adaptador.** Por escolha (§5).
-- **Instância e metadata não existem.** Por escolha (§4.2).
-- **Capacidade e peso não existem.**
-- **Não há UI.** Nem de inventário, nem de baú, nem de troca — os comandos de
-  chat são a interface inteira. O §18 do pedido (componentes reutilizáveis
-  `InventoryView`/`ContainerView`/`TradeView`/`CraftingView`) não foi
-  construído: construir quatro telas contra um servidor que nunca recebeu um
-  jogador escolheria o desenho da UI antes de saber o que a cena precisa
-  mostrar. O que existe do lado do servidor é o formato de dados —
-  `inventory.list(owner)` devolve `[{baseId, count}]` para qualquer dono, que é
-  o modelo único que as quatro telas compartilhariam.
-- **`container` não tem resolvedor de alvo de interação.** Abrir baú continua
-  sendo chamada direta do `housing-service`, que está PARKED.
-- **Nada disto rodou numa sessão real.**
+- **Four of the seven owner types have no adapter.** By choice (§5).
+- **Instances and metadata do not exist.** By choice (§4.2).
+- **Capacity and weight do not exist.**
+- **There is no UI.** Not for inventory, chest or trade — the chat
+  commands are the entire interface. §18 of the request (reusable components
+  `InventoryView`/`ContainerView`/`TradeView`/`CraftingView`) was not
+  built: building four screens against a server that has never received a
+  player would choose the UI design before knowing what the scene needs to
+  show. What exists on the server side is the data format —
+  `inventory.list(owner)` returns `[{baseId, count}]` for any owner, which is
+  the single model the four screens would share.
+- **`container` has no interaction target resolver.** Opening a chest is still
+  a direct call to `housing-service`, which is PARKED.
+- **None of this has run in a real session.**

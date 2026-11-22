@@ -1,77 +1,77 @@
-# Baseline de observabilidade — 24/08/2026
+# Observability baseline — 2026-08-24
 
-Inventário do que o projeto consegue explicar hoje sem depender de MariaDB,
-Skyrim ou serviços externos. Este documento é a evidência inicial de `F8-002`;
-não declara o gate concluído.
+An inventory of what the project can explain today without depending on MariaDB,
+Skyrim or external services. This document is the initial evidence for `F8-002`;
+it does not declare the gate complete.
 
-## Cobertura existente
+## Existing coverage
 
-| Sinal mínimo | Existe hoje | Onde aparece | Lacuna operacional |
+| Minimum signal | Exists today | Where it appears | Operational gap |
 |---|---|---|---|
-| Conexões | **Sim, local** | `connection-monitor.js` agrega ativos, estados, conexões, desconexões, aprovações e rejeições. | Snapshot fica no log do processo; falta collector/histórico. |
-| Falhas de login | **Parcial** | Master API registra chave inválida e erros; launcher mostra as falhas ao jogador. | Não há total por causa nem correlação launcher→Master API→game-api. |
-| Latência DB | **Sim, por serviço** | O wrapper compartilhado mede sucesso/erro em buckets fixos no painel e na Game API. | Ainda falta collector/retenção e instrumentar o gamemode. |
-| Eventos CEF | **Sim, local** | `ui-event-rate-limiter.snapshot()` conta observados/rejeitados por tipo e o bootstrap publica JSON a cada 60 s, sem payload. | Métrica fica só no stdout e reinicia com o processo. |
-| Rejeições | **Parcial** | Guards de autenticação/segredo e rate limits incrementam motivos enumerados. | Ainda falta cobrir as recusas de domínio no gamemode e na fila. |
-| Transferências | **Parcial** | `transaction-service` e `inventory` registram sucesso, replay e falha; o ledger durável fica no banco. | Sem taxa/latência agregada nem alerta de falha. |
-| Reconciliações | **Parcial** | Existem rotinas de economia/estado físico e `healthCheck()`. | Execuções e divergências não são agregadas. |
-| Polling | **Parcial** | Monitor de conexão mede intervalo, ticks e duração máxima. | Pollers de morte, painel, interação e atalhos ainda não medem duração/overlap. |
-| CPU e memória | **Sim nos serviços Node** | Snapshots internos incluem CPU acumulada, RSS, heap e memória externa; SkyMP declara `mp.getPrometheusMetrics()`. | Ainda falta gamemode, collector e histórico. |
-| Fila | **Sim, efêmero** | `GET /health` da Game API expõe capacidade, ocupados, conectados e espera. | Sem histórico, alertas ou persistência após restart. |
-| Saúde de módulos | **Local** | `module-registry.healthCheckAll()` isola falhas de módulos ativos. | Resultado não é publicado nem acompanhado. |
+| Connections | **Yes, local** | `connection-monitor.js` aggregates actives, states, connections, disconnections, approvals and rejections. | The snapshot stays in the process log; a collector/history is missing. |
+| Login failures | **Partial** | The Master API records invalid keys and errors; the launcher shows failures to the player. | No total per cause and no launcher→Master API→game-api correlation. |
+| DB latency | **Yes, per service** | The shared wrapper measures success/error in fixed buckets in the panel and the Game API. | Still missing a collector/retention and gamemode instrumentation. |
+| CEF events | **Yes, local** | `ui-event-rate-limiter.snapshot()` counts observed/rejected per type and the bootstrap publishes JSON every 60 s, without payload. | The metric stays in stdout only and resets with the process. |
+| Rejections | **Partial** | Authentication/secret guards and rate limits increment enumerated reasons. | Domain refusals in the gamemode and the queue are still not covered. |
+| Transfers | **Partial** | `transaction-service` and `inventory` record success, replay and failure; the durable ledger lives in the database. | No aggregated rate/latency and no failure alert. |
+| Reconciliations | **Partial** | Economy/physical-state routines and `healthCheck()` exist. | Runs and divergences are not aggregated. |
+| Polling | **Partial** | The connection monitor measures interval, ticks and maximum duration. | Death, panel, interaction and hotkey pollers do not yet measure duration/overlap. |
+| CPU and memory | **Yes in the Node services** | Internal snapshots include accumulated CPU, RSS, heap and external memory; SkyMP declares `mp.getPrometheusMetrics()`. | Still missing the gamemode, a collector and history. |
+| Queue | **Yes, ephemeral** | The Game API's `GET /health` exposes capacity, occupied, connected and waiting. | No history, alerts or persistence after restart. |
+| Module health | **Local** | `module-registry.healthCheckAll()` isolates failures of active modules. | The result is neither published nor tracked. |
 
-## Princípios para a implementação
+## Implementation principles
 
-1. Métricas não podem carregar ticket, session token, secret, texto de chat,
-   payload CEF, motivo livre ou identificador pessoal.
-2. Métricas internas não devem ficar em endpoint público sem autenticação.
-3. Nomes e labels precisam ter cardinalidade limitada; nunca usar IP, actorId,
-   accountId, rota dinâmica ou mensagem de erro como label.
-4. Logs devem preservar o prefixo estável do componente e incluir um
-   `requestId` opaco quando uma operação cruza serviços.
-5. Métrica em memória serve a uma instância; produção precisa de scrape ou
-   envio externo para sobreviver a restart.
+1. Metrics must not carry a ticket, session token, secret, chat text,
+   CEF payload, free-form reason or personal identifier.
+2. Internal metrics must not sit on a public endpoint without authentication.
+3. Names and labels must have bounded cardinality; never use IP, actorId,
+   accountId, a dynamic route or an error message as a label.
+4. Logs must keep the component's stable prefix and include an opaque
+   `requestId` when an operation crosses services.
+5. In-memory metrics serve one instance; production needs a scrape or
+   external push to survive a restart.
 
-## Próximas entregas executáveis
+## Next executable deliverables
 
-### O1 — Instrumentação HTTP (`IMPLEMENTADO`, sem collector)
+### O1 — HTTP instrumentation (`IMPLEMENTED`, no collector)
 
-- [x] contadores por serviço, rota normalizada e classe de status;
-- [x] duração em buckets fixos;
-- [x] contadores de rate limit e autenticação recusada;
-- [x] endpoint interno protegido por `X-Internal-Secret` na Game API e no bot;
-- [x] endpoint staff-only no painel;
-- [x] `X-Request-Id` validado/gerado e propagado do painel para o bot;
-- [ ] collector, retenção e alertas.
+- [x] counters per service, normalized route and status class;
+- [x] duration in fixed buckets;
+- [x] counters for rate limit and refused authentication;
+- [x] internal endpoint protected by `X-Internal-Secret` in the Game API and the bot;
+- [x] staff-only endpoint in the panel;
+- [x] `X-Request-Id` validated/generated and propagated from the panel to the bot;
+- [ ] collector, retention and alerts.
 
 Endpoints:
 
-- painel: `GET /api/metrics` (sessão com papel de staff);
+- panel: `GET /api/metrics` (session with a staff role);
 - Game API: `GET /internal/metrics` (`X-Internal-Secret`);
-- bot: `GET /api/metrics` (`X-Internal-Secret`, API presa a `127.0.0.1`).
+- bot: `GET /api/metrics` (`X-Internal-Secret`, API bound to `127.0.0.1`).
 
-O snapshot não contém SQL, parâmetros, IP, accountId, actorId, ticket, token,
-payload CEF ou texto livre. Séries têm cardinalidade limitada e rotas dinâmicas
-usam o template Express (`/recurso/:id`), nunca a URL concreta.
+The snapshot contains no SQL, parameters, IP, accountId, actorId, ticket, token,
+CEF payload or free text. Series have bounded cardinality and dynamic routes
+use the Express template (`/resource/:id`), never the concrete URL.
 
-### O2 — Banco e fluxo de login (`PARCIAL`)
+### O2 — Database and login flow (`PARTIAL`)
 
-- [x] medir duração e erro nos wrappers de consulta do painel/Game API, sem registrar SQL/params;
-- [ ] propagar `requestId` desde o launcher para OAuth, fila e Master API;
-- contar falha por causa enumerada (`invalid_ticket`, `not_whitelisted`, etc.).
+- [x] measure duration and errors in the panel/Game API query wrappers, without recording SQL/params;
+- [ ] propagate `requestId` from the launcher to OAuth, the queue and the Master API;
+- count failures by enumerated cause (`invalid_ticket`, `not_whitelisted`, etc.).
 
-### O3 — Gamemode e processo (`PARCIAL`)
+### O3 — Gamemode and process (`PARTIAL`)
 
-- [x] publicar em log estruturado `healthCheckAll()`, eventos CEF e conexões, sem IDs/erros livres;
-- [x] incluir CPU/RSS/heap do processo e duração máxima do polling de conexão;
-- [ ] medir reconciliações e os demais pollers;
-- integrar, quando disponível no artefato pinado, `getPrometheusMetrics()`;
-- [ ] exportar para collector/retenção.
+- [x] publish `healthCheckAll()`, CEF events and connections to a structured log, without IDs/free-form errors;
+- [x] include process CPU/RSS/heap and the maximum duration of connection polling;
+- [ ] measure reconciliations and the other pollers;
+- integrate `getPrometheusMetrics()` when it is available in the pinned artifact;
+- [ ] export to a collector/retention.
 
-### O4 — Operação
+### O4 — Operations
 
-- escolher coletor, retenção e alertas;
-- dashboard mínimo de login, fila, DB, CEF, transferências e recursos;
-- executar incidente controlado e provar diagnóstico sem reprodução local.
+- choose a collector, retention and alerts;
+- minimal dashboard for login, queue, DB, CEF, transfers and resources;
+- run a controlled incident and prove diagnosis without local reproduction.
 
-`F8-002` só pode ser concluído depois de O1–O4 e do exercício de incidente.
+`F8-002` can only be completed after O1–O4 and the incident exercise.

@@ -1,104 +1,104 @@
-# Modelo de Aplicacao de Personagem
+# Character Application Template
 
-## Informacoes do Jogador
+## Player Information
 
 - Discord ID:
 - Steam ID:
-- Fuso horario:
-- Idioma preferido:
-- Confirmacao de idade:
-- Voce leu e aceitou as regras?
+- Time zone:
+- Preferred language:
+- Age confirmation:
+- Have you read and accepted the rules?
 
-## Entendimento das Regras
+## Understanding of the Rules
 
-### 1. Explique metagaming com suas proprias palavras.
+### 1. Explain metagaming in your own words.
 
-Resposta:
+Answer:
 
-### 2. Explique powergaming com suas proprias palavras.
+### 2. Explain powergaming in your own words.
 
-Resposta:
+Answer:
 
-### 3. Explique fail RP com suas proprias palavras.
+### 3. Explain fail RP in your own words.
 
-Resposta:
+Answer:
 
-### 4. Seu amigo te diz no Discord que esta sendo roubado em Whiterun. Seu personagem esta em Riverwood e nao tem conhecimento in-character do roubo. O que voce pode fazer?
+### 4. Your friend tells you on Discord that they are being robbed in Whiterun. Your character is in Riverwood and has no in-character knowledge of the robbery. What can you do?
 
-Resposta:
+Answer:
 
-### 5. Seu personagem perde uma luta e e capturado. O que voce deve fazer?
+### 5. Your character loses a fight and is captured. What should you do?
 
-Resposta:
+Answer:
 
-### 6. Voce acha que outro jogador quebrou uma regra durante uma cena. O que voce deve fazer?
+### 6. You think another player broke a rule during a scene. What should you do?
 
-Resposta:
+Answer:
 
-## Identidade do Personagem
+## Character Identity
 
-- Nome completo do personagem:
-- Raca:
-- Idade:
-- Local de nascimento:
-- Ocupacao atual:
-- Local inicial desejado:
+- Character's full name:
+- Race:
+- Age:
+- Place of birth:
+- Current occupation:
+- Desired starting location:
 
-## Historia do Personagem
+## Character Background
 
-### 1. Historia curta
+### 1. Short backstory
 
-Escreva de 2 a 4 paragrafos.
+Write 2 to 4 paragraphs.
 
-Resposta:
+Answer:
 
-### 2. O que seu personagem quer?
+### 2. What does your character want?
 
-Resposta:
+Answer:
 
-### 3. Do que seu personagem tem medo?
+### 3. What is your character afraid of?
 
-Resposta:
+Answer:
 
-### 4. Qual e uma fraqueza ou falha importante?
+### 4. What is an important weakness or flaw?
 
-Resposta:
+Answer:
 
-### 5. O que seu personagem acredita sobre lei, autoridade e violencia?
+### 5. What does your character believe about law, authority and violence?
 
-Resposta:
+Answer:
 
-### 6. Que tipo de cenas de roleplay voce quer criar para outros jogadores?
+### 6. What kind of roleplay scenes do you want to create for other players?
 
-Resposta:
+Answer:
 
-## Conceitos Restritos
+## Restricted Concepts
 
-Voce quer algum conceito restrito?
+Do you want any restricted concept?
 
-- Nobre:
-- Vampiro:
-- Lobisomem:
-- Ligado a Daedra:
-- Membro de alto cargo em faccao:
-- Mago poderoso:
-- Assassino:
-- Outro:
+- Noble:
+- Vampire:
+- Werewolf:
+- Daedra-bound:
+- High-ranking faction member:
+- Powerful mage:
+- Assassin:
+- Other:
 
-Se sim, explique por que esse conceito deve ser aprovado.
+If yes, explain why this concept should be approved.
 
-Resposta:
+Answer:
 
-## Acordo Tecnico
+## Technical Agreement
 
-Eu concordo em:
+I agree to:
 
-- Usar apenas o cliente/modlist aprovado.
-- Evitar cheats e edicoes de arquivo.
-- Reportar bugs em vez de explora-los.
-- Aceitar consequencias de personagem conforme as regras do servidor.
-- Seguir instrucoes da staff durante moderacao ativa.
+- Use only the approved client/modlist.
+- Avoid cheats and file edits.
+- Report bugs instead of exploiting them.
+- Accept character consequences according to the server rules.
+- Follow staff instructions during active moderation.
 
-Assinatura:
+Signature:
 
-Data:
+Date:

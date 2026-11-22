@@ -1,44 +1,44 @@
-# Catálogo de referências e estudo
+# Reference and study catalog
 
-## Integrar de forma incremental
+## Integrate incrementally
 
-| Recurso | Uso recomendado |
+| Resource | Recommended use |
 |---|---|
-| [Ajv](https://github.com/ajv-validator/ajv) | schema JSON dos payloads de ações |
-| [dbmate](https://github.com/amacneil/dbmate) | runner de migrations MariaDB, após piloto local |
-| [express-mysql-session](https://github.com/chill117/express-mysql-session) | substituir `MemoryStore` no painel web |
-| [Helmet](https://github.com/helmetjs/helmet) | headers HTTP e CSP configurada |
-| [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) | limitar login e ações sensíveis |
-| [Pino](https://github.com/pinojs/pino) | logs JSON com correlação |
-| [Testcontainers Node](https://node.testcontainers.org/modules/mysql/) | testes de integração contra banco real |
+| [Ajv](https://github.com/ajv-validator/ajv) | JSON schema for action payloads |
+| [dbmate](https://github.com/amacneil/dbmate) | MariaDB migrations runner, after a local pilot |
+| [express-mysql-session](https://github.com/chill117/express-mysql-session) | replace `MemoryStore` in the web panel |
+| [Helmet](https://github.com/helmetjs/helmet) | HTTP headers and configured CSP |
+| [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) | limit login and sensitive actions |
+| [Pino](https://github.com/pinojs/pino) | JSON logs with correlation |
+| [Testcontainers Node](https://node.testcontainers.org/modules/mysql/) | integration tests against a real database |
 
-## Estudar e adaptar — não instalar como dependência do produto
+## Study and adapt — do not install as a product dependency
 
-| Referência | O que aproveitar |
+| Reference | What to take from it |
 |---|---|
-| [SkyMP upstream](https://github.com/skyrim-multiplayer/skymp) | contrato Master API, runtime, eventos e APIs `mp` |
-| [txAdmin](https://github.com/citizenfx/txAdmin) | UX de player manager, notas, warns, console e reinício programado |
-| [GameAP](https://github.com/gameap/gameap) / [Daemon](https://github.com/gameap/daemon) | Agent outbound, heartbeat, tarefas e métricas; suporta Windows e MariaDB |
-| [Pterodactyl Wings](https://github.com/pterodactyl/wings) | separação control plane/agent e ciclo de vida de processo |
-| [Casbin](https://github.com/apache/casbin-node-casbin) | padrões RBAC/ABAC; integrar somente se RBAC SQL simples deixar de bastar |
+| [SkyMP upstream](https://github.com/skyrim-multiplayer/skymp) | Master API contract, runtime, events and `mp` APIs |
+| [txAdmin](https://github.com/citizenfx/txAdmin) | UX for player manager, notes, warns, console and scheduled restarts |
+| [GameAP](https://github.com/gameap/gameap) / [Daemon](https://github.com/gameap/daemon) | outbound Agent, heartbeat, tasks and metrics; supports Windows and MariaDB |
+| [Pterodactyl Wings](https://github.com/pterodactyl/wings) | control plane/agent separation and process lifecycle |
+| [Casbin](https://github.com/apache/casbin-node-casbin) | RBAC/ABAC patterns; integrate only if simple SQL RBAC stops being enough |
 
-## Referências de segurança
+## Security references
 
 - [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
 - [OWASP CSRF Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 - [OWASP WebSocket Security](https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html)
-- [RFC 8252 — OAuth para apps nativos](https://www.rfc-editor.org/info/rfc8252/)
+- [RFC 8252 — OAuth for native apps](https://www.rfc-editor.org/info/rfc8252/)
 - [RFC 9700 — OAuth Security BCP](https://www.rfc-editor.org/rfc/rfc9700.html)
 
-## Engenharia reversa permitida
+## Permitted reverse engineering
 
-- Ler código aberto e documentação upstream.
-- Instrumentar o próprio servidor, launcher e banco em laboratório.
-- Construir testes de contrato para Master API, login, `actorId`, sessão e eventos `mp`.
-- Registrar commit/tag, licença, hipótese, experimento e resultado antes de adaptar comportamento.
+- Read open-source code and upstream documentation.
+- Instrument our own server, launcher and database in a lab.
+- Build contract tests for the Master API, login, `actorId`, session and `mp` events.
+- Record commit/tag, license, hypothesis, experiment and result before adapting behavior.
 
-## Proibido
+## Forbidden
 
-- Contornar autenticação, anti-cheat ou controles de servidores de terceiros.
-- Distribuir ou copiar código sem verificar licença e atribuição.
-- Assumir que APIs FiveM são APIs SkyMP.
+- Bypassing authentication, anti-cheat or controls of third-party servers.
+- Distributing or copying code without checking license and attribution.
+- Assuming FiveM APIs are SkyMP APIs.

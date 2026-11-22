@@ -1,176 +1,176 @@
-# Anti-cheat — análise do conselho
+# Anti-cheat — council analysis
 
-**Proposta:** adotar um detector de trainers no launcher, no modelo do que roda hoje num servidor RP brasileiro (varre processos, aplicativos instalados e arquivos, casa contra assinaturas de nome, reporta ao servidor).
+**Proposal:** adopt a trainer detector in the launcher, modeled on what runs today on a Brazilian RP server (scans processes, installed applications and files, matches them against name signatures, reports to the server).
 
-**Estado: SCANNER DE CLIENTE REJEITADO. ALTERNATIVA APROVADA EM CONCEITO.**
+**Status: CLIENT SCANNER REJECTED. ALTERNATIVE APPROVED IN CONCEPT.**
 
-Análise conforme [`CONSTITUICAO.md`](../CONSTITUICAO.md) §15. O [`HEAVY_RP_GAP_ANALYSIS.md`](../research/HEAVY_RP_GAP_ANALYSIS.md) já classifica anti-cheat como `PARTIAL` e nomeia a falta como **threat model e telemetria** — não como ausência de scanner. Esta análise concorda com aquele diagnóstico e o detalha.
-
----
-
-## Veredito primeiro
-
-O scanner detecta **que a ferramenta está instalada**. O que nos machuca é **a manipulação acontecendo**. São afirmações diferentes, e confundi-las custa privacidade sem comprar segurança.
-
-Três razões, em ordem de peso:
-
-1. **Ele não detecta a única ameaça que nos atinge de verdade.** Ver §2 — economia e itens já são server-authoritative; o que resta é ActorValue, e nome de processo não diz nada sobre ActorValue.
-2. **Custo de contorno: renomear um arquivo.** Custo de falso positivo: acusar um jogador inocente. A assimetria está invertida.
-3. **É dado pessoal de brasileiro, num repositório público sob AGPL.** Ver §10 e §13.
-
-O que **fazemos** em vez disso: o servidor observa o efeito, não a ferramenta. §14.
+Analysis according to [`CONSTITUICAO.md`](../CONSTITUICAO.md) §15. [`HEAVY_RP_GAP_ANALYSIS.md`](../research/HEAVY_RP_GAP_ANALYSIS.md) already classifies anti-cheat as `PARTIAL` and names the gap as **threat model and telemetry** — not as the absence of a scanner. This analysis agrees with that diagnosis and details it.
 
 ---
 
-## 1. Objetivo
+## Verdict first
 
-Impedir que alguém obtenha, por manipulação do cliente, vantagem que o servidor aceite como verdadeira — e dar à staff como julgar quando acontecer.
+The scanner detects **that the tool is installed**. What hurts us is **the manipulation happening**. They are different claims, and confusing them costs privacy without buying security.
 
-## 2. Problema que resolve — e o tamanho real dele
+Three reasons, in order of weight:
 
-Aqui está a parte que reorganiza a discussão. **A maior parte do que um trainer faz não nos atinge**, porque a arquitetura já assume cliente hostil (`CONTRIBUTING.md` §3.6):
+1. **It does not detect the only threat that really hits us.** See §2 — economy and items are already server-authoritative; what remains is ActorValue, and a process name says nothing about ActorValue.
+2. **Cost of bypassing: renaming a file.** Cost of a false positive: accusing an innocent player. The asymmetry is inverted.
+3. **It is personal data of Brazilians, in a public repository under the AGPL.** See §10 and §13.
 
-| O que o trainer faz | Nos atinge? | Por quê |
+What we **do** instead: the server observes the effect, not the tool. §14.
+
+---
+
+## 1. Goal
+
+Prevent someone from obtaining, by manipulating the client, an advantage the server accepts as true — and give staff a way to judge when it happens.
+
+## 2. Problem it solves — and its real size
+
+This is the part that reorganizes the discussion. **Most of what a trainer does does not hit us**, because the architecture already assumes a hostile client (`CONTRIBUTING.md` §3.6):
+
+| What the trainer does | Does it hit us? | Why |
 |---|---|---|
-| Ouro infinito | **Não** | Ouro vive em `characters.gold`, movido só por `core/transaction-service` |
-| Criar item | **Não** | Item vive em `character_inventory`; `AddItem` local some no relog (`MODS_AND_GAMEMODE_CONTRACT` §2) |
-| Teleporte, no-clip | **Não** | Cosmético para o servidor; o mundo não deriva estado disso |
-| **Godmode, vida infinita** | **SIM** | `death-service.js:245` lê `getActorValue('Health')`. Vida que não cai = nunca entra em `DOWNED` |
-| **Velocidade, stamina** | **SIM** | Mesmo caminho: ActorValue que o servidor lê |
+| Infinite gold | **No** | Gold lives in `characters.gold`, moved only by `core/transaction-service` |
+| Create items | **No** | Items live in `character_inventory`; a local `AddItem` vanishes on relog (`MODS_AND_GAMEMODE_CONTRACT` §2) |
+| Teleport, no-clip | **No** | Cosmetic for the server; the world derives no state from it |
+| **Godmode, infinite health** | **YES** | `death-service.js:245` reads `getActorValue('Health')`. Health that does not drop = never enters `DOWNED` |
+| **Speed, stamina** | **YES** | Same path: an ActorValue the server reads |
 
-**O contrato de mods já registra esta fronteira:** *mod não consegue criar estado, mas consegue mexer em ActorValue, e o servidor lê ActorValue.*
+**The mods contract already records this boundary:** *a mod cannot create state, but it can touch ActorValue, and the server reads ActorValue.*
 
-Então o problema real é estreito e nomeável: **manipulação de ActorValue**. Não é "trainers".
+So the real problem is narrow and nameable: **ActorValue manipulation**. Not "trainers".
 
-## 3. Problemas que a proposta cria
+## 3. Problems the proposal creates
 
-### 3.1 Detecta a coisa errada
+### 3.1 It detects the wrong thing
 
-O detector deles casa **nome** contra nove assinaturas (Cheat Engine, WeMod, PLITCH, ArtMoney, e um genérico para `trainer`). Isso responde *existe um programa com esse nome nesta máquina?* — e não *a vida deste personagem está sendo manipulada?*
+Their detector matches **names** against nine signatures (Cheat Engine, WeMod, PLITCH, ArtMoney, and a generic one for `trainer`). That answers *is there a program with this name on this machine?* — and not *is this character's health being manipulated?*
 
-Um jogador com Cheat Engine instalado há dois anos para um jogo single-player é sinalizado. Um jogador com godmode ativo por um mod caseiro não é.
+A player who has had Cheat Engine installed for two years for a single-player game is flagged. A player with godmode active through a homemade mod is not.
 
-### 3.2 Falso positivo é o custo que ninguém contabiliza
+### 3.2 A false positive is the cost nobody accounts for
 
-O padrão genérico casa com qualquer coisa: um mod `Combat Trainer.esp`, uma pasta `Personal Trainer`, um PDF de certificação. Eles sabem disso — existe uma opção para desligar o padrão genérico no código deles, o que é a confissão de que a heurística é ruidosa.
+The generic pattern matches anything: a `Combat Trainer.esp` mod, a `Personal Trainer` folder, a certification PDF. They know this — there is an option to turn off the generic pattern in their code, which is an admission that the heuristic is noisy.
 
-Falso positivo aqui não é ruído: é **acusar um jogador de trapaça**. Numa comunidade de RP, essa acusação sobrevive à retratação.
+A false positive here is not noise: it is **accusing a player of cheating**. In an RP community, that accusation outlives the retraction.
 
-### 3.3 Contorno custa cinco segundos
+### 3.3 Bypassing it costs five seconds
 
-Renomear o executável. É tudo. Quem trapaça de propósito passa; quem não trapaça é escaneado. **A ferramenta pune exatamente quem ela não deveria alcançar.**
+Rename the executable. That is all. Whoever cheats on purpose gets through; whoever does not cheat gets scanned. **The tool punishes exactly the people it should not reach.**
 
-### 3.4 Cria expectativa falsa de segurança
+### 3.4 It creates a false expectation of security
 
-Pior que não ter: a staff passa a confiar que "o sistema pega" e para de olhar.
+Worse than not having it: staff start trusting that "the system catches it" and stop looking.
 
-## 4. Exploits possíveis
+## 4. Possible exploits
 
-- **Renomear o executável** — anula tudo.
-- **Rodar de pendrive ou VM** — fora das raízes varridas.
-- **Plantar falso positivo em terceiro.** Criar um arquivo com nome envenenado na pasta de outro jogador (Discord, pasta compartilhada, mod distribuído com esse arquivo dentro) e ele é sinalizado. **Um sistema de acusação automática vira arma.**
-- **Envenenar o canal de relato.** O relatório vem do cliente; um cliente hostil manda o que quiser — inclusive relatório limpo, inclusive acusação forjada contra outro.
+- **Rename the executable** — nullifies everything.
+- **Run from a USB stick or a VM** — outside the scanned roots.
+- **Plant a false positive on someone else.** Create a file with a poisoned name in another player's folder (Discord, shared folder, a mod distributed with that file inside) and they get flagged. **An automatic accusation system becomes a weapon.**
+- **Poison the reporting channel.** The report comes from the client; a hostile client sends whatever it wants — including a clean report, including a forged accusation against someone else.
 
-Este último é decisivo: **é um detector de cliente hostil cuja saída vem do cliente hostil.**
+This last one is decisive: **it is a hostile-client detector whose output comes from the hostile client.**
 
-## 5. Impacto na economia
+## 5. Impact on the economy
 
-Nenhum, nos dois sentidos. A economia já é server-authoritative — foi por isso que o `economy-service` foi apagado. O scanner não protege o que já está protegido, e não alcança o que está exposto (ActorValue não é econômico).
+None, in both directions. The economy is already server-authoritative — that is why `economy-service` was deleted. The scanner does not protect what is already protected, and does not reach what is exposed (ActorValue is not economic).
 
-## 6. Impacto político
+## 6. Political impact
 
-Negativo e subestimado. Quem opera o detector decide quem é acusado. Sem processo, isso é poder sem contrapartida — exatamente o que a §5 da Constituição proíbe e o que a integração com a Chancelaria existe para resolver.
+Negative and underestimated. Whoever operates the detector decides who gets accused. Without a process, that is power without accountability — exactly what §5 of the Constitution forbids and what the integration with the Chancery exists to solve.
 
-## 7. Impacto militar
+## 7. Military impact
 
-O único lugar onde a ameaça real morde: godmode numa cena de combate destrói a cena e a confiança nela. **Mas o scanner não detecta godmode** — detecta instalação. O impacto militar justifica agir; não justifica *este* mecanismo.
+The only place where the real threat bites: godmode in a combat scene destroys the scene and the trust in it. **But the scanner does not detect godmode** — it detects installation. The military impact justifies acting; it does not justify *this* mechanism.
 
-## 8. Impacto religioso
+## 8. Religious impact
 
-Nenhum direto. Indireto se houver mecânica de alma ou corrupção lendo ActorValue: manipulação passaria a falsificar destino de personagem, o que sobe a aposta da §14.
+None directly. Indirectly if there is a soul or corruption mechanic reading ActorValue: manipulation would start falsifying a character's fate, which raises the stakes of §14.
 
-## 9. Impacto social
+## 9. Social impact
 
-**O maior risco do documento.** Comunidade de Heavy RP funciona por confiança. Um sistema que varre a máquina de todo mundo comunica desconfiança por padrão, e a primeira acusação errada custa mais que dez trapaças não detectadas.
+**The biggest risk in the document.** A Heavy RP community works on trust. A system that scans everyone's machine communicates distrust by default, and the first wrong accusation costs more than ten undetected cheats.
 
-Há um caminho social melhor e já existente: **o mundo percebe**. Alguém que sobrevive ao que deveria matá-lo é notado por quem estava na cena — e isso já vira denúncia com testemunha.
+There is a better social path that already exists: **the world notices**. Someone who survives what should have killed them is noticed by whoever was in the scene — and that already becomes a report with a witness.
 
-## 10. Impacto técnico
+## 10. Technical impact
 
-- **Raio de explosão máximo.** O launcher roda antes do jogo, com privilégio de usuário. É o pior lugar da nossa pilha para colocar algo invasivo.
-- **PowerShell a cada 30 s** e varredura de milhares de arquivos a cada 10 min, na máquina de quem só quer jogar.
-- **Canal de relato novo** = superfície nova de autenticação e de abuso.
-- **LGPD.** Jogadores brasileiros, dado pessoal. Lista de aplicativos instalados é reveladora (software médico, apps de relacionamento, ferramentas de busca de emprego). Exige base legal, finalidade declarada, minimização e transparência. *É para anti-cheat* não é base legal automática.
-- **Repositório público sob AGPL.** Publicaríamos o esqueleto de um programa que varre a máquina do usuário e reporta a um servidor remoto. Qualquer fork aponta o endpoint para onde quiser. A AGPL obriga a oferecer a fonte — mitiga, não elimina.
+- **Maximum blast radius.** The launcher runs before the game, with user privilege. It is the worst place in our stack to put something invasive.
+- **PowerShell every 30 s** and a scan of thousands of files every 10 min, on the machine of someone who just wants to play.
+- **A new reporting channel** = a new authentication and abuse surface.
+- **LGPD.** Brazilian players, personal data. A list of installed applications is revealing (medical software, dating apps, job-search tools). It requires a legal basis, a declared purpose, minimization and transparency. *It's for anti-cheat* is not an automatic legal basis.
+- **Public repository under the AGPL.** We would be publishing the skeleton of a program that scans the user's machine and reports to a remote server. Any fork points the endpoint wherever it wants. The AGPL requires offering the source — that mitigates, it does not eliminate.
 
-## 11. Impacto narrativo
+## 11. Narrative impact
 
-Zero. Um scanner não produz história. É infraestrutura policial invisível.
+Zero. A scanner produces no story. It is invisible police infrastructure.
 
-## 12. Como gera histórias
+## 12. How it generates stories
 
-**Não gera** — e pela §4 da Constituição isso basta para descartar *na forma proposta*.
+**It does not** — and under §4 of the Constitution that is enough to discard it *in the proposed form*.
 
-A alternativa gera: vida que não cai vira **anomalia registrada**, que vira **prova**, que vira **processo** com testemunhas — mesmo caminho do `death:killer`. O trapaceiro deixa de ser um banimento silencioso e passa a ser um caso julgado, que a comunidade vê acontecer.
+The alternative does: health that does not drop becomes a **recorded anomaly**, which becomes **evidence**, which becomes a **case** with witnesses — the same path as `death:killer`. The cheater stops being a silent ban and becomes a judged case that the community sees happen.
 
-## 13. Como pode ser abusada
+## 13. How it can be abused
 
-- **Por quem opera:** varredura de máquina de jogador é vigilância; sem finalidade estreita e auditada, vira consulta ao currículo alheio.
-- **Por jogador contra jogador:** plantio de falso positivo (§4).
-- **Por um fork:** nosso código público, endpoint deles, sem as nossas salvaguardas — e com a nossa reputação no nome do projeto.
+- **By whoever operates it:** scanning a player's machine is surveillance; without a narrow, audited purpose, it becomes browsing someone else's résumé.
+- **By player against player:** planting false positives (§4).
+- **By a fork:** our public code, their endpoint, without our safeguards — and with our reputation in the project's name.
 
-## 14. Como balancear — o que fazemos em vez disso
+## 14. How to balance — what we do instead
 
-### 14.1 O servidor observa o efeito, não a ferramenta
+### 14.1 The server observes the effect, not the tool
 
-O `death-service` **já** lê `getActorValue('Health')` a cada 2 s. A checagem de plausibilidade pega carona no dado que já buscamos: **zero chamada Papyrus a mais** — o que importa, porque cada ida e volta custa 13–35 ms.
+`death-service` **already** reads `getActorValue('Health')` every 2 s. The plausibility check piggybacks on the data we already fetch: **zero extra Papyrus calls** — which matters, because each round trip costs 13–35 ms.
 
-O que é implausível e o servidor vê sozinho:
+What is implausible and the server sees on its own:
 
-- Vida que **não cai** enquanto o polling registra dano (o `checkDamageSpike` já existe).
-- Vida que **sobe** sem evento de cura, poção ou descanso.
-- Vida **acima do máximo** conhecido do personagem.
-- Deslocamento por tick acima do limite físico.
+- Health that **does not drop** while polling records damage (`checkDamageSpike` already exists).
+- Health that **rises** without a healing, potion or rest event.
+- Health **above the character's known maximum**.
+- Displacement per tick above the physical limit.
 
-Isso não é contornável renomeando arquivo. Detecta o efeito **independente da ferramenta** — trainer, mod caseiro, script, tanto faz.
+This cannot be bypassed by renaming a file. It detects the effect **regardless of the tool** — trainer, homemade mod, script, it makes no difference.
 
-### 14.2 Nunca banimento automático — evidência, como o `death:killer`
+### 14.2 Never an automatic ban — evidence, like `death:killer`
 
-Anomalia vira linha em `audit_logs`, na categoria `cheating` que o [`MODERATION_WORKFLOW.md`](../admin/MODERATION_WORKFLOW.md) já prevê. **A staff julga.** É a mesma regra que já vale para autoria de morte: verdade OOC vai para quem julga, nunca vira sentença sozinha.
+An anomaly becomes a row in `audit_logs`, in the `cheating` category that [`MODERATION_WORKFLOW.md`](../admin/MODERATION_WORKFLOW.md) already provides for. **Staff judge.** It is the same rule that already applies to death authorship: OOC truth goes to whoever judges, it never becomes a sentence on its own.
 
-### 14.3 Janela de confirmação — a boa ideia deles, aproveitada
+### 14.3 Confirmation window — their good idea, reused
 
-O detector deles exige **3 observações em 70 s** antes de acreditar, com cooldown de 6 h. Isso é engenharia honesta contra oscilação, e vale igual do lado do servidor: **nunca sinalizar por um tick estranho.** Rede, lag e o próprio jogo produzem leituras absurdas isoladas.
+Their detector requires **3 observations within 70 s** before believing, with a 6 h cooldown. That is honest engineering against flapping, and it applies equally on the server side: **never flag based on one strange tick.** Network, lag and the game itself produce isolated absurd readings.
 
-### 14.4 O meio-termo legítimo no cliente, se um dia for preciso
+### 14.4 The legitimate middle ground on the client, if it is ever needed
 
-O launcher **já** calcula hash de arquivos para paridade de modpack, e o jogador já consentiu com isso ao entrar. Estender *essa* verificação — integridade da DLL do SKSE, plugin injetado no `Data/` — fica **dentro do envelope de consentimento que já existe**, não varre arquivo não relacionado, e é justificado pelo contrato de FormID.
+The launcher **already** hashes files for modpack parity, and the player already consented to that by joining. Extending *that* check — integrity of the SKSE DLL, a plugin injected into `Data/` — stays **within the envelope of consent that already exists**, does not scan unrelated files, and is justified by the FormID contract.
 
-Isso é diferente, em natureza, de listar os aplicativos instalados da pessoa.
+That is different, in nature, from listing a person's installed applications.
 
-## 15. Como integra ao resto do mundo
+## 15. How it integrates with the rest of the world
 
-| Sistema | Ligação |
+| System | Link |
 |---|---|
-| `death-service` | Onde a checagem mora — o polling de vida já existe |
-| `core/range-utils` | `nearbyActors()` já dá as testemunhas da cena |
-| `audit_logs` | Onde a evidência pousa, categoria `cheating` |
-| `MODERATION_WORKFLOW` | O fluxo de julgamento já está escrito |
-| `governance-service` | Trapaça vira processo, não linchamento |
-| Chancelaria Real | Prova anexável, com testemunha |
-| Paridade de modpack | Onde cabe a única verificação de cliente legítima (§14.4) |
+| `death-service` | Where the check lives — health polling already exists |
+| `core/range-utils` | `nearbyActors()` already provides the scene's witnesses |
+| `audit_logs` | Where the evidence lands, category `cheating` |
+| `MODERATION_WORKFLOW` | The judgment flow is already written |
+| `governance-service` | Cheating becomes a case, not a lynching |
+| Royal Chancery | Attachable evidence, with a witness |
+| Modpack parity | Where the only legitimate client check fits (§14.4) |
 
 ---
 
-## Ordem recomendada
+## Recommended order
 
-**Pré-requisito: Fase 0.** Não dá para calibrar limiar de plausibilidade sem uma sessão real — sem dado, qualquer número é chute, e chute em detecção de trapaça produz falso positivo.
+**Prerequisite: Phase 0.** You cannot calibrate a plausibility threshold without a real session — without data, any number is a guess, and a guess in cheat detection produces false positives.
 
-1. **Medir antes de detectar.** Durante a Fase 0, registrar leituras de vida e deslocamento **sem julgar nada**. É o *threat model / telemetry* que o gap analysis pede.
-2. **Plausibilidade de ActorValue** sobre o polling existente, com janela de confirmação, gravando em `audit_logs`.
-3. **Integridade do SKSE** dentro da verificação de paridade que já existe (§14.4).
-4. **Nunca** o scanner de processos e aplicativos instalados, salvo decisão explícita com base legal LGPD, aviso ao jogador e revisão humana obrigatória — e mesmo aí, não no repositório público.
+1. **Measure before detecting.** During Phase 0, record health and displacement readings **without judging anything**. That is the *threat model / telemetry* the gap analysis asks for.
+2. **ActorValue plausibility** on top of the existing polling, with a confirmation window, writing to `audit_logs`.
+3. **SKSE integrity** within the parity check that already exists (§14.4).
+4. **Never** the process and installed-application scanner, except by explicit decision with an LGPD legal basis, notice to the player and mandatory human review — and even then, not in the public repository.
 
-## A decisão, em uma frase
+## The decision, in one sentence
 
-> Detectamos **o efeito no servidor**, nunca **a ferramenta no cliente**. A primeira é inforjável e não custa privacidade; a segunda é contornada renomeando um arquivo e cobra a máquina inteira do jogador em troca.
+> We detect **the effect on the server**, never **the tool on the client**. The first cannot be forged and costs no privacy; the second is bypassed by renaming a file and charges the player's whole machine in exchange.

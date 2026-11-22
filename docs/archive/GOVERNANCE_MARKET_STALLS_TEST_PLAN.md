@@ -1,53 +1,53 @@
-# Plano de Teste - Governanca, Guarda e Barraquinhas
+# Test Plan - Governance, Guard and Market Stalls
 
-Data: 2026-07-13
+Date: 2026-07-13
 
-> ⚠️ **Superado por [FASE_0_ROTEIRO.md](../technical/FASE_0_ROTEIRO.md)** (06/08/2026). Este plano cobre governança e barracas; desde ele entraram `death-service`, `/painel`, VOIP, master API de sessão e a fila, e o gamemode passou de ~15 para mais de 60 comandos. Mantido como referência da validação visual (camada 5), que o roteiro novo não cobre.
+> ⚠️ **Superseded by [FASE_0_ROTEIRO.md](../technical/FASE_0_ROTEIRO.md)** (2026-08-06). This plan covers governance and stalls; since it was written, `death-service`, `/painel`, VOIP, the session master API and the queue were added, and the gamemode grew from ~15 to more than 60 commands. Kept as a reference for the visual validation (layer 5), which the new script does not cover.
 
-## Objetivo
+## Goal
 
-Validar, em camadas, os sistemas de governanca/guarda e barraquinhas antes de liberar em gameplay real.
+Validate, in layers, the governance/guard and market stall systems before enabling them in real gameplay.
 
-## Camadas de validacao
+## Validation layers
 
-1. Validacao estatica local
-   - Rodar `npm test` em `skymp/gamemode`.
-   - Rodar `npm run test:systems` em `skymp/gamemode`.
-   - Confirmar que migrations, comandos, permissoes e flags de ambiente estao alinhados.
+1. Local static validation
+   - Run `npm test` in `skymp/gamemode`.
+   - Run `npm run test:systems` in `skymp/gamemode`.
+   - Confirm that migrations, commands, permissions and environment flags are aligned.
 
-2. Validacao de banco
-   - Aplicar `migration-v3-governance.sql`.
-   - Aplicar `migration-v4-market-stalls.sql`.
-   - Rodar `RUN_DB_CHECK=1 npm run test:systems`.
-   - Confirmar tabelas de governanca, guarda, barracas, vendas e licencas.
+2. Database validation
+   - Apply `migration-v3-governance.sql`.
+   - Apply `migration-v4-market-stalls.sql`.
+   - Run `RUN_DB_CHECK=1 npm run test:systems`.
+   - Confirm the governance, guard, stall, sales and license tables.
 
-3. Validacao de servidor sem asset visual
-   - Ligar `ENABLE_GOVERNANCE_SERVICE=true`.
-   - Ligar `ENABLE_MARKET_STALLS_SERVICE=true`.
-   - Manter `skymp/config/market-stalls.visual.json` ausente ou com `enabled=false`.
-   - Confirmar boot sem erro.
+3. Server validation without visual assets
+   - Turn on `ENABLE_GOVERNANCE_SERVICE=true`.
+   - Turn on `ENABLE_MARKET_STALLS_SERVICE=true`.
+   - Keep `skymp/config/market-stalls.visual.json` absent or with `enabled=false`.
+   - Confirm boot without errors.
 
-4. Validacao de gameplay com dois jogadores
-   - Jogador A recebe cargo de guarda/fiscal.
-   - Jogador B recebe licenca de vendedor.
-   - B monta barraca, anuncia item e A fiscaliza.
-   - Jogador A ou C compra item da barraca.
-   - Conferir ouro, imposto, estoque, inventario persistente e logs.
+4. Gameplay validation with two players
+   - Player A receives the guard/inspector role.
+   - Player B receives a vendor license.
+   - B sets up a stall, lists an item and A inspects it.
+   - Player A or C buys an item from the stall.
+   - Check gold, tax, stock, persistent inventory and logs.
 
-5. Validacao visual
-   - Criar plugin proprio com asset aprovado.
-   - Configurar `defaultStallBaseId` em `skymp/config/market-stalls.visual.json`.
-   - Repetir spawn, compra, recolhimento, reconnect e late join.
+5. Visual validation
+   - Create our own plugin with an approved asset.
+   - Configure `defaultStallBaseId` in `skymp/config/market-stalls.visual.json`.
+   - Repeat spawn, purchase, pack-up, reconnect and late join.
 
-## Script local
+## Local script
 
-Rodar dentro de `skymp/gamemode`:
+Run inside `skymp/gamemode`:
 
 ```powershell
 npm run test:systems
 ```
 
-Com banco real:
+With a real database:
 
 ```powershell
 $env:RUN_DB_CHECK='1'
@@ -55,7 +55,7 @@ npm run test:systems
 Remove-Item Env:\RUN_DB_CHECK
 ```
 
-## Checklist manual minimo
+## Minimum manual checklist
 
 - `/realmcreate skyrim Skyrim`
 - `/citycreate whiterun skyrim whiterun Whiterun`
@@ -70,17 +70,17 @@ Remove-Item Env:\RUN_DB_CHECK
 - `/stallsuspend <stallId> teste`
 - `/stallpack <stallId>`
 
-## Criterios de aceite
+## Acceptance criteria
 
-- Nenhuma acao critica depende de dados confiados pelo client.
-- Compra usa transacao de banco e atualiza ouro, estoque, imposto e inventario de forma atomica.
-- Guarda/fiscal sem permissao nao consegue fiscalizar, suspender ou confiscar.
-- Barraca sem asset visual continua funcionando logicamente.
-- Barraca com asset visual gera `visual_ref_id` e desativa o objeto ao recolher.
-- Falha de spawn visual nao bloqueia o sistema economico.
+- No critical action depends on data trusted from the client.
+- A purchase uses a database transaction and updates gold, stock, tax and inventory atomically.
+- A guard/inspector without permission cannot inspect, suspend or confiscate.
+- A stall without a visual asset keeps working logically.
+- A stall with a visual asset generates `visual_ref_id` and disables the object when packed up.
+- A visual spawn failure does not block the economic system.
 
-## Riscos restantes
+## Remaining risks
 
-- `ObjectReference.PlaceAtMe` precisa ser confirmado no runtime SkyMP com o plugin final carregado.
-- Objetos visuais precisam de permissao/licenca registrada antes de entrar no modpack.
-- O teste local nao prova sincronizacao de late join nem persistencia visual apos restart.
+- `ObjectReference.PlaceAtMe` must be confirmed in the SkyMP runtime with the final plugin loaded.
+- Visual objects need a registered permission/license before entering the modpack.
+- The local test does not prove late-join synchronization or visual persistence after a restart.

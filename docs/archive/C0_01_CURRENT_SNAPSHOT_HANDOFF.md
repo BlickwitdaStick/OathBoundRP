@@ -1,36 +1,36 @@
-# C0-01 — Snapshot atual e handoff
+# C0-01 — Current snapshot and handoff
 
-Data: 2026-08-12. Branch: `fix/voip-proximidade-por-celula`. Commit-base: `112d51bc4f1e4308aebe3ab40881abe328db188e`.
+Date: 2026-08-12. Branch: `fix/voip-proximidade-por-celula`. Base commit: `112d51bc4f1e4308aebe3ab40881abe328db188e`.
 
-> **Registro histórico, superado:** o snapshot descrito abaixo foi consolidado no commit `c23179d` e publicado no `main`. As menções a árvore dirty, ownership temporário e commit-base descrevem o momento do handoff e não o estado atual do repositório. A suíte do gamemode chegou depois a 547 testes aprovados.
+> **Historical record, superseded:** the snapshot described below was consolidated in commit `c23179d` and published to `main`. The mentions of a dirty tree, temporary ownership and base commit describe the moment of the handoff, not the current state of the repository. The gamemode suite later reached 547 passing tests.
 
-## Escopo preservado
+## Preserved scope
 
-A árvore já estava modificada antes do início de AUTH-001. Este snapshot contém trabalho de UI gateway/rate limit, connection lifecycle, economia transacional, idempotência de market stalls, VOIP e documentação. Nenhum desses arquivos foi revertido ou reformatado durante esta etapa.
+The tree was already modified before AUTH-001 started. This snapshot contains work on the UI gateway/rate limit, connection lifecycle, transactional economy, market stall idempotency, VOIP and documentation. None of these files was reverted or reformatted during this step.
 
-Principais grupos:
+Main groups:
 
-- `core/ui-event-*`, governance e player panel: contrato CEF e validação progressiva.
-- `core/connection-monitor*`: polling de conexão protegido contra resposta assíncrona obsoleta.
-- `core/institutional-treasury-service*`, `core/regional-market-transaction-service*`, migrations v11-v13: transação e idempotência.
-- `voip-service*`: limite de protocolo, papéis sender/listener e separação por célula.
-- `docs/roadmap/TASK_001` a `TASK_006`: estado e testes de cada entrega.
+- `core/ui-event-*`, governance and player panel: CEF contract and progressive validation.
+- `core/connection-monitor*`: connection polling protected against stale asynchronous responses.
+- `core/institutional-treasury-service*`, `core/regional-market-transaction-service*`, migrations v11-v13: transactions and idempotency.
+- `voip-service*`: protocol limit, sender/listener roles and per-cell separation.
+- `docs/roadmap/TASK_001` to `TASK_006`: status and tests of each deliverable.
 
-## Verificação do snapshot
+## Snapshot verification
 
-| Verificação | Resultado |
+| Check | Result |
 |---|---|
 | Gamemode `npm test` | 531/531 |
-| Gamemode `npm run typecheck` | aprovado |
+| Gamemode `npm run typecheck` | passed |
 | Web | 40/40 |
 | Game API | 30/30 |
-| Bot Discord | 40/40 |
+| Discord bot | 40/40 |
 | Launcher | 24/24 |
-| `git diff --check` nos documentos da auditoria | aprovado |
+| `git diff --check` on the audit documents | passed |
 
-Não houve teste in-game nesta etapa. O handoff anterior informa que o schema local havia sido conferido, mas C0-01 não reaplicou migrations nem alterou o banco.
+There was no in-game test in this step. The previous handoff states that the local schema had been checked, but C0-01 neither reapplied migrations nor changed the database.
 
-## Arquivos que Claude não deve editar sem novo handoff
+## Files Claude must not edit without a new handoff
 
 - `skymp/gamemode/phase0-basic.js`
 - `skymp/gamemode/core/character-state.js`
@@ -39,27 +39,27 @@ Não houve teste in-game nesta etapa. O handoff anterior informa que o schema lo
 - `skymp/gamemode/voip-service.js`
 - `skymp/gamemode/governance-service.js`
 - `skymp/gamemode/market-stalls-service.js`
-- `skymp/packages/database/schema.sql` e migrations v11-v13
+- `skymp/packages/database/schema.sql` and migrations v11-v13
 
-Ownership liberado ao Claude na quinta-feira: `apps/game-api/`, `apps/launcher/`, documentação de distribuição e workflow de release, após ele confirmar o commit-base e seu próprio `git status`.
+Ownership released to Claude on Thursday: `apps/game-api/`, `apps/launcher/`, distribution documentation and the release workflow, after it confirms the base commit and its own `git status`.
 
-## Riscos conhecidos
+## Known risks
 
-- **No momento deste handoff**, a árvore estava dirty e ainda não tinha commit de consolidação; esse risco foi encerrado pelo commit `c23179d`.
-- O launcher escreve um `profileId` derivado do Discord além da sessão opaca. Em produção, `offlineMode=false` faz o SkyMP usar o Master API, mas a redundância vira bypass se a configuração regredir.
-- Os nomes ticket/session são ambíguos entre web, fila, launcher e SkyMP.
-- O personagem aprovado mais recente é escolhido implicitamente; ainda não existe seleção de slot vinculada à sessão.
+- **At the time of this handoff**, the tree was dirty and did not yet have a consolidation commit; this risk was closed by commit `c23179d`.
+- The launcher writes a Discord-derived `profileId` in addition to the opaque session. In production, `offlineMode=false` makes SkyMP use the Master API, but the redundancy becomes a bypass if the configuration regresses.
+- The names ticket/session are ambiguous across web, queue, launcher and SkyMP.
+- The most recently approved character is chosen implicitly; there is still no slot selection tied to the session.
 
 ## Handoff
 
 ```text
 Task: C0-01
-Implementador: Codex
-Commit-base: 112d51bc4f1e4308aebe3ab40881abe328db188e
-Arquivos alterados: somente documentação nova desta fase
-Invariantes preservados: módulos PARKED desligados; MariaDB oficial; trabalho local intacto
-Testes: 531 + 40 + 30 + 40 + 24 aprovados; typecheck aprovado
-Testes manuais: servidor/CEF/voz in-game ainda pendentes
-Security blockers: profileId derivado no client settings; configuração offlineMode
-Próxima ação: AUTH-001/002 e revisão adversarial de Claude
+Implementer: Codex
+Base commit: 112d51bc4f1e4308aebe3ab40881abe328db188e
+Files changed: only new documentation for this phase
+Invariants preserved: PARKED modules off; official MariaDB; local work intact
+Tests: 531 + 40 + 30 + 40 + 24 passed; typecheck passed
+Manual tests: server/CEF/in-game voice still pending
+Security blockers: derived profileId in client settings; offlineMode configuration
+Next action: AUTH-001/002 and adversarial review by Claude
 ```

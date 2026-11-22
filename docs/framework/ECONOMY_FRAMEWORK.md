@@ -1,50 +1,50 @@
 # Economy Framework
 
-**Como mexer em dinheiro no Heavy RP.** Se você está escrevendo um módulo que
-cobra, paga, taxa, multa, recompensa ou trava valor, este documento é o contrato.
+**How to handle money in Heavy RP.** If you are writing a module that
+charges, pays, taxes, fines, rewards or locks value, this document is the contract.
 
-- Decisão: [ADR 004](../technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md)
-- Evidência: [auditoria de economia](../research/ECONOMY_FRAMEWORK_AUDIT.md)
+- Decision: [ADR 004](../technical/ADR_004_ECONOMY_ACCOUNTS_AND_LEDGER.md)
+- Evidence: [economy audit](../research/ECONOMY_FRAMEWORK_AUDIT.md)
 - Schema: [migration v15](../../skymp/packages/database/migration-v15-economy-framework.sql)
-- Código: [`core/economy-service.js`](../../skymp/gamemode/core/economy-service.js)
+- Code: [`core/economy-service.js`](../../skymp/gamemode/core/economy-service.js)
 
 ---
 
-## 1. A regra
+## 1. The rule
 
-> **Nenhum módulo altera saldo diretamente. Nem `characters.gold`, nem
-> `cities.treasury`, nem `holds.treasury`, nem `factions.treasury`.**
+> **No module changes a balance directly. Not `characters.gold`, not
+> `cities.treasury`, not `holds.treasury`, not `factions.treasury`.**
 
-Uma porta: `core/economy-service.js`.
+One door: `core/economy-service.js`.
 
 ```
-governança · barraca · contratos · dívida · aluguel · trabalho · loja
+governance · stall · contracts · debt · rent · work · shop
                               │
                               ▼
                    core/economy-service.js
-        (validação · idempotência · ordem de trava · ledger dos dois lados)
+        (validation · idempotency · lock order · two-sided ledger)
                               │
         ┌─────────────────────┼──────────────────────┐
         ▼                     ▼                      ▼
-core/transaction-service   tesouros            economy_escrow
+core/transaction-service   treasuries          economy_escrow
    characters.gold      *.treasury               balance
 ```
 
-`core/transaction-service.js` continua existindo e continua sendo o **único**
-arquivo que escreve `characters.gold`. Ele é o motor. As primitivas `tx.*` são
-dele; módulo de domínio não as chama.
+`core/transaction-service.js` still exists and is still the **only**
+file that writes `characters.gold`. It is the engine. The `tx.*` primitives are
+its own; domain modules do not call them.
 
-**Como saber que você está errado:** se o seu módulo tem `require` de
-`core/transaction-service` para mexer em ouro, ou uma string `SET gold` /
-`SET treasury`, está errado.
+**How to know you are wrong:** if your module `require`s
+`core/transaction-service` to touch gold, or contains a `SET gold` /
+`SET treasury` string, it is wrong.
 
 ---
 
-## 2. Conta é uma referência
+## 2. An account is a reference
 
-Uma conta é o par `{ type, ref }`. O serviço resolve para onde o saldo mora.
+An account is the pair `{ type, ref }`. The service resolves where the balance lives.
 
-| `type` | `ref` | Saldo real | Exemplo |
+| `type` | `ref` | Actual balance | Example |
 |---|---|---|---|
 | `character` | `characters.id` | `characters.gold` | `{ type: 'character', ref: 7 }` |
 | `city` | `cities.id` | `cities.treasury` | `{ type: 'city', ref: 'whiterun' }` |
@@ -52,37 +52,37 @@ Uma conta é o par `{ type, ref }`. O serviço resolve para onde o saldo mora.
 | `faction` | `factions.id` | `factions.treasury` | `{ type: 'faction', ref: 3 }` |
 | `realm` | `realms.id` | `realms.treasury` | `{ type: 'realm', ref: 'skyrim' }` |
 | `escrow` | `economy_escrow.escrow_id` | `economy_escrow.balance` | `{ type: 'escrow', ref: uuid }` |
-| `system` | rótulo | **nenhum** | `{ type: 'system', ref: 'death_penalty' }` |
+| `system` | label | **none** | `{ type: 'system', ref: 'death_penalty' }` |
 
-### `system` é a fronteira do mundo
+### `system` is the edge of the world
 
-É por onde septim **entra e sai da economia**. Ele não tem saldo — de propósito.
-Toda criação e destruição de dinheiro precisa de uma linha com `system` de um
-dos lados, e o rótulo diz o quê:
+It is where septims **enter and leave the economy**. It has no balance — on purpose.
+Every creation and destruction of money needs a row with `system` on one
+side, and the label says what it is:
 
-| Rótulo | O que é |
+| Label | What it is |
 |---|---|
-| `whitelist_grant` | ouro inicial de personagem aprovado |
-| `death_penalty` | dreno da penalidade de morte |
-| `staff_adjust` | `economy.adjust` — staff criando ou destruindo |
-| `regional_market` | compra e venda no mercado NPC |
-| `staff_fine` | multa aplicada por governador de staff, sem instituição |
+| `whitelist_grant` | starting gold for an approved character |
+| `death_penalty` | drain from the death penalty |
+| `staff_adjust` | `economy.adjust` — staff creating or destroying |
+| `regional_market` | buying and selling in the NPC market |
+| `staff_fine` | fine applied by a staff governor, without an institution |
 
-Rótulo novo entra por edição de código, sob revisão. `[a-z0-9_]{3,48}`.
+A new label comes in through a code edit, under review. `[a-z0-9_]{3,48}`.
 
-> **Listar tudo que a economia criou ou destruiu hoje:**
+> **List everything the economy created or destroyed today:**
 > ```sql
 > SELECT owner_ref, SUM(delta) FROM gold_transactions
 >  WHERE owner_type = 'system' AND created_at >= CURDATE()
 >  GROUP BY owner_ref;
 > ```
-> Isso era impossível antes da v15.
+> This was impossible before v15.
 
 ---
 
 ## 3. API
 
-### Transferir
+### Transfer
 
 ```js
 const economy = require('./core/economy-service');
@@ -91,26 +91,26 @@ const resultado = await economy.transfer({
   from: { type: 'character', ref: compradorId },
   to:   { type: 'character', ref: vendedorId },
   amount: 250,
-  reason: 'stall_purchase',          // ≤ 64 chars, vira coluna no ledger
+  reason: 'stall_purchase',          // ≤ 64 chars, becomes a ledger column
   module: 'market-stalls',
-  actorCharacterId: compradorId,     // quem PEDIU, se não for o titular
+  actorCharacterId: compradorId,     // who REQUESTED it, if not the holder
   idempotencyKey: requestId          // 8–96 chars
 });
 ```
 
-Quando a operação precisa commitar **junto com outra coisa** (baixar estoque,
-entregar item, fechar contrato), use a variante em transação do chamador:
+When the operation needs to commit **together with something else** (lowering stock,
+delivering an item, closing a contract), use the variant inside the caller's transaction:
 
 ```js
 const conn = await db.getConnection();
 await conn.beginTransaction();
 const resultado = await economy.transferInTransaction(conn, { ... });
-// ... resto da operação ...
+// ... rest of the operation ...
 await conn.commit();
 ```
 
-Quem chama `transferInTransaction` **abre, commita e faz rollback**. A função não
-faz nenhuma das três.
+Whoever calls `transferInTransaction` **opens, commits and rolls back**. The function
+does none of the three.
 
 ### Escrow
 
@@ -131,26 +131,26 @@ await economy.closeEscrow({
   reason: 'contract_settlement',
   idempotencyKey: outraChave
 });
-// → { ok: true, amount, outcome: 'released' }   ('refunded' se voltar ao financiador)
+// → { ok: true, amount, outcome: 'released' }   ('refunded' if it goes back to the funder)
 ```
 
-### Ajuste de staff
+### Staff adjustment
 
 ```js
 await economy.adjust({
   target: { type: 'character', ref: alvoId },
-  amount: -500,                    // negativo debita
+  amount: -500,                    // negative debits
   reason: 'estorno_dupe',
-  actorCharacterId: staffCharId,   // obrigatório
+  actorCharacterId: staffCharId,   // mandatory
   idempotencyKey: chave
 });
 ```
 
-Este arquivo **não checa permissão** — quem chama já sabe qual é o cargo. O que
-ele garante é que o ajuste é impossível de fazer sem rastro: o outro lado é
-sempre `system:staff_adjust`, e o ator fica na coluna `actor_character_id`.
+This file **does not check permissions** — the caller already knows the role. What
+it guarantees is that the adjustment is impossible to make without a trace: the other side is
+always `system:staff_adjust`, and the actor goes into the `actor_character_id` column.
 
-### Leitura
+### Reading
 
 ```js
 await economy.getBalance({ type: 'city', ref: 'whiterun' });
@@ -162,199 +162,199 @@ await economy.reconcile({ type: 'city', ref: 'whiterun' });
 
 ---
 
-## 4. O contrato de retorno
+## 4. The return contract
 
-**Este é o ponto mais importante do framework**, e a razão de ele existir.
+**This is the most important point of the framework**, and the reason it exists.
 
 ```js
-{ ok: true,  replayed: false, transferId, amount }   // aconteceu agora
-{ ok: true,  replayed: true,  transferId, amount }   // já tinha acontecido
-{ ok: false, code: 'insufficient_funds', balance }   // regra do jogo recusou
-throw new Error(...)                                  // infraestrutura quebrou
+{ ok: true,  replayed: false, transferId, amount }   // happened now
+{ ok: true,  replayed: true,  transferId, amount }   // had already happened
+{ ok: false, code: 'insufficient_funds', balance }   // a game rule refused it
+throw new Error(...)                                  // infrastructure broke
 ```
 
-Três estados distintos, e **falha de infraestrutura lança** — ela nunca vira
+Three distinct states, and **an infrastructure failure throws** — it never becomes
 `ok: false`.
 
-Por que isso importa: até 13/08/2026 `removeGold` devolvia `boolean`, e `false`
-significava "não tem ouro", "já aconteceu" **e** "o banco caiu". O
-`governance-service` lia esse `false` e emitia **mandado de prisão por
-inadimplência** — então um timeout de rede produzia um mandado contra alguém que
-tinha o dinheiro. Ver [Achado 7](../research/ECONOMY_FRAMEWORK_AUDIT.md#8-achado-7--false-significa-três-coisas-diferentes).
+Why this matters: until 2026-08-13 `removeGold` returned a `boolean`, and `false`
+meant "has no gold", "already happened" **and** "the database is down". The
+`governance-service` read that `false` and issued an **arrest warrant for
+default** — so a network timeout produced a warrant against someone who
+had the money. See [Finding 7](../research/ECONOMY_FRAMEWORK_AUDIT.md#8-achado-7--false-significa-três-coisas-diferentes).
 
-### Códigos de recusa
+### Refusal codes
 
-| Código | Significa |
+| Code | Means |
 |---|---|
-| `insufficient_funds` | saldo não cobre (vem com `balance`) |
-| `balance_overflow` | o destino estouraria o `INT` de saldo |
-| `from_account_not_found` / `to_account_not_found` | titular não existe |
-| `same_account` | origem igual ao destino |
-| `invalid_amount` | zero, negativo, fracionário, NaN ou acima do teto |
-| `invalid_from_account` / `invalid_to_account` | tipo desconhecido ou ref inválida |
-| `invalid_reason` / `invalid_idempotency_key` | fora do formato |
-| `escrow_not_found` / `escrow_not_held` / `escrow_empty` | estado de escrow |
+| `insufficient_funds` | the balance does not cover it (comes with `balance`) |
+| `balance_overflow` | the destination would overflow the balance `INT` |
+| `from_account_not_found` / `to_account_not_found` | the holder does not exist |
+| `same_account` | source equals destination |
+| `invalid_amount` | zero, negative, fractional, NaN or above the ceiling |
+| `invalid_from_account` / `invalid_to_account` | unknown type or invalid ref |
+| `invalid_reason` / `invalid_idempotency_key` | out of format |
+| `escrow_not_found` / `escrow_not_held` / `escrow_empty` | escrow state |
 
-Trate `insufficient_funds` como decisão de jogo. Trate qualquer outro código
-como bug do seu módulo — ele significa que você montou o pedido errado.
+Treat `insufficient_funds` as a game decision. Treat any other code
+as a bug in your module — it means you built the request wrong.
 
 ---
 
-## 5. Idempotência
+## 5. Idempotency
 
-Obrigatória. A chave é gravada **crua** na perna de débito de
-`gold_transactions.idempotency_key` (`UNIQUE`), e consultada com `FOR UPDATE`
-**dentro** da transação. Um reenvio devolve o resultado original.
+Mandatory. The key is stored **raw** on the debit leg of
+`gold_transactions.idempotency_key` (`UNIQUE`), and queried with `FOR UPDATE`
+**inside** the transaction. A resend returns the original result.
 
 ```
-requestId da UI  →  idempotencyKey
-                    ├── perna de débito:  "req-abc123"
-                    └── perna de crédito: "req-abc123#in"
+requestId from the UI  →  idempotencyKey
+                          ├── debit leg:   "req-abc123"
+                          └── credit leg:  "req-abc123#in"
 ```
 
-Se sua operação faz mais de uma transferência, derive sufixos estáveis:
+If your operation makes more than one transfer, derive stable suffixes:
 
 ```js
-idempotencyKey: `${requestId}_pay`   // pagamento
-idempotencyKey: `${requestId}_tax`   // imposto
+idempotencyKey: `${requestId}_pay`   // payment
+idempotencyKey: `${requestId}_tax`   // tax
 ```
 
-**Estáveis** é a palavra: `Date.now()` ou `Math.random()` no meio da chave
-transforma um retry num segundo pagamento.
+**Stable** is the word: `Date.now()` or `Math.random()` in the middle of the key
+turns a retry into a second payment.
 
-Quando o pedido não tem `requestId` (comando de chat, varredura de servidor),
-gere um determinístico a partir do que identifica a operação —
-`sweep-expire-${contractId}` é a chave da varredura de contratos, e é o que
-impede a varredura de expirar duas vezes se rodar duas vezes no mesmo minuto.
+When the request has no `requestId` (chat command, server sweep),
+generate a deterministic one from what identifies the operation —
+`sweep-expire-${contractId}` is the contract sweep's key, and it is what
+prevents the sweep from expiring twice if it runs twice in the same minute.
 
 ---
 
-## 6. O ledger
+## 6. The ledger
 
-`gold_transactions` depois da v15:
+`gold_transactions` after v15:
 
-| Coluna | Para quê |
+| Column | Purpose |
 |---|---|
-| `transaction_id` | UUID da linha |
-| `transfer_id` | **compartilhado pelas duas pernas** — é o que liga pagador e recebedor |
-| `character_id` | preenchido quando o titular é personagem; `NULL` nos demais |
-| `owner_type` / `owner_ref` | de quem é esta perna |
-| `counterparty_type` / `counterparty_ref` | o outro lado |
-| `actor_character_id` | quem pediu, quando não é o titular |
-| `delta` | negativo debita, positivo credita |
-| `reason` / `module` | o quê e de onde |
-| `idempotency_key` | `UNIQUE`; crua na perna de débito |
+| `transaction_id` | UUID of the row |
+| `transfer_id` | **shared by both legs** — it is what links payer and payee |
+| `character_id` | filled in when the holder is a character; `NULL` otherwise |
+| `owner_type` / `owner_ref` | whose leg this is |
+| `counterparty_type` / `counterparty_ref` | the other side |
+| `actor_character_id` | who requested it, when not the holder |
+| `delta` | negative debits, positive credits |
+| `reason` / `module` | what and from where |
+| `idempotency_key` | `UNIQUE`; raw on the debit leg |
 | `status` | `committed` / `rolled_back` |
 
-Consultas que a v15 tornou possíveis:
+Queries that v15 made possible:
 
 ```sql
--- A operação inteira, dos dois lados
+-- The whole operation, both sides
 SELECT * FROM gold_transactions WHERE transfer_id = ?;
 
--- O saldo de um tesouro reconstruído a partir da história
+-- A treasury's balance rebuilt from history
 SELECT SUM(delta) FROM gold_transactions WHERE owner_type='city' AND owner_ref='whiterun';
 
--- Tudo que uma staff moveu
+-- Everything a staff member moved
 SELECT * FROM gold_transactions WHERE actor_character_id = ? ORDER BY created_at DESC;
 ```
 
-### Sobre "metadata segura" (briefing §5)
+### About "safe metadata" (briefing §5)
 
-Não há coluna JSON livre, e é decisão, não esquecimento. Os campos que o
-briefing pede — `from`, `to`, `type`, `reason`, `actor`, `timestamp` — todos
-existem como **colunas tipadas e indexáveis**. Um blob de metadata livre seria
-o lugar onde texto de jogador, nome de item e mensagem de erro acabam entrando
-sem validação, e onde ninguém consegue consultar depois. Precisa de um campo
-novo? Ele vira coluna, com migration e revisão.
-
----
-
-## 7. Invariantes
-
-Sete coisas que o serviço garante e que você não precisa reimplementar:
-
-1. **Saldo nunca fica negativo.** Checado sob `FOR UPDATE`, e o `UPDATE` de
-   tesouro repete a guarda no `WHERE` como segunda linha de defesa.
-2. **Saldo nunca estoura o `INT`.** Crédito que passaria de `2147483647` é
-   recusado com `balance_overflow` em vez de saturar em silêncio.
-3. **Travas em ordem canônica** (`type:ref` ordenado), não "pagador primeiro" —
-   é o que impede deadlock quando A compra de B enquanto B compra de A.
-4. **Toda mudança de saldo tem linha de ledger.** Não há caminho que mude saldo
-   sem gravar as duas pernas.
-5. **Idempotência dentro da transação**, com replay tipado.
-6. **Escrow libera uma vez.** `status` sai de `held` sob a mesma trava.
-7. **Recusa ≠ falha.** Ver §4.
+There is no free-form JSON column, and that is a decision, not an oversight. The fields the
+briefing asks for — `from`, `to`, `type`, `reason`, `actor`, `timestamp` — all
+exist as **typed, indexable columns**. A free-form metadata blob would be
+where player text, item names and error messages end up going in
+without validation, and where nobody can query later. Need a new
+field? It becomes a column, with a migration and review.
 
 ---
 
-## 8. Como estender
+## 7. Invariants
 
-### Um tipo novo de titular
+Seven things the service guarantees that you do not need to reimplement:
 
-Edite `ACCOUNT_KINDS` em `core/economy-service.js`. É uma lista fechada porque o
-nome da tabela e da coluna são **interpolados no SQL** (um `?` não funciona para
-identificador), e a lista fechada é o que torna isso seguro por construção.
-Nenhum nome vindo de payload chega ao SQL.
-
-O titular precisa de uma tabela com chave primária e uma coluna de saldo `INT`
-não-negativa.
-
-### Um propósito novo de escrow
-
-Edite `ESCROW_PURPOSES`. Hoje: `contract`, `auction`, `rent_deposit`, `wager`.
-
-### Um rótulo novo de `system`
-
-Nenhuma lista — o formato é `[a-z0-9_]{3,48}`. Mas escolha um nome que responda
-"de onde veio esse ouro" numa investigação. `mint` não responde;
-`whitelist_grant` responde.
+1. **A balance never goes negative.** Checked under `FOR UPDATE`, and the treasury
+   `UPDATE` repeats the guard in the `WHERE` as a second line of defense.
+2. **A balance never overflows the `INT`.** A credit that would go past `2147483647` is
+   refused with `balance_overflow` instead of silently saturating.
+3. **Locks in canonical order** (sorted `type:ref`), not "payer first" —
+   it is what prevents a deadlock when A buys from B while B buys from A.
+4. **Every balance change has a ledger row.** There is no path that changes a balance
+   without writing both legs.
+5. **Idempotency inside the transaction**, with a typed replay.
+6. **Escrow releases once.** `status` leaves `held` under the same lock.
+7. **Refusal ≠ failure.** See §4.
 
 ---
 
-## 9. O que este framework **não** faz
+## 8. How to extend
 
-Escrito porque um framework que só lista capacidades engana.
+### A new holder type
 
-1. **Não checa permissão.** Quem pode multar, quem pode sacar do tesouro da
-   facção e quem pode ajustar saldo é decisão dos módulos de governança e staff.
-   Duplicar aqui criaria dois lugares para manter a mesma regra.
-2. **Não converte moeda.** `accounts.coins` (loja, dinheiro real) está fora, de
-   propósito, e adicionar o caminho é decisão de produto — ver
-   [Achado 12](../research/ECONOMY_FRAMEWORK_AUDIT.md#13-achado-12--accountscoins-é-dinheiro-e-não-está-nesta-auditoria).
-3. **Não faz reconciliação automática.** `reconcile()` existe e é uma query;
-   nada a executa periodicamente ainda.
-4. **Não impõe política econômica.** Não há cota de emissão, teto de dreno,
-   inflação nem juros. `system` aceita qualquer valor com `reason` obrigatório.
-5. **Não estorna.** Estorno é uma transferência nova no sentido contrário, com
-   `reason` que a nomeia. Linha de ledger não se apaga e não se edita.
-6. **Não rodou em servidor com gente dentro.** Tudo aqui é testado com MySQL
-   simulado e `mp` mockado, como o resto do gamemode. A
-   [Fase 0](../technical/FASE_0_ROTEIRO.md) continua sendo o bloqueio real.
+Edit `ACCOUNT_KINDS` in `core/economy-service.js`. It is a closed list because the
+table and column names are **interpolated into the SQL** (a `?` does not work for an
+identifier), and the closed list is what makes that safe by construction.
+No name coming from a payload reaches the SQL.
+
+The holder needs a table with a primary key and a non-negative `INT`
+balance column.
+
+### A new escrow purpose
+
+Edit `ESCROW_PURPOSES`. Today: `contract`, `auction`, `rent_deposit`, `wager`.
+
+### A new `system` label
+
+No list — the format is `[a-z0-9_]{3,48}`. But choose a name that answers
+"where did this gold come from" in an investigation. `mint` does not answer it;
+`whitelist_grant` does.
 
 ---
 
-## 10. Migração dos módulos existentes
+## 9. What this framework does **not** do
 
-Feito em 13/08/2026:
+Written down because a framework that only lists capabilities misleads.
 
-| Módulo | Antes | Agora |
+1. **It does not check permissions.** Who can fine, who can withdraw from the faction
+   treasury and who can adjust balances is a decision of the governance and staff modules.
+   Duplicating it here would create two places to maintain the same rule.
+2. **It does not convert currency.** `accounts.coins` (shop, real money) is out, on
+   purpose, and adding that path is a product decision — see
+   [Finding 12](../research/ECONOMY_FRAMEWORK_AUDIT.md#13-achado-12--accountscoins-é-dinheiro-e-não-está-nesta-auditoria).
+3. **It does not reconcile automatically.** `reconcile()` exists and is a query;
+   nothing runs it periodically yet.
+4. **It does not impose economic policy.** There is no issuance quota, drain ceiling,
+   inflation or interest. `system` accepts any amount with a mandatory `reason`.
+5. **It does not reverse.** A reversal is a new transfer in the opposite direction, with a
+   `reason` that names it. A ledger row is never deleted or edited.
+6. **It has not run on a server with people inside.** Everything here is tested with simulated MySQL
+   and a mocked `mp`, like the rest of the gamemode. The
+   [Phase 0](../technical/FASE_0_ROTEIRO.md) remains the real blocker.
+
+---
+
+## 10. Migration of existing modules
+
+Done on 2026-08-13:
+
+| Module | Before | Now |
 |---|---|---|
-| `governance-service.fineTarget` | `removeGold` + 2 queries soltas | uma transação; multa credita a instituição; inadimplência abre dívida real |
-| `market-stalls-service.buyItem` | 2× `applyGoldDelta` + `UPDATE cities` solto | 2 transferências (pagamento e imposto), 4 pernas de ledger que somam zero |
-| `regional-market-transaction-service` | `applyGoldDelta` + `UPDATE holds` solto | compra e venda contra `system:regional_market`; imposto é transferência |
+| `governance-service.fineTarget` | `removeGold` + 2 loose queries | one transaction; the fine credits the institution; default opens a real debt |
+| `market-stalls-service.buyItem` | 2× `applyGoldDelta` + a loose `UPDATE cities` | 2 transfers (payment and tax), 4 ledger legs that sum to zero |
+| `regional-market-transaction-service` | `applyGoldDelta` + a loose `UPDATE holds` | buying and selling against `system:regional_market`; tax is a transfer |
 
-Pendente, e registrado: `housing-service.buyProperty` e `horse-service` (ambos
-PARKED) ainda cobram em uma transação e entregam em outra —
-[Achado 9](../research/ECONOMY_FRAMEWORK_AUDIT.md#10-achado-9--compra-de-propriedade-cobra-antes-de-entregar).
-Migrar **não** é reativar
+Pending, and recorded: `housing-service.buyProperty` and `horse-service` (both
+PARKED) still charge in one transaction and deliver in another —
+[Finding 9](../research/ECONOMY_FRAMEWORK_AUDIT.md#10-achado-9--compra-de-propriedade-cobra-antes-de-entregar).
+Migrating is **not** reactivating
 ([PARKED_SERVICES_DECISION](../technical/PARKED_SERVICES_DECISION.md)).
 
 ---
 
-## 11. Ver também
+## 11. See also
 
-- [`CONTRACTS.md`](../gameplay/CONTRACTS.md) — o primeiro consumidor do escrow
-- [`DEBT_SYSTEM.md`](../gameplay/DEBT_SYSTEM.md) — dívida como registro
-- [`ECONOMY_SECURITY_MATRIX.md`](../testing/ECONOMY_SECURITY_MATRIX.md) — o que está testado, e o que não está
-- [`INVENTORY_FRAMEWORK.md`](INVENTORY_FRAMEWORK.md) — o equivalente para item
+- [`CONTRACTS.md`](../gameplay/CONTRACTS.md) — the first consumer of escrow
+- [`DEBT_SYSTEM.md`](../gameplay/DEBT_SYSTEM.md) — debt as a record
+- [`ECONOMY_SECURITY_MATRIX.md`](../testing/ECONOMY_SECURITY_MATRIX.md) — what is tested, and what is not
+- [`INVENTORY_FRAMEWORK.md`](INVENTORY_FRAMEWORK.md) — the equivalent for items
