@@ -102,11 +102,14 @@ ALTER TABLE `parcels`
 
 -- Parcel names are unique per organization now (the Legion and the city can
 -- both have a "Barracks" in Solitude).
--- v33's unique (hold_id, name) is replaced by a plain index of the same name,
--- in ONE statement: it backs the hold_id foreign key, so it cannot be dropped
--- alone, and check-schema-drift (which reads v33's CREATE TABLE) still finds it.
+-- v33's unique (hold_id, name) is replaced by a plain index of the same name
+-- (check-schema-drift reads v33's CREATE TABLE and still finds it). It backs
+-- the hold_id foreign key, so MariaDB refuses to drop it (error 1553, even
+-- with the re-add in the same statement) until another index covers hold_id.
 ALTER TABLE `parcels`
-  DROP INDEX IF EXISTS `uq_parcels_hold_name`,
+  ADD INDEX IF NOT EXISTS `idx_parcels_hold` (`hold_id`);
+ALTER TABLE `parcels` DROP INDEX IF EXISTS `uq_parcels_hold_name`;
+ALTER TABLE `parcels`
   ADD INDEX IF NOT EXISTS `uq_parcels_hold_name` (`hold_id`, `name`);
 ALTER TABLE `parcels`
   ADD UNIQUE INDEX IF NOT EXISTS `uq_parcels_org_name` (`org_id`, `name`);
