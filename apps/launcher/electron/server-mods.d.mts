@@ -43,5 +43,8 @@ export function installServerMods(input: {
   /** Attempts per file on 429/503/network errors (default 5). */
   maxAttempts?: number;
 }): Promise<{ installed: string[] }>;
-export function enableServerPlugins(input: { gamePath: string; plugins: string[] }): { changed: boolean };
+export const SERVER_PLUGINS_STATE_FILE: string;
+export const RETIRED_SERVER_PLUGINS: readonly string[];
+/** Drops plugins a previous sync managed that the server no longer sends; `removed` names them. */
+export function enableServerPlugins(input: { gamePath: string; plugins: string[] }): { changed: boolean; removed: string[] };
 export function dataPathOf(gamePath: string, rel: string): string;

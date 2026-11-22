@@ -380,6 +380,55 @@ describe('load order', () => {
     assert.equal(r.ok, true);
   });
 
+  it('ativo no plugins.txt mas ausente de Data/ não é problema — o jogo pula', () => {
+    const r = analyzePlugins({
+      localPlugins: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
+      serverLoadOrder: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
+      enabledPlugins: ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp'],
+      readHeader: semMasters
+    });
+    assert.deepEqual(r.problems, []);
+  });
+
+  it('plugin renomeado ainda presente em Data/ e ativo continua acusado', () => {
+    const r = analyzePlugins({
+      localPlugins: ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp'],
+      serverLoadOrder: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
+      enabledPlugins: ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp'],
+      readHeader: semMasters
+    });
+    assert.ok(r.problems.some(p => /extra na load order: OathboundHoldstone\.esp/.test(p)));
+  });
+
+  it('depois do sync do launcher, o plugin renomeado sai da lista e a checagem passa', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { enableServerPlugins } = await import('./server-mods.mjs');
+    const game = fs.mkdtempSync(path.join(os.tmpdir(), 'oathbound-rename-'));
+    try {
+      fs.mkdirSync(path.join(game, 'Data'));
+      for (const p of ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp']) {
+        fs.writeFileSync(path.join(game, 'Data', p), '');
+      }
+      fs.writeFileSync(path.join(game, 'OATHBOUND_plugins.txt'), '*Skyrim.esm\r\n*OathboundHoldstone.esp\r\n');
+      fs.writeFileSync(path.join(game, 'OATHBOUND_loadorder.txt'), 'Skyrim.esm\r\nOathboundHoldstone.esp\r\n');
+      enableServerPlugins({ gamePath: game, plugins: ['Oathbound_Holdstone.esp'] });
+      const enabled = parsePluginsTxt(fs.readFileSync(path.join(game, 'OATHBOUND_plugins.txt'), 'utf8'))
+        .filter(p => p.enabled).map(p => p.name);
+      const r = analyzePlugins({
+        localPlugins: fs.readdirSync(path.join(game, 'Data')),
+        serverLoadOrder: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
+        enabledPlugins: enabled,
+        readHeader: semMasters
+      });
+      assert.deepEqual(r.problems, []);
+      assert.equal(r.ok, true);
+    } finally {
+      fs.rmSync(game, { recursive: true, force: true });
+    }
+  });
+
   it('sem plugins.txt, cai para os arquivos em Data/ — direção segura', () => {
     const r = analyzePlugins({
       localPlugins: ['Skyrim.esm', 'HeavyRP.esm', 'Intruso.esp'],
