@@ -187,6 +187,9 @@ async function isEligible(accountId) {
   );
   if (rows.length === 0) return { ok: false, reason: 'account_not_found' };
   if (rows[0].status !== 'active') return { ok: false, reason: 'account_not_active' };
+  // Whitelist off: an active account is enough; the game server creates the
+  // character on the first login (skymp/gamemode/whitelist.js).
+  if (String(process.env.WHITELIST_REQUIRED || '').trim().toLowerCase() === 'false') return { ok: true };
   if (Number(rows[0].approved_apps) === 0) return { ok: false, reason: 'not_whitelisted' };
   if (Number(rows[0].approved_chars) === 0) return { ok: false, reason: 'no_approved_character' };
   return { ok: true };

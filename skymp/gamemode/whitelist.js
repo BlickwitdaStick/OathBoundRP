@@ -11,6 +11,30 @@ const characterNumbers = require('./core/character-numbers');
 // exclusivamente pelo module-registry quando a flag ENABLE_* correspondente
 // está ligada — importar direto no boot os faria rodar sem passar pelo registry.
 
+/**
+ * WHITELIST_REQUIRED=false opens the server: anyone the launcher lets in plays,
+ * and a first login creates their character. Anything but an explicit "false"
+ * keeps the whitelist on.
+ */
+function whitelistRequired() {
+  return String(process.env.WHITELIST_REQUIRED || '').trim().toLowerCase() !== 'false';
+}
+
+/** Last name a character created on first login carries until the player picks one (/rpname). */
+const UNNAMED = commands.UNNAMED_LAST_NAME || 'Unnamed';
+
+/** First name for a new character: the player's Discord name, cleaned to letters. */
+async function newcomerFirstName(accountId) {
+  try {
+    const rows = await db.query('SELECT username FROM discord_identities WHERE account_id = ? LIMIT 1', [accountId]);
+    const clean = String((rows[0] && rows[0].username) || '').replace(/[^A-Za-z' -]/g, '').trim().slice(0, 32);
+    if (clean) return clean.charAt(0).toUpperCase() + clean.slice(1);
+  } catch (err) {
+    console.error('[whitelist] Could not read the Discord name:', err.message);
+  }
+  return `Traveler ${accountId}`;
+}
+
 function allowLocalAutoWhitelist(profileId) {
   if (process.env.NODE_ENV === 'production') return false;
   if (process.env.ALLOW_LOCAL_AUTOWHITELIST !== 'true') return false;
@@ -135,7 +159,7 @@ async function checkWhitelist(userId, profileId, actorId) {
       [account.id]
     );
 
-    if (wlRows.length === 0) {
+    if (wlRows.length === 0 && whitelistRequired()) {
       if (allowLocalAutoWhitelist(profileId)) {
         console.log(`[whitelist] Auto-approving whitelist application for profileId ${profileId}...`);
         await db.query(
@@ -180,6 +204,22 @@ async function checkWhitelist(userId, profileId, actorId) {
           angle_z: 137,
           cell_id: '133c6:Skyrim.esm'
         };
+      } else if (!whitelistRequired()) {
+        const firstName = await newcomerFirstName(account.id);
+        console.log(`[whitelist] Whitelist is off: creating ${firstName}'s first character...`);
+        const insertChar = await db.query(
+          `INSERT INTO characters (account_id, first_name, last_name, status) VALUES (?, ?, ?, 'approved')`,
+          [account.id, firstName, UNNAMED]
+        );
+        const created = await db.query('SELECT * FROM characters WHERE id = ?', [insertChar.insertId]);
+        character = created[0] || { id: insertChar.insertId, first_name: firstName, last_name: UNNAMED };
+        if (typeof mp !== 'undefined') {
+          setTimeout(() => {
+            try {
+              commands.sendNotification(actorId, 'Welcome to OATHBOUND. Name your character with /rpname <First> <Last>.');
+            } catch (_) { /* the player left */ }
+          }, 15000);
+        }
       } else {
         console.log(`[whitelist] User ${userId} has no approved characters. Kicking...`);
         if (typeof mp !== 'undefined') mp.kick(userId);

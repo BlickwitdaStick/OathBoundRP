@@ -163,6 +163,15 @@ passport.use(new DiscordStrategy({
     }
 }));
 
+/**
+ * WHITELIST_REQUIRED=false opens the server: any Discord user who signs in
+ * through the launcher gets an account, and the game makes their character.
+ * Anything but an explicit "false" keeps the whitelist on.
+ */
+function whitelistRequired() {
+  return String(process.env.WHITELIST_REQUIRED || '').trim().toLowerCase() !== 'false';
+}
+
 function requireAuth(req, res, next) {
   if (req.isAuthenticated && req.isAuthenticated()) return next();
   runtimeMetrics.recordRejection('auth_required');
@@ -910,7 +919,16 @@ app.post('/api/launcher/oauth/exchange', async (req, res) => {
     // The account has to exist before a ticket is issued — someone who never
     // went through the panel has no whitelist, so has nothing to do in the queue.
     const accountRows = await db('SELECT account_id FROM discord_identities WHERE discord_id = ?', [user.id]);
-    const accountId = accountRows.length > 0 ? accountRows[0].account_id : null;
+    let accountId = accountRows.length > 0 ? accountRows[0].account_id : null;
+
+    // Whitelist off (WHITELIST_REQUIRED=false): signing in with Discord is
+    // enough, so the launcher creates the account the panel would have.
+    if (!accountId && !whitelistRequired()) {
+      const [accRes] = await executeDb('INSERT INTO accounts (status) VALUES (?)', ['active']);
+      accountId = accRes.insertId;
+      await executeDb('INSERT INTO discord_identities (discord_id, account_id, username, avatar) VALUES (?, ?, ?, ?)',
+        [user.id, accountId, user.global_name || user.username, user.avatar || '']);
+    }
 
     const profile = {
       discordId: user.id,

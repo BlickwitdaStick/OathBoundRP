@@ -4,6 +4,8 @@ const Module = require('node:module');
 const fs = require('node:fs');
 
 const queries = [];
+// Open-server tests flip this: no whitelist row and no character yet.
+const fresh = { on: false };
 const restoredActors = [];
 const realPositionPersistence = require('./core/position-persistence');
 const originalLoad = Module._load;
@@ -16,7 +18,13 @@ Module._load = function (request, parent, isMain) {
         if (/FROM accounts a\s+WHERE a\.id = \?/i.test(sql)) {
           return [{ id: 42, status: 'active', vip_level: 0 }];
         }
-        if (/FROM whitelist_applications/i.test(sql)) return [{ status: 'approved' }];
+        if (/FROM whitelist_applications/i.test(sql)) return fresh.on ? [] : [{ status: 'approved' }];
+        if (fresh.on && /FROM discord_identities/i.test(sql)) return [{ username: 'xX_frost99_Xx' }];
+        if (fresh.on && /INSERT INTO characters/i.test(sql)) return { insertId: 99 };
+        if (fresh.on && /SELECT * FROM characters WHERE id = ?/i.test(sql)) {
+          return [{ id: 99, first_name: 'XXfrostXx', last_name: 'Unnamed', pos_x: -977, pos_y: 9, pos_z: 5, angle_z: 137, cell_id: '133c6:Skyrim.esm' }];
+        }
+        if (fresh.on && /FROM characters/i.test(sql)) return [];
         if (/FROM characters/i.test(sql)) {
           return [{ id: 7, first_name: 'Alvara', last_name: 'Dawnmere', pos_x: 0, pos_y: 0, pos_z: 0, angle_z: 0, cell_id: '0x3c' }];
         }
@@ -92,4 +100,35 @@ test('login teleport sends the saved cell as id:plugin, never a bare id (actor f
   assert.ok(teleport, 'the character is moved to its saved location');
   assert.deepEqual(teleport.value, { pos: [0, 0, 0], rot: [0, 0, 0], cellOrWorldDesc: '3c:Skyrim.esm' });
   assert.deepEqual(restoredActors, [0xff000001], 'position saving starts after the teleport');
+});
+
+test('whitelist on (the default): no approved application means a kick', async () => {
+  const kicks = [];
+  global.mp = { kick: (id) => kicks.push(id), set() {} };
+  fresh.on = true;
+  delete process.env.WHITELIST_REQUIRED;
+  try {
+    assert.equal(await whitelist.checkWhitelist(5, 42, 0xff000005), false);
+    assert.deepEqual(kicks, [5]);
+  } finally {
+    fresh.on = false;
+    delete global.mp;
+  }
+});
+
+test('WHITELIST_REQUIRED=false: a first login gets a character named after Discord, last name Unnamed', async () => {
+  const kicks = [];
+  global.mp = { kick: (id) => kicks.push(id), set() {}, getDescFromId: (id) => id.toString(16) + ':Skyrim.esm' };
+  fresh.on = true;
+  process.env.WHITELIST_REQUIRED = 'false';
+  try {
+    assert.equal(await whitelist.checkWhitelist(6, 42, 0xff000006), true);
+    assert.deepEqual(kicks, []);
+    const insert = queries.find(({ sql }) => /INSERT INTO characters/i.test(sql));
+    assert.deepEqual(insert.params, [42, 'XXfrostXx', 'Unnamed']);
+  } finally {
+    fresh.on = false;
+    delete process.env.WHITELIST_REQUIRED;
+    delete global.mp;
+  }
 });

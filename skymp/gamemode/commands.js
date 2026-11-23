@@ -291,6 +291,51 @@ const rpChat = createRpChatService({
   logEvent: logRpChatEvent
 });
 
+/** Last name of a character created on first login while the whitelist is off (whitelist.js). */
+const UNNAMED_LAST_NAME = 'Unnamed';
+const NAME_PART = /^[A-Za-z][A-Za-z'-]{0,31}$/;
+
+/**
+ * Checks a character name typed by a player: two parts (first, last), letters
+ * with ' or -, each starting with a letter. Returns { first, last } or { error }.
+ */
+function parseRpName(words) {
+  if (words.length !== 2) return { error: 'Give a first and a last name, e.g. /rpname Hrolf Stone-Fist.' };
+  const [a, b] = words;
+  if (!NAME_PART.test(a) || !NAME_PART.test(b)) return { error: 'Names use letters, \' and - only (up to 32 each).' };
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  if (cap(b) === UNNAMED_LAST_NAME) return { error: 'Pick a real last name.' };
+  return { first: cap(a), last: cap(b) };
+}
+
+/**
+ * /rpname First Last — a player names the character the server made for them
+ * (only while it is still "Unnamed"). Staff: /rpname <player#> First Last, any time.
+ */
+async function handleRpNameCommand(actorId, args) {
+  const words = String(args || '').trim().split(/\s+/).filter(Boolean);
+  let target = actorId;
+  if (words.length === 3 && /^#?\d+$/.test(words[0])) {
+    if (!isStaff(actorId)) return sendNotification(actorId, 'Only staff can rename someone else.');
+    target = getActorByCharacterNumber(Number(words[0].replace('#', '')));
+    if (!target) return sendNotification(actorId, `Nobody online is #${words[0].replace('#', '')}.`);
+    words.shift();
+  }
+  const character = activeCharacters.get(target);
+  if (!character) return sendNotification(actorId, 'No character loaded.');
+  if (target === actorId && character.lastName !== UNNAMED_LAST_NAME && !isStaff(actorId)) {
+    return sendNotification(actorId, 'Your character already has a name. Ask staff if it must change.');
+  }
+  const name = parseRpName(words);
+  if (name.error) return sendNotification(actorId, name.error);
+  const db = require('./database');
+  await db.query('UPDATE characters SET first_name = ?, last_name = ? WHERE id = ?', [name.first, name.last, character.characterId]);
+  character.firstName = name.first;
+  character.lastName = name.last;
+  sendNotification(target, `Your character is now ${name.first} ${name.last}.`);
+  if (target !== actorId) sendNotification(actorId, `Renamed to ${name.first} ${name.last}.`);
+}
+
 function parseActorId(raw) {
   if (!raw) return NaN;
   const normalized = raw.toLowerCase().startsWith('0x') ? raw.slice(2) : raw;
@@ -459,6 +504,13 @@ function registerCoreCommands() {
       sendNotification(actorId, 'Could not save the nickname.');
     });
   }, { module: 'identity', phase: 'core', description: 'Set the name you know someone by', usage: '/alias <player#> <name>' });
+
+  commandRegistry.register('/rpname', (actorId, args) => {
+    handleRpNameCommand(actorId, args).catch((err) => {
+      console.error('[identity] /rpname failed:', err.message);
+      sendNotification(actorId, 'Could not save the name.');
+    });
+  }, { module: 'identity', phase: 'core', description: 'Name your new character (once); staff can rename anyone', usage: '/rpname <First> <Last>  ·  staff: /rpname <player#> <First> <Last>' });
 
   commandRegistry.register('/anim', (actorId, args) => {
     if (args) {
@@ -700,6 +752,8 @@ module.exports = {
   setCharacterNumber,
   getActorByCharacterNumber,
   formatCharacterNumber,
+  parseRpName,
+  UNNAMED_LAST_NAME,
   listActiveActorIds,
   handleChatInput,
   broadcastProximityMessage,
