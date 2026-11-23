@@ -1,34 +1,34 @@
 /**
- * parity.mjs — verificação de paridade de modpack, sem I/O
+ * parity.mjs — modpack parity check, with no I/O
  *
- * Esta é a lógica que sustenta o **contrato de FormID**
- * (`docs/technical/MODS_AND_GAMEMODE_CONTRACT.md` §3): o servidor guarda
- * `base_id` no banco, e um FormID só significa alguma coisa dentro de uma
- * load order específica. Se a ordem do jogador diferir da do servidor em uma
- * única posição, o mesmo `base_id` vira um item diferente na tela dele.
+ * This is the logic that upholds the **FormID contract**
+ * (`docs/technical/MODS_AND_GAMEMODE_CONTRACT.md` §3): the server stores
+ * `base_id` in the database, and a FormID only means something inside a
+ * specific load order. If the player's order differs from the server's in a
+ * single position, the same `base_id` becomes a different item on their screen.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * Por que isto virou módulo próprio
+ * Why this became its own module
  * ─────────────────────────────────────────────────────────────────────────────
- * Estava dentro dos handlers `ipcMain.handle` do `main.ts`, misturado com
- * leitura de disco e HTTP — ou seja, impossível de testar sem um Electron, um
- * servidor e uma pasta `Data/` de verdade. Resultado prático: o launcher tinha
- * **zero testes**, e é ele que decide se um jogador entra ou não.
+ * It used to live inside `main.ts`'s `ipcMain.handle` handlers, mixed with
+ * disk reads and HTTP — that is, impossible to test without Electron, a server
+ * and a real `Data/` folder. Practical result: the launcher had **zero
+ * tests**, and it is what decides whether a player gets in or not.
  *
- * Aqui não há `fs`, `http` nem `electron`. As dependências de I/O entram como
- * argumento (`readHeader`, `hashOf`). É JS puro (`.mjs`) e não TypeScript de
- * propósito: assim `node --test` roda direto, sem passo de build — mesma
- * escolha do gamemode.
+ * There is no `fs`, `http` or `electron` here. I/O dependencies come in as
+ * arguments (`readHeader`, `hashOf`). It is plain JS (`.mjs`) and not
+ * TypeScript on purpose: that way `node --test` runs directly, with no build
+ * step — the same choice as the gamemode.
  *
- * Escrito em ESM porque o `apps/launcher` é `"type": "module"`.
+ * Written as ESM because `apps/launcher` is `"type": "module"`.
  */
 
 /**
- * Interpreta o `plugins.txt` do Skyrim.
+ * Parses Skyrim's `plugins.txt`.
  *
- * Formato: uma linha por plugin, `*` na frente quando está ativo, `#` para
- * comentário. O que **não** tem `*` está presente no disco mas fora da load
- * order — e portanto não desloca FormID nenhum.
+ * Format: one line per plugin, `*` in front when it is active, `#` for a
+ * comment. Anything **without** `*` is present on disk but outside the load
+ * order — and so shifts no FormID.
  *
  * @param {string} content
  * @returns {{name: string, enabled: boolean}[]}
@@ -37,28 +37,28 @@ export function parsePluginsTxt(content) {
   if (typeof content !== 'string') return [];
   return content
     .split(/\r?\n/)
-    .map(linha => linha.trim())
-    .filter(linha => linha.length > 0 && !linha.startsWith('#'))
-    .map(linha => ({ name: linha.replace(/^\*/, ''), enabled: linha.startsWith('*') }));
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.startsWith('#'))
+    .map(line => ({ name: line.replace(/^\*/, ''), enabled: line.startsWith('*') }));
 }
 
 /**
- * Lê o cabeçalho TES4 de um plugin a partir do buffer do arquivo.
+ * Reads a plugin's TES4 header from the file's buffer.
  *
- * Recebe **buffer**, não caminho: é o que torna o parser testável com um
- * plugin sintético de 60 bytes em vez de um `.esm` de 300 MB.
+ * Takes a **buffer**, not a path: that is what makes the parser testable with
+ * a 60-byte synthetic plugin instead of a 300 MB `.esm`.
  *
  * @param {Buffer} buffer
  * @returns {{masters: string[], isMaster: boolean, isLight: boolean, error?: string}}
  */
 export function parsePluginHeader(buffer) {
-  const vazio = { masters: [], isMaster: false, isLight: false };
+  const empty = { masters: [], isMaster: false, isLight: false };
 
   if (!buffer || buffer.length < 24) {
-    return { ...vazio, error: 'Arquivo menor que o cabecalho TES4' };
+    return { ...empty, error: 'File is smaller than the TES4 header' };
   }
   if (buffer.toString('latin1', 0, 4) !== 'TES4') {
-    return { ...vazio, error: 'Cabecalho TES4 invalido' };
+    return { ...empty, error: 'Invalid TES4 header' };
   }
 
   const dataSize = buffer.readUInt32LE(4);
@@ -66,9 +66,9 @@ export function parsePluginHeader(buffer) {
   const isMaster = (flags & 0x1) !== 0;
   const isLight = (flags & 0x200) !== 0;
 
-  // Teto de 1 MiB: o bloco de masters vive no começo, e sem limite um arquivo
-  // com `dataSize` corrompido faria o launcher alocar memória arbitrária a
-  // partir de um número que veio de fora.
+  // 1 MiB cap: the masters block lives at the start, and with no limit a file
+  // with a corrupted `dataSize` would make the launcher allocate arbitrary
+  // memory from a number that came from outside.
   const cap = Math.min(dataSize, 1024 * 1024, Math.max(0, buffer.length - 24));
   const data = buffer.subarray(24, 24 + cap);
 
@@ -77,216 +77,216 @@ export function parsePluginHeader(buffer) {
   while (offset + 6 <= data.length) {
     const type = data.toString('latin1', offset, offset + 4);
     const size = data.readUInt16LE(offset + 4);
-    const inicio = offset + 6;
-    const fim = inicio + size;
-    if (fim > data.length) break;
+    const start = offset + 6;
+    const end = start + size;
+    if (end > data.length) break;
     if (type === 'MAST') {
-      const valor = data.toString('utf8', inicio, fim);
-      // MAST vem terminado em NUL; sem cortar, o nome carrega o byte nulo
-      // e nunca casa com o arquivo em disco.
-      const nul = valor.indexOf(String.fromCharCode(0));
-      const nome = (nul >= 0 ? valor.slice(0, nul) : valor).trim();
-      if (nome) masters.push(nome);
+      const value = data.toString('utf8', start, end);
+      // MAST is NUL-terminated; without trimming, the name carries the null
+      // byte and never matches the file on disk.
+      const nul = value.indexOf(String.fromCharCode(0));
+      const name = (nul >= 0 ? value.slice(0, nul) : value).trim();
+      if (name) masters.push(name);
     }
-    offset = fim;
+    offset = end;
   }
 
   return { masters, isMaster, isLight };
 }
 
 /**
- * Compara o conteúdo local com o manifesto do servidor.
+ * Compares local content against the server manifest.
  *
- * `hashOf` é assíncrono de propósito: um `.esm`/`.bsa` de referência passa
- * fácil de 200-300 MB, e um `hashOf` síncrono (ex: `fs.readFileSync` inteiro
- * antes de hashear) força o Node a alocar o arquivo inteiro na heap de uma
- * vez por mod — em manifestos com dezenas de mods, isso estourava a memória
- * do processo do launcher antes mesmo do jogo abrir. `hashOf` assíncrono
- * (ex: hash via stream) deixa o chamador controlar isso.
+ * `hashOf` is async on purpose: a reference `.esm`/`.bsa` easily goes past
+ * 200-300 MB, and a synchronous `hashOf` (e.g. a whole `fs.readFileSync` before
+ * hashing) forces Node to allocate the whole file on the heap at once per mod
+ * — with manifests of dozens of mods, that blew the launcher process's memory
+ * before the game even opened. An async `hashOf` (e.g. hashing via a stream)
+ * lets the caller control that.
  *
- * Os hashes rodam com `concurrency` arquivos "em voo" ao mesmo tempo, não
- * um de cada vez: hashear sequencialmente um manifesto com dezenas de BSAs
- * de referência deixava o disco majoritariamente ocioso entre leituras e
- * levava minutos (achado real: ~5 min num modpack de fork externo). Isso
- * não reabre o problema de memória que motivou o streaming — cada stream
- * ainda só segura um pedaço do arquivo por vez, `concurrency` só controla
- * quantos arquivos DIFERENTES estão sendo lidos ao mesmo tempo.
+ * Hashes run with `concurrency` files "in flight" at once, not one at a time:
+ * hashing a manifest with dozens of reference BSAs sequentially left the disk
+ * mostly idle between reads and took minutes (real finding: ~5 min on an
+ * external fork's modpack). This doesn't reopen the memory problem that
+ * motivated streaming — each stream still holds only one chunk of the file at
+ * a time; `concurrency` only controls how many DIFFERENT files are read at once.
  *
  * @param {Object}   params
  * @param {{filename: string, hash: string}[]} params.serverMods
- * @param {string[]} params.localFiles  nomes dos arquivos em `Data/`
- * @param {(filename: string) => (string | Promise<string>)} params.hashOf  hash do arquivo local
- * @param {number}   [params.concurrency]  arquivos hasheados em paralelo (padrão 4)
+ * @param {string[]} params.localFiles  names of the files in `Data/`
+ * @param {(filename: string) => (string | Promise<string>)} params.hashOf  hash of the local file
+ * @param {number}   [params.concurrency]  files hashed in parallel (default 4)
  */
 export const HASH_ALGORITHM = 'sha256';
 
 export async function compareMods({ serverMods, localFiles, hashOf, hashAlgorithm, concurrency = 4 }) {
   if (!Array.isArray(serverMods)) {
-    return { success: false, error: 'Manifesto invalido do servidor.' };
+    return { success: false, error: 'Invalid manifest from the server.' };
   }
 
-  // O manifesto declara com que algoritmo foi gerado. Sem esta checagem, um
-  // mods.json antigo (MD5) contra um launcher novo (SHA-256) faria TODO arquivo
-  // divergir, e o jogador leria "seu mod esta corrompido" duzentas vezes -- uma
-  // mentira sobre a causa. O modo de falha tem que apontar pro que realmente
-  // aconteceu: o manifesto precisa ser regerado.
+  // The manifest declares which algorithm it was generated with. Without this
+  // check, an old mods.json (MD5) against a new launcher (SHA-256) would make
+  // EVERY file differ, and the player would read "your mod is corrupted" two
+  // hundred times -- a lie about the cause. The failure mode has to point at
+  // what really happened: the manifest needs regenerating.
   if (hashAlgorithm !== HASH_ALGORITHM) {
     return {
       success: false,
-      error: `Manifesto gerado com '${hashAlgorithm || 'algoritmo nao declarado'}', mas este `
-        + `launcher exige ${HASH_ALGORITHM}. Peca ao servidor para regerar o mods.json.`
+      error: `Manifest generated with '${hashAlgorithm || 'undeclared algorithm'}', but this `
+        + `launcher requires ${HASH_ALGORITHM}. Ask the server to regenerate mods.json.`
     };
   }
 
-  // Windows não distingue caixa; o manifesto é gerado noutra máquina.
-  const porNomeMinusculo = new Map(localFiles.map(f => [f.toLowerCase(), f]));
+  // Windows is case-insensitive; the manifest is generated on another machine.
+  const byLowerName = new Map(localFiles.map(f => [f.toLowerCase(), f]));
 
-  // Falta de arquivo é checagem barata (só olha o Map) — resolve tudo antes
-  // de gastar I/O com hash, na ordem do manifesto, pra mensagem de erro
-  // continuar previsível quando um mod faltando vem antes de um hash ruim.
-  const resolvidos = [];
+  // A missing file is a cheap check (it only looks at the Map) — resolve all of
+  // them before spending I/O on hashing, in manifest order, so the error
+  // message stays predictable when a missing mod comes before a bad hash.
+  const resolved = [];
   for (const mod of serverMods) {
-    const local = porNomeMinusculo.get(String(mod.filename).toLowerCase());
+    const local = byLowerName.get(String(mod.filename).toLowerCase());
     if (!local) {
-      return { success: false, error: `Mod faltando: ${mod.filename}` };
+      return { success: false, error: `Missing mod: ${mod.filename}` };
     }
-    resolvidos.push({ mod, local });
+    resolved.push({ mod, local });
   }
 
   let cursor = 0;
-  let divergencia = null;
+  let mismatch = null;
 
   async function worker() {
-    while (cursor < resolvidos.length) {
-      const indice = cursor++;
-      const { mod, local } = resolvidos[indice];
+    while (cursor < resolved.length) {
+      const index = cursor++;
+      const { mod, local } = resolved[index];
       const hash = await hashOf(local);
-      if (hash !== mod.hash && (divergencia === null || indice < divergencia.indice)) {
-        divergencia = { indice, filename: mod.filename };
+      if (hash !== mod.hash && (mismatch === null || index < mismatch.index)) {
+        mismatch = { index, filename: mod.filename };
       }
     }
   }
 
-  const trabalhadores = Math.max(1, Math.min(concurrency, resolvidos.length));
-  await Promise.all(Array.from({ length: trabalhadores }, worker));
+  const workers = Math.max(1, Math.min(concurrency, resolved.length));
+  await Promise.all(Array.from({ length: workers }, worker));
 
-  if (divergencia) {
-    return { success: false, error: `O mod ${divergencia.filename} esta modificado ou corrompido!` };
+  if (mismatch) {
+    return { success: false, error: `The mod ${mismatch.filename} is modified or corrupted!` };
   }
 
   return { success: true };
 }
 
 /**
- * Verifica a load order contra a do servidor.
+ * Checks the load order against the server's.
  *
- * Três classes de problema, e a terceira é a que faltava:
+ * Three classes of problem, and the third is the one that was missing:
  *
- *   1. **Plugin ausente** — o servidor exige e o jogador não tem.
- *   2. **Master fora de ordem** — a dependência carrega depois do dependente.
- *   3. **Plugin extra** — o jogador tem um plugin que o servidor não conhece.
+ *   1. **Missing plugin** — the server requires it and the player doesn't have it.
+ *   2. **Master out of order** — the dependency loads after the dependent.
+ *   3. **Extra plugin** — the player has a plugin the server doesn't know.
  *
- * O caso 3 é o mais perigoso e era o que passava batido. Um `.esp` a mais na
- * load order ocupa um índice e **desloca todos os plugins seguintes**: o
- * `HeavyRP.esm` que é `02` no servidor vira `03` no cliente, e todo `base_id`
- * gravado no banco passa a apontar para outro registro na tela daquele jogador.
+ * Case 3 is the most dangerous and was the one slipping through. One extra
+ * `.esp` in the load order takes an index and **shifts every following
+ * plugin**: the `HeavyRP.esm` that is `02` on the server becomes `03` on the
+ * client, and every `base_id` stored in the database starts pointing at a
+ * different record on that player's screen.
  *
- * Ele passava porque as duas verificações eram feitas **na direção errada**:
- * ambas percorriam a lista do servidor perguntando "o jogador tem isto?", e
- * nenhuma percorria a do jogador perguntando "o servidor conhece isto?".
+ * It slipped through because both checks ran **in the wrong direction**: both
+ * walked the server's list asking "does the player have this?", and neither
+ * walked the player's asking "does the server know this?".
  *
- * `enabledPlugins` (do `plugins.txt`) é o que define a load order real. Sem
- * ele, a checagem cai para os arquivos presentes em `Data/` — mais grosseira,
- * porque um plugin presente e desativado não desloca nada, mas é a direção
- * segura: falso positivo aqui é "você tem um arquivo que não deveria".
+ * `enabledPlugins` (from `plugins.txt`) is what defines the real load order.
+ * Without it, the check falls back to the files present in `Data/` — coarser,
+ * because a plugin that is present but disabled shifts nothing, but it is the
+ * safe direction: a false positive here is "you have a file you shouldn't".
  *
  * @param {Object} params
- * @param {string[]} params.localPlugins           arquivos de plugin em `Data/`
- * @param {string[]} params.serverLoadOrder        ordem canônica do servidor
- * @param {string[]} [params.enabledPlugins]       ativos no `plugins.txt`
+ * @param {string[]} params.localPlugins           plugin files in `Data/`
+ * @param {string[]} params.serverLoadOrder        the server's canonical order
+ * @param {string[]} [params.enabledPlugins]       active in `plugins.txt`
  * @param {(name: string) => Object} params.readHeader
  */
 export function analyzePlugins({ localPlugins, serverLoadOrder, enabledPlugins, readHeader }) {
   const problems = [];
   const plugins = [];
 
-  const locaisPorMinusculo = new Map(localPlugins.map(f => [f.toLowerCase(), f]));
+  const localByLower = new Map(localPlugins.map(f => [f.toLowerCase(), f]));
 
-  // Sem ordem do servidor nao existe paridade a verificar. Antes o codigo caia
-  // para a ordem local, o que fazia a checagem comparar o jogador consigo mesmo
-  // e responder "ok" sempre -- a pior resposta possivel, porque parece
-  // aprovacao.
+  // With no server order there is no parity to check. The code used to fall
+  // back to the local order, which made the check compare the player with
+  // themselves and always answer "ok" -- the worst possible answer, because it
+  // looks like approval.
   if (!Array.isArray(serverLoadOrder) || serverLoadOrder.length === 0) {
     return {
       ok: false,
-      problems: ['Servidor nao informou load order: impossivel verificar paridade.'],
+      problems: ['The server did not provide a load order: parity cannot be checked.'],
       plugins: []
     };
   }
 
-  const declarados = serverLoadOrder.map(String);
-  const indiceDeclarado = new Map(declarados.map((f, i) => [f.toLowerCase(), i]));
+  const declared = serverLoadOrder.map(String);
+  const declaredIndex = new Map(declared.map((f, i) => [f.toLowerCase(), i]));
 
-  // Primeira passada: presenca e cabecalho. Precisa vir antes da ordem efetiva
-  // porque a flag ESM, que decide o hoisting, vive dentro do cabecalho.
-  const cabecalhos = new Map();
-  for (const plugin of declarados) {
-    const nomeLocal = locaisPorMinusculo.get(plugin.toLowerCase());
-    if (!nomeLocal) {
-      problems.push(`Plugin ausente: ${plugin}`);
+  // First pass: presence and header. It has to come before the effective
+  // order because the ESM flag, which decides hoisting, lives in the header.
+  const headers = new Map();
+  for (const plugin of declared) {
+    const localName = localByLower.get(plugin.toLowerCase());
+    if (!localName) {
+      problems.push(`Missing plugin: ${plugin}`);
       continue;
     }
-    const header = readHeader(nomeLocal);
-    plugins.push({ name: nomeLocal, ...header });
-    if (header.error) problems.push(`${nomeLocal}: ${header.error}`);
-    cabecalhos.set(plugin.toLowerCase(), { nomeLocal, header });
+    const header = readHeader(localName);
+    plugins.push({ name: localName, ...header });
+    if (header.error) problems.push(`${localName}: ${header.error}`);
+    headers.set(plugin.toLowerCase(), { localName, header });
   }
 
-  const presentes = declarados.filter(p => cabecalhos.has(p.toLowerCase()));
-  const ordemEfetiva = [...presentes.filter(ehHoistado), ...presentes.filter(p => !ehHoistado(p))];
-  const posEfetiva = new Map(ordemEfetiva.map((p, i) => [p.toLowerCase(), i]));
+  const present = declared.filter(p => headers.has(p.toLowerCase()));
+  const effectiveOrder = [...present.filter(isHoisted), ...present.filter(p => !isHoisted(p))];
+  const effectivePos = new Map(effectiveOrder.map((p, i) => [p.toLowerCase(), i]));
 
-  function ehHoistado(plugin) {
-    const entrada = cabecalhos.get(plugin.toLowerCase());
-    if (!entrada) return false;
+  function isHoisted(plugin) {
+    const entry = headers.get(plugin.toLowerCase());
+    if (!entry) return false;
     const ext = plugin.toLowerCase().slice(plugin.lastIndexOf('.'));
-    // `isLight` NAO entra aqui, e essa ausencia e o ponto inteiro desta funcao.
-    return ext === '.esm' || ext === '.esl' || !!entrada.header.isMaster;
+    // `isLight` is NOT part of this, and that absence is the whole point of this function.
+    return ext === '.esm' || ext === '.esl' || !!entry.header.isMaster;
   }
 
-  // Segunda passada: ordem dos masters, comparada na ordem EFETIVA.
-  for (const plugin of ordemEfetiva) {
-    const { nomeLocal, header } = cabecalhos.get(plugin.toLowerCase());
+  // Second pass: master order, compared in the EFFECTIVE order.
+  for (const plugin of effectiveOrder) {
+    const { localName, header } = headers.get(plugin.toLowerCase());
 
     for (const master of header.masters || []) {
-      if (!locaisPorMinusculo.has(master.toLowerCase())) {
-        problems.push(`${nomeLocal}: master ausente ${master}`);
+      if (!localByLower.has(master.toLowerCase())) {
+        problems.push(`${localName}: missing master ${master}`);
         continue;
       }
-      // Master presente no disco mas fora da ordem do servidor e um ESM base:
-      // a engine o carrega antes de tudo, entao nao ha o que checar aqui. O
-      // laco de plugin extra abaixo e quem decide se ele deveria existir.
-      const iMaster = posEfetiva.get(master.toLowerCase());
-      const iPlugin = posEfetiva.get(plugin.toLowerCase());
+      // A master present on disk but outside the server order is a base ESM:
+      // the engine loads it before everything, so there is nothing to check
+      // here. The extra-plugin loop below decides whether it should exist.
+      const iMaster = effectivePos.get(master.toLowerCase());
+      const iPlugin = effectivePos.get(plugin.toLowerCase());
       if (iMaster !== undefined && iPlugin !== undefined && iMaster > iPlugin) {
-        problems.push(`${nomeLocal}: master ${master} carrega depois do plugin`);
+        problems.push(`${localName}: master ${master} loads after the plugin`);
       }
     }
   }
 
-  // A direcao que faltava.
-  // Entrada ativa no plugins.txt sem arquivo em Data/ nao carrega: o jogo pula
-  // o plugin ausente e nao ocupa indice, entao nao desloca FormID nenhum. E o
-  // caso de um plugin que o servidor renomeou e o jogador nunca baixou.
-  const candidatos = Array.isArray(enabledPlugins) && enabledPlugins.length > 0
-    ? enabledPlugins.filter(p => locaisPorMinusculo.has(String(p).toLowerCase()))
+  // The missing direction.
+  // An active plugins.txt entry with no file in Data/ doesn't load: the game
+  // skips the missing plugin and it takes no index, so it shifts no FormID.
+  // That is the case of a plugin the server renamed and the player never downloaded.
+  const candidates = Array.isArray(enabledPlugins) && enabledPlugins.length > 0
+    ? enabledPlugins.filter(p => localByLower.has(String(p).toLowerCase()))
     : localPlugins;
 
-  for (const local of candidatos) {
-    if (!indiceDeclarado.has(String(local).toLowerCase())) {
+  for (const local of candidates) {
+    if (!declaredIndex.has(String(local).toLowerCase())) {
       problems.push(
-        `Plugin extra na load order: ${local}. Ele desloca os FormIDs de todos ` +
-        `os plugins seguintes, entao os itens do servidor apareceriam trocados.`
+        `Extra plugin in the load order: ${local}. It shifts the FormIDs of every ` +
+        `following plugin, so the server's items would show up swapped.`
       );
     }
   }
@@ -295,11 +295,11 @@ export function analyzePlugins({ localPlugins, serverLoadOrder, enabledPlugins, 
 }
 
 /**
- * Interpreta o `Skyrim.ccc`.
+ * Parses `Skyrim.ccc`.
  *
- * Formato: um nome de plugin por linha, sem `*` — diferente do `plugins.txt`,
- * porque aqui não existe "desativado". O que está listado e presente no disco
- * carrega, ponto.
+ * Format: one plugin name per line, no `*` — unlike `plugins.txt`, because
+ * there is no "disabled" here. Whatever is listed and present on disk loads,
+ * full stop.
  *
  * @param {string} content
  * @returns {string[]}
@@ -308,49 +308,48 @@ export function parseCccTxt(content) {
   if (typeof content !== 'string') return [];
   return content
     .split(/\r?\n/)
-    .map(linha => linha.trim())
-    .filter(linha => linha.length > 0 && !linha.startsWith('#'));
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.startsWith('#'));
 }
 
 /**
- * Confere a paridade do conteúdo Creation Club — o buraco que `analyzePlugins`
- * não cobre.
+ * Checks Creation Club content parity — the gap `analyzePlugins` doesn't cover.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * Por que esta função existe
+ * Why this function exists
  * ─────────────────────────────────────────────────────────────────────────────
- * `analyzePlugins` compara o `plugins.txt` do jogador com a ordem do servidor.
- * **Conteúdo Creation Club nunca aparece no `plugins.txt`.** O Skyrim AE lê o
- * `Skyrim.ccc`, carrega o que estiver listado *e presente em `Data/`*, e
- * encaixa esses plugins logo depois dos masters vanilla — ocupando índices que
- * o servidor não conhece.
+ * `analyzePlugins` compares the player's `plugins.txt` with the server order.
+ * **Creation Club content never appears in `plugins.txt`.** Skyrim AE reads
+ * `Skyrim.ccc`, loads whatever is listed *and present in `Data/`*, and slots
+ * those plugins right after the vanilla masters — taking indexes the server
+ * doesn't know about.
  *
- * Como o primeiro byte de todo FormID é o índice de load order, o efeito é o
- * mesmo do "plugin extra": o `base_id` do banco passa a apontar pra outro
- * record na tela daquele jogador. Sem erro e sem log — o sintoma é um baú com
- * outra coisa dentro (a falha do QA 2.15).
+ * Since the first byte of every FormID is the load order index, the effect is
+ * the same as an "extra plugin": the database `base_id` starts pointing at
+ * another record on that player's screen. No error and no log — the symptom is
+ * a chest with something else inside (QA failure 2.15).
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * O que torna isto pior que um mod extra
+ * What makes this worse than an extra mod
  * ─────────────────────────────────────────────────────────────────────────────
- * O conteúdo do `Skyrim.ccc` **varia conforme o que aquela conta Steam
- * possui**. Não é o mesmo arquivo para dois testadores, e o jogador não
- * escolheu nada disso. Um verificador que só olha `Data/` contra o manifesto
- * não enxerga a diferença, porque os arquivos até podem estar lá — o que muda
- * é o que o executável decide carregar.
+ * The contents of `Skyrim.ccc` **vary with what that Steam account owns**. It
+ * is not the same file for two testers, and the player chose none of it. A
+ * checker that only looks at `Data/` against the manifest doesn't see the
+ * difference, because the files may well be there — what changes is what the
+ * executable decides to load.
  *
- * Por isso a checagem é bidirecional, como em `analyzePlugins`:
+ * That is why the check is bidirectional, like `analyzePlugins`:
  *
- * - CC que o jogador carrega e o servidor não declara → desloca índice;
- * - CC que o servidor declara e o jogador não carrega → falta record.
+ * - CC the player loads and the server doesn't declare → shifts an index;
+ * - CC the server declares and the player doesn't load → a record is missing.
  *
- * A segunda direção é o risco de exigir Creation Club no modpack oficial: ela
- * só passa se **todo** jogador tiver exatamente as mesmas licenças de CC.
+ * The second direction is the risk of requiring Creation Club in the official
+ * modpack: it only passes if **every** player has exactly the same CC licences.
  *
  * @param {Object} params
- * @param {string[]} params.cccEntries        linhas do `Skyrim.ccc` (via `parseCccTxt`)
- * @param {string[]} params.localPlugins      arquivos de plugin presentes em `Data/`
- * @param {string[]} params.serverLoadOrder   ordem canônica do servidor
+ * @param {string[]} params.cccEntries        lines of `Skyrim.ccc` (via `parseCccTxt`)
+ * @param {string[]} params.localPlugins      plugin files present in `Data/`
+ * @param {string[]} params.serverLoadOrder   the server's canonical order
  * @returns {{ok: boolean, problems: string[], effective: string[]}}
  */
 export function analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder, enabledPlugins }) {
@@ -359,42 +358,42 @@ export function analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder,
   if (!Array.isArray(serverLoadOrder) || serverLoadOrder.length === 0) {
     return {
       ok: false,
-      problems: ['Servidor nao informou load order: impossivel verificar paridade de Creation Club.'],
+      problems: ['The server did not provide a load order: Creation Club parity cannot be checked.'],
       effective: []
     };
   }
 
-  const presentes = new Set((localPlugins || []).map(f => String(f).toLowerCase()));
-  const naOrdem = new Set(serverLoadOrder.map(f => String(f).toLowerCase()));
+  const present = new Set((localPlugins || []).map(f => String(f).toLowerCase()));
+  const inOrder = new Set(serverLoadOrder.map(f => String(f).toLowerCase()));
 
-  // Listado no .ccc *e* presente no disco. Entrada sem arquivo não carrega e
-  // não desloca nada — tratá-la como problema seria falso positivo em toda
-  // instalação que não comprou tudo.
+  // Listed in the .ccc *and* present on disk. An entry with no file doesn't
+  // load and shifts nothing — treating it as a problem would be a false
+  // positive on every install that didn't buy everything.
   // Listed in Skyrim.ccc OR enabled in plugins.txt (the OATHBOUND launcher
   // enables the CC masters a mod needs there; the install has no Skyrim.ccc).
   const viaPluginsTxt = (enabledPlugins || []).filter(n => /^cc[a-z0-9]/i.test(String(n)));
   const effective = [...new Set([...(cccEntries || []), ...viaPluginsTxt].map(String))]
-    .filter(nome => presentes.has(nome.toLowerCase()));
+    .filter(name => present.has(name.toLowerCase()));
 
   for (const cc of effective) {
-    if (!naOrdem.has(String(cc).toLowerCase())) {
+    if (!inOrder.has(String(cc).toLowerCase())) {
       problems.push(
-        `Creation Club ativo fora da load order do servidor: ${cc}. O jogo carrega ` +
-        `este plugin sozinho, pelo Skyrim.ccc, mesmo sem estar no plugins.txt — ` +
-        `e ele desloca os FormIDs de todos os plugins seguintes.`
+        `Active Creation Club plugin outside the server load order: ${cc}. The game loads ` +
+        `this plugin by itself, through Skyrim.ccc, even when it is not in plugins.txt — ` +
+        `and it shifts the FormIDs of every following plugin.`
       );
     }
   }
 
-  // Direção inversa: o servidor conta com um CC que este jogador não carrega.
-  const efetivosMinusculo = new Set(effective.map(n => String(n).toLowerCase()));
-  for (const declarado of serverLoadOrder) {
-    const nome = String(declarado);
-    if (!/^cc[a-z0-9]/i.test(nome)) continue; // só conteúdo Creation Club
-    if (!efetivosMinusculo.has(nome.toLowerCase())) {
+  // Reverse direction: the server counts on a CC plugin this player doesn't load.
+  const effectiveLower = new Set(effective.map(n => String(n).toLowerCase()));
+  for (const declaredName of serverLoadOrder) {
+    const name = String(declaredName);
+    if (!/^cc[a-z0-9]/i.test(name)) continue; // Creation Club content only
+    if (!effectiveLower.has(name.toLowerCase())) {
       problems.push(
-        `Creation Club exigido pelo servidor e ausente: ${nome}. Ou a conta Steam ` +
-        `nao possui este conteudo, ou ele nao esta listado no Skyrim.ccc.`
+        `Creation Club plugin required by the server is missing: ${name}. Either the Steam ` +
+        `account doesn't own this content, or it isn't listed in Skyrim.ccc.`
       );
     }
   }

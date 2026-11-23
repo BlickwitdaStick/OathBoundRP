@@ -1,17 +1,16 @@
 /**
  * parity.test.mjs
  *
- * Primeiros testes do launcher. Ele tinha **zero**, e é o programa que todo
- * jogador roda — e o único lugar onde o contrato de FormID é verificado antes
- * de alguém entrar.
+ * The launcher's first tests. It had **zero**, and it is the program every
+ * player runs — and the only place where the FormID contract is checked
+ * before someone gets in.
  *
- * O que estes testes protegem, em uma frase: se a verificação de paridade
- * aprovar um cliente que não deveria, o jogador entra e **vê itens
- * diferentes dos que o servidor gravou**. Não há erro, não há log, não há
- * crash — há um baú que tem outra coisa dentro. É o pior formato de bug que
- * este projeto pode produzir.
+ * What these tests protect, in one sentence: if the parity check approves a
+ * client it shouldn't, the player gets in and **sees different items from the
+ * ones the server stored**. No error, no log, no crash — just a chest with
+ * something else inside. It is the worst kind of bug this project can produce.
  *
- * Executa com: node --test electron/parity.test.mjs
+ * Run with: node --test electron/parity.test.mjs
  */
 
 import assert from 'node:assert';
@@ -28,25 +27,25 @@ import {
 } from './parity.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ajudantes: plugin sintético em vez de .esm de 300 MB
+// Helpers: a synthetic plugin instead of a 300 MB .esm
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Monta um TES4 mínimo com os masters pedidos.
+ * Builds a minimal TES4 with the requested masters.
  * @param {string[]} masters
  * @param {{isMaster?: boolean, isLight?: boolean}} [flags]
  */
 function fakePlugin(masters = [], { isMaster = false, isLight = false } = {}) {
-  const campos = masters.map(nome => {
-    const valor = Buffer.from(nome + String.fromCharCode(0), 'utf8');
-    const campo = Buffer.alloc(6 + valor.length);
-    campo.write('MAST', 0, 'latin1');
-    campo.writeUInt16LE(valor.length, 4);
-    valor.copy(campo, 6);
-    return campo;
+  const fields = masters.map(name => {
+    const value = Buffer.from(name + String.fromCharCode(0), 'utf8');
+    const field = Buffer.alloc(6 + value.length);
+    field.write('MAST', 0, 'latin1');
+    field.writeUInt16LE(value.length, 4);
+    value.copy(field, 6);
+    return field;
   });
 
-  const data = Buffer.concat(campos);
+  const data = Buffer.concat(fields);
   const head = Buffer.alloc(24);
   head.write('TES4', 0, 'latin1');
   head.writeUInt32LE(data.length, 4);
@@ -55,87 +54,87 @@ function fakePlugin(masters = [], { isMaster = false, isLight = false } = {}) {
   return Buffer.concat([head, data]);
 }
 
-/** readHeader que devolve sempre um plugin sem masters. */
-const semMasters = () => ({ masters: [], isMaster: false, isLight: false });
+/** readHeader that always returns a plugin with no masters. */
+const noMasters = () => ({ masters: [], isMaster: false, isLight: false });
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('plugins.txt', () => {
-  it('separa ativo de presente — só o ativo entra na load order', () => {
-    const r = parsePluginsTxt('*Skyrim.esm\n*Update.esm\nDesativado.esp\n');
+  it('tells active from present — only the active one enters the load order', () => {
+    const r = parsePluginsTxt('*Skyrim.esm\n*Update.esm\nDisabled.esp\n');
     assert.deepEqual(r, [
       { name: 'Skyrim.esm', enabled: true },
       { name: 'Update.esm', enabled: true },
-      { name: 'Desativado.esp', enabled: false }
+      { name: 'Disabled.esp', enabled: false }
     ]);
   });
 
-  it('ignora comentário, linha vazia e espaço', () => {
-    const r = parsePluginsTxt('# comentario\n\n  *Skyrim.esm  \n\n');
+  it('ignores comments, empty lines and whitespace', () => {
+    const r = parsePluginsTxt('# comment\n\n  *Skyrim.esm  \n\n');
     assert.deepEqual(r, [{ name: 'Skyrim.esm', enabled: true }]);
   });
 
-  it('aceita CRLF — o arquivo vem do Windows', () => {
+  it('accepts CRLF — the file comes from Windows', () => {
     assert.deepEqual(
       parsePluginsTxt('*A.esm\r\n*B.esp\r\n'),
       [{ name: 'A.esm', enabled: true }, { name: 'B.esp', enabled: true }]
     );
   });
 
-  it('entrada inválida vira lista vazia, não exceção', () => {
+  it('invalid input becomes an empty list, not an exception', () => {
     for (const e of [null, undefined, 42, {}]) {
       assert.deepEqual(parsePluginsTxt(e), []);
     }
   });
 });
 
-describe('cabeçalho TES4', () => {
-  it('lê os masters na ordem declarada', () => {
+describe('TES4 header', () => {
+  it('reads the masters in declared order', () => {
     const h = parsePluginHeader(fakePlugin(['Skyrim.esm', 'Update.esm']));
     assert.deepEqual(h.masters, ['Skyrim.esm', 'Update.esm']);
     assert.equal(h.error, undefined);
   });
 
-  it('corta o NUL do fim do nome', () => {
-    // Sem isso o nome carrega o byte nulo e nunca casa com o arquivo em
-    // disco — o launcher acusaria "master ausente" com o master presente.
+  it('trims the NUL at the end of the name', () => {
+    // Without this the name carries the null byte and never matches the file
+    // on disk — the launcher would report "missing master" with the master present.
     const h = parsePluginHeader(fakePlugin(['Skyrim.esm']));
     assert.equal(h.masters[0], 'Skyrim.esm');
     assert.ok(!h.masters[0].includes(String.fromCharCode(0)));
   });
 
-  it('reconhece as flags de master e de light', () => {
+  it('recognises the master and light flags', () => {
     assert.equal(parsePluginHeader(fakePlugin([], { isMaster: true })).isMaster, true);
     assert.equal(parsePluginHeader(fakePlugin([], { isLight: true })).isLight, true);
     assert.equal(parsePluginHeader(fakePlugin([])).isMaster, false);
   });
 
-  it('arquivo que não é plugin devolve erro em vez de lixo', () => {
-    const h = parsePluginHeader(Buffer.from('isto nao e um plugin do skyrim!!'));
+  it('a file that is not a plugin returns an error instead of garbage', () => {
+    const h = parsePluginHeader(Buffer.from('this is not a skyrim plugin!!!!!'));
     assert.match(h.error, /TES4/);
     assert.deepEqual(h.masters, []);
   });
 
-  it('arquivo truncado não explode', () => {
-    assert.match(parsePluginHeader(Buffer.alloc(10)).error, /menor que o cabecalho/);
-    assert.match(parsePluginHeader(Buffer.alloc(0)).error, /menor que o cabecalho/);
-    assert.match(parsePluginHeader(null).error, /menor que o cabecalho/);
+  it('a truncated file does not blow up', () => {
+    assert.match(parsePluginHeader(Buffer.alloc(10)).error, /smaller than the TES4 header/);
+    assert.match(parsePluginHeader(Buffer.alloc(0)).error, /smaller than the TES4 header/);
+    assert.match(parsePluginHeader(null).error, /smaller than the TES4 header/);
   });
 
-  it('dataSize mentiroso não faz o launcher ler além do arquivo', () => {
-    // O tamanho vem de dentro de um arquivo que o jogador controla. Se o
-    // parser confiasse nele, um .esp forjado leria memoria arbitraria.
+  it('a lying dataSize does not make the launcher read past the file', () => {
+    // The size comes from inside a file the player controls. If the parser
+    // trusted it, a forged .esp would read arbitrary memory.
     const b = fakePlugin(['Skyrim.esm']);
     b.writeUInt32LE(0xFFFFFFF, 4);
     const h = parsePluginHeader(b);
-    assert.ok(Array.isArray(h.masters), 'deveria devolver estrutura valida');
+    assert.ok(Array.isArray(h.masters), 'should return a valid structure');
   });
 });
 
-describe('comparação com o manifesto do servidor', () => {
-  const hashOf = (nome) => ({ 'a.esm': 'h1', 'b.esp': 'h2', 'c.esp': 'ERRADO' })[nome.toLowerCase()];
+describe('comparison with the server manifest', () => {
+  const hashOf = (name) => ({ 'a.esm': 'h1', 'b.esp': 'h2', 'c.esp': 'WRONG' })[name.toLowerCase()];
 
-  it('aprova quando tudo bate', async () => {
+  it('passes when everything matches', async () => {
     const r = await compareMods({
       hashAlgorithm: HASH_ALGORITHM,
       serverMods: [{ filename: 'A.esm', hash: 'h1' }, { filename: 'B.esp', hash: 'h2' }],
@@ -145,28 +144,28 @@ describe('comparação com o manifesto do servidor', () => {
     assert.equal(r.success, true);
   });
 
-  it('ignora diferença de caixa — o manifesto vem de outra máquina', async () => {
+  it('ignores case differences — the manifest comes from another machine', async () => {
     const r = await compareMods({
       hashAlgorithm: HASH_ALGORITHM,
       serverMods: [{ filename: 'a.ESM', hash: 'h1' }],
       localFiles: ['A.esm'],
       hashOf
     });
-    assert.equal(r.success, true, 'Windows nao distingue caixa; a verificacao tambem nao pode');
+    assert.equal(r.success, true, 'Windows is case-insensitive; the check must be too');
   });
 
-  it('reprova mod ausente, dizendo qual', async () => {
+  it('fails a missing mod, saying which one', async () => {
     const r = await compareMods({
       hashAlgorithm: HASH_ALGORITHM,
-      serverMods: [{ filename: 'Faltando.esp', hash: 'h9' }],
+      serverMods: [{ filename: 'Missing.esp', hash: 'h9' }],
       localFiles: ['A.esm'],
       hashOf
     });
     assert.equal(r.success, false);
-    assert.match(r.error, /Faltando\.esp/);
+    assert.match(r.error, /Missing\.esp/);
   });
 
-  it('reprova mod com hash diferente', async () => {
+  it('fails a mod with a different hash', async () => {
     const r = await compareMods({
       hashAlgorithm: HASH_ALGORITHM,
       serverMods: [{ filename: 'C.esp', hash: 'h3' }],
@@ -174,11 +173,11 @@ describe('comparação com o manifesto do servidor', () => {
       hashOf
     });
     assert.equal(r.success, false);
-    assert.match(r.error, /modificado ou corrompido/);
+    assert.match(r.error, /modified or corrupted/);
   });
 
-  it('hashOf assíncrono (ex: hash via stream) funciona igual ao síncrono', async () => {
-    const hashOfAsync = async (nome) => hashOf(nome);
+  it('an async hashOf (e.g. hashing via a stream) works the same as a sync one', async () => {
+    const hashOfAsync = async (name) => hashOf(name);
     const r = await compareMods({
       hashAlgorithm: HASH_ALGORITHM,
       serverMods: [{ filename: 'A.esm', hash: 'h1' }],
@@ -188,18 +187,18 @@ describe('comparação com o manifesto do servidor', () => {
     assert.equal(r.success, true);
   });
 
-  it('hasheia mais de um arquivo por vez quando concurrency > 1', async () => {
-    // Achado real: hash sequencial de um manifesto grande levou ~5 minutos
-    // com o disco ocioso entre leituras. Prova que o worker pool de fato
-    // sobrepõe chamadas em vez de esperar uma terminar pra começar a outra.
-    let emVoo = 0;
-    let picoEmVoo = 0;
-    const hashOfLento = async (nome) => {
-      emVoo++;
-      picoEmVoo = Math.max(picoEmVoo, emVoo);
+  it('hashes more than one file at a time when concurrency > 1', async () => {
+    // Real finding: sequential hashing of a big manifest took ~5 minutes with
+    // the disk idle between reads. Proves the worker pool really overlaps
+    // calls instead of waiting for one to finish before starting the next.
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const slowHashOf = async (name) => {
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
       await new Promise(resolve => setTimeout(resolve, 10));
-      emVoo--;
-      return { 'a.esm': 'h1', 'b.esp': 'h2', 'c.esp': 'h3', 'd.esp': 'h4' }[nome.toLowerCase()];
+      inFlight--;
+      return { 'a.esm': 'h1', 'b.esp': 'h2', 'c.esp': 'h3', 'd.esp': 'h4' }[name.toLowerCase()];
     };
 
     const r = await compareMods({
@@ -211,22 +210,22 @@ describe('comparação com o manifesto do servidor', () => {
         { filename: 'D.esp', hash: 'h4' }
       ],
       localFiles: ['A.esm', 'B.esp', 'C.esp', 'D.esp'],
-      hashOf: hashOfLento,
+      hashOf: slowHashOf,
       concurrency: 4
     });
 
     assert.equal(r.success, true);
-    assert.ok(picoEmVoo > 1, `esperava mais de 1 hash simultâneo, pico foi ${picoEmVoo}`);
+    assert.ok(peakInFlight > 1, `expected more than 1 concurrent hash, peak was ${peakInFlight}`);
   });
 
-  it('acusa o mod com o menor índice no manifesto quando mais de um diverge', async () => {
-    // Com hashing em paralelo, a ordem de conclusão não é mais a ordem do
-    // manifesto -- confirma que o erro reportado continua determinístico
-    // (sempre o de menor índice), não "qual terminou primeiro".
-    const hashOfForaDeOrdem = async (nome) => {
-      const atraso = { 'a.esp': 30, 'b.esp': 0 }[nome.toLowerCase()] ?? 0;
-      await new Promise(resolve => setTimeout(resolve, atraso));
-      return 'ERRADO';
+  it('reports the mod with the lowest manifest index when more than one differs', async () => {
+    // With parallel hashing, completion order is no longer manifest order --
+    // confirms the reported error stays deterministic (always the lowest
+    // index), not "whichever finished first".
+    const outOfOrderHashOf = async (name) => {
+      const delay = { 'a.esp': 30, 'b.esp': 0 }[name.toLowerCase()] ?? 0;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return 'WRONG';
     };
 
     const r = await compareMods({
@@ -236,29 +235,29 @@ describe('comparação com o manifesto do servidor', () => {
         { filename: 'B.esp', hash: 'h2' }
       ],
       localFiles: ['A.esp', 'B.esp'],
-      hashOf: hashOfForaDeOrdem,
+      hashOf: outOfOrderHashOf,
       concurrency: 2
     });
 
     assert.equal(r.success, false);
-    assert.match(r.error, /A\.esp/, 'deveria acusar A.esp (menor indice), mesmo B.esp terminando primeiro');
+    assert.match(r.error, /A\.esp/, 'should report A.esp (lowest index), even with B.esp finishing first');
   });
 
-  it('manifesto inválido reprova em vez de aprovar por omissão', async () => {
-    // Lista vazia passaria em qualquer laco. Se o servidor mandar lixo, a
-    // resposta segura e "nao", nunca "sim".
+  it('an invalid manifest fails instead of passing by default', async () => {
+    // An empty list would pass any loop. If the server sends garbage, the safe
+    // answer is "no", never "yes".
     assert.equal((await compareMods({ hashAlgorithm: HASH_ALGORITHM, serverMods: null, localFiles: [], hashOf })).success, false);
     assert.equal((await compareMods({ hashAlgorithm: HASH_ALGORITHM, serverMods: undefined, localFiles: [], hashOf })).success, false);
   });
 });
 
-describe('algoritmo de hash declarado pelo manifesto', () => {
-  const hashOf = () => 'qualquer';
+describe('hash algorithm declared by the manifest', () => {
+  const hashOf = () => 'anything';
 
-  it('manifesto sem algoritmo declarado reprova, e diz o porque', () => {
-    // Um mods.json gerado antes de 23/08/2026 nao tem o campo. Sem este
-    // portao, TODO arquivo divergiria e o jogador leria "seu mod esta
-    // corrompido" duzentas vezes -- uma mentira sobre a causa.
+  it('a manifest with no declared algorithm fails, and says why', () => {
+    // A mods.json generated before 2026-08-23 doesn't have the field. Without
+    // this gate, EVERY file would differ and the player would read "your mod
+    // is corrupted" two hundred times -- a lie about the cause.
     return compareMods({
       serverMods: [{ filename: 'A.esm', hash: 'x' }],
       localFiles: ['A.esm'],
@@ -266,12 +265,12 @@ describe('algoritmo de hash declarado pelo manifesto', () => {
       hashAlgorithm: undefined
     }).then(r => {
       assert.equal(r.success, false);
-      assert.match(r.error, /regerar o mods\.json/, 'a mensagem tem que dizer o que fazer');
-      assert.ok(!/corrompido/.test(r.error), 'nao pode culpar o mod do jogador');
+      assert.match(r.error, /regenerate mods\.json/, 'the message has to say what to do');
+      assert.ok(!/corrupted/.test(r.error), "must not blame the player's mod");
     });
   });
 
-  it('manifesto em MD5 reprova nomeando o algoritmo errado', async () => {
+  it('an MD5 manifest fails naming the wrong algorithm', async () => {
     const r = await compareMods({
       serverMods: [{ filename: 'A.esm', hash: 'x' }],
       localFiles: ['A.esm'],
@@ -283,124 +282,125 @@ describe('algoritmo de hash declarado pelo manifesto', () => {
     assert.match(r.error, /sha256/);
   });
 
-  it('o portao vem ANTES da checagem de arquivo faltando', async () => {
-    // Manifesto velho E mod faltando ao mesmo tempo: a causa raiz e o
-    // manifesto. Reportar "mod faltando" mandaria o jogador cacar um arquivo
-    // que talvez esteja no lugar certo.
+  it('the gate comes BEFORE the missing-file check', async () => {
+    // Old manifest AND a missing mod at the same time: the root cause is the
+    // manifest. Reporting "missing mod" would send the player hunting for a
+    // file that may well be in the right place.
     const r = await compareMods({
-      serverMods: [{ filename: 'NaoExiste.esp', hash: 'x' }],
+      serverMods: [{ filename: 'DoesNotExist.esp', hash: 'x' }],
       localFiles: [],
       hashOf,
       hashAlgorithm: 'md5'
     });
-    assert.match(r.error, /regerar o mods\.json/);
+    assert.match(r.error, /regenerate mods\.json/);
   });
 
-  it('HASH_ALGORITHM e sha256, nao md5', () => {
-    // MD5 tem colisao pratica. O modelo de ameaca aqui nao e corrupcao
-    // acidental -- e jogador alterando um mod de proposito, que e o unico
-    // caso em que colisao importa.
+  it('HASH_ALGORITHM is sha256, not md5', () => {
+    // MD5 has practical collisions. The threat model here isn't accidental
+    // corruption -- it's a player altering a mod on purpose, which is the only
+    // case where collisions matter.
     assert.equal(HASH_ALGORITHM, 'sha256');
   });
 });
 
 describe('load order', () => {
-  it('aprova ordem idêntica à do servidor', () => {
+  it("passes an order identical to the server's", () => {
     const r = analyzePlugins({
       localPlugins: ['Skyrim.esm', 'HeavyRP.esm'],
       serverLoadOrder: ['Skyrim.esm', 'HeavyRP.esm'],
-      readHeader: (nome) => nome === 'HeavyRP.esm'
+      readHeader: (name) => name === 'HeavyRP.esm'
         ? { masters: ['Skyrim.esm'], isMaster: true, isLight: false }
-        : semMasters()
+        : noMasters()
     });
     assert.deepEqual(r.problems, []);
     assert.equal(r.ok, true);
   });
 
-  it('acusa plugin exigido pelo servidor e ausente no cliente', () => {
+  it('reports a plugin the server requires that the client is missing', () => {
     const r = analyzePlugins({
       localPlugins: ['Skyrim.esm'],
       serverLoadOrder: ['Skyrim.esm', 'HeavyRP.esm'],
-      readHeader: semMasters
+      readHeader: noMasters
     });
     assert.equal(r.ok, false);
-    assert.ok(r.problems.some(p => /ausente: HeavyRP\.esm/.test(p)));
+    assert.ok(r.problems.some(p => /Missing plugin: HeavyRP\.esm/.test(p)));
   });
 
-  it('acusa master que carrega depois do dependente', () => {
+  it('reports a master that loads after its dependent', () => {
     const r = analyzePlugins({
       localPlugins: ['Skyrim.esm', 'HeavyRP.esm'],
-      serverLoadOrder: ['HeavyRP.esm', 'Skyrim.esm'],   // invertido
-      readHeader: (nome) => nome === 'HeavyRP.esm'
+      serverLoadOrder: ['HeavyRP.esm', 'Skyrim.esm'],   // reversed
+      readHeader: (name) => name === 'HeavyRP.esm'
         ? { masters: ['Skyrim.esm'], isMaster: false, isLight: false }
-        : semMasters()
+        : noMasters()
     });
     assert.equal(r.ok, false);
-    assert.ok(r.problems.some(p => /carrega depois do plugin/.test(p)));
+    assert.ok(r.problems.some(p => /loads after the plugin/.test(p)));
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // O caso que passava batido
+  // The case that slipped through
   // ───────────────────────────────────────────────────────────────────────────
 
-  it('acusa PLUGIN EXTRA — era a falha que anulava o contrato de FormID', () => {
-    // O jogador tem tudo que o servidor pede, com o hash certo. Passa em
-    // `compareMods` e passava em `analyzePlugins`. Mas tem um .esp a mais no
-    // meio da ordem: HeavyRP.esm e 02 no servidor e 03 aqui, entao todo
-    // base_id gravado no banco aponta pra outro registro na tela dele.
+  it('reports an EXTRA PLUGIN — the failure that voided the FormID contract', () => {
+    // The player has everything the server asks for, with the right hash. It
+    // passes `compareMods` and used to pass `analyzePlugins`. But there is one
+    // extra .esp in the middle of the order: HeavyRP.esm is 02 on the server
+    // and 03 here, so every base_id stored in the database points at another
+    // record on their screen.
     const r = analyzePlugins({
-      localPlugins: ['Skyrim.esm', 'Update.esm', 'MeuMod.esp', 'HeavyRP.esm'],
+      localPlugins: ['Skyrim.esm', 'Update.esm', 'MyMod.esp', 'HeavyRP.esm'],
       serverLoadOrder: ['Skyrim.esm', 'Update.esm', 'HeavyRP.esm'],
-      enabledPlugins: ['Skyrim.esm', 'Update.esm', 'MeuMod.esp', 'HeavyRP.esm'],
-      readHeader: semMasters
+      enabledPlugins: ['Skyrim.esm', 'Update.esm', 'MyMod.esp', 'HeavyRP.esm'],
+      readHeader: noMasters
     });
 
-    assert.equal(r.ok, false, 'cliente com plugin extra NAO pode ser aprovado');
+    assert.equal(r.ok, false, 'a client with an extra plugin must NOT be approved');
     assert.ok(
-      r.problems.some(p => /extra na load order: MeuMod\.esp/.test(p)),
-      `deveria acusar o plugin extra. Problemas: ${JSON.stringify(r.problems)}`
+      r.problems.some(p => /Extra plugin in the load order: MyMod\.esp/.test(p)),
+      `should report the extra plugin. Problems: ${JSON.stringify(r.problems)}`
     );
     assert.ok(
       r.problems.some(p => /FormID/.test(p)),
-      'a mensagem precisa dizer POR QUE isso importa, senao o jogador so remove a checagem'
+      'the message has to say WHY this matters, or the player just removes the check'
     );
   });
 
-  it('plugin presente mas desativado não é problema', () => {
-    // Arquivo em Data/ fora do plugins.txt nao entra na load order e nao
-    // desloca indice nenhum. Acusar isso seria falso positivo, e falso
-    // positivo ensina o jogador a ignorar o aviso.
+  it('a plugin present but disabled is not a problem', () => {
+    // A file in Data/ outside plugins.txt doesn't enter the load order and
+    // shifts no index. Reporting it would be a false positive, and false
+    // positives teach the player to ignore the warning.
     const r = analyzePlugins({
-      localPlugins: ['Skyrim.esm', 'HeavyRP.esm', 'Desativado.esp'],
+      localPlugins: ['Skyrim.esm', 'HeavyRP.esm', 'Disabled.esp'],
       serverLoadOrder: ['Skyrim.esm', 'HeavyRP.esm'],
       enabledPlugins: ['Skyrim.esm', 'HeavyRP.esm'],
-      readHeader: semMasters
+      readHeader: noMasters
     });
     assert.deepEqual(r.problems, []);
     assert.equal(r.ok, true);
   });
 
-  it('ativo no plugins.txt mas ausente de Data/ não é problema — o jogo pula', () => {
+  it('active in plugins.txt but missing from Data/ is not a problem — the game skips it', () => {
     const r = analyzePlugins({
       localPlugins: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
       serverLoadOrder: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
       enabledPlugins: ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp'],
-      readHeader: semMasters
+      readHeader: noMasters
     });
     assert.deepEqual(r.problems, []);
   });
 
-  it('plugin renomeado ainda presente em Data/ e ativo continua acusado', () => {
+  it('a renamed plugin still present in Data/ and active is still reported', () => {
     const r = analyzePlugins({
       localPlugins: ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp'],
       serverLoadOrder: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
       enabledPlugins: ['Skyrim.esm', 'OathboundHoldstone.esp', 'Oathbound_Holdstone.esp'],
-      readHeader: semMasters
+      readHeader: noMasters
     });
-    assert.ok(r.problems.some(p => /extra na load order: OathboundHoldstone\.esp/.test(p)));
+    assert.ok(r.problems.some(p => /Extra plugin in the load order: OathboundHoldstone\.esp/.test(p)));
   });
 
-  it('depois do sync do launcher, o plugin renomeado sai da lista e a checagem passa', async () => {
+  it('after the launcher sync, the renamed plugin leaves the list and the check passes', async () => {
     const fs = await import('node:fs');
     const os = await import('node:os');
     const path = await import('node:path');
@@ -420,7 +420,7 @@ describe('load order', () => {
         localPlugins: fs.readdirSync(path.join(game, 'Data')),
         serverLoadOrder: ['Skyrim.esm', 'Oathbound_Holdstone.esp'],
         enabledPlugins: enabled,
-        readHeader: semMasters
+        readHeader: noMasters
       });
       assert.deepEqual(r.problems, []);
       assert.equal(r.ok, true);
@@ -429,273 +429,273 @@ describe('load order', () => {
     }
   });
 
-  it('sem plugins.txt, cai para os arquivos em Data/ — direção segura', () => {
+  it('without plugins.txt, falls back to the files in Data/ — the safe direction', () => {
     const r = analyzePlugins({
-      localPlugins: ['Skyrim.esm', 'HeavyRP.esm', 'Intruso.esp'],
+      localPlugins: ['Skyrim.esm', 'HeavyRP.esm', 'Intruder.esp'],
       serverLoadOrder: ['Skyrim.esm', 'HeavyRP.esm'],
-      readHeader: semMasters
+      readHeader: noMasters
     });
-    assert.equal(r.ok, false, 'sem saber o que esta ativo, o arquivo a mais e suspeito');
+    assert.equal(r.ok, false, 'without knowing what is active, the extra file is suspect');
   });
 
-  it('servidor sem load order REPROVA — antes aprovava sempre', () => {
-    // O codigo antigo caia para a ordem local, o que fazia a checagem comparar
-    // o jogador consigo mesmo e responder "ok". A pior resposta possivel,
-    // porque parece aprovacao.
-    for (const ordem of [[], null, undefined]) {
+  it('a server with no load order FAILS — it used to always pass', () => {
+    // The old code fell back to the local order, which made the check compare
+    // the player with themselves and answer "ok". The worst possible answer,
+    // because it looks like approval.
+    for (const order of [[], null, undefined]) {
       const r = analyzePlugins({
-        localPlugins: ['Skyrim.esm', 'QualquerCoisa.esp'],
-        serverLoadOrder: ordem,
-        readHeader: semMasters
+        localPlugins: ['Skyrim.esm', 'Anything.esp'],
+        serverLoadOrder: order,
+        readHeader: noMasters
       });
-      assert.equal(r.ok, false, `load order ${JSON.stringify(ordem)} nao pode ser aprovada`);
-      assert.match(r.problems[0], /impossivel verificar paridade/);
+      assert.equal(r.ok, false, `load order ${JSON.stringify(order)} must not be approved`);
+      assert.match(r.problems[0], /parity cannot be checked/);
     }
   });
 
-  it('cabeçalho ilegível vira problema, não silêncio', () => {
+  it('an unreadable header becomes a problem, not silence', () => {
     const r = analyzePlugins({
-      localPlugins: ['Corrompido.esp'],
-      serverLoadOrder: ['Corrompido.esp'],
-      readHeader: () => ({ masters: [], isMaster: false, isLight: false, error: 'Cabecalho TES4 invalido' })
+      localPlugins: ['Corrupted.esp'],
+      serverLoadOrder: ['Corrupted.esp'],
+      readHeader: () => ({ masters: [], isMaster: false, isLight: false, error: 'Invalid TES4 header' })
     });
     assert.equal(r.ok, false);
     assert.ok(r.problems.some(p => /TES4/.test(p)));
   });
 
-  it('acusa master ausente', () => {
+  it('reports a missing master', () => {
     const r = analyzePlugins({
       localPlugins: ['HeavyRP.esm'],
       serverLoadOrder: ['HeavyRP.esm'],
       readHeader: () => ({ masters: ['Skyrim.esm'], isMaster: false, isLight: false })
     });
     assert.equal(r.ok, false);
-    assert.ok(r.problems.some(p => /master ausente Skyrim\.esm/.test(p)));
+    assert.ok(r.problems.some(p => /missing master Skyrim\.esm/.test(p)));
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Creation Club (MOD-005)
 //
-// O buraco que estes testes fecham: conteúdo Creation Club nunca aparece no
-// `plugins.txt`, então `analyzePlugins` é cego pra ele. O jogo carrega o que
-// está no `Skyrim.ccc` sozinho, e cada plugin desses desloca índice de load
-// order — mesmo efeito do "plugin extra", mesma falha silenciosa do QA 2.15.
+// The gap these tests close: Creation Club content never appears in
+// `plugins.txt`, so `analyzePlugins` is blind to it. The game loads whatever
+// is in `Skyrim.ccc` by itself, and each of those plugins shifts a load order
+// index — the same effect as an "extra plugin", the same silent failure as QA 2.15.
 //
-// Achado ao estudar o The Divine Comedy, que tropeçou nisto e respondeu
-// esvaziando o `Skyrim.ccc` — solução que o Steam desfaz ao verificar os
-// arquivos. Ver docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md §2.
+// Found while studying The Divine Comedy, which tripped on this and answered
+// by emptying `Skyrim.ccc` — a fix Steam undoes when verifying the files. See
+// docs/research/SKYMP_ECOSYSTEM_DEEP_DIVE.md §2.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('ordem efetiva de carga (hoisting de master)', () => {
-  // A engine nao carrega na ordem declarada. Ela hoista todos os masters
-  // primeiro e so depois os .esp. Comparar indices na ordem declarada produz
-  // falso positivo em setup correto -- e falso positivo e o pior resultado
-  // possivel aqui, porque ensina o jogador a ignorar o aviso.
+describe('effective load order (master hoisting)', () => {
+  // The engine doesn't load in declared order. It hoists all masters first and
+  // only then the .esp files. Comparing indexes in declared order produces a
+  // false positive on a correct setup -- and a false positive is the worst
+  // possible result here, because it teaches the player to ignore the warning.
 
-  /** readHeader por tabela: nome -> header. */
-  const headersDe = (tabela) => (nome) => tabela[nome] || semMasters();
+  /** readHeader from a table: name -> header. */
+  const headersFrom = (table) => (name) => table[name] || noMasters();
 
-  it('master declarado DEPOIS do dependente nao e problema: a engine hoista', () => {
-    // plugins.txt pode listar o .esm depois do .esp; a engine carrega o .esm
-    // antes de qualquer jeito. Antes desta correcao acusavamos aqui.
+  it('a master declared AFTER its dependent is not a problem: the engine hoists it', () => {
+    // plugins.txt may list the .esm after the .esp; the engine loads the .esm
+    // first anyway. Before this fix we reported it.
     const r = analyzePlugins({
       localPlugins: ['Patch.esp', 'Base.esm'],
       serverLoadOrder: ['Patch.esp', 'Base.esm'],
       enabledPlugins: ['Patch.esp', 'Base.esm'],
-      readHeader: headersDe({
+      readHeader: headersFrom({
         'Patch.esp': { masters: ['Base.esm'], isMaster: false, isLight: false },
         'Base.esm': { masters: [], isMaster: true, isLight: false }
       })
     });
-    assert.deepEqual(r.problems, [], 'a engine hoista Base.esm; nao ha o que acusar');
+    assert.deepEqual(r.problems, [], 'the engine hoists Base.esm; there is nothing to report');
     assert.equal(r.ok, true);
   });
 
-  it('.esp com flag ESM tambem e hoistado', () => {
-    // Extensao .esp, mas flag ESM ligada: a engine trata como master.
+  it('an .esp with the ESM flag is hoisted too', () => {
+    // .esp extension, but the ESM flag set: the engine treats it as a master.
     const r = analyzePlugins({
-      localPlugins: ['Dependente.esp', 'MasterDisfarcado.esp'],
-      serverLoadOrder: ['Dependente.esp', 'MasterDisfarcado.esp'],
-      enabledPlugins: ['Dependente.esp', 'MasterDisfarcado.esp'],
-      readHeader: headersDe({
-        'Dependente.esp': { masters: ['MasterDisfarcado.esp'], isMaster: false, isLight: false },
-        'MasterDisfarcado.esp': { masters: [], isMaster: true, isLight: false }
+      localPlugins: ['Dependent.esp', 'DisguisedMaster.esp'],
+      serverLoadOrder: ['Dependent.esp', 'DisguisedMaster.esp'],
+      enabledPlugins: ['Dependent.esp', 'DisguisedMaster.esp'],
+      readHeader: headersFrom({
+        'Dependent.esp': { masters: ['DisguisedMaster.esp'], isMaster: false, isLight: false },
+        'DisguisedMaster.esp': { masters: [], isMaster: true, isLight: false }
       })
     });
     assert.deepEqual(r.problems, []);
   });
 
-  it('ESPFE: .esp com flag ESL NAO e hoistado', () => {
-    // O caso que faz a diferenca, e o erro natural de escrever
-    // (`isMaster || isLight`). A flag ESL num .esp muda o ESPACO DE FORMID
-    // (FE), nao a posicao de carga. Tratar espfe como master faria a simulacao
-    // po-lo antes do dependente e ESCONDER um problema real de ordem.
+  it('ESPFE: an .esp with the ESL flag is NOT hoisted', () => {
+    // The case that makes the difference, and the natural mistake to write
+    // (`isMaster || isLight`). The ESL flag on an .esp changes the FORMID
+    // SPACE (FE), not the load position. Treating espfe as a master would make
+    // the simulation put it before its dependent and HIDE a real order problem.
     const r = analyzePlugins({
-      localPlugins: ['Base.esm', 'Consumidor.esp', 'PatchLeve.esp'],
-      // PatchLeve e master de Consumidor, mas esta declarado DEPOIS dele.
-      // Como espfe nao e hoistado, a ordem permanece errada de verdade.
-      serverLoadOrder: ['Base.esm', 'Consumidor.esp', 'PatchLeve.esp'],
-      enabledPlugins: ['Base.esm', 'Consumidor.esp', 'PatchLeve.esp'],
-      readHeader: headersDe({
+      localPlugins: ['Base.esm', 'Consumer.esp', 'LightPatch.esp'],
+      // LightPatch is a master of Consumer, but it is declared AFTER it.
+      // Since espfe isn't hoisted, the order really stays wrong.
+      serverLoadOrder: ['Base.esm', 'Consumer.esp', 'LightPatch.esp'],
+      enabledPlugins: ['Base.esm', 'Consumer.esp', 'LightPatch.esp'],
+      readHeader: headersFrom({
         'Base.esm': { masters: [], isMaster: true, isLight: false },
-        'Consumidor.esp': { masters: ['PatchLeve.esp'], isMaster: false, isLight: false },
-        'PatchLeve.esp': { masters: [], isMaster: false, isLight: true }
+        'Consumer.esp': { masters: ['LightPatch.esp'], isMaster: false, isLight: false },
+        'LightPatch.esp': { masters: [], isMaster: false, isLight: true }
       })
     });
-    assert.equal(r.ok, false, 'espfe nao e hoistado, entao a ordem errada continua errada');
+    assert.equal(r.ok, false, 'espfe is not hoisted, so the wrong order stays wrong');
     assert.ok(
-      r.problems.some(p => /PatchLeve\.esp carrega depois do plugin/.test(p)),
-      `deveria acusar ordem. Problemas: ${JSON.stringify(r.problems)}`
+      r.problems.some(p => /LightPatch\.esp loads after the plugin/.test(p)),
+      `should report the order. Problems: ${JSON.stringify(r.problems)}`
     );
   });
 
-  it('ordem realmente errada entre dois .esp ainda e acusada', () => {
-    // O hoisting nao pode virar desculpa pra parar de checar: entre plugins
-    // que a engine NAO hoista, a ordem declarada vale.
+  it('a really wrong order between two .esp files is still reported', () => {
+    // Hoisting can't become an excuse to stop checking: between plugins the
+    // engine does NOT hoist, the declared order holds.
     const r = analyzePlugins({
       localPlugins: ['A.esp', 'B.esp'],
       serverLoadOrder: ['A.esp', 'B.esp'],
       enabledPlugins: ['A.esp', 'B.esp'],
-      readHeader: headersDe({
+      readHeader: headersFrom({
         'A.esp': { masters: ['B.esp'], isMaster: false, isLight: false },
         'B.esp': { masters: [], isMaster: false, isLight: false }
       })
     });
     assert.equal(r.ok, false);
-    assert.ok(r.problems.some(p => /B\.esp carrega depois do plugin/.test(p)));
+    assert.ok(r.problems.some(p => /B\.esp loads after the plugin/.test(p)));
   });
 
-  it('master ausente continua sendo acusado, hoisting ou nao', () => {
+  it('a missing master is still reported, hoisting or not', () => {
     const r = analyzePlugins({
       localPlugins: ['Patch.esp'],
       serverLoadOrder: ['Patch.esp'],
       enabledPlugins: ['Patch.esp'],
-      readHeader: headersDe({
-        'Patch.esp': { masters: ['SumiuBase.esm'], isMaster: false, isLight: false }
+      readHeader: headersFrom({
+        'Patch.esp': { masters: ['GoneBase.esm'], isMaster: false, isLight: false }
       })
     });
     assert.equal(r.ok, false);
-    assert.ok(r.problems.some(p => /master ausente SumiuBase\.esm/.test(p)));
+    assert.ok(r.problems.some(p => /missing master GoneBase\.esm/.test(p)));
   });
 });
 
 describe('parseCccTxt', () => {
-  it('lê um nome por linha, sem asterisco', () => {
+  it('reads one name per line, with no asterisk', () => {
     const r = parseCccTxt('ccBGSSSE001-Fish.esm\nccQDRSSE001-SurvivalMode.esl');
     assert.deepEqual(r, ['ccBGSSSE001-Fish.esm', 'ccQDRSSE001-SurvivalMode.esl']);
   });
 
-  it('ignora linhas vazias, espaços e comentários', () => {
-    const r = parseCccTxt('  ccA.esm  \n\n# comentario\n\r\nccB.esl\n');
+  it('ignores empty lines, whitespace and comments', () => {
+    const r = parseCccTxt('  ccA.esm  \n\n# comment\n\r\nccB.esl\n');
     assert.deepEqual(r, ['ccA.esm', 'ccB.esl']);
   });
 
-  it('aceita CRLF', () => {
+  it('accepts CRLF', () => {
     assert.deepEqual(parseCccTxt('ccA.esm\r\nccB.esl'), ['ccA.esm', 'ccB.esl']);
   });
 
-  it('entrada não-string vira lista vazia, não exceção', () => {
+  it('non-string input becomes an empty list, not an exception', () => {
     assert.deepEqual(parseCccTxt(undefined), []);
     assert.deepEqual(parseCccTxt(null), []);
   });
 });
 
 describe('analyzeCreationClub', () => {
-  const CINCO_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
+  const FIVE_MASTERS = ['Skyrim.esm', 'Update.esm', 'Dawnguard.esm', 'HearthFires.esm', 'Dragonborn.esm'];
 
-  it('aprova quando não há Creation Club nenhum', () => {
+  it('passes when there is no Creation Club at all', () => {
     const r = analyzeCreationClub({
       cccEntries: [],
-      localPlugins: CINCO_MASTERS,
-      serverLoadOrder: CINCO_MASTERS
+      localPlugins: FIVE_MASTERS,
+      serverLoadOrder: FIVE_MASTERS
     });
     assert.equal(r.ok, true, r.problems.join('; '));
     assert.deepEqual(r.effective, []);
   });
 
-  it('acusa CC que o jogo carrega e o servidor não declara', () => {
+  it("reports CC the game loads and the server doesn't declare", () => {
     const r = analyzeCreationClub({
       cccEntries: ['ccBGSSSE001-Fish.esm'],
-      localPlugins: [...CINCO_MASTERS, 'ccBGSSSE001-Fish.esm'],
-      serverLoadOrder: CINCO_MASTERS
+      localPlugins: [...FIVE_MASTERS, 'ccBGSSSE001-Fish.esm'],
+      serverLoadOrder: FIVE_MASTERS
     });
     assert.equal(r.ok, false);
     assert.ok(r.problems.some(p => /ccBGSSSE001-Fish\.esm/.test(p)));
-    assert.ok(r.problems.some(p => /desloca os FormIDs/.test(p)));
+    assert.ok(r.problems.some(p => /shifts the FormIDs/.test(p)));
   });
 
-  it('entrada no .ccc sem o arquivo em Data/ não é problema: não carrega', () => {
-    // O jogador não comprou aquele CC. O nome está listado, o arquivo não
-    // existe, o jogo não carrega nada e nenhum índice se move.
+  it('a .ccc entry with no file in Data/ is not a problem: it does not load', () => {
+    // The player didn't buy that CC. The name is listed, the file doesn't
+    // exist, the game loads nothing and no index moves.
     const r = analyzeCreationClub({
       cccEntries: ['ccBGSSSE001-Fish.esm'],
-      localPlugins: CINCO_MASTERS,
-      serverLoadOrder: CINCO_MASTERS
+      localPlugins: FIVE_MASTERS,
+      serverLoadOrder: FIVE_MASTERS
     });
     assert.equal(r.ok, true, r.problems.join('; '));
     assert.deepEqual(r.effective, []);
   });
 
-  it('acusa CC exigido pelo servidor que este jogador não carrega', () => {
-    // O risco de exigir Creation Club no modpack: só passa se todo jogador
-    // tiver exatamente as mesmas licenças.
+  it("reports CC the server requires that this player doesn't load", () => {
+    // The risk of requiring Creation Club in the modpack: it only passes if
+    // every player has exactly the same licences.
     const r = analyzeCreationClub({
       cccEntries: [],
-      localPlugins: CINCO_MASTERS,
-      serverLoadOrder: [...CINCO_MASTERS, 'ccBGSSSE001-Fish.esm']
+      localPlugins: FIVE_MASTERS,
+      serverLoadOrder: [...FIVE_MASTERS, 'ccBGSSSE001-Fish.esm']
     });
     assert.equal(r.ok, false);
-    assert.ok(r.problems.some(p => /exigido pelo servidor e ausente/.test(p)));
+    assert.ok(r.problems.some(p => /required by the server is missing/.test(p)));
   });
 
-  it('aprova quando os dois lados carregam o mesmo CC', () => {
+  it('passes when both sides load the same CC', () => {
     const r = analyzeCreationClub({
       cccEntries: ['ccBGSSSE001-Fish.esm'],
-      localPlugins: [...CINCO_MASTERS, 'ccBGSSSE001-Fish.esm'],
-      serverLoadOrder: [...CINCO_MASTERS, 'ccBGSSSE001-Fish.esm']
+      localPlugins: [...FIVE_MASTERS, 'ccBGSSSE001-Fish.esm'],
+      serverLoadOrder: [...FIVE_MASTERS, 'ccBGSSSE001-Fish.esm']
     });
     assert.equal(r.ok, true, r.problems.join('; '));
     assert.deepEqual(r.effective, ['ccBGSSSE001-Fish.esm']);
   });
 
-  it('plugin normal fora da ordem não é acusado como CC ausente', () => {
-    // A direção inversa só vale pra nomes `cc*`; um mod comum já é coberto
-    // por analyzePlugins, e acusar duas vezes confundiria o jogador.
+  it('a normal plugin outside the order is not reported as missing CC', () => {
+    // The reverse direction only applies to `cc*` names; a regular mod is
+    // already covered by analyzePlugins, and reporting it twice would confuse the player.
     const r = analyzeCreationClub({
       cccEntries: [],
-      localPlugins: CINCO_MASTERS,
-      serverLoadOrder: [...CINCO_MASTERS, 'HeavyRP.esp']
+      localPlugins: FIVE_MASTERS,
+      serverLoadOrder: [...FIVE_MASTERS, 'HeavyRP.esp']
     });
     assert.equal(r.ok, true, r.problems.join('; '));
   });
 
-  it('comparação é insensível a maiúsculas, como o resto do módulo', () => {
+  it('comparison is case-insensitive, like the rest of the module', () => {
     const r = analyzeCreationClub({
       cccEntries: ['CCBGSSSE001-FISH.ESM'],
-      localPlugins: [...CINCO_MASTERS, 'ccbgsssE001-fish.esm'],
-      serverLoadOrder: [...CINCO_MASTERS, 'ccBGSSSE001-Fish.esm']
+      localPlugins: [...FIVE_MASTERS, 'ccbgsssE001-fish.esm'],
+      serverLoadOrder: [...FIVE_MASTERS, 'ccBGSSSE001-Fish.esm']
     });
     assert.equal(r.ok, true, r.problems.join('; '));
   });
 
-  it('sem load order do servidor, reprova em vez de aprovar por omissão', () => {
-    for (const ordem of [undefined, null, []]) {
+  it('with no server load order, fails instead of passing by default', () => {
+    for (const order of [undefined, null, []]) {
       const r = analyzeCreationClub({
         cccEntries: ['ccA.esm'],
         localPlugins: ['ccA.esm'],
-        serverLoadOrder: ordem
+        serverLoadOrder: order
       });
-      assert.equal(r.ok, false, `load order ${JSON.stringify(ordem)} nao pode ser aprovada`);
-      assert.match(r.problems[0], /impossivel verificar paridade/);
+      assert.equal(r.ok, false, `load order ${JSON.stringify(order)} must not be approved`);
+      assert.match(r.problems[0], /parity cannot be checked/);
     }
   });
 
-  it('acusa vários CC de uma vez em vez de parar no primeiro', () => {
+  it('reports several CC plugins at once instead of stopping at the first', () => {
     const r = analyzeCreationClub({
       cccEntries: ['ccA.esm', 'ccB.esl'],
-      localPlugins: [...CINCO_MASTERS, 'ccA.esm', 'ccB.esl'],
-      serverLoadOrder: CINCO_MASTERS
+      localPlugins: [...FIVE_MASTERS, 'ccA.esm', 'ccB.esl'],
+      serverLoadOrder: FIVE_MASTERS
     });
     assert.equal(r.ok, false);
     assert.equal(r.problems.length, 2);

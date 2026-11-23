@@ -3,14 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Instala/repara o `voice-helper.exe` (captura de microfone fora do CEF, para a
- * voz por proximidade — ver docs/technical/VOICE_NATIVE_HELPER.md) na pasta do
- * jogo, a partir da cópia que viaja dentro do launcher.
+ * Installs/repairs `voice-helper.exe` (microphone capture outside CEF, for
+ * proximity voice — see docs/technical/VOICE_NATIVE_HELPER.md) in the game
+ * folder, from the copy that travels inside the launcher.
  *
- * Diferente da UI (`ui-integrity.mjs`), isto é **fail-open**: a voz é opcional e
- * a ausência do binário não pode travar o JOGAR. O helper é buildado por CMake/
- * MSVC, não pelo `npm run build` — em máquina de contribuidor sem toolchain C++
- * o `scripts/stage-voice-helper.mjs` não staja nada e o pacote sai sem ele.
+ * Unlike the UI (`ui-integrity.mjs`), this is **fail-open**: voice is optional
+ * and a missing binary must not block PLAY. The helper is built by CMake/MSVC,
+ * not by `npm run build` — on a contributor machine with no C++ toolchain,
+ * `scripts/stage-voice-helper.mjs` stages nothing and the package ships without it.
  *
  * @param {{ sourcePath: string, targetPath: string }} opts
  * @returns {{ ok: boolean, repaired: boolean, skipped?: boolean, reason?: string, error?: string }}
@@ -18,8 +18,8 @@ import path from 'node:path';
 export function syncVoiceHelper({ sourcePath, targetPath }) {
   try {
     if (!sourcePath || !fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
-      // Não é erro: só significa que este pacote foi montado sem o helper.
-      return { ok: true, repaired: false, skipped: true, reason: 'binario nao empacotado' };
+      // Not an error: it only means this package was built without the helper.
+      return { ok: true, repaired: false, skipped: true, reason: 'binary not packaged' };
     }
 
     const targetValid = fs.existsSync(targetPath)
@@ -32,7 +32,7 @@ export function syncVoiceHelper({ sourcePath, targetPath }) {
     fs.copyFileSync(sourcePath, targetPath);
     return { ok: true, repaired: true };
   } catch (error) {
-    // Ainda fail-open pro chamador, mas devolve a causa pra log.
+    // Still fail-open for the caller, but returns the cause for the log.
     return { ok: false, repaired: false, error: error instanceof Error ? error.message : String(error) };
   }
 }

@@ -1,12 +1,12 @@
 import http from 'node:http';
 
 /**
- * Porta loopback fixa onde o launcher escuta o handoff do ticket de voz.
- * A CEF (`skymp/ui/index.html`, `forwardVoiceHandoff`) faz POST aqui com o
- * ticket de 'sender' + actorId, e o launcher sobe o `voice-helper.exe`.
+ * Fixed loopback port where the launcher listens for the voice ticket handoff.
+ * CEF (`skymp/ui/index.html`, `forwardVoiceHandoff`) POSTs the 'sender'
+ * ticket + actorId here, and the launcher starts `voice-helper.exe`.
  *
- * Fixa e conhecida dos dois lados, igual à porta 19847 do callback do OAuth —
- * a CEF é um terceiro processo, não há canal pra negociar porta.
+ * Fixed and known to both sides, like the OAuth callback's port 19847 — CEF
+ * is a third process, there is no channel to negotiate a port.
  */
 export const VOICE_HANDOFF_PORT = 19848;
 
@@ -14,12 +14,13 @@ const MAX_BODY_BYTES = 4096;
 const TICKET_RE = /^[a-f0-9]{8,128}$/i;
 
 /**
- * Servidor HTTP loopback pro handoff de voz.
+ * Loopback HTTP server for the voice handoff.
  *
- * "Armado" só entre um `launch-game` e o fim daquela sessão de jogo: um POST
- * fora dessa janela responde 409. Reduz a chance de um processo local qualquer
- * disparar o helper quando não há jogo rodando — dentro da janela, a CEF do
- * jogo é o remetente esperado, e o ticket já é de uso único e 30s de TTL.
+ * "Armed" only between a `launch-game` and the end of that game session: a
+ * POST outside that window answers 409. It lowers the chance of some random
+ * local process firing the helper when no game is running — inside the window,
+ * the game's CEF is the expected sender, and the ticket is already single-use
+ * with a 30s TTL.
  *
  * @param {{ onHandoff: (h: { actorId: number, ticket: string, host: string, port: number }) => Promise<{ pid?: number }>, host?: string, port?: number }} opts
  */
@@ -27,8 +28,8 @@ export function createVoiceHandoffServer({ onHandoff, host = '127.0.0.1', port =
   let armed = false;
 
   const server = http.createServer((req, res) => {
-    // A CEF carrega o index.html como file:// (origin "null") — sem CORS liberado
-    // o fetch nem sai.
+    // CEF loads index.html as file:// (origin "null") — without CORS allowed
+    // the fetch doesn't even go out.
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 

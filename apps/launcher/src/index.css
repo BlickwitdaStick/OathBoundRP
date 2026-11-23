@@ -28,9 +28,9 @@
   --text-muted: #a3a3a3;
   --accent-gold: #c9a227;
   --accent-gold-hover: #e0b734;
-  /* Acento frio (aurora) — usado com moderacao: status secundario, hover
-     de card, brilho de icone de voz. O ouro continua sendo o acento
-     primario; isto e' so a segunda voz da paleta. */
+  /* Cold accent (aurora) — used sparingly: secondary status, card hover,
+     voice icon glow. Gold remains the primary accent; this is only the
+     palette's second voice. */
   --accent-frost: #4fb8c9;
   --border-color: #262626;
   --border-color-hover: #3a3a3a;
@@ -166,7 +166,7 @@ body {
   flex-direction: column;
 }
 
-/* ─── Marca ───────────────────────────────────────────────────────────── */
+/* ─── Brand ───────────────────────────────────────────────────────────── */
 
 .brand-title {
   font-family: var(--font-display);
@@ -180,10 +180,10 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-/* O flourish embaixo do titulo: nao e' decoracao generica, e' o mesmo
-   vocabulario do brasao do dragao (public/logo.png) resumido a uma linha —
-   um centro que se afina pras pontas, como o corpo do dragao se enrola em
-   torno do proprio brasao. */
+/* The flourish under the title: not generic decoration, it is the same
+   vocabulary as the dragon crest (public/logo.png) reduced to a line —
+   a centre that tapers towards the ends, like the dragon's body coiling
+   around the crest itself. */
 .brand-flourish {
   display: flex;
   align-items: center;
@@ -213,7 +213,7 @@ body {
   flex-shrink: 0;
 }
 
-/* ─── Hero (fundo cheio, usado no Login e no topo da Home) ──────────────── */
+/* ─── Hero (full background, used on Login and at the top of Home) ──────────────── */
 
 .hero-shell {
   position: relative;
@@ -226,10 +226,10 @@ body {
   overflow: hidden;
 }
 
-/* Sem imagem gerada ainda: gradiente de substituicao no mesmo tom da arte
-   planejada (montanha escura + leve glow frio no horizonte), pra' a tela
-   nao ficar um retangulo preto liso enquanto a arte final nao chega. Troca
-   por --hero-image inline quando a arte existir. */
+/* No generated image yet: a placeholder gradient in the same tone as the
+   planned art (dark mountain + slight cold glow on the horizon), so the
+   screen isn't a flat black rectangle until the final art arrives. Swap
+   for --hero-image inline when the art exists. */
 .hero-shell {
   background-image:
     radial-gradient(ellipse 90% 60% at 50% 15%, rgba(79, 184, 201, 0.10), transparent 60%),
@@ -240,8 +240,8 @@ body {
   background-image: var(--hero-image);
 }
 
-/* Vinheta: garante que texto e controles em cima da imagem continuem
-   legiveis nas bordas, onde a arte pode ser clara (neve, aurora). */
+/* Vignette: keeps text and controls over the image readable at the edges,
+   where the art can be bright (snow, aurora). */
 .hero-shell::before {
   content: '';
   position: absolute;
@@ -264,10 +264,10 @@ body {
   padding: 32px;
 }
 
-/* ─── Dashboard da Home: nav flutua sobre a imagem, sidebar de info real
-   ao lado do CTA em vez de tudo empilhado no centro. É essa assimetria —
-   painel de controle em volta de um pôster, não um splash de login — que
-   dá a "pegada" de launcher de jogo em vez de tela de autenticação. ──── */
+/* ─── Home dashboard: nav floats over the image, a real info sidebar next
+   to the CTA instead of everything stacked in the centre. That asymmetry —
+   a control panel around a poster, not a login splash — is what gives it the
+   feel of a game launcher instead of an authentication screen. ──── */
 
 .dashboard-nav {
   position: relative;
@@ -300,10 +300,10 @@ body {
   gap: 20px;
 }
 
-/* Painel com cantos de HUD — o motivo assinatura deste redesign. Os traços
-   nos quatro cantos vem do vocabulario de marcador de mira/inventario de RPG
-   (a mesma familia visual do prompt de interacao do jogo), nao decoracao
-   generica: reforcam que isto e' um painel de controle, nao um cartao web. */
+/* Panel with HUD corners — the signature motif of this redesign. The strokes
+   on the four corners come from the vocabulary of RPG crosshair/inventory
+   markers (the same visual family as the game's interaction prompt), not
+   generic decoration: they reinforce that this is a control panel, not a web card. */
 .hud-panel {
   position: relative;
   background: rgba(10, 10, 10, 0.72);
@@ -335,7 +335,7 @@ body {
   border-right: 2px solid var(--accent-gold);
 }
 
-/* ─── Sidebar de informacoes (dados reais: versao, diretorio, manutencao) ── */
+/* ─── Info sidebar (real data: version, directory, maintenance) ──────────── */
 
 .info-sidebar {
   width: 260px;
@@ -426,7 +426,7 @@ body {
   cursor: not-allowed;
 }
 
-/* ─── Marca e identidade na nav (Home) ───────────────────────────────────── */
+/* ─── Brand and identity in the nav (Home) ───────────────────────────────────── */
 
 .nav-brand {
   display: flex;
@@ -561,7 +561,7 @@ body {
   background: rgba(255, 255, 255, 0.04);
 }
 
-/* ─── Card de status do servidor ─────────────────────────────────────────── */
+/* ─── Server status card ────────────────────────────────────────────────── */
 
 .status-card {
   background: rgba(20, 20, 20, 0.82);

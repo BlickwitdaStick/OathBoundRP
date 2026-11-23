@@ -15,7 +15,7 @@ function fixture() {
   return { root, sourceDir, targetDir };
 }
 
-test('instala uma UI ausente', (t) => {
+test('installs a missing UI', (t) => {
   const dirs = fixture();
   t.after(() => fs.rmSync(dirs.root, { recursive: true, force: true }));
 
@@ -25,7 +25,7 @@ test('instala uma UI ausente', (t) => {
   assert.equal(fs.readFileSync(path.join(dirs.targetDir, 'panel.js'), 'utf8'), 'window.ready = true;');
 });
 
-test('repara arquivo divergente e preserva arquivo extra', (t) => {
+test('repairs a differing file and keeps an extra file', (t) => {
   const dirs = fixture();
   t.after(() => fs.rmSync(dirs.root, { recursive: true, force: true }));
   fs.mkdirSync(dirs.targetDir);
@@ -38,7 +38,7 @@ test('repara arquivo divergente e preserva arquivo extra', (t) => {
   assert.equal(fs.readFileSync(path.join(dirs.targetDir, 'extra.txt'), 'utf8'), 'preservar');
 });
 
-test('não reescreve arquivos que já conferem', (t) => {
+test('does not rewrite files that already match', (t) => {
   const dirs = fixture();
   t.after(() => fs.rmSync(dirs.root, { recursive: true, force: true }));
   syncUiBundle(dirs);
@@ -49,7 +49,7 @@ test('não reescreve arquivos que já conferem', (t) => {
   assert.equal(result.files, 2);
 });
 
-test('falha fechado quando o bundle interno não tem index.html', (t) => {
+test('fails closed when the internal bundle has no index.html', (t) => {
   const dirs = fixture();
   t.after(() => fs.rmSync(dirs.root, { recursive: true, force: true }));
   fs.unlinkSync(path.join(dirs.sourceDir, 'index.html'));

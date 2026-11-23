@@ -1,13 +1,13 @@
 import { spawn } from 'node:child_process';
 
-/** Tempo máximo para o Windows confirmar que criou o processo. */
+/** Maximum time for Windows to confirm it created the process. */
 export const GAME_SPAWN_TIMEOUT_MS = 5_000;
 
 /**
- * Erro operacional do bootstrap do jogo. `code` é estável para a interface
- * traduzir a falha sem depender da mensagem (que pode incluir texto do SO).
+ * Operational error from the game bootstrap. `code` is stable so the UI can
+ * translate the failure without depending on the message (which may include OS text).
  */
-export class ProcessoJogoError extends Error {
+export class GameProcessError extends Error {
   /**
    * @param {'GAME_SPAWN_FAILED'|'GAME_SPAWN_TIMEOUT'|'GAME_SPAWN_NO_PID'} code
    * @param {string} message
@@ -15,22 +15,22 @@ export class ProcessoJogoError extends Error {
    */
   constructor(code, message, options) {
     super(message, options);
-    this.name = 'ProcessoJogoError';
+    this.name = 'GameProcessError';
     this.code = code;
   }
 }
 
 /**
- * Inicia o SKSE diretamente, sem passar o caminho ou argumentos por um shell.
- * A Promise só resolve depois que o Node recebe a confirmação `spawn`; assim,
- * quem chama não anuncia sucesso quando o executável nem chegou a abrir.
+ * Starts SKSE directly, without passing the path or arguments through a shell.
+ * The Promise only resolves after Node receives the `spawn` confirmation, so
+ * the caller doesn't announce success when the executable never even opened.
  *
- * @param {string} exePath caminho absoluto de `skse64_loader.exe`
- * @param {string} cwd diretório do Skyrim
+ * @param {string} exePath absolute path of `skse64_loader.exe`
+ * @param {string} cwd the Skyrim directory
  * @param {{spawnImpl?: typeof spawn, timeoutMs?: number}} [options]
  * @returns {Promise<{pid: number}>}
  */
-export async function iniciarProcessoJogo(exePath, cwd, options = {}) {
+export async function startGameProcess(exePath, cwd, options = {}) {
   const spawnImpl = options.spawnImpl ?? spawn;
   const timeoutMs = options.timeoutMs ?? GAME_SPAWN_TIMEOUT_MS;
 
@@ -45,58 +45,58 @@ export async function iniciarProcessoJogo(exePath, cwd, options = {}) {
       windowsHide: true
     });
   } catch (cause) {
-    throw new ProcessoJogoError(
+    throw new GameProcessError(
       'GAME_SPAWN_FAILED',
-      `Nao foi possivel iniciar o jogo: ${mensagemDoErro(cause)}`,
+      `Could not start the game: ${errorMessage(cause)}`,
       { cause }
     );
   }
 
   return await new Promise((resolve, reject) => {
-    let concluido = false;
+    let settled = false;
 
-    const concluir = (callback) => {
-      if (concluido) return;
-      concluido = true;
+    const settle = (callback) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      child.removeListener('spawn', aoIniciar);
-      child.removeListener('error', aoFalhar);
+      child.removeListener('spawn', onSpawn);
+      child.removeListener('error', onError);
       callback();
     };
 
-    const aoIniciar = () => concluir(() => {
+    const onSpawn = () => settle(() => {
       if (!Number.isInteger(child.pid) || child.pid <= 0) {
-        reject(new ProcessoJogoError(
+        reject(new GameProcessError(
           'GAME_SPAWN_NO_PID',
-          'O processo do jogo foi iniciado sem fornecer um PID valido.'
+          'The game process started without providing a valid PID.'
         ));
         return;
       }
 
-      // Só desacopla depois da confirmação. Antes disso, precisamos observar
-      // `error` para não transformar falha de bootstrap em falso sucesso.
+      // Only detach after the confirmation. Before that, we need to watch
+      // `error` so a bootstrap failure doesn't turn into a false success.
       child.unref();
       resolve({ pid: child.pid });
     });
 
-    const aoFalhar = (cause) => concluir(() => reject(new ProcessoJogoError(
+    const onError = (cause) => settle(() => reject(new GameProcessError(
       'GAME_SPAWN_FAILED',
-      `Nao foi possivel iniciar o jogo: ${mensagemDoErro(cause)}`,
+      `Could not start the game: ${errorMessage(cause)}`,
       { cause }
     )));
 
-    const timer = setTimeout(() => concluir(() => reject(new ProcessoJogoError(
+    const timer = setTimeout(() => settle(() => reject(new GameProcessError(
       'GAME_SPAWN_TIMEOUT',
-      `O Windows nao confirmou a inicializacao do jogo em ${timeoutMs} ms.`
+      `Windows did not confirm the game started within ${timeoutMs} ms.`
     ))), timeoutMs);
 
-    child.once('spawn', aoIniciar);
-    child.once('error', aoFalhar);
+    child.once('spawn', onSpawn);
+    child.once('error', onError);
   });
 }
 
 /** @param {unknown} error */
-function mensagemDoErro(error) {
+function errorMessage(error) {
   if (error instanceof Error && error.message) return error.message;
   return String(error);
 }

@@ -1,111 +1,112 @@
 /**
  * disk.test.mjs
  *
- * Espaço em disco antes de baixar. O que estes testes protegem é menos o
- * cálculo e mais as duas decisões de projeto: checar **os dois destinos**
- * (temp e jogo podem estar em discos diferentes) e **não bloquear quando não
- * dá para medir**.
+ * Disk space before downloading. What these tests protect is less the
+ * arithmetic and more the two design decisions: check **both targets** (temp
+ * and the game can be on different disks) and **don't block when we can't
+ * measure**.
  *
- * Executa com: node --test electron/disk.test.mjs
+ * Run with: node --test electron/disk.test.mjs
  */
 
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
-import { avaliarEspaco, ehDiscoCheio, formatarBytes, RESERVA_BYTES } from './disk.mjs';
+import { checkFreeSpace, isDiskFull, formatBytes, RESERVE_BYTES } from './disk.mjs';
 
 const GB = 1024 * 1024 * 1024;
 
-describe('avaliação de espaço', () => {
-  it('aprova quando sobra folga', () => {
-    const r = avaliarEspaco([
-      { rotulo: 'temp', livreBytes: 20 * GB, necessarioBytes: 2 * GB }
+describe('free space check', () => {
+  it('passes when there is headroom', () => {
+    const r = checkFreeSpace([
+      { label: 'temp', freeBytes: 20 * GB, neededBytes: 2 * GB }
     ]);
     assert.equal(r.ok, true);
     assert.equal(r.error, undefined);
   });
 
-  it('reprova quando falta, dizendo quanto liberar', () => {
-    const r = avaliarEspaco([
-      { rotulo: 'C:\Temp', livreBytes: 1 * GB, necessarioBytes: 5 * GB }
+  it('fails when space is short, saying how much to free', () => {
+    const r = checkFreeSpace([
+      { label: 'C:\Temp', freeBytes: 1 * GB, neededBytes: 5 * GB }
     ]);
     assert.equal(r.ok, false);
-    assert.match(r.error, /C:\Temp/, 'precisa dizer ONDE falta');
-    assert.match(r.error, /Libere/, 'precisa dizer quanto liberar');
+    assert.match(r.error, /C:\Temp/, 'must say WHERE space is short');
+    assert.match(r.error, /Free up/, 'must say how much to free');
   });
 
-  it('exige a reserva além do download', () => {
-    // Cabe justinho o arquivo, mas nao a folga de extracao. Um disco em zero
-    // absoluto quebra coisas que nao tem nada a ver com o launcher.
-    const r = avaliarEspaco([
-      { rotulo: 'jogo', livreBytes: 2 * GB, necessarioBytes: 2 * GB }
+  it('requires the reserve on top of the download', () => {
+    // The file fits exactly, but not the extraction headroom. A disk at
+    // absolute zero breaks things that have nothing to do with the launcher.
+    const r = checkFreeSpace([
+      { label: 'game', freeBytes: 2 * GB, neededBytes: 2 * GB }
     ]);
-    assert.equal(r.ok, false, `com ${formatarBytes(RESERVA_BYTES)} de reserva isso nao cabe`);
+    assert.equal(r.ok, false, `with ${formatBytes(RESERVE_BYTES)} of reserve this does not fit`);
   });
 
-  it('checa TODOS os destinos, não só o primeiro', () => {
-    // O .zip vai pro temp e o conteudo e extraido na pasta do jogo. Podem
-    // estar em discos diferentes: checar so um deixa passar metade dos casos.
-    const r = avaliarEspaco([
-      { rotulo: 'temp', livreBytes: 50 * GB, necessarioBytes: 2 * GB },
-      { rotulo: 'jogo', livreBytes: 1 * GB, necessarioBytes: 2 * GB }
+  it('checks ALL targets, not just the first', () => {
+    // The .zip goes to temp and its contents are extracted into the game
+    // folder. They can be on different disks: checking only one lets half of
+    // the cases through.
+    const r = checkFreeSpace([
+      { label: 'temp', freeBytes: 50 * GB, neededBytes: 2 * GB },
+      { label: 'game', freeBytes: 1 * GB, neededBytes: 2 * GB }
     ]);
     assert.equal(r.ok, false);
-    assert.match(r.error, /jogo/, 'o segundo destino tem que ser avaliado');
+    assert.match(r.error, /game/, 'the second target has to be checked');
   });
 
-  it('não bloqueia quando não dá para medir', () => {
-    // statfs pode faltar ou falhar. Impedir o jogador de jogar porque nao
-    // conseguimos ler o espaco livre seria pior que o problema original.
-    const r = avaliarEspaco([
-      { rotulo: 'temp', livreBytes: null, necessarioBytes: 2 * GB }
+  it('does not block when it cannot measure', () => {
+    // statfs may be missing or fail. Stopping the player from playing because
+    // we couldn't read the free space would be worse than the original problem.
+    const r = checkFreeSpace([
+      { label: 'temp', freeBytes: null, neededBytes: 2 * GB }
     ]);
     assert.equal(r.ok, true);
-    assert.deepEqual(r.naoMedido, ['temp'], 'mas registra que nao foi medido');
+    assert.deepEqual(r.unmeasured, ['temp'], 'but records that it was not measured');
   });
 
-  it('manifesto sem sizeBytes não vira falso bloqueio', () => {
+  it('a manifest without sizeBytes does not become a false block', () => {
     for (const n of [undefined, null, 0, -1, NaN]) {
-      assert.equal(avaliarEspaco([{ rotulo: 't', livreBytes: 1, necessarioBytes: n }]).ok, true);
+      assert.equal(checkFreeSpace([{ label: 't', freeBytes: 1, neededBytes: n }]).ok, true);
     }
   });
 
-  it('lista vazia é aprovada', () => {
-    assert.equal(avaliarEspaco([]).ok, true);
-    assert.equal(avaliarEspaco(null).ok, true);
+  it('an empty list passes', () => {
+    assert.equal(checkFreeSpace([]).ok, true);
+    assert.equal(checkFreeSpace(null).ok, true);
   });
 });
 
-describe('detecção de disco cheio', () => {
-  it('pega pelo código, que é o sinal confiável', () => {
-    const e = new Error('qualquer coisa'); e.code = 'ENOSPC';
-    assert.equal(ehDiscoCheio(e), true);
+describe('disk-full detection', () => {
+  it('catches it by code, which is the reliable signal', () => {
+    const e = new Error('anything'); e.code = 'ENOSPC';
+    assert.equal(isDiskFull(e), true);
   });
 
-  it('pega pelo texto quando o código se perdeu no caminho', () => {
-    // Erro reempacotado numa Promise costuma perder o .code.
-    assert.equal(ehDiscoCheio(new Error('ENOSPC: no space left on device, write')), true);
-    assert.equal(ehDiscoCheio('no space left on device'), true);
+  it('catches it by text when the code was lost along the way', () => {
+    // An error rewrapped in a Promise often loses its .code.
+    assert.equal(isDiskFull(new Error('ENOSPC: no space left on device, write')), true);
+    assert.equal(isDiskFull('no space left on device'), true);
   });
 
-  it('não confunde outros erros com disco cheio', () => {
-    const e = new Error('Timeout no download'); e.code = 'ETIMEDOUT';
-    assert.equal(ehDiscoCheio(e), false);
-    assert.equal(ehDiscoCheio(null), false);
-    assert.equal(ehDiscoCheio(undefined), false);
+  it('does not mistake other errors for a full disk', () => {
+    const e = new Error('Download timed out'); e.code = 'ETIMEDOUT';
+    assert.equal(isDiskFull(e), false);
+    assert.equal(isDiskFull(null), false);
+    assert.equal(isDiskFull(undefined), false);
   });
 });
 
-describe('formatação', () => {
-  it('escolhe a unidade legível', () => {
-    assert.equal(formatarBytes(512), '512 B');
-    assert.equal(formatarBytes(1536), '1.5 KB');
-    assert.equal(formatarBytes(5 * GB), '5.0 GB');
+describe('formatting', () => {
+  it('picks a readable unit', () => {
+    assert.equal(formatBytes(512), '512 B');
+    assert.equal(formatBytes(1536), '1.5 KB');
+    assert.equal(formatBytes(5 * GB), '5.0 GB');
   });
 
-  it('entrada inválida não vira NaN na tela do jogador', () => {
+  it('invalid input does not show up as NaN on the player screen', () => {
     for (const n of [undefined, null, NaN, -5, 'abc']) {
-      assert.equal(formatarBytes(n), '?');
+      assert.equal(formatBytes(n), '?');
     }
   });
 });

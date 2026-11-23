@@ -47,9 +47,9 @@ function formatServerAddress(host, port) {
 }
 
 /**
- * Lê JSON existente sem engolir corrupção. Sobrescrever silenciosamente um
- * arquivo truncado esconderia a causa real e poderia descartar opções do
- * cliente que o launcher não conhece.
+ * Reads existing JSON without swallowing corruption. Silently overwriting a
+ * truncated file would hide the real cause and could drop client options the
+ * launcher doesn't know about.
  *
  * @param {string} filePath
  */
@@ -80,9 +80,9 @@ function removeUntrustedCredentials(record) {
 }
 
 /**
- * Substitui um arquivo por rename no mesmo diretório. Se o destino estiver
- * read-only, abre somente a janela necessária para a troca e restaura o modo
- * anterior no arquivo novo. O temporário nunca contém o ticket no nome.
+ * Replaces a file by rename in the same directory. If the destination is
+ * read-only, it opens only the window needed for the swap and restores the
+ * previous mode on the new file. The temporary file never has the ticket in its name.
  *
  * @param {string} filePath
  * @param {string} contents
@@ -101,8 +101,8 @@ function atomicWriteFile(filePath, contents) {
 
   try {
     fs.writeFileSync(tempPath, contents, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-    // Flush dos bytes antes de publicar o nome final.
-    // Windows exige um descritor gravável para FlushFileBuffers/fsync.
+    // Flush the bytes before publishing the final name.
+    // Windows requires a writable descriptor for FlushFileBuffers/fsync.
     const tempFd = fs.openSync(tempPath, 'r+');
     try { fs.fsyncSync(tempFd); } finally { fs.closeSync(tempFd); }
 
@@ -111,9 +111,9 @@ function atomicWriteFile(filePath, contents) {
       destinationModeChanged = true;
     }
 
-    // Windows não permite rename por cima de um arquivo existente. Remover o
-    // destino deixa uma janela mínima, mas os bytes publicados continuam sendo
-    // sempre o arquivo completo. Em POSIX, rename substitui atomicamente.
+    // Windows doesn't allow rename over an existing file. Removing the
+    // destination leaves a tiny window, but the published bytes are always the
+    // complete file. On POSIX, rename replaces atomically.
     try {
       fs.renameSync(tempPath, filePath);
     } catch (cause) {
@@ -153,23 +153,23 @@ function hasForbiddenCredential(record) {
 }
 
 /**
- * Monta o conteúdo de `Data/Platform/PluginsNoLoad/auth-data-no-load.js`.
+ * Builds the contents of `Data/Platform/PluginsNoLoad/auth-data-no-load.js`.
  *
- * Este é o ÚNICO lugar de onde o skymp5-client distribuído (AuthService)
- * obtém uma sessão remota: `readAuthDataFromDisk()` faz
- * `JSON.parse(conteudo.slice(2))` e, no menu principal, mostra o widget de
- * autorização com o nome do jogador e o botão "Play". O clique em "Play"
- * dispara `authAttempt` com `{ remote: authData }`, conecta no peer direto e
- * envia `loginWithSkympIo { gameData: { session } }`; o servidor resolve a
- * sessão no master API do OATHBOUND (`/api/servers/:masterKey/sessions/:s`).
+ * This is the ONLY place the distributed skymp5-client (AuthService) gets a
+ * remote session from: `readAuthDataFromDisk()` does
+ * `JSON.parse(contents.slice(2))` and, on the main menu, shows the
+ * authorization widget with the player's name and the "Play" button. Clicking
+ * "Play" fires `authAttempt` with `{ remote: authData }`, connects to the peer
+ * directly and sends `loginWithSkympIo { gameData: { session } }`; the server
+ * resolves the session on the OATHBOUND master API (`/api/servers/:masterKey/sessions/:s`).
  *
- * `gameData.session` em `skymp5-client-settings.txt` NÃO é lido pelo cliente
- * (só `gameData.profileId`, que é o modo offline proibido pelo ADR-001). Sem
- * este arquivo o widget aparecia como "not authorized" e "Play" respondia
- * "login first" — ou tentava OAuth no gateway público do SkyMP.
+ * `gameData.session` in `skymp5-client-settings.txt` is NOT read by the client
+ * (only `gameData.profileId`, which is the offline mode forbidden by ADR-001).
+ * Without this file the widget showed "not authorized" and "Play" answered
+ * "login first" — or tried OAuth on SkyMP's public gateway.
  *
- * O formato é `//` + JSON: o prefixo de comentário existe porque o SkyrimPlatform
- * trata a pasta como plugins JS (mesmo em PluginsNoLoad).
+ * The format is `//` + JSON: the comment prefix exists because SkyrimPlatform
+ * treats the folder as JS plugins (even in PluginsNoLoad).
  *
  * @param {{ticket:string, displayName?:string|null}} input
  */
@@ -177,8 +177,8 @@ export function buildRemoteAuthData({ ticket, displayName }) {
   const name = typeof displayName === 'string' ? displayName.trim() : '';
   return {
     session: ticket,
-    // `masterApiId` só é exibido quando não há nome; o cliente não o envia ao
-    // servidor. A identidade real é resolvida server-side a partir da sessão.
+    // `masterApiId` is only shown when there is no name; the client doesn't
+    // send it to the server. The real identity is resolved server-side from the session.
     masterApiId: 0,
     discordUsername: name || 'OATHBOUND',
     discordDiscriminator: null,
@@ -199,18 +199,18 @@ export function parseRemoteAuthData(contents) {
 }
 
 /**
- * Prepara os dois contratos de conexão consumidos pelo cliente SkyMP.
- * Lança `ConnectionSettingsError` em qualquer inconsistência; o chamador não
- * deve iniciar o jogo nesse caso.
+ * Prepares the two connection contracts read by the SkyMP client.
+ * Throws `ConnectionSettingsError` on any inconsistency; the caller must not
+ * start the game in that case.
  *
- * Também publica a sessão remota em `PluginsNoLoad/auth-data-no-load.js` (ver
- * `buildRemoteAuthData`). Nada aqui conecta automaticamente: o cliente só
- * conecta quando o jogador clica "Play" no widget de autorização do menu.
+ * Also publishes the remote session in `PluginsNoLoad/auth-data-no-load.js` (see
+ * `buildRemoteAuthData`). Nothing here connects automatically: the client only
+ * connects when the player clicks "Play" in the menu's authorization widget.
  *
  * @param {{gamePath:string, ticket:string, serverIp:string, serverPort:number|string, discordId?:string, displayName?:string|null}} input
  * @returns {{configPath:string, clientSettingsPath:string, authDataPath:string, config:Record<string, unknown>, clientSettings:Record<string, unknown>}}
  */
-export function prepararConfiguracaoConexao(input) {
+export function prepareConnectionSettings(input) {
   const gamePath = typeof input?.gamePath === 'string' ? input.gamePath.trim() : '';
   if (!gamePath || gamePath.includes('\0')) {
     throw new ConnectionSettingsError("INVALID_GAME_PATH", "The game path is invalid.");
@@ -240,8 +240,8 @@ export function prepararConfiguracaoConexao(input) {
   const authDataPath = path.join(authDataDirectory, 'auth-data-no-load.js');
   const authData = buildRemoteAuthData({ ticket, displayName: input.displayName });
 
-  // Leia ambos antes de alterar qualquer um: JSON legado corrompido falha sem
-  // deixar metade da configuração atualizada.
+  // Read both before changing either: corrupted legacy JSON fails without
+  // leaving half of the configuration updated.
   const config = { ...readExistingJson(configPath) };
   const clientSettings = { ...readExistingJson(clientSettingsPath) };
   const legacyGameData = isRecord(clientSettings.gameData) ? clientSettings.gameData : {};
@@ -266,9 +266,9 @@ export function prepararConfiguracaoConexao(input) {
     atomicWriteFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
     atomicWriteFile(clientSettingsPath, `${JSON.stringify(clientSettings, null, 2)}\n`);
     fs.mkdirSync(authDataDirectory, { recursive: true });
-    // Sem newline final: o cliente faz JSON.parse(slice(2)) do arquivo inteiro,
-    // e JSON.parse tolera whitespace, mas mantemos o formato exato que o
-    // próprio cliente grava em writeAuthDataToDisk.
+    // No trailing newline: the client does JSON.parse(slice(2)) of the whole
+    // file, and JSON.parse tolerates whitespace, but we keep the exact format
+    // the client itself writes in writeAuthDataToDisk.
     atomicWriteFile(authDataPath, serializeRemoteAuthData(authData));
   } catch (cause) {
     throw new ConnectionSettingsError("WRITE_FAILED", "Failed to save the connection configuration.", cause);
@@ -309,8 +309,3 @@ export function prepararConfiguracaoConexao(input) {
 
   return { configPath, clientSettingsPath, authDataPath, config: writtenConfig, clientSettings: writtenSettings };
 }
-
-// Alias descritivo para consumidores que já adotem nomes em inglês. O contrato
-// canônico usado pelo launcher é `prepararConfiguracaoConexao`.
-export const prepareConnectionSettings = prepararConfiguracaoConexao;
-

@@ -52,8 +52,6 @@ export interface PreparedConnectionSettings {
   clientSettings: Record<string, unknown>;
 }
 
-export function prepararConfiguracaoConexao(
+export function prepareConnectionSettings(
   input: PrepareConnectionSettingsInput
 ): PreparedConnectionSettings;
-
-export const prepareConnectionSettings: typeof prepararConfiguracaoConexao;

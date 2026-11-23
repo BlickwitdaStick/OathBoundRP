@@ -1,8 +1,8 @@
 /**
- * Tipos de `parity.mjs`.
+ * Types for `parity.mjs`.
  *
- * O módulo é JS puro para que `node --test` rode sem passo de build; esta
- * declaração é o que mantém o `main.ts` typechecked ao importá-lo.
+ * The module is plain JS so `node --test` runs with no build step; this
+ * declaration is what keeps `main.ts` typechecked when importing it.
  */
 
 export interface PluginHeader {
@@ -29,16 +29,16 @@ export function parsePluginHeader(buffer: Buffer | null | undefined): PluginHead
 export function compareMods(params: {
   serverMods: ServerMod[] | null | undefined;
   localFiles: string[];
-  // Assincrono de proposito: hashear um .esm/.bsa de referencia inteiro de
-  // uma vez (ex: fs.readFileSync) estourava a memoria do processo antes do
-  // jogo abrir. hashOf assincrono deixa o chamador usar hash via stream.
+  // Async on purpose: hashing a whole reference .esm/.bsa at once (e.g.
+  // fs.readFileSync) blew the process memory before the game opened. An async
+  // hashOf lets the caller hash via a stream.
   hashOf: (filename: string) => string | Promise<string>;
-  // Algoritmo declarado pelo manifesto. Diferente de HASH_ALGORITHM reprova
-  // com mensagem que aponta pra causa (manifesto velho), nao pra "mod
-  // corrompido".
+  // Algorithm declared by the manifest. A different HASH_ALGORITHM fails with
+  // a message pointing at the cause (an old manifest), not at "corrupted
+  // mod".
   hashAlgorithm: string | undefined;
-  // Arquivos hasheados em paralelo (padrao 4) -- sequencial deixava
-  // manifestos grandes levarem minutos com o disco ocioso entre leituras.
+  // Files hashed in parallel (default 4) -- sequential made big manifests
+  // take minutes with the disk idle between reads.
   concurrency?: number;
 }): Promise<{ success: boolean; error?: string }>;
 
@@ -54,8 +54,8 @@ export const HASH_ALGORITHM: 'sha256';
 export function parseCccTxt(content: string | null | undefined): string[];
 
 /**
- * `effective` são os plugins de Creation Club que o jogo realmente carrega:
- * listados no `Skyrim.ccc` **e** presentes em `Data/`.
+ * `effective` is the Creation Club plugins the game actually loads: listed in
+ * `Skyrim.ccc` **and** present in `Data/`.
  */
 export function analyzeCreationClub(params: {
   cccEntries: string[] | null | undefined;

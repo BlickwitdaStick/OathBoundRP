@@ -4,21 +4,21 @@ import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'path'
 
-// `electron/main.ts` lê a configuração via `process.env.VITE_*`, mas nada
-// colocava esses valores em `process.env`: o Vite carrega `.env` para
-// `import.meta.env` (renderer), não para o processo Node do main, e o app
-// empacotado nem sequer tem um `.env` do lado. Resultado: CLIENT_ID, SERVER_IP,
-// API_PORT e DIST_REPO caíam sempre no fallback vazio/localhost, então login,
-// fila, verificação de mods e update nunca podiam funcionar fora da máquina de
-// desenvolvimento.
+// `electron/main.ts` reads its configuration via `process.env.VITE_*`, but
+// nothing put those values into `process.env`: Vite loads `.env` into
+// `import.meta.env` (renderer), not into the main Node process, and the
+// packaged app doesn't even have a `.env` next to it. Result: CLIENT_ID,
+// SERVER_IP, API_PORT and DIST_REPO always fell back to empty/localhost, so
+// login, the queue, mod verification and updates could never work outside the
+// development machine.
 //
-// A correção é substituir esses acessos em tempo de build (`define`), que é o
-// único mecanismo que sobrevive ao empacotamento.
+// The fix is to replace those accesses at build time (`define`), which is the
+// only mechanism that survives packaging.
 //
-// VITE_DISCORD_CLIENT_SECRET NÃO entra nessa lista de propósito: qualquer valor
-// embutido aqui viaja dentro do instalador e pode ser extraído por qualquer
-// jogador. A troca de code por token passou a ser feita pelo painel web, que é
-// quem guarda o secret — ver docs/technical/LAUNCHER_DISTRIBUTION.md.
+// VITE_DISCORD_CLIENT_SECRET is NOT in this list on purpose: any value
+// embedded here travels inside the installer and can be extracted by any
+// player. Exchanging the code for a token is now done by the web panel, which
+// is what holds the secret — see docs/technical/LAUNCHER_DISTRIBUTION.md.
 const INLINED_ENV = [
   'VITE_DISCORD_CLIENT_ID',
   'VITE_DISCORD_REDIRECT_URI',
@@ -46,19 +46,19 @@ export default defineConfig(({ mode }) => {
         outDir: 'dist-electron',
         minify: mode === 'production',
         rollupOptions: {
-          // `.mjs`, nao `.js` — package.json tem "type": "module", mas o
-          // electron-builder empacota olhando so o campo `main` do
-          // extraMetadata dele, sem confiar no "type" do package.json real.
-          // Sem a extensao explicita, o instalador empacotado falhava com
-          // "entry file not found" procurando o `.js` de antes dentro do
-          // ASAR. Ver electron-builder.json e package.json "main".
+          // `.mjs`, not `.js` — package.json has "type": "module", but
+          // electron-builder packages by looking only at the `main` field of
+          // its extraMetadata, without trusting the real package.json "type".
+          // Without the explicit extension, the packaged installer failed with
+          // "entry file not found", looking for the old `.js` inside the
+          // ASAR. See electron-builder.json and package.json "main".
           //
-          // Tentativa de forcar o preload pra CJS (`format: 'cjs'`) foi
-          // revertida: esta versao do vite-plugin-electron mira Vite 8
-          // (Rolldown) e le `build.rolldownOptions`, nao `rollupOptions` —
-          // o `format` daqui era silenciosamente ignorado, e o arquivo saia
-          // com extensao `.cjs` mas `import`/`export` de verdade por dentro,
-          // o que quebraria ao carregar (pior que antes). Ver
+          // An attempt to force the preload to CJS (`format: 'cjs'`) was
+          // reverted: this version of vite-plugin-electron targets Vite 8
+          // (Rolldown) and reads `build.rolldownOptions`, not `rollupOptions` —
+          // the `format` here was silently ignored, and the file came out
+          // with a `.cjs` extension but real `import`/`export` inside, which
+          // would break on load (worse than before). See
           // docs/technical/LAUNCHER_DISTRIBUTION.md §7.
           output: {
             entryFileNames: '[name].mjs',

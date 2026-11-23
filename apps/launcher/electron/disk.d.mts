@@ -1,15 +1,15 @@
 /**
- * Tipos de `disk.mjs`. O módulo é JS puro para rodar sob `node --test` sem
- * passo de build; esta declaração mantém o `main.ts` typechecked.
+ * Types for `disk.mjs`. The module is plain JS so it runs under `node --test`
+ * with no build step; this declaration keeps `main.ts` typechecked.
  */
 
-export const RESERVA_BYTES: number;
+export const RESERVE_BYTES: number;
 
-export function formatarBytes(n: number): string;
+export function formatBytes(n: number): string;
 
-export function ehDiscoCheio(err: unknown): boolean;
+export function isDiskFull(err: unknown): boolean;
 
-export function avaliarEspaco(
-  destinos: Array<{ rotulo: string; livreBytes: number | null; necessarioBytes: number }> | null | undefined,
-  reserva?: number
-): { ok: boolean; error?: string; naoMedido?: string[] };
+export function checkFreeSpace(
+  targets: Array<{ label: string; freeBytes: number | null; neededBytes: number }> | null | undefined,
+  reserve?: number
+): { ok: boolean; error?: string; unmeasured?: string[] };

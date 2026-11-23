@@ -19,8 +19,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  // `electron/` estava fora de qualquer tsconfig: nem `npm run build` (que roda
-  // `tsc`) nem o vite-plugin-electron (esbuild, que só transpila) checavam tipo
-  // no processo main. Um erro de tipo em main.ts ia direto pro instalador.
+  // `electron/` was outside every tsconfig: neither `npm run build` (which runs
+  // `tsc`) nor vite-plugin-electron (esbuild, which only transpiles) type-checked
+  // the main process. A type error in main.ts went straight into the installer.
   "include": ["vite.config.ts", "electron"]
 }

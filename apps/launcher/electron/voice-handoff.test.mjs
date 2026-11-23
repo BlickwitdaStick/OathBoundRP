@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createVoiceHandoffServer } from './voice-handoff.mjs';
-import { iniciarVoiceHelper, killVoiceHelper } from './voice-process.mjs';
+import { startVoiceHelper, killVoiceHelper } from './voice-process.mjs';
 
 async function withServer(onHandoff, fn) {
   const srv = createVoiceHandoffServer({ onHandoff, port: 0 });
@@ -29,7 +29,7 @@ function post(url, body) {
   });
 }
 
-test('desarmado: POST valido responde 409 e nao chama onHandoff', async () => {
+test('disarmed: a valid POST answers 409 and does not call onHandoff', async () => {
   let chamou = false;
   await withServer(async () => { chamou = true; return {}; }, async ({ url }) => {
     const r = await post(url, VALID);
@@ -38,7 +38,7 @@ test('desarmado: POST valido responde 409 e nao chama onHandoff', async () => {
   });
 });
 
-test('armado: POST valido chama onHandoff com o corpo normalizado e devolve pid', async () => {
+test('armed: a valid POST calls onHandoff with the normalised body and returns the pid', async () => {
   let recebido = null;
   await withServer(async (h) => { recebido = h; return { pid: 4242 }; }, async ({ srv, url }) => {
     srv.arm();
@@ -49,11 +49,11 @@ test('armado: POST valido chama onHandoff com o corpo normalizado e devolve pid'
   });
 });
 
-test('armado: ticket fora do formato hex -> 400, sem spawn', async () => {
+test('armed: a ticket not in hex format -> 400, no spawn', async () => {
   let chamou = false;
   await withServer(async () => { chamou = true; return {}; }, async ({ srv, url }) => {
     srv.arm();
-    const r = await post(url, { ...VALID, ticket: 'nao-e-hex; rm -rf /' });
+    const r = await post(url, { ...VALID, ticket: 'not-hex; rm -rf /' });
     assert.equal(r.status, 400);
     assert.equal(chamou, false);
   });
@@ -67,7 +67,7 @@ test('armado: actorId ausente -> 400', async () => {
   });
 });
 
-test('armado: JSON invalido -> 400', async () => {
+test('armed: invalid JSON -> 400', async () => {
   await withServer(async () => ({}), async ({ srv, url }) => {
     srv.arm();
     const r = await post(url, '{ not json');
@@ -110,7 +110,7 @@ test('GET / e outros metodos -> 404', async () => {
   });
 });
 
-test('onHandoff que lanca -> 500', async () => {
+test('onHandoff that throws -> 500', async () => {
   await withServer(async () => { throw new Error('spawn boom'); }, async ({ srv, url }) => {
     srv.arm();
     const r = await post(url, VALID);
@@ -121,18 +121,18 @@ test('onHandoff que lanca -> 500', async () => {
 
 // ─── voice-process: spawn via stub ───
 
-test('iniciarVoiceHelper resolve com pid quando o processo confirma', async () => {
+test('startVoiceHelper resolves with the pid when the process confirms', async () => {
   const fake = fakeChild();
-  const p = iniciarVoiceHelper('vh.exe', ['--actor-id', '0x1'], '/game', {
+  const p = startVoiceHelper('vh.exe', ['--actor-id', '0x1'], '/game', {
     spawnImpl: () => { queueMicrotask(() => fake.emit('spawn')); return fake; }
   });
   assert.deepEqual(await p, { pid: 1234 });
   killVoiceHelper();
 });
 
-test('iniciarVoiceHelper rejeita quando o spawn falha', async () => {
+test('startVoiceHelper rejects when the spawn fails', async () => {
   const fake = fakeChild();
-  const p = iniciarVoiceHelper('vh.exe', [], '/game', {
+  const p = startVoiceHelper('vh.exe', [], '/game', {
     spawnImpl: () => { queueMicrotask(() => fake.emit('error', new Error('ENOENT'))); return fake; }
   });
   await assert.rejects(p, /ENOENT/);

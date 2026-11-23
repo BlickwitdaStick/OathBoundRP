@@ -23,15 +23,15 @@ function sha256(filePath) {
 }
 
 /**
- * Instala e repara o bundle local da UI CEF usando a cópia imutável que viaja
- * dentro do launcher. Arquivos extras não são apagados: só o conjunto que o
- * projeto possui é autoritativo e reparado.
+ * Installs and repairs the local CEF UI bundle using the immutable copy that
+ * travels inside the launcher. Extra files are not deleted: only the set the
+ * project owns is authoritative and repaired.
  */
 export function syncUiBundle({ sourceDir, targetDir }) {
   try {
     const sourceEntry = path.join(sourceDir, REQUIRED_ENTRYPOINT);
     if (!fs.existsSync(sourceEntry) || !fs.statSync(sourceEntry).isFile()) {
-      return { ok: false, repaired: [], error: `Bundle da UI sem ${REQUIRED_ENTRYPOINT}.` };
+      return { ok: false, repaired: [], error: `UI bundle is missing ${REQUIRED_ENTRYPOINT}.` };
     }
 
     const files = listFiles(sourceDir);

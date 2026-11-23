@@ -7,20 +7,20 @@ import { fileURLToPath } from 'node:url';
 const launcherDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(fs.readFileSync(path.join(launcherDir, 'electron-builder.json'), 'utf8'));
 
-test('o pacote inclui a UI CEF como recurso do launcher', () => {
+test('the package includes the CEF UI as a launcher resource', () => {
   assert.ok(config.extraResources.some((entry) => entry.from === '../../skymp/ui' && entry.to === 'skymp-ui'));
 });
 
-test('o pacote inclui o voice-helper.exe como recurso vendor (opcional)', () => {
+test('the package includes voice-helper.exe as a vendor resource (optional)', () => {
   const entry = config.extraResources.find((e) => e.to === 'vendor');
-  assert.ok(entry, 'faltou a entrada extraResources para vendor/');
+  assert.ok(entry, 'the extraResources entry for vendor/ is missing');
   assert.equal(entry.from, 'build-resources');
   assert.deepEqual(entry.filter, ['voice-helper.exe']);
 
-  // O `from` precisa existir versionado, senao o electron-builder falha antes de
-  // qualquer coisa — mesmo quando o exe (nao versionado) nao foi stajado.
+  // The `from` must exist under version control, or electron-builder fails
+  // before anything else — even when the (unversioned) exe wasn't staged.
   const stagingDir = path.join(launcherDir, entry.from);
-  assert.ok(fs.existsSync(stagingDir), `${entry.from}/ tem que existir no repo`);
+  assert.ok(fs.existsSync(stagingDir), `${entry.from}/ has to exist in the repo`);
 });
 
 test('the package ships 7za.exe for Nexus archives', () => {
@@ -29,12 +29,12 @@ test('the package ships 7za.exe for Nexus archives', () => {
   assert.ok(fs.existsSync(path.join(launcherDir, entry.from, '7za.exe')), `${entry.from}/7za.exe must exist (npm install)`);
 });
 
-test('o build stagea o voice-helper antes de empacotar', () => {
+test('the build stages the voice-helper before packaging', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(launcherDir, 'package.json'), 'utf8'));
   assert.match(pkg.scripts.build, /stage-voice-helper\.mjs.*electron-builder/s);
 });
 
-test('o pacote não inclui recursivamente a própria pasta de saída', () => {
+test('the package does not recursively include its own output folder', () => {
   assert.ok(config.files.includes('dist-electron/main.mjs'));
   assert.ok(config.files.includes('dist-electron/preload.mjs'));
   assert.ok(!config.files.includes('dist-electron/**/*'));

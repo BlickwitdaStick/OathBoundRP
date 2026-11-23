@@ -31,9 +31,9 @@ export function Home({ auth, setAuth }: HomeProps) {
   const navigate = useNavigate();
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState<string>('');
-  // null = ainda checando. Antes disto o card mostrava "Online" fixo no JSX,
-  // sem nenhuma chamada por tras — bolinha verde e texto que nunca mudavam
-  // mesmo com o apps/game-api fora do ar.
+  // null = still checking. Before this the card showed a hard-coded "Online"
+  // in the JSX, with no call behind it — a green dot and a label that never
+  // changed even with apps/game-api down.
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   // Server-hosted mods prompt (SkyUI, RaceMenu...): shown when the server
@@ -133,11 +133,11 @@ export function Home({ auth, setAuth }: HomeProps) {
     loadAppInfo();
   }, []);
 
-  // `invalid_ticket`/`not_authenticated` do apps/game-api significam que nem
-  // a sessao de launcher (30 dias, ver migration-v25) conseguiu emitir um
-  // ticket valido — a unica saida real e' logar de novo. Antes disto o
-  // jogador so via "Erro: invalid_ticket" cru na tela, sem indicacao de que
-  // precisava relogar.
+  // `invalid_ticket`/`not_authenticated` from apps/game-api mean that not even
+  // the launcher session (30 days, see migration-v25) could issue a valid
+  // ticket — the only real way out is logging in again. Before this the
+  // player only saw a raw "Error: invalid_ticket" on screen, with no hint
+  // that they needed to log in again.
   const isSessionExpiredMessage = (message: unknown) =>
     message === 'invalid_ticket' || message === 'not_authenticated';
 
@@ -174,10 +174,10 @@ export function Home({ auth, setAuth }: HomeProps) {
           await handleSessionExpired();
           return;
         }
-        setStatus(`Erro: ${pollRes.message || 'queue unavailable'}`);
+        setStatus(`Error: ${pollRes.message || 'queue unavailable'}`);
       } catch (e: any) {
         stopQueuePolling();
-        setStatus(`Erro: ${e.message}`);
+        setStatus(`Error: ${e.message}`);
       }
     }, QUEUE_POLL_INTERVAL_MS);
   };
@@ -253,11 +253,11 @@ export function Home({ auth, setAuth }: HomeProps) {
         return;
       }
 
-      // Voz por proximidade: opcional, nunca trava o PLAY. Se o helper nao veio
-      // no pacote (skipped) ou a copia falhou, segue — a voz so nao funciona.
+      // Proximity voice: optional, never blocks PLAY. If the helper didn't come
+      // in the package (skipped) or the copy failed, carry on — voice just won't work.
       const voice = await window.electronAPI.ensureVoiceHelper(gamePath);
       if (!voice.ok) {
-        console.warn('[launcher] voice-helper nao instalado:', voice.error);
+        console.warn('[launcher] voice-helper not installed:', voice.error);
       }
 
       setStatus('Validating client version...');
@@ -367,9 +367,9 @@ export function Home({ auth, setAuth }: HomeProps) {
         await handleSessionExpired();
         return;
       }
-      setStatus(`Erro: ${queueRes.message || 'queue unavailable'}`);
+      setStatus(`Error: ${queueRes.message || 'queue unavailable'}`);
     } catch (e: any) {
-      setStatus(`Erro: ${e.message}`);
+      setStatus(`Error: ${e.message}`);
     } finally {
       setIsPlaying(false);
     }

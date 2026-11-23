@@ -9,7 +9,7 @@ function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'vh-sync-'));
 }
 
-test('copia o exe quando o alvo nao existe', () => {
+test('copies the exe when the target does not exist', () => {
   const dir = tmp();
   const source = path.join(dir, 'voice-helper.exe');
   const target = path.join(dir, 'game', 'Data', 'Platform', 'voice-helper.exe');
@@ -20,20 +20,20 @@ test('copia o exe quando o alvo nao existe', () => {
   assert.equal(fs.readFileSync(target, 'utf8'), 'BINARIO-V1');
 });
 
-test('nao reescreve quando o hash confere', () => {
+test('does not rewrite when the hash matches', () => {
   const dir = tmp();
   const source = path.join(dir, 'voice-helper.exe');
   const target = path.join(dir, 'voice-helper.exe.copy');
   fs.writeFileSync(source, 'IGUAL');
   fs.writeFileSync(target, 'IGUAL');
-  const mtimeAntes = fs.statSync(target).mtimeMs;
+  const mtimeBefore = fs.statSync(target).mtimeMs;
 
   const r = syncVoiceHelper({ sourcePath: source, targetPath: target });
   assert.deepEqual(r, { ok: true, repaired: false });
-  assert.equal(fs.statSync(target).mtimeMs, mtimeAntes, 'nao deve ter tocado no arquivo');
+  assert.equal(fs.statSync(target).mtimeMs, mtimeBefore, 'must not have touched the file');
 });
 
-test('repara quando o alvo diverge', () => {
+test('repairs when the target differs', () => {
   const dir = tmp();
   const source = path.join(dir, 'voice-helper.exe');
   const target = path.join(dir, 'target.exe');
@@ -45,10 +45,10 @@ test('repara quando o alvo diverge', () => {
   assert.equal(fs.readFileSync(target, 'utf8'), 'NOVO');
 });
 
-test('fail-open quando o exe nao foi empacotado: ok:true, skipped', () => {
+test('fail-open when the exe was not packaged: ok:true, skipped', () => {
   const dir = tmp();
   const r = syncVoiceHelper({
-    sourcePath: path.join(dir, 'nao-existe.exe'),
+    sourcePath: path.join(dir, 'does-not-exist.exe'),
     targetPath: path.join(dir, 'target.exe')
   });
   assert.equal(r.ok, true);
@@ -57,7 +57,7 @@ test('fail-open quando o exe nao foi empacotado: ok:true, skipped', () => {
   assert.equal(fs.existsSync(path.join(dir, 'target.exe')), false);
 });
 
-test('sourcePath vazio nao explode', () => {
+test('an empty sourcePath does not blow up', () => {
   const r = syncVoiceHelper({ sourcePath: '', targetPath: path.join(tmp(), 'x.exe') });
   assert.equal(r.ok, true);
   assert.equal(r.skipped, true);

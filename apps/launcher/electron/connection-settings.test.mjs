@@ -28,7 +28,7 @@ function expectCode(fn, code) {
   assert.throws(fn, error => error instanceof ConnectionSettingsError && error.code === code);
 }
 
-test('grava os dois contratos, preserva legado compatível e remove credenciais não confiáveis', () => {
+test('writes both contracts, keeps compatible legacy data and removes untrusted credentials', () => {
   const f = fixture();
   try {
     fs.writeFileSync(f.configPath, JSON.stringify({ ui: { scale: 2 }, profileId: 99, token: 'old' }));
@@ -64,7 +64,7 @@ test('grava os dois contratos, preserva legado compatível e remove credenciais 
   } finally { cleanup(f.gamePath); }
 });
 
-test('recusa ticket vazio antes de criar arquivos', () => {
+test('rejects an empty ticket before creating files', () => {
   const f = fixture();
   try {
     expectCode(() => prepareConnectionSettings({
@@ -78,7 +78,7 @@ test('recusa ticket vazio antes de criar arquivos', () => {
   } finally { cleanup(f.gamePath); }
 });
 
-test('JSON inválido falha fechado sem alterar o outro arquivo', () => {
+test('invalid JSON fails closed without changing the other file', () => {
   const f = fixture();
   try {
     const original = JSON.stringify({ preserve: true });
@@ -95,7 +95,7 @@ test('JSON inválido falha fechado sem alterar o outro arquivo', () => {
   } finally { cleanup(f.gamePath); }
 });
 
-test('aceita settings legado sem gameData e preserva campos desconhecidos', () => {
+test('accepts legacy settings without gameData and keeps unknown fields', () => {
   const f = fixture();
   try {
     fs.writeFileSync(f.settingsPath, JSON.stringify({ legacyOption: 42 }));
@@ -111,7 +111,7 @@ test('aceita settings legado sem gameData e preserva campos desconhecidos', () =
   } finally { cleanup(f.gamePath); }
 });
 
-test('atualiza arquivo read-only e restaura seu modo', () => {
+test('updates a read-only file and restores its mode', () => {
   const f = fixture();
   try {
     fs.writeFileSync(f.configPath, '{}');
@@ -136,7 +136,7 @@ test('atualiza arquivo read-only e restaura seu modo', () => {
   }
 });
 
-test('valida host e porta com códigos claros', () => {
+test('validates host and port with clear codes', () => {
   const f = fixture();
   try {
     expectCode(() => prepareConnectionSettings({
@@ -151,7 +151,7 @@ test('valida host e porta com códigos claros', () => {
   } finally { cleanup(f.gamePath); }
 });
 
-test('recusa raiz JSON que não seja objeto', () => {
+test('rejects a JSON root that is not an object', () => {
   const f = fixture();
   try {
     fs.writeFileSync(f.configPath, '[]');
@@ -161,13 +161,14 @@ test('recusa raiz JSON que não seja objeto', () => {
   } finally { cleanup(f.gamePath); }
 });
 
-// ── Sessão remota do AuthService (menu principal) ───────────────────────────
+// ── AuthService remote session (main menu) ──────────────────────────────────
 //
-// O skymp5-client distribuído NÃO lê `gameData.session` do settings: a única
-// fonte de sessão remota é `Data/Platform/PluginsNoLoad/auth-data-no-load.js`,
-// lido por `AuthService.readAuthDataFromDisk()` como
-// `JSON.parse(getPluginSourceCode(...).slice(2))`. Este helper reproduz essa
-// leitura literalmente para provar que o arquivo gravado é aceito pelo cliente.
+// The distributed skymp5-client does NOT read `gameData.session` from the
+// settings: the only source of a remote session is
+// `Data/Platform/PluginsNoLoad/auth-data-no-load.js`, read by
+// `AuthService.readAuthDataFromDisk()` as
+// `JSON.parse(getPluginSourceCode(...).slice(2))`. This helper reproduces that
+// read literally to prove the written file is accepted by the client.
 function readLikeSkympClient(authDataPath) {
   const data = fs.readFileSync(authDataPath, 'utf8');
   if (!data) return null;
@@ -178,7 +179,7 @@ function authDataPathOf(gamePath) {
   return path.join(gamePath, 'Data', 'Platform', 'PluginsNoLoad', 'auth-data-no-load.js');
 }
 
-test('semeia a sessão remota que o AuthService lê no menu principal, substituindo //null', () => {
+test('seeds the remote session the AuthService reads on the main menu, replacing //null', () => {
   const f = fixture();
   try {
     const authDataPath = authDataPathOf(f.gamePath);
@@ -196,21 +197,21 @@ test('semeia a sessão remota que o AuthService lê no menu principal, substitui
 
     assert.equal(result.authDataPath, authDataPath);
     const raw = fs.readFileSync(authDataPath, 'utf8');
-    assert.ok(raw.startsWith('//{'), 'formato idêntico ao writeAuthDataToDisk do cliente');
-    assert.notEqual(raw.charCodeAt(0), 0xfeff, 'sem BOM: slice(2) quebraria o JSON');
+    assert.ok(raw.startsWith('//{'), "same format as the client's writeAuthDataToDisk");
+    assert.notEqual(raw.charCodeAt(0), 0xfeff, 'no BOM: slice(2) would break the JSON');
 
     const authData = readLikeSkympClient(authDataPath);
-    assert.equal(authData.session, 'opaque-ticket', 'sessão crua, igual a gameData.session no servidor');
+    assert.equal(authData.session, 'opaque-ticket', 'raw session, same as gameData.session on the server');
     assert.equal(authData.discordUsername, 'Ysolda');
     for (const forbidden of ['profileId', 'token', 'launcherTicket']) {
-      assert.equal(Object.hasOwn(authData, forbidden), false, `${forbidden} nunca vai para o cliente`);
+      assert.equal(Object.hasOwn(authData, forbidden), false, `${forbidden} never goes to the client`);
     }
-    // Nada de temporários esquecidos na pasta que o SkyrimPlatform varre.
+    // No temporary files left behind in the folder SkyrimPlatform scans.
     assert.deepEqual(fs.readdirSync(path.dirname(authDataPath)), ['auth-data-no-load.js']);
   } finally { cleanup(f.gamePath); }
 });
 
-test('cria PluginsNoLoad quando ausente e usa rótulo padrão sem nome de exibição', () => {
+test('creates PluginsNoLoad when missing and uses the default label with no display name', () => {
   const f = fixture();
   try {
     prepareConnectionSettings({
@@ -223,7 +224,7 @@ test('cria PluginsNoLoad quando ausente e usa rótulo padrão sem nome de exibi�
   } finally { cleanup(f.gamePath); }
 });
 
-test('ticket vazio não toca a sessão remota anterior', () => {
+test('an empty ticket does not touch the previous remote session', () => {
   const f = fixture();
   try {
     const authDataPath = authDataPathOf(f.gamePath);
@@ -236,7 +237,7 @@ test('ticket vazio não toca a sessão remota anterior', () => {
   } finally { cleanup(f.gamePath); }
 });
 
-test('nenhum temporário fica para trás em Plugins (prefixo de um único ponto)', () => {
+test('no temporary file is left behind in Plugins (single-dot prefix)', () => {
   const f = fixture();
   try {
     prepareConnectionSettings({

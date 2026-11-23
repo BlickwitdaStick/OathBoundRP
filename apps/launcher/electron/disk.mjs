@@ -1,91 +1,91 @@
 /**
- * disk.mjs — espaço em disco antes de baixar, sem I/O
+ * disk.mjs — disk space before downloading, with no I/O
  *
- * Baixar modpack até o disco encher é rotina, e o modo de falha cru é
- * ilegível: o jogador recebe `ENOSPC: no space left on device` no meio de uma
- * barra de progresso e não sabe se o problema é dele, do servidor ou da
- * internet.
+ * Downloading a modpack until the disk fills up is routine, and the raw
+ * failure mode is unreadable: the player gets `ENOSPC: no space left on device`
+ * in the middle of a progress bar and can't tell whether the problem is theirs,
+ * the server's or the internet's.
  *
- * Duas coisas que este módulo trata e que uma checagem ingênua erra:
+ * Two things this module handles that a naive check gets wrong:
  *
- * **O download e a instalação podem estar em discos diferentes.** O `.zip` vai
- * para `temp` e o conteúdo é extraído na pasta do jogo. Checar só um dos dois
- * deixa passar exatamente metade dos casos.
+ * **The download and the install can be on different disks.** The `.zip` goes
+ * to `temp` and its contents are extracted into the game folder. Checking only
+ * one of the two lets exactly half of the cases through.
  *
- * **Não saber medir não é motivo para bloquear.** `statfs` pode faltar ou
- * falhar; nesse caso seguimos em frente. Impedir o jogador de jogar porque não
- * conseguimos ler o espaço livre seria pior que o problema original.
+ * **Not being able to measure is no reason to block.** `statfs` may be missing
+ * or fail; in that case we carry on. Stopping the player from playing because
+ * we couldn't read the free space would be worse than the original problem.
  */
 
 /**
- * Folga além do necessário. A extração precisa de espaço temporário, e um
- * Windows com disco em zero absoluto passa a se comportar mal em coisas que
- * não têm nada a ver com o launcher.
+ * Headroom beyond what is needed. Extraction needs temporary space, and a
+ * Windows install with a disk at absolute zero starts misbehaving in ways that
+ * have nothing to do with the launcher.
  */
-export const RESERVA_BYTES = 512 * 1024 * 1024;
+export const RESERVE_BYTES = 512 * 1024 * 1024;
 
 /** @param {number} n */
-export function formatarBytes(n) {
+export function formatBytes(n) {
   if (typeof n !== 'number' || !isFinite(n) || n < 0) return '?';
-  const unidades = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let valor = n;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = n;
   let i = 0;
-  while (valor >= 1024 && i < unidades.length - 1) { valor /= 1024; i++; }
-  return `${valor.toFixed(valor >= 10 || i === 0 ? 0 : 1)} ${unidades[i]}`;
+  while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
+  return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 /**
- * `ENOSPC` é o código; a mensagem varia por plataforma e por locale, então
- * checar texto seria frágil. O texto entra só como rede de segurança para
- * erros que perderam o código no caminho (ex: reempacotados numa Promise).
+ * `ENOSPC` is the code; the message varies by platform and locale, so checking
+ * text would be fragile. The text is only a safety net for errors that lost
+ * their code along the way (e.g. rewrapped in a Promise).
  *
  * @param {unknown} err
  */
-export function ehDiscoCheio(err) {
+export function isDiskFull(err) {
   if (!err) return false;
-  const codigo = /** @type {any} */ (err).code;
-  if (codigo === 'ENOSPC') return true;
-  const texto = String(/** @type {any} */ (err).message || err);
-  return /ENOSPC|no space left|espa[cç]o insuficiente/i.test(texto);
+  const code = /** @type {any} */ (err).code;
+  if (code === 'ENOSPC') return true;
+  const text = String(/** @type {any} */ (err).message || err);
+  return /ENOSPC|no space left|not enough space|espa[cç]o insuficiente/i.test(text);
 }
 
 /**
- * Avalia se dá para prosseguir.
+ * Decides whether it is OK to go ahead.
  *
- * @param {{rotulo: string, livreBytes: number|null, necessarioBytes: number}[]} destinos
- * @param {number} [reserva]
- * @returns {{ok: boolean, error?: string, naoMedido?: string[]}}
+ * @param {{label: string, freeBytes: number|null, neededBytes: number}[]} targets
+ * @param {number} [reserve]
+ * @returns {{ok: boolean, error?: string, unmeasured?: string[]}}
  */
-export function avaliarEspaco(destinos, reserva = RESERVA_BYTES) {
-  if (!Array.isArray(destinos) || destinos.length === 0) return { ok: true };
+export function checkFreeSpace(targets, reserve = RESERVE_BYTES) {
+  if (!Array.isArray(targets) || targets.length === 0) return { ok: true };
 
-  const naoMedido = [];
+  const unmeasured = [];
 
-  for (const destino of destinos) {
-    const { rotulo, livreBytes, necessarioBytes } = destino;
+  for (const target of targets) {
+    const { label, freeBytes, neededBytes } = target;
 
-    // Sem medida confiável, seguimos — ver o cabeçalho.
-    if (typeof livreBytes !== 'number' || !isFinite(livreBytes)) {
-      naoMedido.push(rotulo);
+    // No reliable measurement: carry on — see the header.
+    if (typeof freeBytes !== 'number' || !isFinite(freeBytes)) {
+      unmeasured.push(label);
       continue;
     }
-    if (typeof necessarioBytes !== 'number' || !isFinite(necessarioBytes) || necessarioBytes <= 0) {
+    if (typeof neededBytes !== 'number' || !isFinite(neededBytes) || neededBytes <= 0) {
       continue;
     }
 
-    const exigido = necessarioBytes + reserva;
-    if (livreBytes < exigido) {
-      const faltam = exigido - livreBytes;
+    const required = neededBytes + reserve;
+    if (freeBytes < required) {
+      const missing = required - freeBytes;
       return {
         ok: false,
         error:
-          `Espaco insuficiente em ${rotulo}: ha ${formatarBytes(livreBytes)} livres e ` +
-          `sao necessarios ${formatarBytes(exigido)} ` +
-          `(${formatarBytes(necessarioBytes)} do download mais ${formatarBytes(reserva)} de folga). ` +
-          `Libere ${formatarBytes(faltam)} e tente de novo.`
+          `Not enough space on ${label}: ${formatBytes(freeBytes)} free and ` +
+          `${formatBytes(required)} needed ` +
+          `(${formatBytes(neededBytes)} for the download plus ${formatBytes(reserve)} of headroom). ` +
+          `Free up ${formatBytes(missing)} and try again.`
       };
     }
   }
 
-  return naoMedido.length > 0 ? { ok: true, naoMedido } : { ok: true };
+  return unmeasured.length > 0 ? { ok: true, unmeasured } : { ok: true };
 }

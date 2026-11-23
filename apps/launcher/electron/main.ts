@@ -7,10 +7,10 @@ import https from 'https';
 import crypto from 'crypto';
 import { URL, fileURLToPath } from 'url';
 import { parsePluginsTxt, parsePluginHeader, compareMods, analyzePlugins, parseCccTxt, analyzeCreationClub } from './parity.mjs';
-import { avaliarEspaco, ehDiscoCheio } from './disk.mjs';
+import { checkFreeSpace, isDiskFull } from './disk.mjs';
 import { syncUiBundle } from './ui-integrity.mjs';
 import { syncVoiceHelper } from './voice-helper.mjs';
-import { prepararConfiguracaoConexao } from './connection-settings.mjs';
+import { prepareConnectionSettings } from './connection-settings.mjs';
 import {
   createHashCache,
   enableServerPlugins,
@@ -31,26 +31,26 @@ import {
   parseNxmUrl,
   planNexusDownloads
 } from './nexus-mods.mjs';
-import { iniciarProcessoJogo } from './game-process.mjs';
-import { iniciarVoiceHelper, killVoiceHelper } from './voice-process.mjs';
+import { startGameProcess } from './game-process.mjs';
+import { startVoiceHelper, killVoiceHelper } from './voice-process.mjs';
 import { createVoiceHandoffServer, VOICE_HANDOFF_PORT } from './voice-handoff.mjs';
 
-// package.json tem "type": "module", entao o Vite empacota este arquivo como
-// ESM — __dirname nao existe em ESM (e' global so de CommonJS). Sem isso,
-// qualquer `npm start` falhava na primeira BrowserWindow com
-// "ReferenceError: __dirname is not defined", antes mesmo da janela abrir.
+// package.json has "type": "module", so Vite bundles this file as ESM —
+// __dirname doesn't exist in ESM (it is a CommonJS-only global). Without this,
+// any `npm start` failed on the first BrowserWindow with
+// "ReferenceError: __dirname is not defined", before the window even opened.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Constants & Env ───
-// Estes valores são substituídos em tempo de build pelo `define` do
-// vite.config.ts — em runtime não existe `.env` do lado do app empacotado.
-// VITE_DISCORD_CLIENT_SECRET foi removido de propósito: o secret vive só no
-// painel web (ver POST /api/launcher/oauth/exchange).
+// These values are replaced at build time by the `define` in vite.config.ts —
+// at runtime there is no `.env` on the packaged app's side.
+// VITE_DISCORD_CLIENT_SECRET was removed on purpose: the secret lives only in
+// the web panel (see POST /api/launcher/oauth/exchange).
 const DISCORD_CLIENT_ID = process.env.VITE_DISCORD_CLIENT_ID || '';
 const DISCORD_REDIRECT_URI = process.env.VITE_DISCORD_REDIRECT_URI || 'http://localhost:19847/callback';
 const SERVER_IP = process.env.VITE_SERVER_IP || '127.0.0.1';
-// Default 7777 pra bater com o "port" de skymp/config/server-settings.*.json.
-// O default anterior era 7757, que nao existia em lugar nenhum do lado servidor.
+// Default 7777 to match the "port" in skymp/config/server-settings.*.json.
+// The previous default was 7757, which existed nowhere on the server side.
 const SERVER_PORT = parseInt(process.env.VITE_SERVER_PORT || '7777', 10);
 const API_PORT = parseInt(process.env.VITE_API_PORT || '7758', 10);
 const DIST_REPO = process.env.VITE_GITHUB_DIST_REPO || '';
@@ -77,10 +77,10 @@ function ensureSkympUi(gamePath: string) {
   });
 }
 
-// voice-helper.exe: captura de microfone fora do CEF pra voz por proximidade.
-// Empacotado como resources/vendor/ quando o build de C++ estava disponivel na
-// hora de gerar o instalador (scripts/stage-voice-helper.mjs). Pode nao existir:
-// a voz e opcional e o helper nao sai do `npm run build`.
+// voice-helper.exe: microphone capture outside CEF for proximity voice.
+// Packaged as resources/vendor/ when the C++ build was available at the time
+// the installer was generated (scripts/stage-voice-helper.mjs). It may not
+// exist: voice is optional and the helper doesn't come out of `npm run build`.
 function bundledVoiceHelperPath() {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'vendor', 'voice-helper.exe')
@@ -89,7 +89,7 @@ function bundledVoiceHelperPath() {
 
 function ensureVoiceHelper(gamePath: string) {
   if (!gamePath) return { ok: false, repaired: false, error: 'Invalid game path.' };
-  // Fica em Data/Platform/, junto do resto do que a SkyrimPlatform usa.
+  // Lives in Data/Platform/, alongside the rest of what SkyrimPlatform uses.
   return syncVoiceHelper({
     sourcePath: bundledVoiceHelperPath(),
     targetPath: deployedVoiceHelperPath(gamePath)
@@ -100,11 +100,11 @@ function deployedVoiceHelperPath(gamePath: string) {
   return path.join(gamePath, 'Data', 'Platform', 'voice-helper.exe');
 }
 
-// ─── Handoff do ticket de voz ───
-// O comando /voz no jogo emite um ticket de 'sender'; a CEF o repassa pra este
-// servidor loopback (porta 19848), que sobe o voice-helper.exe com --ticket.
-// Tudo opcional: sem exe, ou sem a CEF conseguindo fazer o fetch, falar nao
-// sobe e ouvir segue. Ver docs/technical/VOICE_NATIVE_HELPER.md §11.
+// ─── Voice ticket handoff ───
+// The in-game /voice command issues a 'sender' ticket; CEF passes it on to this
+// loopback server (port 19848), which starts voice-helper.exe with --ticket.
+// All optional: with no exe, or with CEF unable to do the fetch, speaking
+// doesn't start and listening carries on. See docs/technical/VOICE_NATIVE_HELPER.md §11.
 let voiceHandoff: ReturnType<typeof createVoiceHandoffServer> | null = null;
 let voiceWatchdog: NodeJS.Timeout | null = null;
 let voiceHandoffMissingLogged = false;
@@ -121,7 +121,7 @@ async function armVoiceHandoff(gamePath: string) {
   if (!exePath) {
     if (!voiceHandoffMissingLogged) {
       voiceHandoffMissingLogged = true;
-      console.info('[launcher] voice-helper.exe ausente; handoff de voz desativado nesta sessao.');
+      console.info('[launcher] voice-helper.exe missing; voice handoff disabled for this session.');
     }
     return;
   }
@@ -135,15 +135,15 @@ async function armVoiceHandoff(gamePath: string) {
           '--host', host,
           '--port', String(port)
         ];
-        const r = await iniciarVoiceHelper(exePath, args, gamePath);
-        console.info(`[launcher] voice-helper iniciado (pid=${r.pid}) para actor 0x${actorId.toString(16)}`);
+        const r = await startVoiceHelper(exePath, args, gamePath);
+        console.info(`[launcher] voice-helper started (pid=${r.pid}) for actor 0x${actorId.toString(16)}`);
         return r;
       }
     });
     try {
       await voiceHandoff.listen();
     } catch (e: any) {
-      console.warn(`[launcher] handoff de voz nao pode escutar em ${VOICE_HANDOFF_PORT}: ${e?.message}`);
+      console.warn(`[launcher] voice handoff could not listen on ${VOICE_HANDOFF_PORT}: ${e?.message}`);
       voiceHandoff = null;
       return;
     }
@@ -151,19 +151,19 @@ async function armVoiceHandoff(gamePath: string) {
 
   voiceHandoff.arm();
 
-  // Sem watcher de saida do jogo (o spawn e detached). Quando o jogo fecha,
-  // desarma o handoff e mata o helper — a voz nao faz sentido sem o jogo.
+  // No game-exit watcher (the spawn is detached). When the game closes,
+  // disarm the handoff and kill the helper — voice makes no sense without the game.
   if (voiceWatchdog) clearInterval(voiceWatchdog);
-  let vimoJogoRodando = false;
+  let sawGameRunning = false;
   voiceWatchdog = setInterval(async () => {
     const running = await isGameRunning();
-    if (running) { vimoJogoRodando = true; return; }
-    if (!vimoJogoRodando) return; // ainda subindo
+    if (running) { sawGameRunning = true; return; }
+    if (!sawGameRunning) return; // still starting
     clearInterval(voiceWatchdog!);
     voiceWatchdog = null;
     voiceHandoff?.disarm();
     killVoiceHelper();
-    console.info('[launcher] jogo encerrado; handoff de voz desarmado.');
+    console.info('[launcher] game closed; voice handoff disarmed.');
   }, 4000);
 }
 
@@ -183,7 +183,7 @@ type PluginHeader = {
   error?: string;
 };
 
-// [VOIP-NOTHROTTLE] - Previne gargalos no jogo quando em background
+// [VOIP-NOTHROTTLE] - Prevents game stalls while in the background
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
@@ -206,21 +206,21 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: true,
       backgroundThrottling: false,
-      // O sandbox padrao do Electron para o preload script tem arestas mal
-      // resolvidas com preload em ESM (`.mjs`): o arquivo carrega sem erro,
-      // mas o contextBridge.exposeInMainWorld nunca roda, e o renderer ve
-      // `window.electronAPI === undefined`. contextIsolation continua ligado
-      // — isso ja isola o preload do conteudo da pagina; o sandbox e' uma
-      // camada a mais especificamente sobre chamadas de sistema do proprio
-      // preload, e o nosso preload e' codigo nosso, nao conteudo de terceiro.
+      // Electron's default sandbox for the preload script has unresolved rough
+      // edges with an ESM preload (`.mjs`): the file loads with no error, but
+      // contextBridge.exposeInMainWorld never runs, and the renderer sees
+      // `window.electronAPI === undefined`. contextIsolation stays on — that
+      // already isolates the preload from the page content; the sandbox is an
+      // extra layer specifically over the preload's own system calls, and our
+      // preload is our own code, not third-party content.
       //
-      // Tentei trocar o preload pra CommonJS pra manter o sandbox ligado
-      // (22/08/2026) e reverti: o vite-plugin-electron desta versao mira
-      // Vite 8/Rolldown e ignora silenciosamente `format: 'cjs'` passado por
-      // `rollupOptions` — o arquivo saia `.cjs` por fora, ESM por dentro, o
-      // que quebraria ao carregar. Sem uma via confirmada de configurar o
-      // formato do preload nesta versao do plugin, `sandbox: false` continua
-      // sendo a correcao que de fato funciona. Ver
+      // I tried switching the preload to CommonJS to keep the sandbox on
+      // (2026-08-22) and reverted: this version of vite-plugin-electron targets
+      // Vite 8/Rolldown and silently ignores `format: 'cjs'` passed through
+      // `rollupOptions` — the file came out `.cjs` outside, ESM inside, which
+      // would break on load. With no confirmed way to configure the preload
+      // format in this plugin version, `sandbox: false` remains the fix that
+      // actually works. See
       // docs/technical/LAUNCHER_DISTRIBUTION.md §7.
       sandbox: false,
     },
@@ -314,13 +314,13 @@ app.on('activate', () => {
 ipcMain.on('window-minimize', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('window-close', () => { if (mainWindow) mainWindow.close(); });
 
-// ─── Info do App (Home) ───
+// ─── App info (Home) ───
 //
-// Tudo aqui já existia em algum canto do processo main — só nunca tinha sido
-// exposto pra tela inicial. `launcherVersion` já era lido em
-// report-recent-crashes; `clientVersion`/`modsVersion` já eram lidos via
-// readStamp() pelos handlers de update. Sem chamada de rede: os stamps são
-// arquivos locais gravados na última instalação/atualização bem-sucedida.
+// Everything here already existed somewhere in the main process — it had just
+// never been exposed to the home screen. `launcherVersion` was already read in
+// report-recent-crashes; `clientVersion`/`modsVersion` were already read via
+// readStamp() by the update handlers. No network call: the stamps are local
+// files written by the last successful install/update.
 // Launcher self-update from the OATHBOUND GitHub fork (launcher-update.mjs).
 let pendingLauncherUpdate: any = null;
 ipcMain.handle('launcher-update-check', async () => {
@@ -676,9 +676,9 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * POST de JSON para uma URL arbitrária (http ou https). Diferente de
- * `postJsonToApi`, que é fixo no host/porta do servidor de jogo — o painel web
- * costuma ficar em outro host/porta (VITE_PANEL_URL).
+ * POST JSON to an arbitrary URL (http or https). Unlike `postJsonToApi`,
+ * which is pinned to the game server's host/port — the web panel usually
+ * lives on another host/port (VITE_PANEL_URL).
  */
 function postJsonToUrl(url: string, body: any): Promise<{ status: number, data: any }> {
   return new Promise((resolve) => {
@@ -740,12 +740,12 @@ function httpGetJson(url: string): Promise<any> {
   });
 }
 
-// Espaco livre do volume que contem `caminho`. Devolve null quando nao da pra
-// medir -- `statfs` pode faltar, e nesse caso `avaliarEspaco` segue em frente
-// de proposito (ver disk.mjs).
-function espacoLivreBytes(caminho: string): number | null {
+// Free space on the volume that holds `targetPath`. Returns null when it can't
+// be measured -- `statfs` may be missing, and in that case `checkFreeSpace`
+// carries on on purpose (see disk.mjs).
+function freeBytesOn(targetPath: string): number | null {
   try {
-    const st = (fs as any).statfsSync(caminho);
+    const st = (fs as any).statfsSync(targetPath);
     return st.bsize * st.bavail;
   } catch {
     return null;
@@ -753,13 +753,13 @@ function espacoLivreBytes(caminho: string): number | null {
 }
 
 /**
- * O .zip vai pro temp e o conteudo e extraido na pasta do jogo -- que podem
- * estar em discos diferentes. Checar so um deixa passar metade dos casos.
+ * The .zip goes to temp and its contents are extracted into the game folder --
+ * which may be on different disks. Checking only one lets half of the cases through.
  */
-function checarEspacoParaBaixar(tmpPath: string, destinoPath: string, sizeBytes: number) {
-  return avaliarEspaco([
-    { rotulo: `disco temporario (${path.parse(tmpPath).root})`, livreBytes: espacoLivreBytes(path.dirname(tmpPath)), necessarioBytes: sizeBytes },
-    { rotulo: `pasta do jogo (${path.parse(destinoPath).root})`, livreBytes: espacoLivreBytes(destinoPath), necessarioBytes: sizeBytes }
+function checkSpaceForDownload(tmpPath: string, gameDirPath: string, sizeBytes: number) {
+  return checkFreeSpace([
+    { label: `temporary disk (${path.parse(tmpPath).root})`, freeBytes: freeBytesOn(path.dirname(tmpPath)), neededBytes: sizeBytes },
+    { label: `game folder (${path.parse(gameDirPath).root})`, freeBytes: freeBytesOn(gameDirPath), neededBytes: sizeBytes }
   ]);
 }
 
@@ -816,13 +816,13 @@ function sha256File(filePath: string): Promise<string> {
   });
 }
 
-// Hash do manifesto de mods. Era MD5 ate 23/08/2026; MD5 tem colisao pratica,
-// e o modelo de ameaca aqui nao e corrupcao acidental -- e jogador alterando um
-// mod DE PROPOSITO, que e exatamente o caso em que colisao importa.
+// Hash of the mods manifest. It was MD5 until 2026-08-23; MD5 has practical
+// collisions, and the threat model here isn't accidental corruption -- it's a
+// player altering a mod ON PURPOSE, which is exactly when collisions matter.
 //
-// A leitura e por stream porque fs.readFileSync do arquivo inteiro, para um
-// Skyrim.esm de referencia (~280 MB), aloca tudo na heap de uma vez por mod e
-// estourava a memoria do launcher antes do jogo abrir.
+// Reading is streamed because fs.readFileSync of the whole file, for a
+// reference Skyrim.esm (~280 MB), allocated everything on the heap at once per
+// mod and blew the launcher's memory before the game opened.
 function hashFileForManifest(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -846,7 +846,7 @@ function extractZip(zipPath: string, destDir: string): Promise<void> {
       ps.on('error', reject);
       ps.on('close', code => code === 0 ? resolve() : reject(new Error(psErr || `Expand-Archive exited with code ${code}`)));
     });
-    tar.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `tar saiu com codigo ${code}`)));
+    tar.on('close', code => code === 0 ? resolve() : reject(new Error(stderr || `tar exited with code ${code}`)));
   });
 }
 
@@ -859,8 +859,8 @@ function isGameRunning(): Promise<boolean> {
 }
 
 function killGameProcesses(): Promise<void> {
-  // O helper de voz e filho do launcher — mata pelo handle primeiro; o taskkill
-  // e rede de seguranca pra uma instancia orfa de sessao anterior.
+  // The voice helper is a child of the launcher — kill it by handle first; the
+  // taskkill is a safety net for an orphaned instance from a previous session.
   voiceHandoff?.disarm();
   killVoiceHelper();
   return new Promise((resolve) => {
@@ -973,7 +973,7 @@ ipcMain.handle('discord-login', async () => {
 
         if (!state || state !== oauthState) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<h1>Erro: parâmetro state inválido ou ausente.</h1>');
+          res.end('<h1>Error: invalid or missing state parameter.</h1>');
           callbackServer.close();
           finish(null);
           return;
@@ -981,16 +981,16 @@ ipcMain.handle('discord-login', async () => {
 
         if (!code) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<h1>Erro: código de autorização não recebido.</h1>');
+          res.end('<h1>Error: authorization code not received.</h1>');
           callbackServer.close();
           finish(null);
           return;
         }
 
-        // A troca de `code` por token roda no painel web, não aqui: o client
-        // secret do Discord não pode viajar dentro de um instalador que os
-        // jogadores baixam. Ver POST /api/launcher/oauth/exchange em
-        // apps/web/server.js e docs/technical/LAUNCHER_DISTRIBUTION.md.
+        // Exchanging `code` for a token runs in the web panel, not here: the
+        // Discord client secret can't travel inside an installer that players
+        // download. See POST /api/launcher/oauth/exchange in
+        // apps/web/server.js and docs/technical/LAUNCHER_DISTRIBUTION.md.
         const exchange = await postJsonToUrl(`${PANEL_URL}/api/launcher/oauth/exchange`, {
           code,
           redirect_uri: DISCORD_REDIRECT_URI,
@@ -998,7 +998,7 @@ ipcMain.handle('discord-login', async () => {
 
         if (exchange.status !== 200 || !exchange.data || !exchange.data.discordId) {
           res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<h1>Erro ao concluir o login. Verifique se o painel do servidor está acessível.</h1>');
+          res.end('<h1>Error completing the login. Check that the server panel is reachable.</h1>');
           callbackServer.close();
           finish(null);
           return;
@@ -1010,14 +1010,14 @@ ipcMain.handle('discord-login', async () => {
           username: user.username,
           globalName: user.globalName || user.username,
           avatar: user.avatar || null,
-          // Prova de que este Discord autenticou de fato, emitida pelo painel.
-          // É o que a fila (apps/game-api) exige — `discordId` sozinho é público
-          // e não prova nada. Vem ausente se a conta ainda não existe no painel
-          // (jogador que nunca pediu whitelist).
+          // Proof that this Discord account really authenticated, issued by the
+          // panel. It is what the queue (apps/game-api) requires — `discordId`
+          // alone is public and proves nothing. It is missing if the account
+          // doesn't exist in the panel yet (a player who never applied).
           launchTicket: user.launchTicket || null,
-          // Multiuso, ~30 dias — troca por um launchTicket novo em
-          // /api/launcher/session/refresh-ticket sem repetir este popup.
-          // Ver migration-v25-launcher-sessions.sql.
+          // Multi-use, ~30 days — exchanged for a fresh launchTicket at
+          // /api/launcher/session/refresh-ticket without repeating this popup.
+          // See migration-v25-launcher-sessions.sql.
           sessionToken: user.sessionToken || null,
           loginDate: new Date().toISOString(),
         };
@@ -1029,8 +1029,8 @@ ipcMain.handle('discord-login', async () => {
           <html>
             <body style="background:#0a0a0a;color:#c9a227;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
               <div style="text-align:center;">
-                <h1>✅ Login realizado com sucesso!</h1>
-                <p style="color:#d6d3d1;">Bem-vindo, ${escapeHtml(authData.globalName)}! Pode fechar esta janela.</p>
+                <h1>✅ Login successful!</h1>
+                <p style="color:#d6d3d1;">Welcome, ${escapeHtml(authData.globalName)}! You can close this window.</p>
               </div>
             </body>
           </html>
@@ -1044,17 +1044,17 @@ ipcMain.handle('discord-login', async () => {
       } catch (err) {
         console.error('OAuth2 callback error:', err);
         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end('<h1>Erro interno.</h1>');
+        res.end('<h1>Internal error.</h1>');
         callbackServer.close();
         finish(null);
       }
     });
 
-    // Sem isto, uma falha de listen() (porta 19847 ainda presa por uma
-    // tentativa de login anterior que nao fechou limpo) virava um evento
-    // 'error' sem listener no servidor HTTP -- e o comportamento padrao do
-    // Node pra 'error' sem handler e' lancar e derrubar o processo inteiro,
-    // exigindo reiniciar o launcher pra tentar de novo.
+    // Without this, a listen() failure (port 19847 still held by a previous
+    // login attempt that didn't close cleanly) became an 'error' event with
+    // no listener on the HTTP server -- and Node's default behaviour for an
+    // unhandled 'error' is to throw and bring the whole process down,
+    // requiring a launcher restart to try again.
     callbackServer.on('error', (err) => {
       console.error('OAuth2 callback server error:', err);
       if (authWindow && !authWindow.isDestroyed()) {
@@ -1106,9 +1106,9 @@ ipcMain.handle('discord-login', async () => {
 });
 
 ipcMain.handle('discord-logout', async () => {
-  // Melhor esforço: se o painel estiver fora do ar, o logout local acontece
-  // do mesmo jeito. Sem isto, um auth.json roubado do disco continuaria
-  // rendendo launch tickets novos mesmo depois do dono deslogar.
+  // Best effort: if the panel is down, the local logout happens anyway.
+  // Without this, an auth.json stolen from disk would keep yielding fresh
+  // launch tickets even after the owner logged out.
   try {
     const auth = readAuthFile();
     if (auth && auth.sessionToken) {
@@ -1136,29 +1136,29 @@ ipcMain.handle('get-auth-status', async () => {
 
 // ─── Queue System ───
 //
-// A fila é autenticada por ticket, não por `discordId`: discordId é público, e
-// mandá-lo como prova de identidade deixaria qualquer um entrar na fila no
-// lugar de outro jogador. O ticket inicial vem do painel no login; cada consulta
-// consome o ticket atual e recebe o próximo (`pollTicket`), então um ticket
-// interceptado já está gasto quando chega em outras mãos.
+// The queue is authenticated by ticket, not by `discordId`: discordId is
+// public, and sending it as proof of identity would let anyone join the queue
+// in another player's place. The initial ticket comes from the panel at login;
+// each poll consumes the current ticket and receives the next (`pollTicket`),
+// so an intercepted ticket is already spent by the time it reaches other hands.
 
 /**
- * Guarda o ticket da próxima consulta de fila. Vive só em memória de propósito:
- * é de uso único e curto, não faz sentido persistir entre execuções.
+ * Holds the ticket for the next queue poll. Lives only in memory on purpose:
+ * it is single-use and short-lived, so persisting it between runs makes no sense.
  */
 let currentQueueTicket: string | null = null;
 
 /**
- * Antes desta função trocar sempre por um ticket fresco via `sessionToken`,
- * uma segunda tentativa de jogar na mesma sessão do launcher — sem `pollTicket`
- * em memória, ex: a fila admitiu direto na primeira vez, sem fila de espera —
- * reenviava o `launchTicket` do login, que já tinha sido consumido. O servidor
- * respondia 401 invalid_ticket, e a única saída era refazer o OAuth do Discord
- * inteiro. Ver migration-v25-launcher-sessions.sql.
+ * Before this function always exchanged for a fresh ticket via `sessionToken`,
+ * a second attempt to play in the same launcher session — with no `pollTicket`
+ * in memory, e.g. the queue admitted directly the first time, with no wait —
+ * resent the login's `launchTicket`, which had already been consumed. The
+ * server answered 401 invalid_ticket, and the only way out was redoing the
+ * whole Discord OAuth. See migration-v25-launcher-sessions.sql.
  */
 async function nextQueueTicket(): Promise<string | null> {
-  // Um pollTicket em memória (emitido pelo game-api enquanto na fila) sempre
-  // vence: já está fresco e foi emitido pra esta consulta específica.
+  // A pollTicket in memory (issued by game-api while queued) always wins:
+  // it is already fresh and was issued for this specific poll.
   if (currentQueueTicket) return currentQueueTicket;
 
   const auth = readAuthFile();
@@ -1171,9 +1171,9 @@ async function nextQueueTicket(): Promise<string | null> {
     if (refresh.status === 200 && refresh.data && typeof refresh.data.launchTicket === 'string') {
       return refresh.data.launchTicket;
     }
-    // Sessão expirada/revogada (ex: usuário deslogou de outra máquina): cai
-    // pro launchTicket abaixo, que na pior das hipóteses dá o mesmo
-    // 401 invalid_ticket que já existia antes desta mudança.
+    // Expired/revoked session (e.g. the user logged out on another machine):
+    // falls back to the launchTicket below, which at worst gives the same
+    // 401 invalid_ticket that already existed before this change.
   }
 
   return auth.launchTicket || null;
@@ -1182,31 +1182,31 @@ async function nextQueueTicket(): Promise<string | null> {
 function rememberQueueTicket(response: any) {
   if (response && typeof response.pollTicket === 'string') {
     currentQueueTicket = response.pollTicket;
-    delete response.pollTicket; // o renderer não precisa nem deve ver o ticket
+    delete response.pollTicket; // the renderer neither needs nor should see the ticket
   }
   return response;
 }
 
 // ─── Server Status ───
 //
-// A tela inicial mostrava "Online" fixo no JSX, sem checagem nenhuma por
-// trás — um bolinha verde e um texto que nunca mudavam, independente do
-// apps/game-api estar de pé ou não. `GET /health` já existe no game-api
-// (usado só por operação manual); isto é o primeiro consumidor real dele.
+// The home screen showed a hard-coded "Online" in the JSX, with no check at
+// all behind it — a green dot and a label that never changed, regardless of
+// whether apps/game-api was up. `GET /health` already exists in game-api
+// (used only by manual operations); this is its first real consumer.
 ipcMain.handle('check-server-status', async () => {
   const online = await new Promise<boolean>((resolve) => {
     const req = http.get(
       `http://${SERVER_IP}:${API_PORT}/health`,
       { headers: { 'User-Agent': 'Skyrim-Heavy-RP-Launcher' } },
       (res) => {
-        res.resume(); // não precisa do corpo, só confirmar que respondeu
+        res.resume(); // we don't need the body, only to confirm it answered
         resolve(res.statusCode === 200);
       }
     );
     req.on('error', () => resolve(false));
-    // Curto de propósito: isto roda no boot da tela e num intervalo — um
-    // timeout de 20s (padrão do httpGetJson) deixaria a UI travada "carregando"
-    // por muito tempo toda vez que o servidor estiver mesmo fora do ar.
+    // Short on purpose: this runs when the screen boots and on an interval — a
+    // 20s timeout (httpGetJson's default) would leave the UI stuck "loading"
+    // for a long time whenever the server really is down.
     req.setTimeout(4000, () => {
       req.destroy();
       resolve(false);
@@ -1229,10 +1229,10 @@ ipcMain.handle('join-queue', async () => {
   return rememberQueueTicket(response.data);
 });
 
-// O ticket vai no corpo do POST, igual ao `join-queue` acima. Já foi query
-// string de um GET: query string entra em log de acesso e de proxy, e o ticket
-// é credencial — quem o tem consulta a fila como aquela conta. Ver
-// `SEC-QS-01` em docs/roadmap/ECOSYSTEM_ADAPTATION_ROADMAP.md.
+// The ticket goes in the POST body, like `join-queue` above. It used to be the
+// query string of a GET: query strings end up in access and proxy logs, and
+// the ticket is a credential — whoever holds it polls the queue as that
+// account. See `SEC-QS-01` in docs/roadmap/ECOSYSTEM_ADAPTATION_ROADMAP.md.
 ipcMain.handle('poll-queue', async () => {
   const ticket = await nextQueueTicket();
   if (!ticket) return { status: 'error', message: 'not_authenticated' };
@@ -1430,9 +1430,9 @@ function listDataPlugins(folderPath: string) {
 }
 
 function readPluginHeader(filePath: string): PluginHeader {
-  // O I/O fica aqui; o parsing vive em parity.mjs, testado com plugin
-  // sintetico. Lemos so o comeco do arquivo: o bloco de masters fica no
-  // cabecalho, e um .esm de Skyrim tem centenas de MB.
+  // The I/O lives here; the parsing lives in parity.mjs, tested with a
+  // synthetic plugin. We read only the start of the file: the masters block is
+  // in the header, and a Skyrim .esm is hundreds of MB.
   let fd: number | null = null;
   try {
     fd = fs.openSync(filePath, 'r');
@@ -1469,10 +1469,10 @@ ipcMain.handle('get-local-plugins', async (_event, folderPath) => {
   }
 });
 
-// ─── Mods hospedados pelo servidor (SkyUI, RaceMenu...) ───
-// O game-api publica /client-mods/manifest.json (skymp/client-mods). Antes do
-// PLAY o renderer pergunta o que falta, mostra ao jogador e, com o ok dele,
-// baixa/verifica/instala. Ver electron/server-mods.mjs.
+// ─── Server-hosted mods (SkyUI, RaceMenu...) ───
+// game-api publishes /client-mods/manifest.json (skymp/client-mods). Before
+// PLAY the renderer asks what's missing, shows it to the player and, with
+// their OK, downloads/verifies/installs. See electron/server-mods.mjs.
 
 function gameApiBaseUrl() {
   const host = SERVER_IP.includes(':') ? `[${SERVER_IP}]` : SERVER_IP;
@@ -1694,7 +1694,7 @@ ipcMain.handle('install-server-mods', async (_event, gamePath, opts) => {
 
     // Room for the biggest archive plus everything it unpacks into Data/.
     const biggestArchive = nexusKey ? Math.max(0, ...nexusPlan.archives.map(a => a.source.size || a.bytes)) : 0;
-    const space = checarEspacoParaBaixar(path.join(gamePath, 'Data', '.space-check'), gamePath, plan.totalBytes + biggestArchive);
+    const space = checkSpaceForDownload(path.join(gamePath, 'Data', '.space-check'), gamePath, plan.totalBytes + biggestArchive);
     if (!space.ok) return { ok: false, error: space.error };
 
     let nexusInstalled = 0;
@@ -1780,10 +1780,10 @@ ipcMain.handle('enable-server-plugins', async (_event, gamePath) => {
 });
 
 ipcMain.handle('verify-mods', async (_event, folderPath) => {
-  if (!folderPath) return { success: false, error: "Caminho do jogo inválido." };
+  if (!folderPath) return { success: false, error: "Invalid game path." };
   try {
     const dataPath = path.join(folderPath, 'Data');
-    if (!fs.existsSync(dataPath)) return { success: false, error: "Pasta Data não encontrada." };
+    if (!fs.existsSync(dataPath)) return { success: false, error: "Data folder not found." };
 
     const modsJson: any = await new Promise((resolve) => {
       http.get(`http://${SERVER_IP}:${API_PORT}/mods.json`, (res) => {
@@ -1795,19 +1795,19 @@ ipcMain.handle('verify-mods', async (_event, folderPath) => {
     });
 
     if (!modsJson || !modsJson.mods) {
-      return { success: false, error: "Falha ao baixar mods.json do servidor. Servidor pode estar offline." };
+      return { success: false, error: "Failed to download mods.json from the server. The server may be offline." };
     }
 
     const allFiles = fs.readdirSync(dataPath);
     const hashOf = (filename: string) => hashFileForManifest(path.join(dataPath, filename));
 
-    const resultado = await compareMods({
+    const analysis = await compareMods({
       serverMods: modsJson.mods,
       localFiles: allFiles,
       hashOf,
       hashAlgorithm: modsJson.hashAlgorithm
     });
-    if (!resultado.success) return resultado;
+    if (!analysis.success) return analysis;
 
     return { success: true, loadOrder: modsJson.loadOrder };
   } catch (e: any) {
@@ -1819,12 +1819,12 @@ ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) =>
   if (!folderPath) return { ok: false, problems: ['Invalid game path.'], plugins: [] };
   try {
     const dataPath = path.join(folderPath, 'Data');
-    if (!fs.existsSync(dataPath)) return { ok: false, problems: ['Pasta Data nao encontrada.'], plugins: [] };
+    if (!fs.existsSync(dataPath)) return { ok: false, problems: ['Data folder not found.'], plugins: [] };
 
-    // A load order real vem do plugins.txt, nao dos arquivos presentes em
-    // Data/: um plugin no disco e desativado nao ocupa indice e nao desloca
-    // FormID nenhum. Sem o arquivo, parity.mjs cai para os arquivos presentes,
-    // que e a direcao segura.
+    // The real load order comes from plugins.txt, not from the files present
+    // in Data/: a plugin that is on disk but disabled takes no index and
+    // shifts no FormID. Without the file, parity.mjs falls back to the files
+    // present, which is the safe direction.
     const pluginsTxtPath = oathboundPluginsTxtPath(folderPath);
     const enabledPlugins = fs.existsSync(pluginsTxtPath)
       ? parsePluginsTxt(fs.readFileSync(pluginsTxtPath, 'utf8')).filter(p => p.enabled).map(p => p.name)
@@ -1832,20 +1832,21 @@ ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) =>
 
     const localPlugins = listDataPlugins(folderPath);
 
-    const resultado = analyzePlugins({
+    const analysis = analyzePlugins({
       localPlugins,
       serverLoadOrder,
       enabledPlugins,
-      readHeader: (nome: string) => readPluginHeader(path.join(dataPath, nome))
+      readHeader: (name: string) => readPluginHeader(path.join(dataPath, name))
     });
 
-    // Creation Club nao passa pelo plugins.txt: o Skyrim AE le o Skyrim.ccc e
-    // carrega sozinho o que estiver listado e presente em Data/. Sao plugins
-    // que ocupam indice de load order e que a checagem acima nao enxerga.
+    // Creation Club doesn't go through plugins.txt: Skyrim AE reads
+    // Skyrim.ccc and loads by itself whatever is listed there and present in
+    // Data/. Those are plugins that take a load order index and that the check
+    // above doesn't see.
     //
-    // O arquivo fica na raiz do jogo, ao lado do executavel — nao em Data/. E
-    // o conteudo dele varia conforme o que a conta Steam possui, entao dois
-    // testadores podem carregar listas diferentes sem ter escolhido nada.
+    // The file is in the game root, next to the executable — not in Data/.
+    // And its contents vary with what the Steam account owns, so two testers
+    // can load different lists without having chosen anything.
     const cccPath = path.join(folderPath, 'Skyrim.ccc');
     const cccEntries = fs.existsSync(cccPath)
       ? parseCccTxt(fs.readFileSync(cccPath, 'utf8'))
@@ -1854,9 +1855,9 @@ ipcMain.handle('analyze-plugins', async (_event, folderPath, serverLoadOrder) =>
     const cc = analyzeCreationClub({ cccEntries, localPlugins, serverLoadOrder, enabledPlugins });
 
     return {
-      ...resultado,
-      ok: resultado.ok && cc.ok,
-      problems: [...resultado.problems, ...cc.problems],
+      ...analysis,
+      ok: analysis.ok && cc.ok,
+      problems: [...analysis.problems, ...cc.problems],
       creationClub: cc.effective
     };
   } catch (e: any) {
@@ -1878,15 +1879,15 @@ ipcMain.handle('kill-game', async () => {
 });
 
 ipcMain.handle('check-client-update', async (_event, gamePath) => {
-  // Sem DIST_REPO, o operador optou por não distribuir via GitHub Releases
-  // (dev local, fork em teste) — isso não é o mesmo caso que "configurei a
-  // distribuição e ela está fora do ar". Bloquear PLAY aqui puniria quem
-  // nunca pediu esse gate, então este caso passa sem erro. Manifesto ausente
-  // ou inválido COM DIST_REPO configurado continua falhando fechado abaixo:
-  // aí sim alguém decidiu depender do gate e ele está quebrado.
+  // Without DIST_REPO, the operator chose not to distribute via GitHub
+  // Releases (local dev, fork under test) — that isn't the same case as "I set
+  // up distribution and it is down". Blocking PLAY here would punish someone
+  // who never asked for this gate, so this case passes with no error. A missing
+  // or invalid manifest WITH DIST_REPO configured still fails closed below:
+  // there, someone did decide to depend on the gate and it is broken.
   if (!DIST_REPO) return { updateAvailable: false };
   const manifest = await httpGetJson(clientManifestUrl());
-  if (!manifest || !manifest.clientVersion) return { updateAvailable: false, error: 'Manifesto de cliente indisponivel.' };
+  if (!manifest || !manifest.clientVersion) return { updateAvailable: false, error: 'Client manifest unavailable.' };
   const installedVersion = gamePath ? readStamp(gamePath, CLIENT_VERSION_FILENAME) : null;
   return {
     updateAvailable: installedVersion !== manifest.clientVersion,
@@ -1899,8 +1900,8 @@ ipcMain.handle('check-client-update', async (_event, gamePath) => {
 
 ipcMain.handle('install-client-update', async (_event, gamePath) => {
   if (!gamePath) return { success: false, error: 'Invalid game path.' };
-  if (await isGameRunning()) return { success: false, gameRunning: true, error: 'O jogo esta aberto. Feche antes de atualizar.' };
-  if (!DIST_REPO) return { success: false, error: 'VITE_GITHUB_DIST_REPO nao configurado.' };
+  if (await isGameRunning()) return { success: false, gameRunning: true, error: 'The game is open. Close it before updating.' };
+  if (!DIST_REPO) return { success: false, error: 'VITE_GITHUB_DIST_REPO is not configured.' };
 
   const send = (phase: string, percent: number) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', { phase, percent });
@@ -1908,22 +1909,22 @@ ipcMain.handle('install-client-update', async (_event, gamePath) => {
   const tmpZip = path.join(app.getPath('temp'), 'skymp_client_update.zip');
   try {
     const manifest = await httpGetJson(clientManifestUrl());
-    if (!manifest || !manifest.downloadUrl) return { success: false, error: 'Manifesto de cliente invalido.' };
+    if (!manifest || !manifest.downloadUrl) return { success: false, error: 'Invalid client manifest.' };
 
-    const espaco = checarEspacoParaBaixar(tmpZip, gamePath, manifest.sizeBytes);
-    if (!espaco.ok) return { success: false, error: espaco.error };
+    const downloadSpace = checkSpaceForDownload(tmpZip, gamePath, manifest.sizeBytes);
+    if (!downloadSpace.ok) return { success: false, error: downloadSpace.error };
 
     send('download', 0);
     await downloadToFile(manifest.downloadUrl, tmpZip, percent => send('download', percent));
     if (!manifest.sha256) {
       try { fs.unlinkSync(tmpZip); } catch {}
-      return { success: false, error: 'Manifesto de cliente sem SHA256: verificacao de integridade obrigatoria ausente.' };
+      return { success: false, error: 'Client manifest has no SHA256: the mandatory integrity check is missing.' };
     }
     send('verify', 0);
     const actual = await sha256File(tmpZip);
     if (actual.toLowerCase() !== String(manifest.sha256).toLowerCase()) {
       try { fs.unlinkSync(tmpZip); } catch {}
-      return { success: false, error: 'SHA256 do cliente nao confere.' };
+      return { success: false, error: 'Client SHA256 does not match.' };
     }
     send('verify', 100);
     await killGameProcesses();
@@ -1936,19 +1937,20 @@ ipcMain.handle('install-client-update', async (_event, gamePath) => {
     return { success: true, version: manifest.clientVersion };
   } catch (e: any) {
     try { fs.unlinkSync(tmpZip); } catch {}
-    // ENOSPC cru ("no space left on device, write") no meio de uma barra de
-    // progresso nao diz ao jogador se o problema e dele, do servidor ou da
-    // internet. A checagem previa nao pega tudo: o disco pode encher DURANTE
-    // o download, ou a extracao pode precisar de mais que o .zip.
-    if (ehDiscoCheio(e)) {
-      return { success: false, error: 'O disco encheu durante a operacao. Libere espaco e tente de novo.' };
+    // A raw ENOSPC ("no space left on device, write") in the middle of a
+    // progress bar doesn't tell the player whether the problem is theirs, the
+    // server's or the internet's. The upfront check doesn't catch everything:
+    // the disk can fill up DURING the download, or extraction may need more
+    // than the .zip.
+    if (isDiskFull(e)) {
+      return { success: false, error: 'The disk filled up during the operation. Free up space and try again.' };
     }
     return { success: false, error: e.message };
   }
 });
 
 ipcMain.handle('check-mods-update', async (_event, gamePath) => {
-  if (!DIST_REPO) return { updateAvailable: false, error: 'VITE_GITHUB_DIST_REPO nao configurado.' };
+  if (!DIST_REPO) return { updateAvailable: false, error: 'VITE_GITHUB_DIST_REPO is not configured.' };
   const manifest = await httpGetJson(modsManifestUrl());
   if (!manifest || !manifest.modsVersion) return { updateAvailable: false, error: 'Manifesto de mods indisponivel.' };
   const installedVersion = gamePath ? readStamp(gamePath, MODS_VERSION_FILENAME) : null;
@@ -1964,8 +1966,8 @@ ipcMain.handle('check-mods-update', async (_event, gamePath) => {
 
 ipcMain.handle('install-mods-update', async (_event, gamePath, force) => {
   if (!gamePath) return { success: false, error: 'Invalid game path.' };
-  if (await isGameRunning()) return { success: false, gameRunning: true, error: 'O jogo esta aberto. Feche antes de atualizar mods.' };
-  if (!DIST_REPO) return { success: false, error: 'VITE_GITHUB_DIST_REPO nao configurado.' };
+  if (await isGameRunning()) return { success: false, gameRunning: true, error: 'The game is open. Close it before updating mods.' };
+  if (!DIST_REPO) return { success: false, error: 'VITE_GITHUB_DIST_REPO is not configured.' };
 
   const send = (phase: string, percent: number) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('mods-update-progress', { phase, percent });
@@ -1973,7 +1975,7 @@ ipcMain.handle('install-mods-update', async (_event, gamePath, force) => {
   const tmpZip = path.join(app.getPath('temp'), 'skymp_mods_update.zip');
   try {
     const manifest = await httpGetJson(modsManifestUrl());
-    if (!manifest || (!manifest.downloadUrl && !Array.isArray(manifest.parts))) return { success: false, error: 'Manifesto de mods invalido.' };
+    if (!manifest || (!manifest.downloadUrl && !Array.isArray(manifest.parts))) return { success: false, error: 'Invalid mods manifest.' };
     const installedVersion = readStamp(gamePath, MODS_VERSION_FILENAME);
     if (!force && installedVersion === manifest.modsVersion) {
       return { success: true, version: manifest.modsVersion, alreadyCurrent: true };
@@ -1988,13 +1990,13 @@ ipcMain.handle('install-mods-update', async (_event, gamePath, force) => {
     await killGameProcesses();
     await new Promise(resolve => setTimeout(resolve, 900));
 
-    // Soma o que ainda falta baixar: partes ja instaladas nao ocupam disco de novo.
-    const bytesPendentes = parts.reduce((total: number, p: any) => {
-      const jaTem = !force && installedParts[p.name || p.url] && installedParts[p.name || p.url] === (p.contentSig || null);
-      return jaTem ? total : total + (Number(p.sizeBytes) || 0);
+    // Add up what is still left to download: parts already installed don't take disk space again.
+    const pendingBytes = parts.reduce((total: number, p: any) => {
+      const alreadyHave = !force && installedParts[p.name || p.url] && installedParts[p.name || p.url] === (p.contentSig || null);
+      return alreadyHave ? total : total + (Number(p.sizeBytes) || 0);
     }, 0);
-    const espacoMods = checarEspacoParaBaixar(tmpZip, gamePath, bytesPendentes);
-    if (!espacoMods.ok) return { success: false, error: espacoMods.error };
+    const modsSpace = checkSpaceForDownload(tmpZip, gamePath, pendingBytes);
+    if (!modsSpace.ok) return { success: false, error: modsSpace.error };
 
     let downloaded = 0;
     let skipped = 0;
@@ -2014,13 +2016,13 @@ ipcMain.handle('install-mods-update', async (_event, gamePath, force) => {
       await downloadToFile(part.url, tmpZip, percent => send('download', Math.min(100, base + Math.round(percent * span / 100))));
       if (!part.sha256) {
         try { fs.unlinkSync(tmpZip); } catch {}
-        return { success: false, error: `Parte ${index + 1} sem SHA256: verificacao de integridade obrigatoria ausente.` };
+        return { success: false, error: `Part ${index + 1} has no SHA256: the mandatory integrity check is missing.` };
       }
       send('verify', base);
       const actual = await sha256File(tmpZip);
       if (actual.toLowerCase() !== String(part.sha256).toLowerCase()) {
         try { fs.unlinkSync(tmpZip); } catch {}
-        return { success: false, error: `SHA256 dos mods nao confere na parte ${index + 1}.` };
+        return { success: false, error: `Mods SHA256 does not match for part ${index + 1}.` };
       }
       send('extract', base);
       await extractZip(tmpZip, gamePath);
@@ -2033,12 +2035,13 @@ ipcMain.handle('install-mods-update', async (_event, gamePath, force) => {
     return { success: true, version: manifest.modsVersion, downloaded, skipped };
   } catch (e: any) {
     try { fs.unlinkSync(tmpZip); } catch {}
-    // ENOSPC cru ("no space left on device, write") no meio de uma barra de
-    // progresso nao diz ao jogador se o problema e dele, do servidor ou da
-    // internet. A checagem previa nao pega tudo: o disco pode encher DURANTE
-    // o download, ou a extracao pode precisar de mais que o .zip.
-    if (ehDiscoCheio(e)) {
-      return { success: false, error: 'O disco encheu durante a operacao. Libere espaco e tente de novo.' };
+    // A raw ENOSPC ("no space left on device, write") in the middle of a
+    // progress bar doesn't tell the player whether the problem is theirs, the
+    // server's or the internet's. The upfront check doesn't catch everything:
+    // the disk can fill up DURING the download, or extraction may need more
+    // than the .zip.
+    if (isDiskFull(e)) {
+      return { success: false, error: 'The disk filled up during the operation. Free up space and try again.' };
     }
     return { success: false, error: e.message };
   }
@@ -2067,7 +2070,7 @@ ipcMain.handle('report-recent-crashes', async () => {
       const raw = fs.readFileSync(file.fullPath);
       const maxBytes = 60 * 1024;
       const content = raw.length > maxBytes
-        ? Buffer.concat([raw.subarray(0, maxBytes), Buffer.from('\n...[truncado pelo launcher]')]).toString('utf8')
+        ? Buffer.concat([raw.subarray(0, maxBytes), Buffer.from('\n...[truncated by the launcher]')]).toString('utf8')
         : raw.toString('utf8');
       return { filename: file.name, mtime: file.mtime, content };
     })
@@ -2079,46 +2082,46 @@ ipcMain.handle('report-recent-crashes', async () => {
 
 ipcMain.handle('launch-game', async (_event, folderPath, ticket) => {
   if (!folderPath) {
-    return { ok: false, code: 'GAME_PATH_REQUIRED', error: 'Caminho do jogo nao configurado.' };
+    return { ok: false, code: 'GAME_PATH_REQUIRED', error: 'Game path is not configured.' };
   }
   const exePath = path.join(folderPath, 'skse64_loader.exe');
   if (!fs.existsSync(exePath)) {
-    return { ok: false, code: 'SKSE_MISSING', error: 'skse64_loader.exe nao encontrado na pasta do jogo.' };
+    return { ok: false, code: 'SKSE_MISSING', error: 'skse64_loader.exe not found in the game folder.' };
   }
 
   try {
     const auth = readAuthFile();
     if (!auth || !auth.discordId) {
-      return { ok: false, code: 'NOT_AUTHENTICATED', error: 'Faca login novamente antes de iniciar o jogo.' };
+      return { ok: false, code: 'NOT_AUTHENTICATED', error: 'Log in again before starting the game.' };
     }
     activateOathboundLoadOrder(folderPath);
 
 
-    // AUTH-01 + CONNECT-P0: o arquivo realmente consumido pelo cliente recebe
-    // a sessao opaca, nunca profileId. O writer tambem grava o destino direto
-    // com server-info-ignore, trata read-only, rele e valida os dois JSONs. Se
-    // qualquer passo falhar, o SKSE nao nasce com credenciais antigas.
-    prepararConfiguracaoConexao({
+    // AUTH-01 + CONNECT-P0: the file the client actually reads receives the
+    // opaque session, never profileId. The writer also writes the destination
+    // directly with server-info-ignore, handles read-only, re-reads and
+    // validates both JSONs. If any step fails, SKSE doesn't start with stale credentials.
+    prepareConnectionSettings({
       gamePath: folderPath,
       ticket,
       serverIp: SERVER_IP,
       serverPort: SERVER_PORT,
       discordId: auth.discordId,
-      // Só rótulo do widget de autorização no menu principal; a identidade
-      // continua sendo resolvida pelo master API a partir da sessão.
+      // Only the label of the authorization widget on the main menu; identity
+      // is still resolved by the master API from the session.
       displayName: auth.globalName || auth.username || null,
     });
 
     await killGameProcesses();
-    const processResult = await iniciarProcessoJogo(exePath, folderPath);
-    console.info(`[launcher] Skyrim iniciado com pid=${processResult.pid}`);
+    const processResult = await startGameProcess(exePath, folderPath);
+    console.info(`[launcher] Skyrim started with pid=${processResult.pid}`);
 
     armOathboundLoadOrderRestore();
 
-    // Handoff de voz: liga o listener loopback pra quando o jogador rodar /voz.
-    // Nunca bloqueia o PLAY — a voz e opcional.
+    // Voice handoff: turns on the loopback listener for when the player runs /voice.
+    // Never blocks PLAY — voice is optional.
     armVoiceHandoff(folderPath).catch((e) =>
-      console.warn('[launcher] nao foi possivel armar o handoff de voz:', e?.message));
+      console.warn('[launcher] could not arm the voice handoff:', e?.message));
 
     return { ok: true, pid: processResult.pid };
   } catch (e: any) {
@@ -2127,8 +2130,8 @@ ipcMain.handle('launch-game', async (_event, folderPath, ticket) => {
     const code = typeof e?.code === 'string' ? e.code : 'GAME_LAUNCH_FAILED';
     const message = typeof e?.message === 'string' && e.message
       ? e.message
-      : 'Nao foi possivel preparar ou iniciar o jogo.';
-    console.error(`[launcher] Falha no bootstrap do jogo (${code}):`, e);
+      : 'Could not prepare or start the game.';
+    console.error(`[launcher] Game bootstrap failed (${code}):`, e);
     return { ok: false, code, error: message };
   }
 });

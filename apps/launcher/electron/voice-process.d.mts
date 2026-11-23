@@ -2,7 +2,7 @@ import type { spawn } from 'node:child_process';
 
 export const VOICE_SPAWN_TIMEOUT_MS: number;
 
-export function iniciarVoiceHelper(
+export function startVoiceHelper(
   exePath: string,
   args: string[],
   cwd?: string,

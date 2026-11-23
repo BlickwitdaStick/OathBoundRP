@@ -14,8 +14,8 @@ dist-electron
 release
 *.local
 
-# Binario nativo stajado pelo scripts/stage-voice-helper.mjs (nao versionado;
-# vem do build de voice-helper/). O diretorio fica, o exe nao.
+# Native binary staged by scripts/stage-voice-helper.mjs (not versioned;
+# it comes from the voice-helper/ build). The directory stays, the exe doesn't.
 build-resources/voice-helper.exe
 
 # Editor directories and files

@@ -1,24 +1,25 @@
 import { spawn } from 'node:child_process';
 
-/** Tempo máximo para o Windows confirmar que criou o processo do helper. */
+/** Maximum time for Windows to confirm it created the helper process. */
 export const VOICE_SPAWN_TIMEOUT_MS = 5_000;
 
 /** @type {import('node:child_process').ChildProcess | null} */
 let current = null;
 
 /**
- * Sobe o `voice-helper.exe`. Só um por vez: um `/voz` novo (novo ticket) mata o
- * anterior. NÃO é `detached` — o helper é filho do launcher e morre com ele, o
- * que é aceitável (a voz para; o jogador roda `/voz` de novo). O `killGameProcesses`
- * do launcher tem `taskkill voice-helper.exe` como rede de seguranca.
+ * Starts `voice-helper.exe`. Only one at a time: a new `/voice` (new ticket)
+ * kills the previous one. It is NOT `detached` — the helper is a child of the
+ * launcher and dies with it, which is acceptable (voice stops; the player runs
+ * `/voice` again). The launcher's `killGameProcesses` has
+ * `taskkill voice-helper.exe` as a safety net.
  *
- * @param {string} exePath caminho absoluto do voice-helper.exe
+ * @param {string} exePath absolute path of voice-helper.exe
  * @param {string[]} args ['--actor-id', ..., '--ticket', ..., '--host', ..., '--port', ...]
  * @param {string} [cwd]
  * @param {{ spawnImpl?: typeof spawn, timeoutMs?: number }} [options]
  * @returns {Promise<{ pid: number }>}
  */
-export async function iniciarVoiceHelper(exePath, args, cwd, options = {}) {
+export async function startVoiceHelper(exePath, args, cwd, options = {}) {
   const spawnImpl = options.spawnImpl ?? spawn;
   const timeoutMs = options.timeoutMs ?? VOICE_SPAWN_TIMEOUT_MS;
 
@@ -34,7 +35,7 @@ export async function iniciarVoiceHelper(exePath, args, cwd, options = {}) {
       windowsHide: true
     });
   } catch (cause) {
-    throw new Error(`Nao foi possivel iniciar o voice-helper: ${mensagem(cause)}`);
+    throw new Error(`Could not start the voice-helper: ${errorMessage(cause)}`);
   }
 
   current = child;
@@ -52,17 +53,17 @@ export async function iniciarVoiceHelper(exePath, args, cwd, options = {}) {
     const onSpawn = () => finish(() => {
       if (!Number.isInteger(child.pid) || child.pid <= 0) {
         current = null;
-        reject(new Error('voice-helper iniciado sem PID valido.'));
+        reject(new Error('voice-helper started without a valid PID.'));
         return;
       }
       resolve({ pid: child.pid });
     });
     const onError = (cause) => finish(() => {
       current = null;
-      reject(new Error(`Nao foi possivel iniciar o voice-helper: ${mensagem(cause)}`));
+      reject(new Error(`Could not start the voice-helper: ${errorMessage(cause)}`));
     });
     const timer = setTimeout(() => finish(() => {
-      reject(new Error(`O Windows nao confirmou o voice-helper em ${timeoutMs} ms.`));
+      reject(new Error(`Windows did not confirm the voice-helper within ${timeoutMs} ms.`));
     }), timeoutMs);
 
     child.once('spawn', onSpawn);
@@ -71,10 +72,10 @@ export async function iniciarVoiceHelper(exePath, args, cwd, options = {}) {
   });
 }
 
-/** Mata o helper atual, se houver. Idempotente. */
+/** Kills the current helper, if any. Idempotent. */
 export function killVoiceHelper() {
   if (current) {
-    try { current.kill(); } catch { /* ja morto */ }
+    try { current.kill(); } catch { /* already dead */ }
     current = null;
   }
 }
@@ -84,7 +85,7 @@ export function voiceHelperRunning() {
 }
 
 /** @param {unknown} error */
-function mensagem(error) {
+function errorMessage(error) {
   if (error instanceof Error && error.message) return error.message;
   return String(error);
 }

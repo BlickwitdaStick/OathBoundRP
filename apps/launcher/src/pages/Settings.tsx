@@ -101,8 +101,8 @@ export function Settings() {
     try {
       const result = await window.electronAPI.ensureSkympUi(gamePath);
       if (!result.ok) setError(result.error || 'Failed to repair the interface.');
-      else if (result.repaired.length > 0) setSuccess(`Interface repaired: ${result.repaired.length} arquivo(s).`);
-      else setSuccess(`Interface valid: ${result.files || 0} arquivo(s).`);
+      else if (result.repaired.length > 0) setSuccess(`Interface repaired: ${result.repaired.length} file(s).`);
+      else setSuccess(`Interface valid: ${result.files || 0} file(s).`);
     } catch (e: any) {
       setError(e.message || 'Failed to repair the interface.');
     } finally {
@@ -140,7 +140,7 @@ export function Settings() {
     try {
       const result = await window.electronAPI.reportRecentCrashes();
       if (result.ok) {
-        setSuccess(result.sent ? `Crash report sent (${result.sent} arquivo(s)).` : 'No recent crashes found.');
+        setSuccess(result.sent ? `Crash report sent (${result.sent} file(s)).` : 'No recent crashes found.');
       } else {
         setError(result.error || 'Failed to send crash report.');
       }
