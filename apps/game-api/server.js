@@ -208,17 +208,17 @@ app.get('/mods.json', (req, res) => {
   res.json(result.manifest);
 });
 
-// ── Mods hospedados pelo servidor (skymp/client-mods) ───────────────────────
+// ── Server-hosted mods (skymp/client-mods) ──────────────────────────────────
 //
-// O launcher baixa daqui tudo que o servidor exige (SkyUI, RaceMenu...) e
-// confere SHA-256 antes de instalar. Manifesto gerado por
-// scripts/sync-client-mods.js (roda no Start-AllServices). Só arquivos listados
-// no manifesto são servidos — ver clientMods.resolveServedFile.
+// The launcher downloads everything the server requires (SkyUI, RaceMenu...)
+// from here and checks the SHA-256 before installing. The manifest is generated
+// by scripts/sync-client-mods.js (runs in Start-AllServices). Only files listed
+// in the manifest are served — see clientMods.resolveServedFile.
 
 app.get('/client-mods/manifest.json', (req, res) => {
   const result = clientModsLoader.load();
   if (!result.ok) {
-    console.error(`[game-api] client-mods manifest invalido: ${result.reason} (${CLIENT_MODS_MANIFEST_PATH})`);
+    console.error(`[game-api] client-mods manifest invalid: ${result.reason} (${CLIENT_MODS_MANIFEST_PATH})`);
     return res.status(503).json({ error: 'Client mods manifest unavailable.' });
   }
   res.set('Cache-Control', 'no-store');
@@ -227,9 +227,9 @@ app.get('/client-mods/manifest.json', (req, res) => {
 
 app.get(/^\/client-mods\/files\/(.+)$/, (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
-  // Por arquivo, não por byte. Um pacote de texturas tem milhares de arquivos
-  // (SMIM + Skyland = ~4.000): o teto antigo de 300/min derrubava a primeira
-  // instalação legítima com 429. O launcher respeita Retry-After e tenta de novo.
+  // Per file, not per byte. A texture pack has thousands of files
+  // (SMIM + Skyland = ~4,000): the old 300/min cap broke the first legitimate
+  // install with a 429. The launcher honours Retry-After and tries again.
   if (isRateLimited(`client-mods:${ip}`, 6000, 60 * 1000)) {
     res.set('Retry-After', '10');
     runtimeMetrics.recordRejection('rate_limit_client_mods');

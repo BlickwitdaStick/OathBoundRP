@@ -142,7 +142,7 @@ async function main() {
     console.log(`[manifest] --only-load-order: ${entries.length} of ${allFiles.length} files go into the manifest.`);
   }
 
-  console.log(`[manifest] Hasheando ${entries.length} arquivos em ${dataDir}...`);
+  console.log(`[manifest] Hashing ${entries.length} files in ${dataDir}...`);
   const mods = new Array(entries.length);
   let nextIndex = 0;
   const workerCount = Math.min(4, entries.length);

@@ -18,7 +18,7 @@ function fixture() {
 }
 
 describe('runtime metrics', () => {
-  it('mede rota normalizada, classe de status e propaga request id válido', () => {
+  it('measures the normalised route and status class, and propagates a valid request id', () => {
     const { metrics, advance } = fixture();
     const req = { method: 'GET', baseUrl: '', route: null, get: () => 'request-1234' };
     const res = new EventEmitter();
@@ -35,9 +35,9 @@ describe('runtime metrics', () => {
     assert.equal(metrics.snapshot().requests['GET /users/:id 2xx'].count, 1);
   });
 
-  it('não aceita request id arbitrário e não cria série por URL concreta', () => {
+  it('rejects an arbitrary request id and does not create a series per concrete URL', () => {
     const { metrics } = fixture();
-    const req = { method: 'GET', url: '/users/secret-person', get: () => 'inválido com espaço' };
+    const req = { method: 'GET', url: '/users/secret-person', get: () => 'invalid with spaces' };
     const res = new EventEmitter();
     res.statusCode = 404;
     res.setHeader = () => {};
@@ -47,7 +47,7 @@ describe('runtime metrics', () => {
     assert.ok(metrics.snapshot().requests['GET unmatched 4xx']);
   });
 
-  it('mede sucesso e erro de banco sem registrar SQL ou parâmetros', async () => {
+  it('measures database success and error without recording SQL or parameters', async () => {
     const { metrics, advance } = fixture();
     await metrics.timeDb(async () => { advance(7); return 42; });
     await assert.rejects(metrics.timeDb(async () => { advance(11); throw new Error('DB_PASS=secret'); }));
@@ -57,7 +57,7 @@ describe('runtime metrics', () => {
     assert.doesNotMatch(JSON.stringify(snapshot), /secret|DB_PASS/);
   });
 
-  it('limita cardinalidade de séries e sanitiza motivos', () => {
+  it('caps series cardinality and sanitises reasons', () => {
     const { metrics } = fixture();
     for (let i = 0; i < MAX_SERIES + 20; i++) metrics.recordRequest('GET', `/route-${i}`, 200, 1);
     metrics.recordRejection('invalid_ticket');

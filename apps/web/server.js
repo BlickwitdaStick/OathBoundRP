@@ -715,15 +715,16 @@ app.get('/api/crashes', requireStaff, async (req, res) => {
 // endpoint, the path is `offlineMode: true`, where the client simply declares
 // its own `profileId` in `skymp_config.json` and the server believes it.
 //
-// O `master` padrão do SkyMP é `https://gateway.skymp.net`. Apontar para o
-// nosso painel é só trocar a string em `server-settings.json` — e faz sentido,
-// porque o painel já é quem autentica o Discord e aprova a whitelist.
-// Heartbeat do servidor de jogo. O MasterClient do skymp5-server faz
-// `POST {master}/api/servers/{masterKey}` com `{ name, maxPlayers, online }` a
-// cada 5 s quando `offlineMode: false`. Sem esta rota o console do servidor
-// imprimia "Error updating info on master server: ... status code 404" a cada
-// ciclo. Só guardamos o último estado em memória (exibido no dashboard staff);
-// nada aqui afeta login ou sessão.
+// SkyMP's default `master` is `https://gateway.skymp.net`. Pointing it at
+// our panel only takes changing the string in `server-settings.json` — and it
+// makes sense, because the panel is already what authenticates Discord and
+// approves the whitelist.
+// Game server heartbeat. skymp5-server's MasterClient does
+// `POST {master}/api/servers/{masterKey}` with `{ name, maxPlayers, online }`
+// every 5 s when `offlineMode: false`. Without this route the server console
+// printed "Error updating info on master server: ... status code 404" every
+// cycle. We only keep the latest state in memory (shown on the staff
+// dashboard); nothing here affects login or sessions.
 let gameServerStatus = null;
 const GAME_SERVER_STATUS_STALE_MS = 30 * 1000;
 
