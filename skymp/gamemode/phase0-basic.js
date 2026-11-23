@@ -677,6 +677,22 @@ moduleRegistry.register({
   }
 });
 
+// The Council of High Hrothgar (council-service.js, OATHBOUND RP Design phase 1):
+// summons from the High Hrothgar stone, /answer and /return, Council-granted
+// shouts kept per character. Advisors and titles live in holdstone-service.js.
+const councilService = require(path.join(gamemodeDir, 'council-service'));
+moduleRegistry.register({
+  id: 'council',
+  enabledBy: 'ENABLE_COUNCIL',
+  phase: 'lab',
+  version: '1.0.0',
+  dependencies: [],
+  optionalDependencies: ['holdstones'],
+  commands: councilService.commandDefs(),
+  initialize: async () => { await councilService.initialize(); },
+  shutdown: async () => { councilService.shutdown(); }
+});
+
 // Look-at keys (look-keys-service.js): E trade / I introduce / G group on
 // players; E open / G lock on doors (G only with parcel access). Groups show
 // members within ~100 m on the compass.

@@ -139,6 +139,30 @@ function createDb() {
       else t.stone_ranks.push({ id: nextRank++, org_id: p[0], rank_key: p[1], name: p[2], position: p[3], is_leader: p[4] });
       return {};
     }
+    if (s.startsWith('SELECT rank_key FROM stone_ranks WHERE org_id')) {
+      return t.stone_ranks.filter((r) => r.org_id === p[0]).map((r) => ({ rank_key: r.rank_key })).sort((x, y) => x.rank_key.localeCompare(y.rank_key));
+    }
+    if (s.startsWith('SELECT COUNT(*) AS n FROM stone_members WHERE org_id')) {
+      return [{ n: t.stone_members.filter((m) => m.org_id === p[0]).length }];
+    }
+    if (s === 'DELETE FROM stone_ranks WHERE org_id = ?') {
+      t.stone_ranks = t.stone_ranks.filter((r) => r.org_id !== p[0]);
+      return {};
+    }
+    if (s.startsWith('SELECT character_id, org_id FROM advisors')) return t.advisors || [];
+    if (s.startsWith('SELECT character_id FROM advisors WHERE org_id')) return (t.advisors || []).filter((r) => r.org_id === p[0]);
+    if (s.startsWith('DELETE FROM advisors WHERE org_id = ? OR character_id = ?')) {
+      t.advisors = (t.advisors || []).filter((r) => r.org_id !== p[0] && r.character_id !== p[1]);
+      return {};
+    }
+    if (s.startsWith('DELETE FROM advisors WHERE character_id')) {
+      t.advisors = (t.advisors || []).filter((r) => r.character_id !== p[0]);
+      return {};
+    }
+    if (s.startsWith('INSERT INTO advisors')) {
+      (t.advisors = t.advisors || []).push({ character_id: p[0], org_id: p[1] });
+      return {};
+    }
     if (s.startsWith('DELETE FROM stone_ranks')) {
       t.stone_ranks = t.stone_ranks.filter((r) => r.id !== p[0]);
       t.stone_members = t.stone_members.filter((m) => m.rank_id !== p[0]);
@@ -272,6 +296,7 @@ describe('holdstone-service: stones from holdstones.json', () => {
     assert.equal(byId.high_hrothgar.kind, 'faction');
     assert.equal(byId.imperial_legion.kind, 'faction');
     assert.equal(byId.riverwood.parent, 'whiterun');
+    assert.equal(byId.riverwood.kind, 'thanedom', 'Riverwood is a thanedom under Whiterun (RP Design)');
     for (const st of real.stones) if (st.parent) assert.ok(ids.includes(st.parent), `${st.id}: parent ${st.parent} exists`);
   });
 
@@ -285,9 +310,10 @@ describe('holdstone-service: stones from holdstones.json', () => {
     assert.equal(orgs.high_hrothgar.hold_id, null);
     assert.equal(orgs.riften.base_id, null, 'a hold with no stone in the list keeps none');
     const keys = (org) => db.tables.stone_ranks.filter((r) => r.org_id === org).map((r) => r.rank_key);
-    assert.deepEqual(keys('whiterun'), ['citizen', 'guard', 'steward', 'jarl'], 'v33 ranks untouched');
+    // Whiterun had the old default ladder and nobody in it: it moves to the RP Design ladder.
+    assert.deepEqual(keys('whiterun'), ['citizen', 'guard', 'quartermaster', 'court_mage', 'commander', 'sworn_sword', 'housecarl', 'steward', 'jarl']);
     assert.deepEqual(keys('high_hrothgar'), ['recruit', 'member', 'officer', 'leader']);
-    assert.deepEqual(keys('riverwood'), ['resident', 'guard', 'reeve']);
+    assert.deepEqual(keys('riverwood'), ['resident', 'guard', 'reeve'], 'a town gets the town ladder');
     assert.deepEqual(keys('imperial_legion'), ['recruit', 'member', 'officer', 'leader']);
   });
 
@@ -575,7 +601,7 @@ describe('holdstone-service: ranks', () => {
   it('unknown rank keys are refused with the list of ranks', async () => {
     const r = await service.setMemberRank(STAFF_ACTOR, 'whiterun', { id: 20, name: 'Bo' }, 'emperor');
     assert.equal(r.ok, false);
-    assert.match(r.message, /citizen, guard, steward, jarl/);
+    assert.match(r.message, /citizen, guard, .*steward, jarl/);
   });
 
   it('staff edit a ladder: add a rank, remove one', async () => {

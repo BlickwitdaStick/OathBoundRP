@@ -33,14 +33,39 @@
 
 const ORG_KINDS = Object.freeze(['hold', 'town', 'faction', 'thanedom', 'council']);
 
-/** Ladder a new organization starts with, per kind. Staff can change it. */
+/**
+ * Ladder a new organization starts with, per kind (OATHBOUND RP Design,
+ * "Ranks and titles"). Highest first in the comments; positions are spaced so
+ * leaders can add their own ranks (Sergeant, Captain, …) in between.
+ * Quartermaster is a guard position, under the Commander.
+ */
 const DEFAULT_LADDERS = Object.freeze({
-  hold: [['citizen', 'Citizen', 10, false], ['guard', 'Guard', 20, false], ['steward', 'Steward', 30, true], ['jarl', 'Jarl', 40, true]],
+  hold: [
+    ['citizen', 'Citizen', 20, false], ['guard', 'Guard', 40, false], ['quartermaster', 'Quartermaster', 45, false],
+    ['court_mage', 'Court Mage', 50, false], ['commander', 'Commander', 60, true], ['sworn_sword', 'Sworn-Sword', 70, false],
+    ['housecarl', 'Housecarl', 80, false], ['steward', 'Steward', 90, true], ['jarl', 'Jarl', 100, true]
+  ],
   town: [['resident', 'Resident', 10, false], ['guard', 'Guard', 20, false], ['reeve', 'Reeve', 30, true]],
   faction: [['recruit', 'Recruit', 10, false], ['member', 'Member', 20, false], ['officer', 'Officer', 30, true], ['leader', 'Leader', 40, true]],
-  thanedom: [['retainer', 'Retainer', 10, false], ['housecarl', 'Housecarl', 20, false], ['thane', 'Thane', 30, true]],
+  thanedom: [
+    ['citizen', 'Citizen', 20, false], ['guard', 'Guard', 40, false], ['sworn_sword', 'Sworn-Sword', 70, false],
+    ['housecarl', 'Housecarl', 80, false], ['thane', 'Thane', 100, true]
+  ],
   council: [['councilor', 'Councilor', 10, false], ['elder', 'Elder', 20, true]]
 });
+
+/**
+ * The ladders this file shipped before the RP Design. An organization still on
+ * one of these with no members is moved to the new ladder at boot.
+ */
+const LEGACY_LADDER_KEYS = Object.freeze({
+  hold: ['citizen', 'guard', 'jarl', 'steward'],
+  thanedom: ['housecarl', 'retainer', 'thane'],
+  town: ['guard', 'reeve', 'resident']
+});
+
+/** Rank keys only the Council (staff) may grant or take away: an Advisor needs its approval. */
+const COUNCIL_ONLY_RANKS = Object.freeze(['jarl']);
 
 /**
  * @typedef {{id:string, name:string, kind:string, holdId:string|null, parentId:string|null, baseId:string|null}} Org
@@ -156,7 +181,13 @@ function buildIndex(snapshot = {}, resolveId = () => null) {
     if (object.formId) objectsById.set(object.formId, object);
   }
 
-  return { holds, orgs, orgByBase, ranks, ranksByOrg, members, parcels, objectsByDesc, objectsById };
+  // Advisors (staff-granted title): characterId → the organization they advise.
+  const advisors = new Map();
+  for (const row of snapshot.advisors || []) {
+    const characterId = _int(row.character_id);
+    if (characterId != null && row.org_id) advisors.set(characterId, String(row.org_id));
+  }
+  return { holds, orgs, orgByBase, ranks, ranksByOrg, members, parcels, objectsByDesc, objectsById, advisors };
 }
 
 const EMPTY_INDEX = buildIndex();
@@ -293,9 +324,41 @@ function leadsFromParent(index, orgId, actor) {
   });
 }
 
-/** Leader of the organization (a member whose rank is a leader rank), leader of a parent, or staff. */
+/** The Advisor of this organization or of one it answers to (Whiterun's Advisor over Riverwood). */
+function advisesOrg(index, orgId, actor) {
+  const advised = index.advisors && Number.isSafeInteger(actor.characterId) ? index.advisors.get(actor.characterId) : null;
+  if (!advised) return false;
+  return advised === orgId || ancestorsOf(index, orgId).some((o) => o.id === advised);
+}
+
+/** Nobody holds the organization's top leader rank (the Jarl died or was removed). */
+function topSeatEmpty(index, orgId) {
+  const ranks = (index.ranksByOrg && index.ranksByOrg.get(orgId)) || [];
+  const top = ranks.reduce((a, r) => (!a || r.position > a.position ? r : a), null);
+  if (!top) return false;
+  for (const [key, rankId] of index.members) {
+    if (key.startsWith(`${orgId}:`) && rankId === top.id) return false;
+  }
+  return true;
+}
+
+/**
+ * The rank an actor's authority is judged by: their own, or, for a Steward
+ * when the seat above is empty, the top rank (the Steward rules until a new
+ * Jarl is named).
+ */
+function effectiveRank(index, orgId, characterId) {
+  const mine = memberRank(index, orgId, characterId);
+  if (!mine || !mine.isLeader || mine.key !== 'steward' || !topSeatEmpty(index, orgId)) return mine;
+  const ranks = (index.ranksByOrg && index.ranksByOrg.get(orgId)) || [];
+  const top = ranks.reduce((a, r) => (!a || r.position > a.position ? r : a), null);
+  return top ? { ...mine, position: top.position } : mine;
+}
+
+/** Leader of the organization (a member whose rank is a leader rank), leader of a parent, its Advisor, or staff. */
 function canManageOrg(index, orgId, actor) {
   if (actor.isStaff) return true;
+  if (advisesOrg(index, orgId, actor)) return true;
   const rank = memberRank(index, orgId, actor.characterId);
   if (rank && rank.isLeader) return true;
   return leadsFromParent(index, orgId, actor);
@@ -317,13 +380,24 @@ function canLockParcel(index, parcel, actor) {
  */
 function canAssignRank(index, orgId, actor, targetCharacterId, newRank) {
   if (actor.isStaff) return { ok: true };
+  // The Jarl's seat is the Council's to fill or empty; nobody else touches it.
+  const theirsNow = memberRank(index, orgId, targetCharacterId);
+  const councilOnly = (r) => Boolean(r && COUNCIL_ONLY_RANKS.includes(r.key));
+  if (councilOnly(newRank) || councilOnly(theirsNow)) {
+    return { ok: false, message: `Naming or removing a ${(newRank && councilOnly(newRank) ? newRank : theirsNow).name} needs the Council's approval.` };
+  }
+  // An Advisor stands above the whole ladder of their hold, but not over their own rank.
+  if (advisesOrg(index, orgId, actor)) {
+    if (targetCharacterId === actor.characterId) return { ok: false, message: 'You cannot change your own rank.' };
+    return { ok: true };
+  }
   // A parent's leader stands above the child's whole ladder (the Jarl of
   // Whiterun can name Riverwood's Reeve), but still not over their own rank.
   if (leadsFromParent(index, orgId, actor)) {
     if (targetCharacterId === actor.characterId) return { ok: false, message: 'You cannot change your own rank.' };
     return { ok: true };
   }
-  const mine = memberRank(index, orgId, actor.characterId);
+  const mine = effectiveRank(index, orgId, actor.characterId);
   if (!mine || !mine.isLeader) return { ok: false, message: 'Only the leaders here can set ranks.' };
   if (targetCharacterId === actor.characterId) return { ok: false, message: 'You cannot change your own rank.' };
   const theirs = memberRank(index, orgId, targetCharacterId);
@@ -336,8 +410,29 @@ function canAssignRank(index, orgId, actor, targetCharacterId, newRank) {
   return { ok: true };
 }
 
+/**
+ * Every title a character holds, e.g. ["Advisor of Whiterun", "Jarl of Whiterun",
+ * "Citizen of Riverwood"]: "<rank> of <organization>".
+ */
+function titlesOf(index, characterId) {
+  const out = [];
+  const advised = index.advisors && index.advisors.get(characterId);
+  if (advised) {
+    const org = index.orgs.get(advised);
+    out.push(`Advisor of ${org ? org.name : advised}`);
+  }
+  for (const m of membershipsOf(index, characterId)) out.push(`${m.rank.name} of ${m.org.name}`);
+  return out;
+}
+
 module.exports = {
   ORG_KINDS,
+  LEGACY_LADDER_KEYS,
+  COUNCIL_ONLY_RANKS,
+  advisesOrg,
+  topSeatEmpty,
+  effectiveRank,
+  titlesOf,
   DEFAULT_LADDERS,
   EMPTY_INDEX,
   buildIndex,

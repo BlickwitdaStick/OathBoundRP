@@ -174,3 +174,63 @@ describe('parcel-locks: leadership', () => {
     for (const kind of locks.ORG_KINDS) assert.ok(locks.DEFAULT_LADDERS[kind].some((r) => r[3]), `${kind} has a leader rank`);
   });
 });
+
+describe('parcel-locks: RP Design ranks, Advisors and titles', () => {
+  const L = require('./parcel-locks');
+  const ladder = (org) => L.DEFAULT_LADDERS.hold.map(([key, name, position, leader], i) => ({ id: org === 'whiterun' ? i + 1 : i + 100, org_id: org, rank_key: key, name, position, is_leader: leader ? 1 : 0 }));
+  const rankId = (key) => L.DEFAULT_LADDERS.hold.findIndex((r) => r[0] === key) + 1;
+  function index({ members = [], advisors = [] } = {}) {
+    return L.buildIndex({
+      holds: [{ id: 'whiterun', name: 'Whiterun Hold' }],
+      orgs: [
+        { id: 'whiterun', name: 'Whiterun', kind: 'hold', hold_id: 'whiterun', parent_id: null, base_id: null },
+        { id: 'riverwood', name: 'Riverwood', kind: 'thanedom', hold_id: 'whiterun', parent_id: 'whiterun', base_id: null }
+      ],
+      ranks: [...ladder('whiterun'), { id: 200, org_id: 'riverwood', rank_key: 'thane', name: 'Thane', position: 100, is_leader: 1 }],
+      members,
+      advisors
+    });
+  }
+  const actor = (characterId) => ({ characterId, isStaff: false });
+
+  it('the hold ladder runs Jarl > Steward > … > Quartermaster > Guard > Citizen', () => {
+    const order = [...L.DEFAULT_LADDERS.hold].sort((a, b) => b[2] - a[2]).map((r) => r[0]);
+    assert.deepEqual(order, ['jarl', 'steward', 'housecarl', 'sworn_sword', 'commander', 'court_mage', 'quartermaster', 'guard', 'citizen']);
+    assert.deepEqual([...L.DEFAULT_LADDERS.thanedom].sort((a, b) => b[2] - a[2]).map((r) => r[0]), ['thane', 'housecarl', 'sworn_sword', 'guard', 'citizen']);
+  });
+
+  it('an Advisor manages their hold and its thanedoms and sets any rank but the Jarl', () => {
+    const idx = index({ advisors: [{ character_id: 9, org_id: 'whiterun' }] });
+    assert.equal(L.canManageOrg(idx, 'whiterun', actor(9)), true);
+    assert.equal(L.canManageOrg(idx, 'riverwood', actor(9)), true, 'Riverwood answers to Whiterun');
+    assert.equal(L.canAssignRank(idx, 'whiterun', actor(9), 5, idx.ranks.get(rankId('steward'))).ok, true);
+    const jarl = L.canAssignRank(idx, 'whiterun', actor(9), 5, idx.ranks.get(rankId('jarl')));
+    assert.equal(jarl.ok, false);
+    assert.match(jarl.message, /Council's approval/);
+    assert.equal(L.canAssignRank(idx, 'whiterun', actor(9), 9, idx.ranks.get(rankId('guard'))).ok, false, 'not their own rank');
+  });
+
+  it('only the Council removes a Jarl', () => {
+    const idx = index({ members: [{ org_id: 'whiterun', character_id: 5, rank_id: rankId('jarl') }], advisors: [{ character_id: 9, org_id: 'whiterun' }] });
+    assert.equal(L.canAssignRank(idx, 'whiterun', actor(9), 5, null).ok, false);
+    assert.equal(L.canAssignRank(idx, 'whiterun', { characterId: 1, isStaff: true }, 5, null).ok, true);
+  });
+
+  it('with no Jarl, the Steward rules like one (any rank below the Jarl), but never names a Jarl', () => {
+    const withJarl = index({ members: [{ org_id: 'whiterun', character_id: 4, rank_id: rankId('steward') }, { org_id: 'whiterun', character_id: 5, rank_id: rankId('jarl') }] });
+    assert.equal(L.canAssignRank(withJarl, 'whiterun', actor(4), 6, withJarl.ranks.get(rankId('housecarl'))).ok, true);
+    assert.equal(L.topSeatEmpty(withJarl, 'whiterun'), false);
+    const noJarl = index({ members: [{ org_id: 'whiterun', character_id: 4, rank_id: rankId('steward') }, { org_id: 'whiterun', character_id: 7, rank_id: rankId('steward') }] });
+    assert.equal(L.topSeatEmpty(noJarl, 'whiterun'), true);
+    assert.equal(L.canAssignRank(noJarl, 'whiterun', actor(4), 7, noJarl.ranks.get(rankId('housecarl'))).ok, true, 'another Steward is below the acting Jarl');
+    assert.equal(L.canAssignRank(noJarl, 'whiterun', actor(4), 8, noJarl.ranks.get(rankId('jarl'))).ok, false);
+  });
+
+  it('titles read "<rank> of <place>", the Advisor title first', () => {
+    const idx = index({
+      members: [{ org_id: 'whiterun', character_id: 9, rank_id: rankId('citizen') }, { org_id: 'riverwood', character_id: 9, rank_id: 200 }],
+      advisors: [{ character_id: 9, org_id: 'whiterun' }]
+    });
+    assert.deepEqual(L.titlesOf(idx, 9), ['Advisor of Whiterun', 'Thane of Riverwood', 'Citizen of Whiterun']);
+  });
+});

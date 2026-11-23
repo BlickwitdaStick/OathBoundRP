@@ -262,6 +262,7 @@ async function syncOrganizations() {
     await db.query('UPDATE stone_orgs SET parent_id = ? WHERE id = ?', [parent, s.id]);
   }
   const orgs = await db.query('SELECT id, kind FROM stone_orgs');
+  await upgradeLegacyLadders(orgs);
   const ranked = new Set((await db.query('SELECT DISTINCT org_id FROM stone_ranks')).map((r) => String(r.org_id)));
   for (const org of orgs) {
     if (ranked.has(String(org.id))) continue;
@@ -273,6 +274,59 @@ async function syncOrganizations() {
     }
   }
   return stones.length;
+}
+
+/**
+ * An organization whose ladder is exactly an old default (any old kind: Riverwood
+ * was a town) and that has no members yet gets the RP Design ladder of its kind.
+ * A ladder anyone customized, or with members, is left alone.
+ */
+async function upgradeLegacyLadders(orgs) {
+  const { db, logger } = deps();
+  const legacy = Object.values(parcelLocks.LEGACY_LADDER_KEYS).map((keys) => keys.join(','));
+  for (const org of orgs) {
+    const id = String(org.id);
+    const keys = (await db.query('SELECT rank_key FROM stone_ranks WHERE org_id = ? ORDER BY rank_key', [id])).map((r) => String(r.rank_key));
+    if (!keys.length || !legacy.includes(keys.join(','))) continue;
+    const wanted = (parcelLocks.DEFAULT_LADDERS[org.kind] || []).map((r) => r[0]).sort().join(',');
+    if (keys.join(',') === wanted) continue;
+    const people = await db.query('SELECT COUNT(*) AS n FROM stone_members WHERE org_id = ?', [id]);
+    if (Number(people[0] && people[0].n) > 0) continue;
+    await db.query('DELETE FROM stone_ranks WHERE org_id = ?', [id]);
+    logger.log(`[holdstones] ${id}: moved to the ${org.kind} ladder of the RP Design`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Advisors (staff-granted title; OATHBOUND RP Design)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Makes a character the Advisor of an organization (or removes their title with orgId null). */
+async function setAdvisor(staffAccountId, character, orgId) {
+  const { db } = deps();
+  if (!character) return no('No such character.');
+  if (orgId == null) {
+    await db.query('DELETE FROM advisors WHERE character_id = ?', [character.id]);
+    await reload();
+    return ok(`${character.name} is no longer an Advisor.`);
+  }
+  const org = _org(orgId);
+  if (!org) return no(`Unknown stone "${orgId}".`);
+  const previous = await db.query('SELECT character_id FROM advisors WHERE org_id = ?', [org.id]);
+  await db.query('DELETE FROM advisors WHERE org_id = ? OR character_id = ?', [org.id, character.id]);
+  await db.query('INSERT INTO advisors (character_id, org_id, granted_by_account_id) VALUES (?, ?, ?)', [character.id, org.id, staffAccountId || null]);
+  await reload();
+  const replaced = previous.length && Number(previous[0].character_id) !== character.id ? ' (replacing the previous Advisor)' : '';
+  return ok(`${character.name} is now Advisor of ${org.name}${replaced}.`);
+}
+
+/** The organization a character advises, or null. */
+function advisorOrgOf(characterId) {
+  return (_index.advisors && _index.advisors.get(characterId)) || null;
+}
+
+function titlesOf(characterId) {
+  return parcelLocks.titlesOf(_index, characterId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -289,7 +343,13 @@ async function reload() {
     db.query('SELECT id, org_id, hold_id, name, owner_character_id, min_rank_id, locked FROM parcels'),
     db.query('SELECT object_id, parcel_id, kind, locks, partner_object_id FROM parcel_objects')
   ]);
-  _index = parcelLocks.buildIndex({ holds, orgs, ranks, members, parcels, objects }, idOfDesc);
+  let advisors = [];
+  try {
+    advisors = await db.query('SELECT character_id, org_id FROM advisors');
+  } catch (err) {
+    deps().logger.error('[holdstones] advisors not loaded (run migration v42):', err.message);
+  }
+  _index = parcelLocks.buildIndex({ holds, orgs, ranks, members, parcels, objects, advisors }, idOfDesc);
   return _index;
 }
 
@@ -339,6 +399,9 @@ function _notifyCharacter(characterId, message) {
 // Authorization is checked by the caller (interactions / commands) against
 // the same `actor` object, so both paths enforce the same rules.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** The organization whose stone reaches the Council (data/holdstones.json). */
+const COUNCIL_STONE_ORG = 'high_hrothgar';
 
 const ok = (message, extra = {}) => ({ ok: true, message, ...extra });
 const no = (message) => ({ ok: false, message });
@@ -643,6 +706,7 @@ async function orgPayload(orgId, actor, targetId = null) {
     yourRank: mine ? mine.name : null,
     canManage,
     isStaff: actor.isStaff,
+    titles: parcelLocks.titlesOf(_index, actor.characterId),
     allegiances: parcelLocks.membershipsOf(_index, actor.characterId)
       .map((m) => ({ name: m.org.name, kind: KIND_LABELS[m.org.kind] || m.org.kind, rank: m.rank.name })),
     ranks: parcelLocks.ranksOf(_index, orgId).map((r) => ({ key: r.key, name: r.name, position: r.position, isLeader: r.isLeader })),
@@ -728,6 +792,30 @@ function registerInteractions() {
       if (!orgId) return { message: 'This is not a holdstone.' };
       deps().sendModal(ctx.actorId, 'holdstone:open', await orgPayload(orgId, _ctxActor(ctx), ctx.target.formId));
       return { message: null };
+    }
+  });
+
+  // The Council's ancient magic is tied to the stones: an Advisor (or staff,
+  // to test) calls it from the High Hrothgar stone (council-service.js).
+  R.register({
+    ...stone,
+    id: 'council.summon',
+    label: 'Summon the Council',
+    order: 15,
+    canSee: async (ctx) => _orgOfTarget(ctx) === COUNCIL_STONE_ORG &&
+      (Boolean(advisorOrgOf(ctx.characterId)) || Boolean(deps().isStaff(ctx.actorId))),
+    schema: {
+      reason: { type: 'string', label: 'Why do you summon the Council?', min: 3, max: 200, required: true }
+    },
+    execute: async (ctx) => {
+      if (_orgOfTarget(ctx) !== COUNCIL_STONE_ORG) return { message: 'Only the High Hrothgar stone reaches the Council.' };
+      const result = await require('./council-service').summon({
+        actorId: ctx.actorId,
+        characterId: ctx.characterId,
+        advisedOrgId: advisorOrgOf(ctx.characterId),
+        reason: ctx.data.reason
+      });
+      return { message: `[Council] ${result.message}` };
     }
   });
 
@@ -1095,6 +1183,38 @@ async function handleParcelCommand(actorId, args) {
   }
 }
 
+async function handleAdvisorCommand(actorId, args) {
+  if (!_staffGuard(actorId)) return;
+  const [num, stone] = String(args || '').trim().split(/\s+/);
+  const character = await characterByNumber(String(num || '').replace(/^#/, ''));
+  if (!character || !stone) return _say(actorId, 'Usage: /advisor <player#> <stone|none> (stones: /holdstone list)');
+  const staffChar = deps().commands.getActiveCharacterData(actorId);
+  const result = await setAdvisor(staffChar ? staffChar.accountId : null, character, stone.toLowerCase() === 'none' ? null : stone.toLowerCase());
+  _say(actorId, `[Council] ${result.message}`);
+  if (result.ok) {
+    const target = deps().commands.getActiveActorByCharacterId ? deps().commands.getActiveActorByCharacterId(character.id) : null;
+    if (target) _say(target, stone.toLowerCase() === 'none' ? '[Council] You are no longer an Advisor.' : `[Council] The Council names you ${titlesOf(character.id)[0]}.`);
+  }
+}
+
+async function handleTitlesCommand(actorId, args) {
+  const arg = String(args || '').trim().replace(/^#/, '');
+  let characterId = null;
+  let name = 'You';
+  if (arg) {
+    if (!deps().isStaff(actorId)) return _say(actorId, 'Only staff can see other people\'s titles here.');
+    const c = await characterByNumber(arg);
+    if (!c) return _say(actorId, `No character #${arg}.`);
+    characterId = c.id;
+    name = c.name;
+  } else {
+    const me = deps().commands.getActiveCharacterData(actorId);
+    characterId = me ? me.characterId : null;
+  }
+  const titles = characterId ? titlesOf(characterId) : [];
+  _say(actorId, titles.length ? `${name}: ${titles.join(' · ')}` : `${name} hold no titles yet.`);
+}
+
 function commandDefs() {
   const wrap = (fn) => (actorId, args) => fn(actorId, args).catch((err) => {
     deps().logger.error('[holdstones] command failed:', err.message);
@@ -1104,7 +1224,9 @@ function commandDefs() {
     { name: '/holdstone', handler: wrap(handleHoldstoneCommand), description: '[Staff] List stones and edit their rank ladders', usage: '/holdstone [list|ranks|addrank|delrank]' },
     { name: '/holdrank', handler: wrap(handleHoldRankCommand), description: '[Staff] Set a player\'s rank at a stone', usage: '/holdrank <stone> <player#> <rank|none>' },
     { name: '/parcel', handler: wrap(handleParcelCommand), description: '[Staff] Manage parcels (doors and containers that lock)', usage: '/parcel [list|create|info|rename|rank|lock|unlock|disown|delete|add|remove|tool]' },
-    { name: '/parcelowner', handler: wrap(handleParcelOwnerCommand), description: '[Staff] Give a parcel to a player', usage: '/parcelowner <parcelId> <player#>' }
+    { name: '/parcelowner', handler: wrap(handleParcelOwnerCommand), description: '[Staff] Give a parcel to a player', usage: '/parcelowner <parcelId> <player#>' },
+    { name: '/advisor', handler: wrap(handleAdvisorCommand), description: '[Staff] Make a player the Advisor of a hold, or remove the title', usage: '/advisor <player#> <stone|none>' },
+    { name: '/titles', handler: wrap(handleTitlesCommand), description: 'Your titles (staff: anyone\'s)', usage: '/titles [player#]' }
   ];
 }
 
@@ -1153,6 +1275,11 @@ module.exports = {
   normalizeDesc,
   baseDescOf,
   orgOfStoneRef,
+  setAdvisor,
+  advisorOrgOf,
+  titlesOf,
+  upgradeLegacyLadders,
+  COUNCIL_STONE_ORG,
   detectKind,
   findTeleportPartner,
   characterByNumber,

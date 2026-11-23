@@ -45,7 +45,10 @@ const EVENT_KINDS = Object.freeze({
   permakill:          { title: 'Permakill',            color: 0x71368a, icon: '⚰️' },
   whitelist_approve:  { title: 'Whitelist approved',   color: 0x2ecc71, icon: '✅' },
   whitelist_reject:   { title: 'Whitelist rejected',   color: 0xe74c3c, icon: '❌' },
-  whitelist_reset:    { title: 'Whitelist reverted',   color: 0x95a5a6, icon: '↩️' }
+  whitelist_reset:    { title: 'Whitelist reverted',   color: 0x95a5a6, icon: '↩️' },
+  // OATHBOUND RP Design: an Advisor calls the Council from the High Hrothgar stone.
+  council_summons:    { title: 'The Council is summoned', color: 0xc9a227, icon: '🔔' },
+  council_answered:   { title: 'Summons answered',     color: 0x3498db, icon: '🌀' }
 });
 
 /** Trims and cleans text from outside before it becomes a Discord message. */
