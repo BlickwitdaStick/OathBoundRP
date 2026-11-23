@@ -46,7 +46,7 @@ export function isDiskFull(err) {
   const code = /** @type {any} */ (err).code;
   if (code === 'ENOSPC') return true;
   const text = String(/** @type {any} */ (err).message || err);
-  return /ENOSPC|no space left|not enough space|espa[cç]o insuficiente/i.test(text);
+  return /ENOSPC|no space left|not enough space/i.test(text);
 }
 
 /**

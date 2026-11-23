@@ -11,11 +11,7 @@
  *   - When the channel goes empty, it is deleted automatically after a grace
  *     period (avoids flicker if someone reconnects quickly).
  *   - /voice-close deletes the current channel immediately (staff, or the creator).
- *
- * The commands used to be called /voz-criar and /voz-fechar. Discord has no
- * command aliases, so the old names live on as pt-BR name localizations:
- * Discord clients set to Portuguese still see them, and the interaction always
- * arrives with the base (English) name.
+
  *
  * Nothing is persisted to the database — if the bot restarts, temporary
  * channels already created stop being "managed" (they won't be auto-deleted),
@@ -89,14 +85,12 @@ function scheduleRemovalIfEmpty(channel) {
 const commands = [
   new SlashCommandBuilder()
     .setName(CREATE_COMMAND)
-    .setNameLocalizations({ 'pt-BR': 'voz-criar' })
     .setDescription('[Staff] Create a temporary voice channel for an RP scene')
     .addStringOption(opt =>
       opt.setName('name').setDescription('Name of the scene/location').setRequired(true)
     ),
   new SlashCommandBuilder()
     .setName(CLOSE_COMMAND)
-    .setNameLocalizations({ 'pt-BR': 'voz-fechar' })
     .setDescription('[Staff] Close the current temporary voice channel')
 ];
 

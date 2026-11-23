@@ -241,19 +241,15 @@ app.get('/api/me', requireAuth, async (req, res) => {
 // Best-effort heuristic: flags strong concepts so staff look more carefully
 // before approving (Heavy RP whitelist rubric). It's not an automatic gate —
 // it only sets needs_extra_review for staff to decide during review.
-//
-// The pattern deliberately includes Portuguese keywords alongside the English
-// ones: many applicants write their character sheets in Portuguese, and those
-// keywords are matched against player input, not shown to anyone.
 const STRONG_CONCEPT_PATTERN = new RegExp(
   [
-    'nobre', 'noble', 'jarl', 'th[aã]ne',
+    'noble', 'jarl', 'thane',
     'vampir', 'vampire',
-    'lobisomem', 'werewolf',
+    'werewolf',
     'daedra', 'daedric',
-    'mago poderoso', 'archmage', 'arquimago',
-    'assassino', 'assassin',
-    'l[ií]der de fac[cç][aã]o', 'faction leader'
+    'archmage',
+    'assassin',
+    'faction leader'
   ].join('|'),
   'i'
 );

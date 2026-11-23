@@ -38,7 +38,7 @@ describe('isStaffMember', () => {
 
 describe('sanitizeChannelName', () => {
   it('keeps a valid name', () => {
-    assert.strictEqual(voiceChannels.sanitizeChannelName('Taverna do Bannered Mare'), 'Taverna do Bannered Mare');
+    assert.strictEqual(voiceChannels.sanitizeChannelName('The Bannered Mare Tavern'), 'The Bannered Mare Tavern');
   });
 
   it('truncates very long names to 60 characters', () => {

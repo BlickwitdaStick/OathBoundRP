@@ -46,7 +46,6 @@ describe('.env parser', () => {
   });
 
   test('recognizes placeholders without printing values', () => {
-    assert.equal(isPlaceholder('SEU_CLIENT_ID_AQUI'), true); // legacy Portuguese placeholder
     assert.equal(isPlaceholder('YOUR_CLIENT_ID_HERE'), true);
     assert.equal(isPlaceholder('owner/repo'), false);
   });

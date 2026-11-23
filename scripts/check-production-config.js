@@ -23,11 +23,7 @@ function parseEnv(text) {
 
 function isPlaceholder(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  // `seu_` / `seu-usuario` catch the Portuguese placeholders older .env
-  // files still carry; `your_` / `your-` / `replace-with` catch the English ones.
   return !normalized
-    || normalized.includes('seu_')
-    || normalized.includes('seu-usuario')
     || normalized.includes('your_')
     || normalized.includes('your-')
     || normalized.includes('replace-with')

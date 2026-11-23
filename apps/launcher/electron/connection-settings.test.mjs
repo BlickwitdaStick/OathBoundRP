@@ -33,7 +33,7 @@ test('writes both contracts, keeps compatible legacy data and removes untrusted 
   try {
     fs.writeFileSync(f.configPath, JSON.stringify({ ui: { scale: 2 }, profileId: 99, token: 'old' }));
     fs.writeFileSync(f.settingsPath, JSON.stringify({
-      language: 'pt-BR',
+      language: 'en-US',
       launcherTicket: 'old',
       gameData: { difficulty: 'hard', profileId: 5, token: 'old', launcherTicket: 'old' }
     }));
@@ -53,7 +53,7 @@ test('writes both contracts, keeps compatible legacy data and removes untrusted 
     assert.equal(Object.hasOwn(result.config, 'profileId'), false);
     assert.equal(Object.hasOwn(result.config, 'token'), false);
 
-    assert.equal(result.clientSettings.language, 'pt-BR');
+    assert.equal(result.clientSettings.language, 'en-US');
     assert.equal(result.clientSettings['server-info-ignore'], true);
     assert.equal(result.clientSettings['server-ip'], 'game.example.com');
     assert.equal(result.clientSettings['server-port'], 7777);
