@@ -250,7 +250,7 @@ app.get(/^\/client-mods\/files\/(.+)$/, (req, res) => {
   });
 });
 
-// ── Fila ────────────────────────────────────────────────────────────────────
+// ── Queue ───────────────────────────────────────────────────────────────────
 
 app.post('/api/queue/join', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
