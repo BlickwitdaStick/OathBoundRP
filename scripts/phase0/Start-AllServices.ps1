@@ -51,19 +51,19 @@ foreach ($svc in $services) {
   $ready += $svc
 }
 
-# Mods hospedados pelo servidor (skymp\client-mods): gera o manifesto que o
-# launcher baixa, copia os plugins para o data dir do servidor SkyMP, poe-nos no
-# loadOrder do server-settings.json e regenera o mods.json. Precisa rodar ANTES
-# de subir game-api e servidor. Falha aqui e fatal: subir com load order
-# diferente entre servidor e cliente desloca FormIDs sem erro nenhum.
+# Server-hosted mods (skymp\client-mods): generates the manifest the launcher
+# downloads, copies the plugins into the SkyMP server's data dir, puts them in
+# the server-settings.json loadOrder and regenerates mods.json. It has to run
+# BEFORE game-api and the server start. A failure here is fatal: starting with a
+# different load order on server and client shifts FormIDs with no error at all.
 $syncScript = Join-Path $rootDir "apps\game-api\scripts\sync-client-mods.js"
 if (Test-Path -LiteralPath $syncScript) {
-  Write-Host "Sincronizando mods do servidor (skymp\client-mods)..." -ForegroundColor Cyan
+  Write-Host "Syncing server mods (skymp\client-mods)..." -ForegroundColor Cyan
   Push-Location (Join-Path $rootDir "apps\game-api")
   try {
     & node "scripts\sync-client-mods.js"
     if ($LASTEXITCODE -ne 0) {
-      Write-Host "Falha ao sincronizar skymp\client-mods. Corrija e rode de novo." -ForegroundColor Red
+      Write-Host "Failed to sync skymp\client-mods. Fix it and run again." -ForegroundColor Red
       exit 1
     }
   } finally {
@@ -72,8 +72,8 @@ if (Test-Path -LiteralPath $syncScript) {
   Write-Host ""
 }
 
-# O manifesto de mods nao impede o boot, mas sem ele nenhum jogador passa da
-# verificacao de paridade — entao avisamos alto em vez de deixar descobrir em jogo.
+# A missing mods manifest doesn't block boot, but without it no player gets past
+# the parity check -- so we warn loudly instead of letting it be found in game.
 $manifestPath = Join-Path $rootDir "apps\game-api\mods.json"
 if (-not (Test-Path -LiteralPath $manifestPath)) {
   Write-Warning "apps\game-api\mods.json does not exist: /mods.json will answer 503 and no player can get in."
