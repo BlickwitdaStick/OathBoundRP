@@ -35,6 +35,12 @@ async function newcomerFirstName(accountId) {
   return `Traveler ${accountId}`;
 }
 
+/** True when the account has never had a character (any status). */
+async function hasNoCharacters(accountId) {
+  const rows = await db.query('SELECT COUNT(*) AS n FROM characters WHERE account_id = ?', [accountId]);
+  return Number(rows[0] && rows[0].n) === 0;
+}
+
 function allowLocalAutoWhitelist(profileId) {
   if (process.env.NODE_ENV === 'production') return false;
   if (process.env.ALLOW_LOCAL_AUTOWHITELIST !== 'true') return false;
@@ -204,9 +210,12 @@ async function checkWhitelist(userId, profileId, actorId) {
           angle_z: 137,
           cell_id: '133c6:Skyrim.esm'
         };
-      } else if (!whitelistRequired()) {
+      } else if (!whitelistRequired() || await hasNoCharacters(account.id)) {
+        // Whitelist off, or whitelisted with no character at all (by Discord
+        // role, without a character sheet): the first login makes one. A
+        // retired character still needs a new application.
         const firstName = await newcomerFirstName(account.id);
-        console.log(`[whitelist] Whitelist is off: creating ${firstName}'s first character...`);
+        console.log(`[whitelist] Creating ${firstName}'s first character...`);
         const insertChar = await db.query(
           `INSERT INTO characters (account_id, first_name, last_name, status) VALUES (?, ?, ?, 'approved')`,
           [account.id, firstName, UNNAMED]

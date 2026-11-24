@@ -19,6 +19,19 @@ const INTERNAL_API_SECRET = requireEnv('INTERNAL_API_SECRET');
 // The bot listens on 127.0.0.1 (see apps/bot-discord/index.js). Configurable
 // because the panel and the bot don't always run on the same host.
 const BOT_INTERNAL_URL = process.env.BOT_INTERNAL_URL || 'http://127.0.0.1:3002';
+const discordAccess = require('./discordAccess');
+
+/** Discord roles → whitelist/staff rows (discordAccess.js). Never throws. */
+function syncDiscordAccess(accountId, discordId) {
+  return discordAccess.syncDiscordAccess({
+    db: (sql, params) => db(sql, params),
+    execute: (sql, params) => executeDb(sql, params),
+    accountId,
+    discordId,
+    botUrl: BOT_INTERNAL_URL,
+    secret: INTERNAL_API_SECRET
+  });
+}
 // Allowlist of redirect_uri values accepted by /api/launcher/oauth/exchange. The
 // launcher starts a local callback server on 127.0.0.1:19847 (see electron/main.ts).
 const LAUNCHER_REDIRECT_URIS = (process.env.LAUNCHER_REDIRECT_URIS || 'http://localhost:19847/callback,http://127.0.0.1:19847/callback')
@@ -157,6 +170,7 @@ passport.use(new DiscordStrategy({
             await executeDb('UPDATE discord_identities SET username = ?, avatar = ? WHERE discord_id = ?', [profile.username, profile.avatar || '', profile.id]);
         }
 
+        await syncDiscordAccess(accountId, profile.id);
         return done(null, { id: profile.id, username: profile.username, avatar: profile.avatar, accountId });
     } catch(err) {
         return done(err, null);
@@ -215,8 +229,15 @@ app.get('/health', async (req, res) => {
 app.get('/api/auth/discord', passport.authenticate('discord'));
 app.get('/api/auth/discord/callback', passport.authenticate('discord', {
     failureRedirect: '/?error=auth_failed'
-}), (req, res) => {
-    res.redirect('/');
+}), async (req, res) => {
+    // Staff land on the panel, players on their application.
+    try {
+        const staffRows = await db('SELECT role FROM staff_roles WHERE account_id = ? LIMIT 1', [req.user.accountId]);
+        return res.redirect(staffRows.length > 0 ? '/' : '/apply.html');
+    } catch (err) {
+        console.error('[auth callback]', err.message);
+        return res.redirect('/');
+    }
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -231,9 +252,14 @@ app.get('/api/me', requireAuth, async (req, res) => {
     try {
         const appRows = await db('SELECT * FROM whitelist_applications WHERE account_id = ? ORDER BY id DESC LIMIT 1', [req.user.accountId]);
         const application = appRows.length > 0 ? appRows[0] : null;
+        const staffRows = await db('SELECT role FROM staff_roles WHERE account_id = ? LIMIT 1', [req.user.accountId]);
         res.json({
             user: req.user,
-            application
+            application,
+            // The front page sends players to the application page and staff
+            // to the panel; with the whitelist off, nobody needs to apply.
+            isStaff: staffRows.length > 0,
+            whitelistRequired: whitelistRequired()
         });
     } catch (err) { console.error('[/api/me]', err); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -920,7 +946,11 @@ app.post('/api/launcher/oauth/exchange', async (req, res) => {
 
     // Whitelist off (WHITELIST_REQUIRED=false): signing in with Discord is
     // enough, so the launcher creates the account the panel would have.
-    if (!accountId && !whitelistRequired()) {
+    let access = null;
+    if (!accountId && whitelistRequired()) {
+      access = await discordAccess.fetchMemberAccess({ botUrl: BOT_INTERNAL_URL, secret: INTERNAL_API_SECRET, discordId: user.id });
+    }
+    if (!accountId && (!whitelistRequired() || (access && (access.whitelisted || access.staffRole)))) {
       const [accRes] = await executeDb('INSERT INTO accounts (status) VALUES (?)', ['active']);
       accountId = accRes.insertId;
       await executeDb('INSERT INTO discord_identities (discord_id, account_id, username, avatar) VALUES (?, ?, ?, ?)',
@@ -933,6 +963,8 @@ app.post('/api/launcher/oauth/exchange', async (req, res) => {
       globalName: user.global_name || user.username,
       avatar: user.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png` : null
     };
+
+    if (accountId) await syncDiscordAccess(accountId, user.id);
 
     // Only the panel has the client secret, so only it can prove that Discord
     // user really authenticated. The ticket carries that proof to the queue
@@ -966,6 +998,8 @@ app.post('/api/launcher/session/refresh-ticket', async (req, res) => {
 
   try {
     await db(`UPDATE launcher_sessions SET last_used_at = NOW() WHERE session_hash = ?`, [hashTicket(sessionToken)]);
+    // A role given or taken on Discord counts from this Play on.
+    await syncDiscordAccess(session.accountId, session.discordId);
     const launchTicket = await issueLaunchTicket(session.accountId, session.discordId, ip);
     res.json({ launchTicket });
   } catch (err) {

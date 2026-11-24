@@ -181,7 +181,8 @@ async function isEligible(accountId) {
             (SELECT COUNT(*) FROM whitelist_applications w
               WHERE w.account_id = a.id AND w.status = 'approved') AS approved_apps,
             (SELECT COUNT(*) FROM characters c
-              WHERE c.account_id = a.id AND c.status = 'approved') AS approved_chars
+              WHERE c.account_id = a.id AND c.status = 'approved') AS approved_chars,
+            (SELECT COUNT(*) FROM characters c WHERE c.account_id = a.id) AS any_chars
      FROM accounts a WHERE a.id = ?`,
     [accountId]
   );
@@ -191,7 +192,10 @@ async function isEligible(accountId) {
   // character on the first login (skymp/gamemode/whitelist.js).
   if (String(process.env.WHITELIST_REQUIRED || '').trim().toLowerCase() === 'false') return { ok: true };
   if (Number(rows[0].approved_apps) === 0) return { ok: false, reason: 'not_whitelisted' };
-  if (Number(rows[0].approved_chars) === 0) return { ok: false, reason: 'no_approved_character' };
+  // Whitelisted with no character at all (e.g. by Discord role, no sheet):
+  // the game server makes the first one. A retired character still needs a
+  // new application.
+  if (Number(rows[0].approved_chars) === 0 && Number(rows[0].any_chars) > 0) return { ok: false, reason: 'no_approved_character' };
   return { ok: true };
 }
 

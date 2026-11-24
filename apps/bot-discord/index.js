@@ -5,6 +5,7 @@ const express = require('express');
 const app = express();
 const voiceChannels = require('./voiceChannels');
 const moderationLog = require('./moderationLog');
+const memberAccess = require('./memberAccess');
 const { deployCommands } = require('./deploy-commands');
 const { createMemoryRateLimiter } = require('./rateLimiter');
 const { isDiscordSnowflake } = require('./inputValidation');
@@ -131,6 +132,45 @@ app.post('/api/sync-role', async (req, res) => {
         res.json({ ok: true });
     } catch (err) {
         console.error(`[discord-bot] Sync error:`, err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * What a member's Discord roles grant in game: the whitelist and a staff role
+ * (`memberAccess.js`). The panel asks when a player signs in or presses Play,
+ * so a role given on Discord counts at their next Play — no SQL by hand.
+ * POST so the Discord id stays out of URLs and access logs.
+ */
+const STAFF_ROLE_MAP = memberAccess.staffRoleMapFromEnv();
+for (const err of STAFF_ROLE_MAP.errors) console.warn(`[discord-bot] STAFF_ROLE_MAP: ${err}`);
+
+app.post('/api/member-access', async (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (isRateLimited(`member-access:${ip}`, 120, 60 * 1000)) {
+        runtimeMetrics.recordRejection('rate_limit_member_access');
+        return res.status(429).json({ error: 'Too many requests' });
+    }
+    if (!isValidInternalSecret(req.get('X-Internal-Secret'))) {
+        runtimeMetrics.recordRejection('internal_secret_invalid');
+        console.warn(`[discord-bot] Unauthorized access attempt to /api/member-access from ${ip}`);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const discordId = (req.body || {}).discord_id;
+    if (!isDiscordSnowflake(discordId)) return res.status(400).json({ error: 'Invalid discord_id' });
+    if (!GUILD_ID) return res.status(500).json({ error: 'GUILD_ID not configured' });
+
+    try {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const member = await guild.members.fetch(discordId).catch(() => null);
+        if (!member) return res.json({ inGuild: false, whitelisted: false, staffRole: null });
+        const access = memberAccess.accessFor(member.roles.cache.keys(), {
+            whitelistRoleId: WHITELIST_ROLE_ID,
+            staffRoleMap: STAFF_ROLE_MAP.map
+        });
+        res.json({ inGuild: true, ...access });
+    } catch (err) {
+        console.error('[discord-bot] member-access error:', err.message);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

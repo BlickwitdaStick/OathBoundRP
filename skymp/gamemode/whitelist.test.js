@@ -5,7 +5,7 @@ const fs = require('node:fs');
 
 const queries = [];
 // Open-server tests flip this: no whitelist row and no character yet.
-const fresh = { on: false };
+const fresh = { on: false, approved: false, anyChars: 0 };
 const restoredActors = [];
 const realPositionPersistence = require('./core/position-persistence');
 const originalLoad = Module._load;
@@ -18,7 +18,8 @@ Module._load = function (request, parent, isMain) {
         if (/FROM accounts a\s+WHERE a\.id = \?/i.test(sql)) {
           return [{ id: 42, status: 'active', vip_level: 0 }];
         }
-        if (/FROM whitelist_applications/i.test(sql)) return fresh.on ? [] : [{ status: 'approved' }];
+        if (/FROM whitelist_applications/i.test(sql)) return fresh.on && !fresh.approved ? [] : [{ status: 'approved' }];
+        if (fresh.on && /SELECT COUNT\(\*\) AS n FROM characters/i.test(sql)) return [{ n: fresh.anyChars }];
         if (fresh.on && /FROM discord_identities/i.test(sql)) return [{ username: 'xX_frost99_Xx' }];
         if (fresh.on && /INSERT INTO characters/i.test(sql)) return { insertId: 99 };
         if (fresh.on && /SELECT * FROM characters WHERE id = ?/i.test(sql)) {
@@ -129,6 +130,36 @@ test('WHITELIST_REQUIRED=false: a first login gets a character named after Disco
   } finally {
     fresh.on = false;
     delete process.env.WHITELIST_REQUIRED;
+    delete global.mp;
+  }
+});
+
+test('whitelist on: whitelisted with no character at all (Discord role) gets a first character', async () => {
+  const kicks = [];
+  global.mp = { kick: (id) => kicks.push(id), set() {}, getDescFromId: (id) => id.toString(16) + ':Skyrim.esm' };
+  Object.assign(fresh, { on: true, approved: true, anyChars: 0 });
+  delete process.env.WHITELIST_REQUIRED;
+  try {
+    assert.equal(await whitelist.checkWhitelist(7, 42, 0xff000007), true);
+    assert.deepEqual(kicks, []);
+    assert.ok(queries.some(({ sql }) => /INSERT INTO characters/i.test(sql)));
+  } finally {
+    Object.assign(fresh, { on: false, approved: false, anyChars: 0 });
+    delete global.mp;
+  }
+});
+
+test('whitelist on: a retired character still needs a new application', async () => {
+  const kicks = [];
+  global.mp = { kick: (id) => kicks.push(id), set() {} };
+  Object.assign(fresh, { on: true, approved: true, anyChars: 1 });
+  delete process.env.WHITELIST_REQUIRED;
+  try {
+    assert.equal(await whitelist.checkWhitelist(8, 42, 0xff000008), false);
+    assert.deepEqual(kicks, [8]);
+    assert.ok(!queries.some(({ sql }) => /INSERT INTO characters/i.test(sql)));
+  } finally {
+    Object.assign(fresh, { on: false, approved: false, anyChars: 0 });
     delete global.mp;
   }
 });

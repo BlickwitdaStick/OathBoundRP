@@ -152,7 +152,20 @@
             if (response.ok) {
                 const data = await response.json();
                 document.getElementById('auth-section').classList.add('hidden');
-                
+
+                // The server is open: nothing to apply for.
+                if (data.whitelistRequired === false && !data.application) {
+                    document.getElementById('status-section').classList.remove('hidden');
+                    document.getElementById('status-text').textContent = 'OPEN';
+                    const openBox = document.getElementById('application-status');
+                    openBox.style.display = 'block';
+                    openBox.className = 'status-approved';
+                    openBox.textContent = 'No application needed right now. Install the OATHBOUND launcher, sign in with Discord and press Play. ' +
+                        'You will name your character in game with /rpname First Last.';
+                    document.getElementById('logout-btn').style.display = 'block';
+                    return;
+                }
+
                 if (data.application) {
                     document.getElementById('status-section').classList.remove('hidden');
                     const statusText = document.getElementById('status-text');

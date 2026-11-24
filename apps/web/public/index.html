@@ -16,6 +16,7 @@
     <div class="subtitle">Oathbound RP · Staff Panel</div>
     <a class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;display:flex" href="/api/auth/discord">Enter with Discord</a>
     <p id="login-error" style="color:#e05252;margin-top:12px;font-size:13px;display:none">You have no access, contact staff please.</p>
+    <p style="margin-top:18px;font-size:13px;color:#9aa0a6">Not staff? <a href="/apply.html" style="color:#d9b76e">Join the server here</a>.</p>
   </div>
 </div>
 
@@ -89,6 +90,9 @@ async function checkAuth() {
   try {
     const r = await fetch('/api/me', { credentials: 'include' });
     if (r.ok) {
+      const me = await r.json().catch(() => ({}));
+      // Players have nothing to do in the staff panel: send them to their application.
+      if (me && me.isStaff === false) { window.location.replace('/apply.html'); return; }
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').classList.add('visible');
       navigate('dashboard');
