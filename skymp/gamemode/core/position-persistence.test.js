@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createPositionPersistence, loadStartPoints, normalizeCell, toCellDesc, loginLocation, cellCheckerFor, MIN_MOVE, WRITE_MS } = require('./position-persistence');
+const { alreadyAt, createPositionPersistence, loadStartPoints, normalizeCell, toCellDesc, loginLocation, cellCheckerFor, MIN_MOVE, WRITE_MS } = require('./position-persistence');
 
 const START = { pos: [35, -165, -189], cell: '162e2' };
 
@@ -189,5 +189,23 @@ describe('position persistence: cell descriptors for the login teleport', () => 
     assert.equal(cellCheckerFor({ getIdFromDesc: () => { throw new Error('x'); }, lookupEspmRecordById: () => ({}) })('1:Skyrim.esm'), true,
       'a failed lookup must not strand the player');
     assert.equal(cellCheckerFor(undefined), null);
+  });
+});
+
+describe('alreadyAt', () => {
+  const target = { pos: [-977, 9, 5], rot: [0, 0, 137], cellOrWorldDesc: '133c6:Skyrim.esm' };
+
+  it('same cell within reach: no teleport needed', () => {
+    assert.equal(alreadyAt({ pos: [-960, 20, 5], cellOrWorldDesc: '133C6:Skyrim.esm' }, target), true);
+  });
+
+  it('another cell or too far: teleport', () => {
+    assert.equal(alreadyAt({ pos: [-977, 9, 5], cellOrWorldDesc: '1a26f:Skyrim.esm' }, target), false);
+    assert.equal(alreadyAt({ pos: [-500, 9, 5], cellOrWorldDesc: '133c6:Skyrim.esm' }, target), false);
+  });
+
+  it('unknown current location: teleport', () => {
+    assert.equal(alreadyAt(null, target), false);
+    assert.equal(alreadyAt({ cellOrWorldDesc: '133c6:Skyrim.esm' }, target), false);
   });
 });

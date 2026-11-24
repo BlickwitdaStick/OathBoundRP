@@ -298,7 +298,14 @@ async function checkWhitelist(userId, profileId, actorId) {
         positionPersistence.cellCheckerFor(mp));
 
       try {
-        if (locData) {
+        let current = null;
+        try { current = mp.get(actorId, 'locationalData'); } catch { /* not spawned yet */ }
+        if (current) {
+          console.log(`[whitelist] Actor ${actorId.toString(16)} spawned at pos=[${(current.pos || []).map((v) => Math.round(v)).join(', ')}] cell=${current.cellOrWorldDesc}`);
+        }
+        if (locData && positionPersistence.alreadyAt(current, locData)) {
+          console.log(`[whitelist] Actor ${actorId.toString(16)} already at its db location; no teleport.`);
+        } else if (locData) {
           console.log(`[whitelist] Moving actor ${actorId.toString(16)} to db location: pos=[${locData.pos.join(', ')}] cell=${locData.cellOrWorldDesc} (stored: ${character.cell_id})`);
           mp.set(actorId, 'locationalData', locData);
         } else {

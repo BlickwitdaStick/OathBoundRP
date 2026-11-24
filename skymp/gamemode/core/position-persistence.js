@@ -98,6 +98,15 @@ function loginLocation(character, getDescFromId, isCellOrWorld) {
   return { pos: pos.map(Number), rot: [0, 0, Number.isFinite(angle) ? angle : 0], cellOrWorldDesc };
 }
 
+/** True when `current` (mp locationalData) already stands at `target`. */
+function alreadyAt(current, target, radius = MIN_MOVE) {
+  if (!current || !target || !Array.isArray(current.pos) || !Array.isArray(target.pos)) return false;
+  if (normalizeCell(current.cellOrWorldDesc) !== normalizeCell(target.cellOrWorldDesc)) return false;
+  const [dx, dy, dz] = target.pos.map((v, i) => Number(v) - Number(current.pos[i]));
+  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return Number.isFinite(d) && d <= radius;
+}
+
 /**
  * isCellOrWorld for loginLocation, backed by the SkyMP API. True when the desc
  * names a CELL or WRLD record; false when the plugins say it is something else
@@ -268,7 +277,7 @@ function getInstance() {
 }
 
 module.exports = {
-  cellCheckerFor,
+  alreadyAt, cellCheckerFor,
   createPositionPersistence, getInstance, loadStartPoints, normalizeCell, toCellDesc, loginLocation,
   TICK_MS, WRITE_MS, MIN_MOVE, START_POINT_RADIUS
 };

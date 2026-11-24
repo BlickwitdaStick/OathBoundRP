@@ -103,6 +103,27 @@ test('login teleport sends the saved cell as id:plugin, never a bare id (actor f
   assert.deepEqual(restoredActors, [0xff000001], 'position saving starts after the teleport');
 });
 
+test('login skips the teleport when SkyMP already spawned the actor at its saved location', async () => {
+  const sets = [];
+  global.mp = {
+    set: (id, key, value) => sets.push({ id, key, value }),
+    get: (id, key) => (key === 'locationalData' ? { pos: [10, 0, 0], rot: [0, 0, 0], cellOrWorldDesc: '3c:Skyrim.esm' } : undefined),
+    getDescFromId: (id) => `${id.toString(16)}:Skyrim.esm`,
+    kick: () => {}
+  };
+  restoredActors.length = 0;
+  const realGetInstance = realPositionPersistence.getInstance;
+  realPositionPersistence.getInstance = () => ({ markRestored: (id) => restoredActors.push(id) });
+  try {
+    assert.equal(await whitelist.checkWhitelist(1, 42, 0xff000001), true);
+  } finally {
+    delete global.mp;
+    realPositionPersistence.getInstance = realGetInstance;
+  }
+  assert.equal(sets.find((s) => s.key === 'locationalData'), undefined);
+  assert.deepEqual(restoredActors, [0xff000001]);
+});
+
 test('whitelist on (the default): no approved application means a kick', async () => {
   const kicks = [];
   global.mp = { kick: (id) => kicks.push(id), set() {} };
