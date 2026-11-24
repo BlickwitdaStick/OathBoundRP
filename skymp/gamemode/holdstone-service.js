@@ -81,6 +81,17 @@ function _defaultDeps() {
       try { return Boolean(require('./admin-service').getRole(actorId)); } catch { return false; }
     },
     sendModal: () => {},
+    // The stone menu needs the mouse: browserFocused gives the in-game browser
+    // the cursor (F2/F8 do the same). Without it the menu showed with no
+    // cursor until Enter opened the chat.
+    setBrowserFocus: (actorId, focused) => {
+      const api = _mp();
+      if (!api || !actorId) return;
+      try {
+        if (focused) api.set(actorId, 'browserVisible', true);
+        api.set(actorId, 'browserFocused', Boolean(focused));
+      } catch { /* the player left */ }
+    },
     openInteractionMenu: () => {},
     stoneList: () => JSON.parse(fs.readFileSync(STONES_FILE, 'utf8')),
     logger: console
@@ -791,6 +802,7 @@ function registerInteractions() {
       const orgId = _orgOfTarget(ctx);
       if (!orgId) return { message: 'This is not a holdstone.' };
       deps().sendModal(ctx.actorId, 'holdstone:open', await orgPayload(orgId, _ctxActor(ctx), ctx.target.formId));
+      deps().setBrowserFocus(ctx.actorId, true);
       return { message: null };
     }
   });
@@ -1044,7 +1056,9 @@ function registerInteractions() {
  */
 async function handleUiEvent(actorId, uiEvent) {
   if (!uiEvent || typeof uiEvent.type !== 'string' || !uiEvent.type.startsWith('holdstone:')) return false;
-  return uiEvent.type === 'holdstone:close';
+  if (uiEvent.type !== 'holdstone:close') return false;
+  deps().setBrowserFocus(actorId, false);
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

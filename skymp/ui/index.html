@@ -833,33 +833,35 @@
 <!-- Holdstone: hold menu (gamemode/holdstone-service.js) -->
 <div id="holdstone-panel" aria-hidden="true">
   <div class="hs-shell">
+    <div class="hs-crest" aria-hidden="true"><span id="hs-crest-rune">ᛟ</span></div>
+    <button type="button" class="hs-close" id="hs-close" aria-label="Close">×</button>
     <div class="hs-head">
-      <div class="hs-head-text">
-        <div class="hs-eyebrow" id="hs-eyebrow">Holdstone</div>
-        <div class="hs-title" id="hs-hold-name">—</div>
-        <div class="hs-sub" id="hs-your-rank"></div>
-      </div>
-      <button type="button" class="hs-close" id="hs-close" aria-label="Close">×</button>
+      <div class="hs-eyebrow" id="hs-eyebrow">Holdstone</div>
+      <div class="hs-title" id="hs-hold-name">—</div>
+      <div class="hs-lineage" id="hs-lineage"></div>
+      <div class="hs-sub" id="hs-your-rank"></div>
+      <div class="hs-titles" id="hs-titles"></div>
     </div>
 
-    <div class="hs-section-title">Your allegiances</div>
-    <div class="hs-ranks" id="hs-allegiances"></div>
-
-    <div class="hs-section-title">Ranks, lowest to highest</div>
-    <div class="hs-ranks" id="hs-ranks"></div>
+    <div class="hs-rule" aria-hidden="true"><span>ᛜ</span></div>
 
     <div class="hs-columns">
-      <div>
-        <div class="hs-section-title">Members</div>
-        <div class="hs-list" id="hs-members"></div>
+      <div class="hs-col">
+        <div class="hs-section-title">The ladder</div>
+        <div class="hs-ranks" id="hs-ranks"></div>
+        <div class="hs-section-title">Your allegiances</div>
+        <div class="hs-allegiances" id="hs-allegiances"></div>
       </div>
-      <div>
+      <div class="hs-col">
+        <div class="hs-section-title">Sworn to this stone</div>
+        <div class="hs-list" id="hs-members"></div>
         <div class="hs-section-title">Parcels</div>
         <div class="hs-list" id="hs-parcels"></div>
       </div>
     </div>
 
     <div class="hs-manage" id="hs-manage">
+      <div class="hs-rule" aria-hidden="true"><span>ᛉ</span></div>
       <div class="hs-section-title">Leadership</div>
       <form class="hs-form" id="hs-rank-form">
         <input id="hs-rank-player" type="number" min="1" max="5000" placeholder="Player #" aria-label="Player number">

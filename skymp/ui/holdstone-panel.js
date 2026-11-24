@@ -39,17 +39,27 @@
     });
   }
 
-  function renderRanks(ranks) {
+  /** Carved crest rune per kind of stone. */
+  const KIND_RUNES = { hold: 'ᛟ', thanedom: 'ᚦ', town: 'ᚺ', faction: 'ᛉ', council: 'ᛞ' };
+
+  /** The rank ladder, highest first; the viewer's own rank is marked. */
+  function renderRanks(ranks, yourRank) {
     const root = $('hs-ranks');
     root.innerHTML = '';
     if (!ranks || ranks.length === 0) {
-      root.appendChild(el('div', 'hs-empty', 'No ranks set up here.'));
+      root.appendChild(el('div', 'hs-empty', 'No ranks are carved here yet.'));
       return;
     }
-    for (const rank of ranks) {
-      const chip = el('span', 'hs-rank' + (rank.isLeader ? ' leader' : ''), rank.name);
-      chip.title = 'Key: ' + rank.key + (rank.isLeader ? ' (leader)' : '');
-      root.appendChild(chip);
+    const ladder = ranks.slice().sort((a, b) => (b.position || 0) - (a.position || 0));
+    for (const rank of ladder) {
+      const mine = yourRank && rank.name === yourRank;
+      const step = el('div', 'hs-step' + (rank.isLeader ? ' leader' : '') + (mine ? ' mine' : ''));
+      step.appendChild(el('span', 'hs-step-mark', rank.isLeader ? 'ᛝ' : '◆'));
+      step.appendChild(el('span', 'hs-step-name', rank.name));
+      if (mine) step.appendChild(el('span', 'hs-step-you', 'you'));
+      else if (rank.isLeader) step.appendChild(el('span', 'hs-step-tag', 'leads'));
+      step.title = 'Key: ' + rank.key;
+      root.appendChild(step);
     }
   }
 
@@ -57,13 +67,13 @@
     const root = $('hs-members');
     root.innerHTML = '';
     if (!members || members.length === 0) {
-      root.appendChild(el('div', 'hs-empty', 'No members yet.'));
+      root.appendChild(el('div', 'hs-empty', 'No one has sworn to this stone yet.'));
       return;
     }
     for (const member of members) {
-      const row = el('div', 'hs-row');
+      const row = el('div', 'hs-row hs-member');
       row.appendChild(el('span', 'hs-row-name', member.name));
-      row.appendChild(el('span', 'hs-row-meta', member.rank));
+      row.appendChild(el('span', 'hs-badge', member.rank));
       root.appendChild(row);
     }
   }
@@ -73,7 +83,7 @@
     root.innerHTML = '';
     const parcels = data.parcels || [];
     if (parcels.length === 0) {
-      root.appendChild(el('div', 'hs-empty', 'No parcels here.'));
+      root.appendChild(el('div', 'hs-empty', 'No land is parcelled here.'));
       return;
     }
     for (const parcel of parcels) {
@@ -115,7 +125,9 @@
       return;
     }
     for (const a of list) {
-      const chip = el('span', 'hs-rank', a.name + ': ' + a.rank);
+      const chip = el('span', 'hs-chip');
+      chip.appendChild(el('span', 'hs-chip-org', a.name));
+      chip.appendChild(el('span', 'hs-chip-rank', a.rank));
       chip.title = a.kind;
       root.appendChild(chip);
     }
@@ -124,15 +136,26 @@
   function render(data) {
     state.data = data;
     if (data.targetId != null) state.targetId = data.targetId;
-    const answersTo = Array.isArray(data.answersTo) && data.answersTo.length ? ' · answers to ' + data.answersTo[0] : '';
-    const vassals = Array.isArray(data.vassals) && data.vassals.length ? ' · over ' + data.vassals.join(', ') : '';
-    $('hs-eyebrow').textContent = (data.kind || 'Holdstone') + (data.seat ? ' · ' + data.seat : '') + answersTo + vassals;
+    const kind = String(data.kind || 'Holdstone');
+    $('hs-eyebrow').textContent = kind + (data.seat && data.seat !== data.orgName ? ' of ' + data.seat : '');
     $('hs-hold-name').textContent = data.orgName || data.orgId || '—';
+    const rune = $('hs-crest-rune');
+    if (rune) rune.textContent = KIND_RUNES[kind.toLowerCase()] || 'ᛟ';
+    const lineage = [];
+    if (Array.isArray(data.answersTo) && data.answersTo.length) lineage.push('Answers to ' + data.answersTo[0]);
+    if (Array.isArray(data.vassals) && data.vassals.length) lineage.push('Holds sway over ' + data.vassals.join(', '));
+    const lineageEl = $('hs-lineage');
+    if (lineageEl) lineageEl.textContent = lineage.join(' · ');
     $('hs-your-rank').textContent = data.yourRank
-      ? 'Your rank: ' + data.yourRank
-      : (data.isStaff ? 'Staff' : 'You are not tied to this stone');
+      ? 'You stand as ' + data.yourRank
+      : (data.isStaff ? 'You walk here as staff' : 'You are not sworn to this stone');
+    const titles = $('hs-titles');
+    if (titles) {
+      titles.innerHTML = '';
+      for (const t of (Array.isArray(data.titles) ? data.titles : [])) titles.appendChild(el('span', 'hs-title-chip', t));
+    }
     renderAllegiances(data.allegiances);
-    renderRanks(data.ranks);
+    renderRanks(data.ranks, data.yourRank);
     renderMembers(data.members);
     renderParcels(data);
 

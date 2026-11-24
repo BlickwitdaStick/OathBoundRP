@@ -237,6 +237,7 @@ let db;
 let notes;
 let menus;
 let modals;
+let focus;
 let errors;
 
 function setup() {
@@ -249,6 +250,7 @@ function setup() {
   notes = [];
   menus = [];
   modals = [];
+  focus = [];
   errors = [];
   service.configure({
     db,
@@ -262,6 +264,7 @@ function setup() {
     },
     isStaff: (actorId) => actorId === STAFF,
     sendModal: (actorId, type, data) => modals.push({ actorId, type, data }),
+    setBrowserFocus: (actorId, focused) => focus.push({ actorId, focused }),
     openInteractionMenu: (actorId, targetId) => menus.push({ actorId, targetId }),
     stoneList: () => STONES,
     logger: { log() {}, error: (...a) => errors.push(a.join(' ')) }
@@ -381,6 +384,11 @@ describe('holdstone-service: a stone placed in the Creation Kit works without bi
     assert.equal(panel.data.yourRank, 'Citizen');
     assert.equal(panel.data.canManage, false);
     assert.deepEqual(panel.data.allegiances, [{ name: 'Whiterun', kind: 'Hold', rank: 'Citizen' }]);
+    // The menu gets the mouse when it opens and gives it back when it closes.
+    assert.deepEqual(focus, [{ actorId: ANA, focused: true }]);
+    assert.equal(await service.handleUiEvent(ANA, { type: 'holdstone:close' }), true);
+    assert.deepEqual(focus.at(-1), { actorId: ANA, focused: false });
+    assert.equal(await service.handleUiEvent(ANA, { type: 'holdstone:other' }), false);
   });
 
   it('High Hrothgar: staff tie themselves to it; members show their allegiances everywhere', async () => {

@@ -1,143 +1,317 @@
 /* ============================================================================
- * holdstone-panel.css — hold menu at a holdstone. Same stone/parchment family
- * as depot-panel.css; system serif fonts only (CEF may have no network).
+ * holdstone-panel.css — the menu at a holdstone, drawn as a carved stone
+ * tablet: arched top, grey granite, chiselled letters and gold-inlaid runes.
+ * System fonts only (the in-game browser may have no network); the granite
+ * grain is an inline SVG noise, so nothing is downloaded.
  * ==========================================================================*/
 
 #holdstone-panel {
-    --hs-stone-1: #17140f;
-    --hs-stone-2: #231d16;
-    --hs-parchment: #e8dcc0;
-    --hs-parchment-dim: rgba(232, 220, 192, 0.62);
-    --hs-parchment-faint: rgba(232, 220, 192, 0.28);
-    --hs-metal: #8a7a52;
-    --hs-metal-bright: #c9b877;
-    --hs-metal-dim: rgba(201, 184, 119, 0.16);
-    --hs-danger: #c0463a;
-    --hs-ok: #6f8f4f;
-    --hs-font: 'Bookman Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
+    --hs-rock-light: #6d6a64;
+    --hs-rock: #4c4a46;
+    --hs-rock-dark: #2f2e2b;
+    --hs-rock-deep: #1d1c1a;
+    --hs-carve: #e4ddcd;
+    --hs-carve-dim: rgba(236, 230, 216, 0.82);
+    --hs-carve-faint: rgba(236, 230, 216, 0.56);
+    --hs-gold: #d6b261;
+    --hs-gold-bright: #f0d48f;
+    --hs-gold-dim: rgba(214, 178, 97, 0.18);
+    --hs-moss: #8fae7a;
+    --hs-blood: #e07a62;
+    --hs-font: 'Segoe UI Variable', 'Segoe UI', -apple-system, system-ui, sans-serif;
+    --hs-display: 'Cinzel', 'Trajan Pro', Georgia, 'Times New Roman', serif;
+    /* Light from above: bright lip, dark groove. */
+    --hs-chisel: 0 1px 0 rgba(255, 255, 255, 0.10), 0 -1px 1px rgba(0, 0, 0, 0.85);
+
     position: fixed;
     top: 50%;
     left: 50%;
-    width: min(820px, calc(100vw - 48px));
-    max-height: calc(100vh - 96px);
-    transform: translate(-50%, -50%) scale(0.97);
+    width: min(860px, calc(100vw - 48px));
+    max-height: calc(100vh - 64px);
+    transform: translate(-50%, -48%);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.22s ease, transform 0.22s ease;
+    transition: opacity 0.2s ease, transform 0.2s ease;
     z-index: 210;
     font-family: var(--hs-font);
-    color: var(--hs-parchment);
+    color: var(--hs-carve);
+    filter: drop-shadow(0 28px 50px rgba(0, 0, 0, 0.75));
 }
 
 #holdstone-panel.open {
     opacity: 1;
     pointer-events: auto;
-    transform: translate(-50%, -50%) scale(1);
+    transform: translate(-50%, -50%);
 }
 
+@media (prefers-reduced-motion: reduce) {
+    #holdstone-panel { transition: none; }
+}
+
+/* ── The tablet ─────────────────────────────────────────────────────────── */
 #holdstone-panel .hs-shell {
-    background: linear-gradient(180deg, var(--hs-stone-2), var(--hs-stone-1));
-    border: 1px solid var(--hs-metal);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 48px rgba(0, 0, 0, 0.55);
-    padding: 18px 22px;
-    max-height: calc(100vh - 96px);
+    position: relative;
+    max-height: calc(100vh - 64px);
     overflow-y: auto;
+    padding: 78px 40px 30px;
+    /* Rounded like a runestone: high arch on top, square base. */
+    border-radius: 48% 48% 10px 10px / 92px 92px 10px 10px;
+    background:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.49  0 0 0 0 0.47  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+        radial-gradient(ellipse 90% 60% at 30% 10%, rgba(255, 255, 255, 0.10), transparent 60%),
+        radial-gradient(ellipse 70% 50% at 85% 90%, rgba(0, 0, 0, 0.35), transparent 70%),
+        linear-gradient(170deg, var(--hs-rock-light) 0%, var(--hs-rock) 38%, var(--hs-rock-dark) 100%);
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -3px 0 rgba(0, 0, 0, 0.5),
+        inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+        inset 0 0 60px rgba(0, 0, 0, 0.45);
+    border: 1px solid #1a1917;
+    /* A scrollbar along the curve of the arch looks wrong; the wheel still scrolls. */
+    scrollbar-width: none;
+}
+#holdstone-panel .hs-shell::-webkit-scrollbar { display: none; }
+
+/* A carved border just inside the edge, following the arch. */
+#holdstone-panel .hs-shell::before {
+    content: '';
+    position: absolute;
+    inset: 12px;
+    border-radius: 48% 48% 6px 6px / 82px 82px 6px 6px;
+    border: 1px solid rgba(0, 0, 0, 0.55);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    pointer-events: none;
 }
 
-#holdstone-panel .hs-head {
+/* ── Crest + header ─────────────────────────────────────────────────────── */
+#holdstone-panel .hs-crest {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    border-bottom: 1px solid var(--hs-metal-dim);
-    padding-bottom: 10px;
-    margin-bottom: 12px;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 40%, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.15));
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.12);
+    color: var(--hs-gold-bright);
+    font-size: 26px;
+    text-shadow: 0 0 10px rgba(240, 212, 143, 0.45), 0 1px 0 rgba(0, 0, 0, 0.8);
 }
-
-#holdstone-panel .hs-head-text { flex: 1; }
-#holdstone-panel .hs-eyebrow {
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--hs-metal-bright);
-}
-#holdstone-panel .hs-title { font-size: 24px; margin-top: 2px; }
-#holdstone-panel .hs-sub { font-size: 13px; color: var(--hs-parchment-dim); margin-top: 2px; }
 
 #holdstone-panel .hs-close {
-    background: none;
-    border: 1px solid var(--hs-metal-dim);
-    color: var(--hs-parchment);
-    font-size: 20px;
+    position: absolute;
+    top: 72px;
+    right: 44px;
     width: 32px;
     height: 32px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+    color: var(--hs-carve-dim);
+    font-size: 20px;
+    line-height: 1;
     cursor: pointer;
+}
+#holdstone-panel .hs-close:hover { color: var(--hs-carve); background: rgba(0, 0, 0, 0.4); }
+
+#holdstone-panel .hs-head { text-align: center; }
+#holdstone-panel .hs-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--hs-gold);
+    text-shadow: var(--hs-chisel);
+}
+#holdstone-panel .hs-title {
+    font-family: var(--hs-display);
+    font-size: 34px;
+    letter-spacing: 0.08em;
+    margin: 4px 0 2px;
+    color: #d9d2c2;
+    /* Cut into the rock: dark top edge, light bottom lip. */
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 1px rgba(0, 0, 0, 0.6);
+}
+#holdstone-panel .hs-lineage { font-size: 12px; color: var(--hs-carve-faint); font-style: italic; min-height: 2px; text-shadow: var(--hs-chisel); }
+#holdstone-panel .hs-sub { font-size: 14px; color: var(--hs-carve-dim); margin-top: 8px; text-shadow: var(--hs-chisel); }
+#holdstone-panel .hs-titles { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
+#holdstone-panel .hs-title-chip {
+    font-family: var(--hs-display);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 3px 12px;
+    color: var(--hs-gold-bright);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.2));
+    border-radius: 3px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Carved divider with a rune in the middle. */
+#holdstone-panel .hs-rule {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 18px 0 6px;
+    color: var(--hs-gold);
+    font-size: 15px;
+}
+#holdstone-panel .hs-rule::before,
+#holdstone-panel .hs-rule::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: rgba(0, 0, 0, 0.5);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 #holdstone-panel .hs-section-title {
+    font-family: var(--hs-display);
     font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--hs-gold);
+    margin: 16px 0 8px;
+    text-shadow: var(--hs-chisel);
+}
+
+#holdstone-panel .hs-empty { font-size: 13px; color: var(--hs-carve-faint); font-style: italic; text-shadow: var(--hs-chisel); }
+
+/* ── Columns ────────────────────────────────────────────────────────────── */
+#holdstone-panel .hs-columns { display: grid; grid-template-columns: 1fr 1.35fr; gap: 28px; }
+#holdstone-panel .hs-col { min-width: 0; }
+
+/* Recessed panels: the parts of the stone that were cut deeper. */
+#holdstone-panel .hs-ranks,
+#holdstone-panel .hs-list {
+    background: rgba(0, 0, 0, 0.22);
+    border-radius: 6px;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 8px 10px;
+}
+
+/* The ladder, highest rank on top. */
+#holdstone-panel .hs-ranks { position: relative; }
+#holdstone-panel .hs-step {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 4px;
+    font-size: 14px;
+    color: var(--hs-carve-dim);
+    text-shadow: var(--hs-chisel);
+}
+#holdstone-panel .hs-step + .hs-step { border-top: 1px solid rgba(0, 0, 0, 0.3); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+#holdstone-panel .hs-step-mark { width: 14px; text-align: center; font-size: 10px; color: var(--hs-carve-faint); }
+#holdstone-panel .hs-step-name { flex: 1; }
+#holdstone-panel .hs-step.leader .hs-step-name { font-family: var(--hs-display); color: var(--hs-carve); letter-spacing: 0.03em; }
+#holdstone-panel .hs-step.leader .hs-step-mark { color: var(--hs-gold); font-size: 13px; }
+#holdstone-panel .hs-step-tag { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--hs-carve-faint); }
+#holdstone-panel .hs-step.mine {
+    color: var(--hs-gold-bright);
+    background: linear-gradient(90deg, var(--hs-gold-dim), transparent);
+    border-radius: 4px;
+}
+#holdstone-panel .hs-step.mine .hs-step-mark { color: var(--hs-gold-bright); text-shadow: 0 0 8px rgba(240, 212, 143, 0.6); }
+#holdstone-panel .hs-step-you {
+    font-size: 10px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--hs-metal-bright);
-    margin: 14px 0 6px;
+    color: #1d1a12;
+    background: var(--hs-gold);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-shadow: none;
 }
 
-#holdstone-panel .hs-ranks { display: flex; flex-wrap: wrap; gap: 6px; }
-#holdstone-panel .hs-rank {
-    border: 1px solid var(--hs-metal-dim);
-    padding: 2px 8px;
-    font-size: 13px;
+#holdstone-panel .hs-allegiances { display: flex; flex-wrap: wrap; gap: 6px; }
+#holdstone-panel .hs-chip {
+    display: inline-flex;
+    border-radius: 4px;
+    overflow: hidden;
+    font-size: 12px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-#holdstone-panel .hs-rank.leader { border-color: var(--hs-metal); color: var(--hs-metal-bright); }
+#holdstone-panel .hs-chip-org { padding: 3px 8px; background: rgba(0, 0, 0, 0.32); color: var(--hs-carve); }
+#holdstone-panel .hs-chip-rank { padding: 3px 8px; background: rgba(0, 0, 0, 0.16); color: var(--hs-gold-bright); }
 
-#holdstone-panel .hs-columns {
-    display: grid;
-    grid-template-columns: 1fr 1.6fr;
-    gap: 18px;
-}
-
-#holdstone-panel .hs-list { display: flex; flex-direction: column; gap: 4px; }
+/* Members and parcels. */
+#holdstone-panel .hs-list { display: flex; flex-direction: column; max-height: 210px; overflow-y: auto; }
 #holdstone-panel .hs-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    background: rgba(0, 0, 0, 0.22);
-    border: 1px solid rgba(0, 0, 0, 0.3);
+    gap: 10px;
+    padding: 6px 2px;
+    text-shadow: var(--hs-chisel);
 }
-#holdstone-panel .hs-row-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-#holdstone-panel .hs-row-name { flex: 1; font-size: 14px; }
-#holdstone-panel .hs-row-meta { font-size: 12px; color: var(--hs-parchment-dim); }
+#holdstone-panel .hs-row + .hs-row { border-top: 1px solid rgba(0, 0, 0, 0.3); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+#holdstone-panel .hs-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#holdstone-panel .hs-row-name { flex: 1; font-size: 14px; color: var(--hs-carve); }
+#holdstone-panel .hs-row-meta { font-size: 12px; color: var(--hs-carve-faint); }
+#holdstone-panel .hs-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: var(--hs-gold-bright);
+    background: rgba(0, 0, 0, 0.3);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    text-shadow: none;
+}
+#holdstone-panel .hs-lock {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.3);
+    text-shadow: none;
+}
+#holdstone-panel .hs-lock.locked { color: var(--hs-blood); }
+#holdstone-panel .hs-lock.open { color: var(--hs-moss); }
 
-#holdstone-panel .hs-lock { font-size: 12px; padding: 1px 6px; border: 1px solid; }
-#holdstone-panel .hs-lock.locked { color: var(--hs-danger); border-color: var(--hs-danger); }
-#holdstone-panel .hs-lock.open { color: var(--hs-ok); border-color: var(--hs-ok); }
-
+/* ── Buttons and forms: iron-bound wood would clash; these are cut stone. ── */
 #holdstone-panel .hs-btn {
-    background: var(--hs-metal-dim);
-    border: 1px solid var(--hs-metal);
-    color: var(--hs-parchment);
     font-family: var(--hs-font);
     font-size: 12px;
-    padding: 3px 8px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.55);
+    color: var(--hs-carve);
+    background: linear-gradient(180deg, #5d5a54, #403e3a);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6);
     cursor: pointer;
+    white-space: nowrap;
 }
-#holdstone-panel .hs-btn:hover { background: rgba(201, 184, 119, 0.3); }
+#holdstone-panel .hs-btn:hover { background: linear-gradient(180deg, #6a665f, #4a4843); color: var(--hs-gold-bright); }
+#holdstone-panel .hs-btn:active { box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.5); }
 
-#holdstone-panel .hs-empty { font-size: 13px; color: var(--hs-parchment-faint); padding: 4px 0; }
-
-#holdstone-panel .hs-manage { display: none; border-top: 1px solid var(--hs-metal-dim); margin-top: 14px; }
+#holdstone-panel .hs-manage { display: none; }
 #holdstone-panel .hs-manage.visible { display: block; }
-#holdstone-panel .hs-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+#holdstone-panel .hs-form { display: flex; gap: 8px; margin-bottom: 8px; }
 #holdstone-panel .hs-form input {
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid var(--hs-metal-dim);
-    color: var(--hs-parchment);
+    flex: 1;
+    min-width: 0;
     font-family: var(--hs-font);
-    padding: 4px 6px;
     font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.32);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.08);
+    color: var(--hs-carve);
+    outline: none;
 }
-#holdstone-panel .hs-hint { font-size: 12px; color: var(--hs-parchment-faint); margin-top: 8px; }
+#holdstone-panel .hs-form input::placeholder { color: var(--hs-carve-faint); }
+#holdstone-panel .hs-form input:focus { border-color: var(--hs-gold); }
+#holdstone-panel .hs-hint { font-size: 12px; color: var(--hs-carve-faint); font-style: italic; margin-top: 4px; text-shadow: var(--hs-chisel); }
 
-@media (max-width: 640px) {
-    #holdstone-panel .hs-columns { grid-template-columns: 1fr; }
+@media (max-width: 720px) {
+    #holdstone-panel .hs-shell { padding: 78px 20px 24px; }
+    #holdstone-panel .hs-columns { grid-template-columns: 1fr; gap: 0; }
+    #holdstone-panel .hs-form { flex-wrap: wrap; }
 }
