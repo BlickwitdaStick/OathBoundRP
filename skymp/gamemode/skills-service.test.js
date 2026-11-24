@@ -317,6 +317,49 @@ test('client snippets are plain strings with the expected hooks', () => {
   assert.doesNotThrow(() => new Function('ctx', service.PANEL_UPDATE_OWNER_SNIPPET));
 });
 
+/** Runs REPORT_SNIPPET against a fake Skyrim Platform shaped like the real one. */
+function runReportSnippet({ weaponType = 1, bodyWeight = 1 } = {}) {
+  const handlers = {};
+  const sent = [];
+  const PLAYER_ID = 0x14;
+  const form = (id) => ({ getFormID: () => id });
+  const player = {
+    getFormID: () => PLAYER_ID,
+    getEquippedWeapon: () => null,
+    getWornForm: () => ({ weight: bodyWeight })
+  };
+  const sp = {
+    on: (name, fn) => { (handlers[name] = handlers[name] || []).push(fn); },
+    Game: { getPlayer: () => player },
+    Actor: { from: (r) => r },
+    Weapon: { from: (f) => (f && f.weaponType !== undefined ? { getWeaponType: () => f.weaponType } : null) },
+    Armor: { from: (f) => (f ? { getWeightClass: () => f.weight } : null) },
+    // Latent, as in Skyrim Platform: a Promise of the school name.
+    Spell: { from: (s) => s && { getNthEffectMagicEffect: () => ({ getAssociatedSkill: () => Promise.resolve(s.school) }) } }
+  };
+  new Function('ctx', service.REPORT_SNIPPET)({ sp, sendEvent: (e) => sent.push(e), state: {} });
+  const fire = (name, e) => (handlers[name] || []).forEach((fn) => fn(e));
+  return { fire, sent, player, form, weaponType };
+}
+
+test('client report: hits use Skyrim Platform\'s `aggressor` field and report the weapon and body armor', () => {
+  const c = runReportSnippet({ bodyWeight: 0 });
+  const enemy = c.form(0xff000123);
+  c.fire('hit', { aggressor: c.player, target: enemy, source: { weaponType: 1 }, isPowerAttack: true });
+  c.fire('hit', { aggressor: enemy, target: c.player, source: null });
+  assert.deepEqual(c.sent, [
+    { kind: 'hit', weaponType: 1, dual: false, power: true },
+    { kind: 'struck', weightClass: 0 }
+  ]);
+});
+
+test('client report: a spell reports its school once the latent getAssociatedSkill resolves', async () => {
+  const c = runReportSnippet();
+  c.fire('spellCast', { caster: c.player, spell: { school: 'Destruction' } });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(c.sent, [{ kind: 'cast', school: 'Destruction' }]);
+});
+
 test('older launchers: the F3 menu files go out once per session, and the injector is valid JS', async () => {
   const t = setup();
   const bundle = service.loadUiBundle();

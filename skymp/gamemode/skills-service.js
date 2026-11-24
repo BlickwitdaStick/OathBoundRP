@@ -308,9 +308,11 @@ const REPORT_SNIPPET = `
   ctx.sp.on('hit', function (e) {
     try {
       var player = ctx.sp.Game.getPlayer();
-      if (!player || !e.agressor || !e.target) return;
+      // Skyrim Platform names it \`aggressor\` (older builds: \`agressor\`).
+      var attacker = e.aggressor || e.agressor;
+      if (!player || !attacker || !e.target) return;
       var pid = player.getFormID();
-      var from = e.agressor.getFormID();
+      var from = attacker.getFormID();
       var to = e.target.getFormID();
       if (from === pid && to !== pid) {
         if (!ctx.sp.Actor.from(e.target)) return;
@@ -336,8 +338,14 @@ const REPORT_SNIPPET = `
       var spell = e.spell ? ctx.sp.Spell.from(e.spell) : null;
       if (!spell) return;
       var effect = spell.getNthEffectMagicEffect(0);
-      var school = effect ? effect.getAssociatedSkill() : '';
-      if (school) ctx.sendEvent({ kind: 'cast', school: String(school) });
+      if (!effect) return;
+      // getAssociatedSkill is latent: it returns a Promise of the school name.
+      var sendSchool = function (school) {
+        if (school && typeof school === 'string') ctx.sendEvent({ kind: 'cast', school: school });
+      };
+      var pending = effect.getAssociatedSkill();
+      if (pending && typeof pending.then === 'function') pending.then(sendSchool, function () {});
+      else sendSchool(pending);
     } catch (err) {}
   });
 `;

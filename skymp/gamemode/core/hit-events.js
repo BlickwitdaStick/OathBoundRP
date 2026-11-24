@@ -98,9 +98,10 @@ const MAX_GOLPES_POR_EPISODIO = 200;
 const SNIPPET_DO_CLIENTE = `
   ctx.sp.on('hit', (e) => {
     try {
-      // \`agressor\` (aggressor) with that spelling is what Skyrim Platform delivers.
+      // Skyrim Platform names it \`aggressor\`; older builds spelled it \`agressor\`.
+      var atacante = e.aggressor || e.agressor;
       var alvo = e.target && ctx.getFormIdInServerFormat(e.target.getFormID());
-      var quemBateu = e.agressor && ctx.getFormIdInServerFormat(e.agressor.getFormID());
+      var quemBateu = atacante && ctx.getFormIdInServerFormat(atacante.getFormID());
       if (!alvo || !quemBateu) return;
       ctx.sendEvent({
         target: alvo,

@@ -70,7 +70,7 @@ test('auth boundary — launcher online injeta sessão opaca e remove profileId 
   const launcher = read('apps/launcher/electron/main.ts');
   const connectionSettings = read('apps/launcher/electron/connection-settings.mjs');
 
-  assert.match(launcher, /prepararConfiguracaoConexao\s*\(\s*\{/);
+  assert.match(launcher, /prepareConnectionSettings\s*\(\s*\{/);
   assert.match(connectionSettings, /config\.session\s*=\s*`ticket:\$\{ticket\}`/);
   assert.match(connectionSettings, /removeUntrustedCredentials\(config\)/);
 });
@@ -84,7 +84,7 @@ test('auth boundary — AUTH-01 corrigido: client settings gravam gameData.sessi
   const launcher = read('apps/launcher/electron/main.ts');
   const connectionSettings = read('apps/launcher/electron/connection-settings.mjs');
 
-  assert.match(launcher, /prepararConfiguracaoConexao\s*\(\s*\{/);
+  assert.match(launcher, /prepareConnectionSettings\s*\(\s*\{/);
   assert.match(connectionSettings, /gameData\.session\s*=\s*ticket/);
   assert.match(connectionSettings, /removeUntrustedCredentials\(gameData\)/);
   assert.match(connectionSettings, /clientSettings\['server-info-ignore'\]\s*=\s*true/);

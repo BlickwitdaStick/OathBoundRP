@@ -413,6 +413,23 @@ describe('profession-service — addProfessionXp', () => {
     assert.strictEqual((await professionService.addProfessionXp({ characterId: CHAR_A, professionCode: 'miner', amount: 1.5, staffCharacterId: 1 }, h.dependencies)).code, 'invalid_amount');
   });
 
+  it('practice reaches the skills system even without an old profession row (profession picked in F3)', async () => {
+    const skillActivity = require('./core/skill-activity');
+    const seen = [];
+    const off = skillActivity.subscribe((a) => seen.push(a));
+    try {
+      const h = makeHarness({ rows: [] });
+      const r = await professionService.addProfessionXp({ characterId: CHAR_A, professionCode: 'tanner', amount: 5, context: 'craft' }, h.dependencies);
+      assert.strictEqual(r.code, 'not_found');
+      assert.deepStrictEqual(seen, [{ characterId: CHAR_A, professionCode: 'tanner', amount: 5, source: 'craft' }]);
+      seen.length = 0;
+      await professionService.addProfessionXp({ characterId: CHAR_A, professionCode: 'tanner', amount: 5, staffCharacterId: 900 }, h.dependencies);
+      assert.deepStrictEqual(seen, [], 'staff corrections are not practice');
+    } finally {
+      off();
+    }
+  });
+
   it('recusa XP de profissão suspensa', async () => {
     const h = makeHarness({ rows: [{ id: 1, character_id: CHAR_A, profession_code: 'miner', status: STATUS.SUSPENDED, rank: 0, xp: 10 }] });
     const r = await professionService.addProfessionXp({ characterId: CHAR_A, professionCode: 'miner', amount: 5 }, h.dependencies);

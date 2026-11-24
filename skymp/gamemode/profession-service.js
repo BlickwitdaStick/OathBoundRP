@@ -457,6 +457,14 @@ async function addProfessionXp(opts, dependencies = {}) {
     return { ok: false, code: 'negative_requires_admin' };
   }
 
+  // Practice counts for the skills system (skills-service.js maps the
+  // profession code to a skill) whether or not the character also has a row
+  // in the older profession table: a profession picked in the F3 menu has none,
+  // and its crafting used to earn nothing. Staff corrections are not practice.
+  if (amount > 0 && !_isPositiveInt(staffCharacterId)) {
+    require('./core/skill-activity').report({ characterId, professionCode, amount, source: (opts && opts.context) || 'profession_xp' });
+  }
+
   const conn = await deps.db.getConnection();
   try {
     await conn.beginTransaction();
@@ -481,12 +489,6 @@ async function addProfessionXp(opts, dependencies = {}) {
 
     await conn.query('UPDATE character_professions SET xp = ? WHERE id = ?', [xpNovo, linha.id]);
     await conn.commit();
-
-    // Mirror real gains into the skills system (skills-service.js maps the
-    // profession code to a skill). Staff corrections are not practice.
-    if (amount > 0 && !_isPositiveInt(staffCharacterId)) {
-      require('./core/skill-activity').report({ characterId, professionCode, amount, source: opts.context || 'profession_xp' });
-    }
 
     return { ok: true, data: { previousXp: xpAnterior, xp: xpNovo, delta: xpNovo - xpAnterior } };
   } catch (err) {
