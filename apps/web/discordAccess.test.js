@@ -61,16 +61,24 @@ test('leaving the Discord server removes a Discord-granted staff role', async ()
   assert.equal(f.t.staff, null);
 });
 
-test('hand-set roles and owners are never touched', async () => {
+test('hand-set roles are never touched, an owner set in the database included', async () => {
   const manual = fakeDb({ staff: { role: 'moderator', notes: null } });
   await applyMemberAccess({ db: manual.db, execute: manual.execute, accountId: 5, access: access({ staffRole: null }) });
   await applyMemberAccess({ db: manual.db, execute: manual.execute, accountId: 5, access: access({ staffRole: 'admin' }) });
   assert.deepEqual(manual.t.staff, { role: 'moderator', notes: null });
 
-  const owner = fakeDb({ staff: { role: 'owner', notes: DISCORD_NOTE } });
+  const owner = fakeDb({ staff: { role: 'owner', notes: null } });
   await applyMemberAccess({ db: owner.db, execute: owner.execute, accountId: 1, access: { inGuild: false, whitelisted: false, staffRole: null } });
   assert.equal(owner.t.staff.role, 'owner');
   assert.deepEqual([...manual.t.audit, ...owner.t.audit], []);
+});
+
+test('the Founder role grants owner, and taking the role away removes it', async () => {
+  const f = fakeDb();
+  await applyMemberAccess({ db: f.db, execute: f.execute, accountId: 9, access: access({ whitelisted: true, staffRole: 'owner' }) });
+  assert.deepEqual(f.t.staff, { role: 'owner', notes: DISCORD_NOTE });
+  await applyMemberAccess({ db: f.db, execute: f.execute, accountId: 9, access: access({ whitelisted: true, staffRole: 'admin' }) });
+  assert.equal(f.t.staff.role, 'admin');
 });
 
 test('bot unreachable or answering nonsense: nothing changes and sign-in carries on', async () => {
@@ -82,9 +90,9 @@ test('bot unreachable or answering nonsense: nothing changes and sign-in carries
 
   const weird = async () => ({ ok: true, json: async () => ({ staffRole: 'owner' }) });
   assert.equal(await fetchMemberAccess({ botUrl: 'http://bot', secret: 's', discordId: '1', fetchImpl: weird }), null);
-  const ownerClaim = async () => ({ ok: true, json: async () => ({ inGuild: true, whitelisted: true, staffRole: 'owner' }) });
-  assert.deepEqual(await fetchMemberAccess({ botUrl: 'http://bot', secret: 's', discordId: '1', fetchImpl: ownerClaim }),
-    { inGuild: true, whitelisted: true, staffRole: null }, 'owner can never come from Discord');
+  const unknownRole = async () => ({ ok: true, json: async () => ({ inGuild: true, whitelisted: true, staffRole: 'god' }) });
+  assert.deepEqual(await fetchMemberAccess({ botUrl: 'http://bot', secret: 's', discordId: '1', fetchImpl: unknownRole }),
+    { inGuild: true, whitelisted: true, staffRole: null }, 'only roles the game knows');
 });
 
 test('the request to the bot carries the internal secret and the id in the body', async () => {

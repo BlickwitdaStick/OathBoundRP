@@ -16,12 +16,15 @@
  *   coming from Discord). Losing the role does not take it away; staff use the
  *   panel for that, as before.
  * - Staff: rows this sync created carry `notes = DISCORD_NOTE`. Only those are
- *   changed or removed when the Discord role changes. A role set by hand in the
- *   database is left alone, and an `owner` row is never touched.
+ *   changed or removed when the Discord role changes (Founder → owner included).
+ *   A role set by hand in the database is never touched, so an owner set there
+ *   cannot be removed from Discord.
  * - Every change goes to `audit_logs`.
  */
 
 const DISCORD_NOTE = 'discord-role';
+/** Staff roles the game knows (skymp/gamemode/admin-service.js ROLE_PERMISSIONS). */
+const STAFF_ROLES = Object.freeze(['moderator', 'admin', 'owner']);
 const BOT_TIMEOUT_MS = 3000;
 
 /**
@@ -45,7 +48,7 @@ async function fetchMemberAccess({ botUrl, secret, discordId, fetchImpl = fetch,
     return {
       inGuild: body.inGuild,
       whitelisted: body.whitelisted === true,
-      staffRole: body.staffRole === 'admin' || body.staffRole === 'moderator' ? body.staffRole : null
+      staffRole: STAFF_ROLES.includes(body.staffRole) ? body.staffRole : null
     };
   } catch {
     return null;
@@ -87,7 +90,7 @@ async function applyMemberAccess({ db, execute, accountId, access }) {
   const wanted = access.inGuild ? access.staffRole : null;
   const rows = await db('SELECT role, notes FROM staff_roles WHERE account_id = ? LIMIT 1', [accountId]);
   const current = rows[0] || null;
-  const managed = current && current.notes === DISCORD_NOTE && current.role !== 'owner';
+  const managed = Boolean(current && current.notes === DISCORD_NOTE);
 
   if (!current && wanted) {
     await execute('INSERT INTO staff_roles (account_id, role, notes) VALUES (?, ?, ?)', [accountId, wanted, DISCORD_NOTE]);

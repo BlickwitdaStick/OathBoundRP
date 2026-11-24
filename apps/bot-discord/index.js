@@ -144,6 +144,8 @@ app.post('/api/sync-role', async (req, res) => {
  */
 const STAFF_ROLE_MAP = memberAccess.staffRoleMapFromEnv();
 for (const err of STAFF_ROLE_MAP.errors) console.warn(`[discord-bot] STAFF_ROLE_MAP: ${err}`);
+const WHITELIST_ROLE_IDS = memberAccess.whitelistRoleIdsFromEnv();
+for (const err of WHITELIST_ROLE_IDS.errors) console.warn(`[discord-bot] WHITELIST_ROLE_IDS: ${err}`);
 
 app.post('/api/member-access', async (req, res) => {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -165,7 +167,7 @@ app.post('/api/member-access', async (req, res) => {
         const member = await guild.members.fetch(discordId).catch(() => null);
         if (!member) return res.json({ inGuild: false, whitelisted: false, staffRole: null });
         const access = memberAccess.accessFor(member.roles.cache.keys(), {
-            whitelistRoleId: WHITELIST_ROLE_ID,
+            whitelistRoleIds: WHITELIST_ROLE_IDS.ids,
             staffRoleMap: STAFF_ROLE_MAP.map
         });
         res.json({ inGuild: true, ...access });
