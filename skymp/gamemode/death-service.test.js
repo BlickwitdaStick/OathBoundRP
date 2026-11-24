@@ -880,6 +880,28 @@ describe('death-service — leftover death at login', () => {
     assert.strictEqual(characterState.get(VICTIM_CHARACTER_ID), STATES.NORMAL);
   });
 
+  it('a character saved with no health is revived even when isDead is false', () => {
+    mp.get = (id, prop) => {
+      if (prop === 'isDead') return false;
+      if (prop === 'percentages') return { health: 0, magicka: 0.4, stamina: 0.2 };
+      return original.get(id, prop);
+    };
+    characterState.set(VICTIM_CHARACTER_ID, STATES.NORMAL, {});
+    assert.strictEqual(deathService.recoverOnLogin(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID), true);
+    assert.deepStrictEqual(sets.find((s) => s.prop === 'percentages').v, { health: 1, magicka: 1, stamina: 1 });
+  });
+
+  it('a wounded but living character keeps its health', () => {
+    mp.get = (id, prop) => {
+      if (prop === 'isDead') return false;
+      if (prop === 'percentages') return { health: 0.3, magicka: 1, stamina: 1 };
+      return original.get(id, prop);
+    };
+    characterState.set(VICTIM_CHARACTER_ID, STATES.NORMAL, {});
+    assert.strictEqual(deathService.recoverOnLogin(VICTIM_ACTOR_ID, VICTIM_CHARACTER_ID), false);
+    assert.deepStrictEqual(sets, []);
+  });
+
   it('a healthy character is left alone', () => {
     mp.get = (id, prop) => (prop === 'isDead' ? false : original.get(id, prop));
     characterState.set(VICTIM_CHARACTER_ID, STATES.NORMAL, {});

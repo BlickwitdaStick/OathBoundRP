@@ -351,6 +351,11 @@ function pollPlayersOnce() {
 function reviveNow(actorId, characterId) {
   let wasDead = false;
   try { wasDead = Boolean(mp.get(actorId, 'isDead')); } catch { /* unknown */ }
+  let noHealth = false;
+  try {
+    const p = mp.get(actorId, 'percentages');
+    noHealth = Boolean(p) && typeof p.health === 'number' && p.health <= 0;
+  } catch { /* unknown */ }
   const state = characterState.get(characterId);
   const entry = _downedPlayers.get(characterId);
   if (entry) {
@@ -358,7 +363,7 @@ function reviveNow(actorId, characterId) {
     clearPoseTimers(entry);
     _downedPlayers.delete(characterId);
   }
-  const stuck = wasDead || Boolean(entry) || state === STATES.DOWNED || state === STATES.DEAD;
+  const stuck = wasDead || noHealth || Boolean(entry) || state === STATES.DOWNED || state === STATES.DEAD;
   if (!stuck) return false;
   if (wasDead) mp.set(actorId, 'isDead', false);
   _wasDead.set(actorId, false);
