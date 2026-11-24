@@ -275,14 +275,25 @@ async function buildClientModsManifest(rootDir, opts = {}) {
   }
   const relPaths = listFiles(rootDir);
   const files = [];
+  const progress = typeof opts.onProgress === 'function' ? opts.onProgress : null;
+  const progressEveryMs = opts.progressEveryMs || 5000;
+  let hashedFiles = 0;
+  let hashedBytes = 0;
+  let lastReport = Date.now();
   for (const rel of relPaths) {
     if (!isSafeRelativePath(rel)) throw new Error(`Unsafe file name in client-mods: ${rel}`);
     const full = path.join(rootDir, ...rel.split('/'));
     const st = fs.statSync(full);
     const hit = cache[rel];
-    const sha256 = hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs ? hit.sha256 : await sha256File(full);
+    const cached = hit && hit.size === st.size && hit.mtimeMs === st.mtimeMs;
+    const sha256 = cached ? hit.sha256 : await sha256File(full);
+    if (!cached) { hashedFiles++; hashedBytes += st.size; }
     nextCache[rel] = { size: st.size, mtimeMs: st.mtimeMs, sha256 };
     files.push({ path: rel, size: st.size, sha256 });
+    if (progress && Date.now() - lastReport >= progressEveryMs) {
+      lastReport = Date.now();
+      progress({ done: files.length, total: relPaths.length, hashedFiles, hashedBytes });
+    }
   }
 
   const rootPlugins = relPaths.filter(rel => !rel.includes('/') && PLUGIN_EXTENSIONS.has(path.extname(rel).toLowerCase()));

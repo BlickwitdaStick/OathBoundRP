@@ -113,12 +113,15 @@ async function syncClientMods(opts) {
   const lightSupported = o.serverSupportsLightPlugins === undefined ? resolveLightPluginSupport() : !!o.serverSupportsLightPlugins;
 
   const previous = fs.existsSync(o.manifestOutPath) ? readJson(o.manifestOutPath) : null;
+  log(`[client-mods] checking ${o.clientModsDir}`);
   const manifest = await buildClientModsManifest(o.clientModsDir, {
     hashCachePath: o.hashCachePath === undefined ? path.join(GAME_API_DIR, 'client-mods-hash-cache.json') : o.hashCachePath,
     baseDataDir,
     // Existing plugins keep their place; new ones go after (PLUGIN_LOAD_ORDER_STRATEGY.md rule 4).
     previousPlugins: (previous && previous.plugins) || [],
-    serverSupportsLightPlugins: lightSupported
+    serverSupportsLightPlugins: lightSupported,
+    onProgress: ({ done, total, hashedFiles, hashedBytes }) =>
+      log(`[client-mods] checking files ${done}/${total} (${hashedFiles} new or changed, ${(hashedBytes / 1048576).toFixed(0)} MB hashed)`)
   });
   log(`[client-mods] ${manifest.files.length} file(s), ${manifest.plugins.length} plugin(s), ${(manifest.totalBytes / 1048576).toFixed(1)} MB, version ${manifest.version}`);
   const nexus = attachNexusSources(o.nexusRecipePath ? readNexusRecipe(o.nexusRecipePath) : null, manifest);
