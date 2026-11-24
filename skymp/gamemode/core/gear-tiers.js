@@ -21,28 +21,28 @@ const MATERIAL_RULES = Object.freeze([
   [/stormcloak|eastmarch/i, 'apprentice'],
   [/steel\s*plate|steelplate/i, 'expert'],
   [/dragon\s*(plate|scale|bone)|dragonplate|dragonscale|dragonbone|daedric|daedra|ebony|glass|stalhrim|malachite/i, 'master'],
-  [/orcish|orichalcum|quicksilver|elven\s*gilded|elvengilded/i, 'expert'],
-  [/elven|moonstone|dwarven|dwemer|chitin|falmer|nordic|silver|gold|vampire|nightingale|thievesguild|thieves guild|darkbrotherhood|dark brotherhood|blades|moragtong|morag tong/i, 'adept'],
-  [/steel|corundum|bonemold|scaled|imperial|dawnguard|hunter|penitus/i, 'apprentice'],
-  [/iron|hide|leather|studded|\bfur\b|forsworn|draugr|ancient\s*nord|\bwood/i, 'novice']
+  [/orcish|orichalcum|quicksilver|elven\s*gilded|elvengilded|mithril|meteoric|ayleid/i, 'expert'],
+  [/elven|moonstone|dwarven|dwemer|chitin|falmer|nordic|silver|gold|vampire|nightingale|thievesguild|thieves guild|darkbrotherhood|dark brotherhood|blades|moragtong|morag tong|altmer|thalmor|dunmer|bosmer|minotaur/i, 'adept'],
+  [/steel|corundum|bonemold|scaled|scalemail|imperial|dawnguard|hunter|penitus|khajii?t|wolf/i, 'apprentice'],
+  [/iron|hide|leather|studded|fur\b|forsworn|draugr|ancient\s*nord|\bwood|bone|bronze|copper|brass|chainmail|common/i, 'novice']
 ]);
 
 /** Crafting materials by editor id. */
 const INGREDIENT_RULES = Object.freeze([
   [/^(IngotEbony|ingotMalachite|DragonBone|DragonScales|DaedraHeart|DLC2OreStalhrim)$/i, 'master'],
-  [/^(IngotQuicksilver|IngotOrichalcum)$/i, 'expert'],
-  [/^(ingotSilver|IngotGold|IngotIMoonstone|IngotDwarven|DLC2ChitinPlate|ChaurusChitin)$/i, 'adept'],
+  [/^(IngotQuicksilver|IngotOrichalcum|BSKIngotMeteoricIron|BSKOreMeteoricIron|BSKOreMithril|BSKIngotMithril)$/i, 'expert'],
+  [/^(ingotSilver|IngotGold|IngotIMoonstone|IngotDwarven|DLC2ChitinPlate|ChaurusChitin|BSKMinotaurHide)$/i, 'adept'],
   [/^(IngotSteel|IngotCorundum|DLC2NetchLeather|DLC2BoneMold.*)$/i, 'apprentice'],
-  [/^(IngotIron|Leather01|LeatherStrips|Hide.*|Pelt.*|Firewood01)$/i, 'novice']
+  [/^(IngotIron|Leather01|LeatherStrips|Hide.*|Pelt.*|Firewood01|BSKIngot(Copper|Brass|Bronze|Tin)|BSKOre(Copper|Tin))$/i, 'novice']
 ]);
 
 /** Ore and the ingot it smelts into share a tier (same as core/skills.js ORE_TIERS). */
 const ORE_RULES = Object.freeze([
   [/ebony|malachite|stalhrim/i, 'master'],
-  [/quicksilver|orichalcum/i, 'expert'],
+  [/quicksilver|orichalcum|mithril|meteoric/i, 'expert'],
   [/moonstone|silver|gold|dwarven|dwemer/i, 'adept'],
   [/corundum|steel/i, 'apprentice'],
-  [/iron/i, 'novice']
+  [/iron|copper|tin\b|bronze|brass/i, 'novice']
 ]);
 
 function tierIndexOf(key) {

@@ -44,6 +44,27 @@ describe('gear tiers: classify', () => {
     assert.equal(tierOf({ name: 'Mystery Plate' }), null);
   });
 
+  it('Beyond Skyrim and Sentinel materials', () => {
+    assert.equal(tierOf({ keywords: ['BSKArmorMaterialBronze'] }), 'novice');
+    assert.equal(tierOf({ keywords: ['BSKWeapMaterialBone'] }), 'novice');
+    assert.equal(tierOf({ keywords: ['BSKArmorMaterialFur'] }), 'novice');
+    assert.equal(tierOf({ keywords: ['CYRArmorMaterialChainmail'] }), 'novice');
+    assert.equal(tierOf({ keywords: ['CYRArmorMaterialScalemail'] }), 'apprentice');
+    assert.equal(tierOf({ keywords: ['ArmorMaterialLightKhajiitiSteel'] }), 'apprentice');
+    assert.equal(tierOf({ keywords: ['TH_MaterialKhajiit'] }), 'apprentice');
+    assert.equal(tierOf({ keywords: ['MCE_ArmorMaterialWolf'] }), 'apprentice');
+    assert.equal(tierOf({ keywords: ['CYRArmorMaterialSilver'] }), 'adept');
+    assert.equal(tierOf({ keywords: ['TH_MaterialThalmor'] }), 'adept');
+    assert.equal(tierOf({ keywords: ['TH_MaterialDunmer'] }), 'adept');
+    assert.equal(tierOf({ keywords: ['CYRWeapMaterialAyleid'] }), 'expert');
+    assert.equal(tierOf({ keywords: ['BSKArmorMaterialImperialMithril'] }), 'expert');
+    assert.equal(tierOf({ keywords: ['TH_MaterialGuard'] }), 'apprentice');
+    assert.equal(tierOf({ keywords: ['DLC1ArmorMaterialDragonbone'] }), 'master');
+    assert.equal(tierOf({ keywords: ['DLC2ArmorMaterialBonemoldHeavy'] }), 'apprentice');
+    assert.equal(gearTiers.smeltTier('BSKIngotCopper'), 'novice');
+    assert.equal(gearTiers.smeltTier('BSKIngotMeteoricIron'), 'expert');
+  });
+
   it('smelting follows the ore', () => {
     assert.equal(gearTiers.smeltTier('IngotIron'), 'novice');
     assert.equal(gearTiers.smeltTier('IngotCorundum'), 'apprentice');
