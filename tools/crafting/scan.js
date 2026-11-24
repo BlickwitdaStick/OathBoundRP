@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { readPlugin, zstring } = require('./esp-read');
+const { loadStrings } = require('./strings');
 
 const REPO = path.resolve(__dirname, '..', '..');
 const CLIENT_MODS = path.join(REPO, 'skymp', 'client-mods');
@@ -49,7 +50,8 @@ function loadOrder(exclude = []) {
 
 function scan({ exclude = [] } = {}) {
   const order = loadOrder(exclude);
-  const armors = new Map();   // key -> armor (last override wins, origin kept)
+  const armors = new Map();
+  const weapons = new Map();   // key -> armor (last override wins, origin kept)
   const cobjMap = new Map(); // COBJ key -> last override {plugin, out, bench, items, conds}
   const skins = new Set();    // keys used as RACE/NPC skin
   const raceArmors = new Set();
@@ -63,7 +65,14 @@ function scan({ exclude = [] } = {}) {
   for (const name of order) {
     const file = locate(name);
     if (!file) { console.warn(`[scan] missing plugin ${name}`); continue; }
-    const types = new Set(['ARMO', 'COBJ', 'RACE', 'NPC_', 'KYWD', 'LVLI', 'OTFT', 'MISC', 'INGR', 'ARMA']);
+    const types = new Set(['ARMO', 'WEAP', 'COBJ', 'RACE', 'NPC_', 'KYWD', 'LVLI', 'OTFT', 'MISC', 'INGR', 'ARMA']);
+    let strings = null;
+    const nameOf = (full, hdr) => {
+      if (!full) return null;
+      if (!hdr.localized) return zstring(full.data);
+      if (!strings) strings = loadStrings(GAME_DATA, name);
+      return strings.get(full.data.readUInt32LE(0)) || null;
+    };
     const header = readPlugin(file, name, types, (rec, hdr) => {
       const f = (t) => rec.fields.find((x) => x.type === t);
       const fs_ = (t) => rec.fields.filter((x) => x.type === t);
@@ -94,7 +103,7 @@ function scan({ exclude = [] } = {}) {
         if (c) {
           const n1 = f('NAM1');
           cobjMap.set(rec.key, {
-            plugin: name, edid, key: rec.key,
+            plugin: name, edid, key: rec.key, raw: rec.fields, masters: hdr.masters, recFlags: rec.flags,
             out: rec.ref(c.data.readUInt32LE(0)),
             bench: b ? rec.ref(b.data.readUInt32LE(0)) : null,
             count: n1 ? n1.data.readUInt16LE(0) : 1,
@@ -104,12 +113,29 @@ function scan({ exclude = [] } = {}) {
         }
         return;
       }
+      if (rec.type === 'WEAP') {
+        if (rec.deleted) { weapons.delete(rec.key); return; }
+        const prev = weapons.get(rec.key);
+        const w = { key: rec.key, origin: rec.key.split('|')[0], plugin: name, edid, recFlags: rec.flags, raw: rec.fields, masters: hdr.masters };
+        w.name = nameOf(f('FULL'), hdr);
+        if (prev && !w.name && prev.name) w.name = prev.name;
+        const k = f('KWDA');
+        w.kw = [];
+        if (k) for (let o = 0; o + 4 <= k.data.length; o += 4) w.kw.push(rec.ref(k.data.readUInt32LE(o)));
+        const dn = f('DNAM'); w.anim = dn ? dn.data.readUInt8(0) : null;
+        const d = f('DATA'); w.damage = d && d.data.length >= 10 ? d.data.readUInt16LE(8) : 0;
+        w.enchanted = Boolean(f('EITM'));
+        const t = f('CNAM'); w.template = t ? rec.ref(t.data.readUInt32LE(0)) : null;
+        weapons.set(rec.key, w);
+        return;
+      }
       if (rec.type === 'ARMO') {
         if (rec.deleted) { armors.delete(rec.key); return; }
         const prev = armors.get(rec.key);
         const a = { key: rec.key, origin: rec.key.split('|')[0], plugin: name, edid, recFlags: rec.flags };
         const full = f('FULL');
-        a.name = full ? (hdr.localized ? null : zstring(full.data)) : null;
+        a.name = nameOf(full, hdr);
+        a.raw = rec.fields; a.masters = hdr.masters;
         const bod2 = f('BOD2'); const bodt = f('BODT');
         if (bod2) { a.slots = bod2.data.readUInt32LE(0); a.armorType = bod2.data.readUInt32LE(4); a.bodyFlags = 0; }
         else if (bodt) { a.slots = bodt.data.readUInt32LE(0); a.bodyFlags = bodt.data.readUInt8(4); a.armorType = bodt.data.length >= 12 ? bodt.data.readUInt32LE(8) : null; }
@@ -129,8 +155,9 @@ function scan({ exclude = [] } = {}) {
     plugins.push({ name, masters: header.masters, light: header.light });
   }
   for (const a of armors.values()) a.kwEdids = a.kw.map((k) => keywords.get(k) || k);
+  for (const w of weapons.values()) w.kwEdids = w.kw.map((k) => keywords.get(k) || k);
   const cobjs = [...cobjMap.values()];
-  return { order, plugins, armors, cobjs, skins, keywords, kwByEdid, leveled, outfits, misc, VANILLA };
+  return { order, plugins, armors, weapons, cobjs, skins, keywords, kwByEdid, leveled, outfits, misc, VANILLA };
 }
 
-module.exports = { scan, VANILLA, CLIENT_MODS, REPO, locate };
+module.exports = { scan, VANILLA, CLIENT_MODS, REPO, GAME_DATA, locate };

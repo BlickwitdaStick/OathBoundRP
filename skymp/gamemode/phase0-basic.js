@@ -78,6 +78,7 @@ const tradeService  = require(path.join(gamemodeDir, 'trade-service'));
 const depotService  = require(path.join(gamemodeDir, 'core', 'depot-service'));
 const holdstoneService = require(path.join(gamemodeDir, 'holdstone-service'));
 const skillsService = require(path.join(gamemodeDir, 'skills-service'));
+const gearGateService = require(path.join(gamemodeDir, 'gear-gate-service'));
 const survivalService = require(path.join(gamemodeDir, 'survival-service'));
 const crimeService  = require(path.join(gamemodeDir, 'core', 'crime-service'));
 const interactionPromptService = require(path.join(gamemodeDir, 'core', 'interaction-prompt-service'));
@@ -732,9 +733,11 @@ moduleRegistry.register({
   initialize: async () => {
     await skillsService.initialize();
     uiEventRouter.register('skills', skillsService.handleUiEvent);
+    gearGateService.initialize();
   },
   shutdown: async () => {
     uiEventRouter.unregister('skills');
+    gearGateService.shutdown();
     skillsService.shutdown();
   }
 });

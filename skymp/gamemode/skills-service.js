@@ -37,6 +37,7 @@
 
 const skills = require('./core/skills');
 const trees = require('./core/skill-trees');
+const gearTiers = require('./core/gear-tiers');
 const progressionForms = require('./core/progression-forms');
 const skillActivity = require('./core/skill-activity');
 
@@ -420,12 +421,12 @@ async function loadCatalog() {
   const api = d.mp();
   const catalog = await progressionForms.buildCatalogFromServer(api, {
     trackedPlugins: d.trackedPlugins,
-    perkEditorIds: trees.allPerkEditorIds(),
+    perkEditorIds: [...trees.allPerkEditorIds(), ...gearTiers.allTierPerks()],
     log: (m) => d.logger.log(m)
   });
   setCatalog(catalog);
   d.logger.log(`[skills] ${catalog.perkByEditorId.size} tree perks resolved, ${catalog.tracked.size} mod perks/spells tracked (${d.trackedPlugins.join(', ')}).`);
-  if (catalog.missingPerks.length) d.logger.warn(`[skills] Tree perks not found in Skyrim.esm: ${catalog.missingPerks.join(', ')}`);
+  if (catalog.missingPerks.length) d.logger.warn(`[skills] Tree perks not found in Skyrim.esm / Oathbound_Armor.esp: ${catalog.missingPerks.join(', ')}`);
   if (catalog.missingPlugins.length) d.logger.warn(`[skills] Tracked plugins not in the load order: ${catalog.missingPlugins.join(', ')}`);
 }
 
@@ -670,6 +671,10 @@ function buildClientPayload(state) {
         const id = node && node.perk ? _catalog.perkByEditorId.get(node.perk) : null;
         if (id) perkIds.add(id);
       }
+      for (const editorId of gearTiers.tierPerksFor(row.skill_code, skills.tierIndex(attributes ? skills.effectiveLevel(row.skill_code, row, attributes) : skills.levelOfRow(row)))) {
+        const id = _catalog.perkByEditorId.get(editorId);
+        if (id) perkIds.add(id);
+      }
     }
   }
   for (const key of state.modForms) {
@@ -705,6 +710,7 @@ function pushToClient(actorId, state) {
       _uiSent.add(actorId);
     }
     api.set(actorId, PROPERTY, payload);
+    require('./gear-gate-service').recheck(actorId);
   } catch (err) {
     deps().logger.error(`[skills] Could not send progression to 0x${actorId.toString(16)}:`, err.message);
   }

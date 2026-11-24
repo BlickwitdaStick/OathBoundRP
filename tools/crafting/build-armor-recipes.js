@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 /**
- * Builds OathboundArmorRecipes.esp: a light (ESL-flagged) plugin of COBJ
- * records so every playable armor, clothing, cloak and bag piece added by our
- * hosted mods can be made at a forge or tanning rack.
+ * Builds Oathbound_Armor.esp (light plugin): the material tier perks, every
+ * forge/smelter/tanning/tempering recipe in the load order gated by the
+ * crafter's profession tier, a recipe for every playable armor piece of the
+ * hosted mods that had none, and Eastmarch names for Stormcloak gear. Also
+ * writes skymp/gamemode/data/gear-tiers.json for the server's equip gate.
  *
- * Why a plugin: SkyMP crafts from COBJ records server-side
- * (skymp5-server CraftService: the client sends the inputs, the server finds
- * the matching COBJ in the loaded plugins, removes the inputs and adds the
- * output). The client shows the same records in the vanilla crafting menu, so
- * one plugin covers both sides. Condition functions the server does not
- * implement (HasPerk) evaluate to true there; the client still hides the
- * recipe until the perk is owned, and skills-service re-applies tree perks at
- * every login, so the vanilla smithing perks are the skill gate.
+ * SkyMP crafts from COBJ records server-side (CraftService) and treats
+ * HasPerk as true there; the client hides a recipe until the tier perk is
+ * owned, and skills-service.js grants the tier perks from skill levels.
  *
  * How each recipe is chosen, in order:
  *   1. sibling: another armor with the same name (colour suffix " - X"
@@ -31,7 +28,7 @@
  * loot copies of vanilla pieces, child clothing, and quest/rank outfits.
  *
  * Usage: node tools/crafting/build-armor-recipes.js [--no-install]
- *   writes tools/crafting/dist/OathboundArmorRecipes.esp,
+ *   writes tools/crafting/dist/Oathbound_Armor.esp,
  *   tools/crafting/armor-recipes-report.md, and copies the plugin into
  *   skymp/client-mods unless --no-install.
  */
@@ -41,7 +38,11 @@ const fs = require('fs');
 const path = require('path');
 const { scan, VANILLA, CLIENT_MODS } = require('./scan');
 
-const PLUGIN = 'OathboundArmorRecipes.esp';
+const PLUGIN = 'Oathbound_Armor.esp';
+const GEAR_FILE = path.join(__dirname, '..', '..', 'skymp', 'gamemode', 'data', 'gear-tiers.json');
+const gearTiers = require('../../skymp/gamemode/core/gear-tiers');
+const GATED_BENCHES = new Set(['CraftingSmithingForge', 'CraftingSmithingSkyforge', 'DLC1CraftingDawnguard', 'DLC1LD_CraftingForgeAetherium',
+  'CraftingTanningRack', 'CraftingSmelter', 'CraftingSmithingArmorTable', 'CraftingSmithingSharpeningWheel', 'CoSWheelCrafting']);
 const DIST = path.join(__dirname, 'dist');
 const REPORT = path.join(__dirname, 'armor-recipes-report.md');
 const FIRST_LOCAL_ID = 0x800;
@@ -126,7 +127,7 @@ const TIER_TEMPLATES = /^Armor(Hide|Leather|Studded|Elven|Scaled|Glass|Iron|Iron
 
 function main() {
   const install = !process.argv.includes('--no-install');
-  const s = scan({ exclude: [PLUGIN] });
+  const s = scan({ exclude: [PLUGIN, 'Oathbound_Armor.esp'] });
   const kw = (k) => s.keywords.get(k) || '';
   const vanillaMisc = (edid) => {
     const k = s.misc.get(edid);
@@ -278,71 +279,278 @@ function main() {
     added.push({ a, r });
   }
 
-  // ── Write the plugin ──────────────────────────────────────────────────────
-  if (added.length > LAST_LOCAL_ID - FIRST_LOCAL_ID + 1) throw new Error(`${added.length} recipes do not fit a light plugin`);
-  const refs = new Set();
-  for (const { a, r } of added) {
-    refs.add(a.key); refs.add(r.bench);
-    r.items.forEach((i) => refs.add(i.item));
-    r.conds.forEach((c) => refs.add(c.param1));
+  // ── Tiers ─────────────────────────────────────────────────────────────────
+  const edidOfKey = new Map([...s.misc].map(([e, k]) => [k, e]));
+  const recipeOf = new Map();
+  for (const c of making) if (!recipeOf.has(c.out)) recipeOf.set(c.out, c.items);
+  for (const { a, r } of added) recipeOf.set(a.key, r.items);
+  const ingredientsOf = (key) => (recipeOf.get(key) || []).map((i) => edidOfKey.get(i.item)).filter(Boolean);
+
+  const vanillaArmorTiers = [];
+  for (const a of s.armors.values()) {
+    if (!VANILLA.has(a.origin) || a.armorType > 1 || !TIER_TEMPLATES.test(a.edid)) continue;
+    const t = gearTiers.classify({ keywords: a.kwEdids, name: a.name, edid: a.edid });
+    if (t.tier) vanillaArmorTiers.push({ armorType: a.armorType, slot: slotClass(a), rating: a.rating, tier: t.tier });
   }
-  const owners = new Set([...refs].map((k) => k.split('|')[0]));
+  const vanillaWeaponTiers = [];
+  for (const w of s.weapons.values()) {
+    if (!VANILLA.has(w.origin) || w.template || !/^(Iron|Steel|Elven|Dwarven|Orcish|Glass|Ebony|Daedric)/.test(w.edid)) continue;
+    const t = gearTiers.classify({ keywords: w.kwEdids, name: w.name, edid: w.edid });
+    if (t.tier) vanillaWeaponTiers.push({ anim: w.anim, damage: w.damage, tier: t.tier });
+  }
+  const nearest = (list, value) => list.slice().sort((x, y) => Math.abs(x.value - value) - Math.abs(y.value - value))[0];
+
+  const tierOf = new Map();
+  const tierCounts = {};
+  function armorTier(a) {
+    if (tierOf.has(a.key)) return tierOf.get(a.key);
+    tierOf.set(a.key, 'novice');
+    let t = gearTiers.classify({ keywords: a.kwEdids, name: a.name, edid: a.edid, ingredients: ingredientsOf(a.key) });
+    if (!t.tier && a.template && s.armors.has(a.template)) t = { tier: armorTier(s.armors.get(a.template)), by: 'template' };
+    if (!t.tier && a.armorType <= 1) {
+      const list = vanillaArmorTiers.filter((v) => v.armorType === a.armorType && v.slot === slotClass(a)).map((v) => ({ ...v, value: v.rating }));
+      const v = list.length ? nearest(list, a.rating) : null;
+      if (v) t = { tier: v.tier, by: 'rating' };
+    }
+    if (!t.tier) t = { tier: 'novice', by: 'default' };
+    tierCounts[t.by] = (tierCounts[t.by] || 0) + 1;
+    tierOf.set(a.key, t.tier);
+    return t.tier;
+  }
+  function weaponTier(w) {
+    if (tierOf.has(w.key)) return tierOf.get(w.key);
+    tierOf.set(w.key, 'novice');
+    let t = gearTiers.classify({ keywords: w.kwEdids, name: w.name, edid: w.edid, ingredients: ingredientsOf(w.key) });
+    if (!t.tier && w.template && s.weapons.has(w.template)) t = { tier: weaponTier(s.weapons.get(w.template)), by: 'template' };
+    if (!t.tier) {
+      const list = vanillaWeaponTiers.filter((v) => v.anim === w.anim).map((v) => ({ ...v, value: v.damage }));
+      const v = list.length ? nearest(list, w.damage) : null;
+      if (v) t = { tier: v.tier, by: 'rating' };
+    }
+    if (!t.tier) t = { tier: 'novice', by: 'default' };
+    tierCounts[t.by] = (tierCounts[t.by] || 0) + 1;
+    tierOf.set(w.key, t.tier);
+    return t.tier;
+  }
+
+  // Equip gate data for the server.
+  const gear = {};
+  const descOfKey = (key) => {
+    const [owner, local] = key.split('|');
+    const plugin = s.order.find((n) => n.toLowerCase() === owner) || owner;
+    return `${local}:${plugin}`;
+  };
+  for (const a of s.armors.values()) {
+    const skill = gearTiers.armorSkill(a.armorType);
+    if (!skill || a.recFlags & 0x4 || s.skins.has(a.key) || has(a, 'ArmorJewelry')) continue;
+    gear[descOfKey(a.key)] = [skill, gearTiers.tierIndexOf(armorTier(a))];
+  }
+  for (const w of s.weapons.values()) {
+    const skill = gearTiers.WEAPON_SKILL_BY_ANIM[w.anim];
+    if (!skill || w.recFlags & 0x4) continue;
+    gear[descOfKey(w.key)] = [skill, gearTiers.tierIndexOf(weaponTier(w))];
+  }
+
+  // ── Which recipes are gated, and by what ──────────────────────────────────
+  const SMITHING_PERKS = new Set(Object.keys(PERK_NAMES).filter((k) => k !== 'skyrim.esm|5218e'));
+  function gateOf(outKey, benchEdid, items) {
+    const a = s.armors.get(outKey);
+    if (a) {
+      const heavy = a.armorType === 1 || (has(a, 'ArmorJewelry') && benchEdid !== 'CraftingTanningRack' && benchEdid !== 'CoSWheelCrafting');
+      return { skill: heavy ? 'metal_worker' : 'outfitter', tier: armorTier(a) };
+    }
+    const w = s.weapons.get(outKey);
+    if (w) return { skill: 'metal_worker', tier: weaponTier(w) };
+    const inputs = items.map((i) => edidOfKey.get(i.item)).filter(Boolean);
+    if (benchEdid === 'CraftingSmelter') return { skill: 'metal_worker', tier: gearTiers.smeltTier(edidOfKey.get(outKey) || '', inputs) };
+    if (benchEdid === 'CraftingTanningRack' || benchEdid === 'CoSWheelCrafting') return { skill: 'outfitter', tier: 'novice' };
+    const t = gearTiers.classify({ edid: edidOfKey.get(outKey) || '', ingredients: inputs });
+    return { skill: 'metal_worker', tier: t.tier || 'novice' };
+  }
+
+  const overrides = s.cobjs.filter((c) => c.bench && GATED_BENCHES.has(kw(c.bench)));
+
+  // ── Masters ───────────────────────────────────────────────────────────────
+  const TIER_PERK_IDS = new Map();
+  const perkSpecs = [];
+  Object.keys(gearTiers.CRAFT_SKILLS).forEach((skill) => gearTiers.TIER_KEYS.forEach((tier) => {
+    const edid = gearTiers.tierPerk(skill, tier);
+    perkSpecs.push({ edid, local: FIRST_LOCAL_ID + perkSpecs.length, name: `${gearTiers.CRAFT_SKILLS[skill]} ${gearTiers.TIER_NAMES[gearTiers.tierIndexOf(tier)]}` });
+    TIER_PERK_IDS.set(`${skill}|${tier}`, edid);
+  }));
+  const firstRecipeLocal = FIRST_LOCAL_ID + 0x10;
+
+  const renames = [...s.armors.values(), ...s.weapons.values()]
+    .filter((x) => x.name && /stormcloak/i.test(x.name) && !x.raw.some((f) => f.type === 'VMAD'));
+
+  const refs = new Set();
+  for (const { a, r } of added) { refs.add(a.key); refs.add(r.bench); r.items.forEach((i) => refs.add(i.item)); }
+  const keyIn = (mastersOf, self) => {
+    const owners = mastersOf.map((m) => m.toLowerCase());
+    return (id) => { const hi = id >>> 24; return `${hi < owners.length ? owners[hi] : self.toLowerCase()}|${(id & 0xffffff).toString(16)}`; };
+  };
+  const FORM_FNS = new Set([47, 59, 71, 72, 74, 182, 359, 448, 543, 560, 629]);
+  const isFormParam = (fn, v) => v !== 0 && (FORM_FNS.has(fn) || (v & 0xffffff) >= 0x800);
+  for (const c of overrides) {
+    const ref = keyIn(c.masters, c.plugin);
+    refs.add(c.key);
+    for (const f of c.raw) {
+      if (f.type === 'CNTO' || f.type === 'CNAM' || f.type === 'BNAM') refs.add(ref(f.data.readUInt32LE(0)));
+      if (f.type === 'CTDA') {
+        const op = f.data.readUInt8(0); const fn = f.data.readUInt16LE(8);
+        if (op & 0x04) refs.add(ref(f.data.readUInt32LE(4)));
+        for (const at of [12, 16]) { const v = f.data.readUInt32LE(at); if (isFormParam(fn, v)) refs.add(ref(v)); }
+        if (f.data.readUInt32LE(20) === 2) refs.add(ref(f.data.readUInt32LE(24)));
+      }
+    }
+  }
+  const ARMO_FORM_FIELDS = new Set(['EITM', 'YNAM', 'ZNAM', 'ETYP', 'BIDS', 'BAMT', 'RNAM', 'MODL', 'TNAM']);
+  const WEAP_FORM_FIELDS = new Set(['EITM', 'ETYP', 'BIDS', 'BAMT', 'INAM', 'WNAM', 'SNAM', 'XNAM', 'NAM7', 'TNAM', 'NAM9', 'NAM8', 'UNAM', 'CNAM']);
+  const formFieldsOf = (x) => (s.armors.has(x.key) ? ARMO_FORM_FIELDS : WEAP_FORM_FIELDS);
+  for (const x of renames) {
+    const ref = keyIn(x.masters, x.plugin);
+    refs.add(x.key);
+    for (const f of x.raw) {
+      if (formFieldsOf(x).has(f.type) && f.data.length === 4) refs.add(ref(f.data.readUInt32LE(0)));
+      if (f.type === 'KWDA') for (let o = 0; o + 4 <= f.data.length; o += 4) refs.add(ref(f.data.readUInt32LE(o)));
+    }
+  }
+  const selfKey = PLUGIN.toLowerCase();
+  const owners = new Set([...refs].map((k) => k.split('|')[0]).filter((o) => o !== selfKey));
+  owners.add('skyrim.esm');
   const masters = s.order.filter((n) => owners.has(n.toLowerCase()));
   const missing = [...owners].filter((o) => !masters.some((m) => m.toLowerCase() === o));
   if (missing.length) throw new Error(`forms from plugins outside the load order: ${missing.join(', ')}`);
+  if (masters[0].toLowerCase() !== 'skyrim.esm') throw new Error('Skyrim.esm must be the first master');
   const masterIdx = new Map(masters.map((m, i) => [m.toLowerCase(), i]));
+  masterIdx.set(selfKey, masters.length);
   const fid = (key) => {
     const [owner, local] = key.split('|');
+    if (!masterIdx.has(owner)) throw new Error(`no master for ${key}`);
     return ((masterIdx.get(owner) << 24) | parseInt(local, 16)) >>> 0;
   };
+  const selfId = (local) => ((masters.length << 24) | local) >>> 0;
+  const tierCtda = (skill, tier) => {
+    const perkLocal = perkSpecs.find((p) => p.edid === TIER_PERK_IDS.get(`${skill}|${tier}`)).local;
+    const b = Buffer.alloc(32);
+    b.writeUInt8(0, 0); b.writeFloatLE(1, 4); b.writeUInt16LE(FN_HAS_PERK, 8);
+    b.writeUInt32LE(selfId(perkLocal), 12); b.writeInt32LE(-1, 28);
+    return field('CTDA', b);
+  };
 
-  const records = [];
+  // ── Records ───────────────────────────────────────────────────────────────
+  const perkRecords = perkSpecs.map((p) => record('PERK', 0, selfId(p.local), [
+    field('EDID', zstring(p.edid)), field('FULL', zstring(p.name)), field('DESC', zstring('')), field('DATA', Buffer.from([0, 0, 1, 0, 1]))
+  ]));
+
+  const cobjRecords = [];
+  const gateCounts = {};
+  const countGate = (g) => { const k = `${g.skill} ${g.tier}`; gateCounts[k] = (gateCounts[k] || 0) + 1; };
+  for (const c of overrides) {
+    const ref = keyIn(c.masters, c.plugin);
+    const remap = (v) => fid(ref(v));
+    const g = gateOf(c.out, kw(c.bench), c.items);
+    countGate(g);
+    const outFields = [];
+    let inserted = false;
+    let skipCis = false;
+    for (const f of c.raw) {
+      if (f.type === 'CIS1' || f.type === 'CIS2') { if (!skipCis) outFields.push(field(f.type, f.data)); continue; }
+      skipCis = false;
+      if (f.type === 'COED') continue;
+      if (f.type === 'CTDA') {
+        if (!inserted) { outFields.push(tierCtda(g.skill, g.tier)); inserted = true; }
+        const d = Buffer.from(f.data);
+        const op = d.readUInt8(0); const fn = d.readUInt16LE(8);
+        if (fn === FN_HAS_PERK && SMITHING_PERKS.has(ref(d.readUInt32LE(12)))) { skipCis = true; continue; }
+        if (op & 0x04) d.writeUInt32LE(remap(d.readUInt32LE(4)), 4);
+        for (const at of [12, 16]) { const v = d.readUInt32LE(at); if (isFormParam(fn, v)) d.writeUInt32LE(remap(v), at); }
+        if (d.readUInt32LE(20) === 2) d.writeUInt32LE(remap(d.readUInt32LE(24)), 24);
+        outFields.push(field('CTDA', d));
+        continue;
+      }
+      if (f.type === 'CNAM' && !inserted) { outFields.push(tierCtda(g.skill, g.tier)); inserted = true; }
+      if (f.type === 'CNTO') { const d = Buffer.from(f.data); d.writeUInt32LE(remap(d.readUInt32LE(0)), 0); outFields.push(field('CNTO', d)); continue; }
+      if (f.type === 'CNAM' || f.type === 'BNAM') { outFields.push(field(f.type, u32(remap(f.data.readUInt32LE(0))))); continue; }
+      outFields.push(field(f.type, f.data));
+    }
+    if (!inserted) outFields.push(tierCtda(g.skill, g.tier));
+    cobjRecords.push(record('COBJ', 0, fid(c.key), outFields));
+  }
+
+  if (added.length > LAST_LOCAL_ID - firstRecipeLocal + 1) throw new Error(`${added.length} recipes do not fit a light plugin`);
   const usedEdids = new Set();
   added.sort((x, y) => (x.a.origin + x.a.edid).localeCompare(y.a.origin + y.a.edid));
   added.forEach(({ a, r }, i) => {
-    const formId = ((masters.length << 24) | (FIRST_LOCAL_ID + i)) >>> 0;
+    const formId = selfId(firstRecipeLocal + i);
     let edid = `OBRecipe_${a.edid.replace(/[^A-Za-z0-9_]/g, '')}`;
     while (usedEdids.has(edid)) edid += '_';
     usedEdids.add(edid);
     r.edid = edid;
     r.formId = formId;
+    const g = gateOf(a.key, kw(r.bench), r.items);
+    r.gate = g;
+    countGate(g);
     const fields = [field('EDID', zstring(edid)), field('COCT', u32(r.items.length))];
     for (const it of r.items) {
       const b = Buffer.alloc(8); b.writeUInt32LE(fid(it.item), 0); b.writeInt32LE(it.count, 4);
       fields.push(field('CNTO', b));
     }
-    for (const c of r.conds) fields.push(field('CTDA', ctda(c, fid)));
+    fields.push(tierCtda(g.skill, g.tier));
     fields.push(field('CNAM', u32(fid(a.key))));
     fields.push(field('BNAM', u32(fid(r.bench))));
     const n1 = Buffer.alloc(2); n1.writeUInt16LE(r.count || 1, 0);
     fields.push(field('NAM1', n1));
-    records.push(record('COBJ', 0, formId, fields));
+    cobjRecords.push(record('COBJ', 0, formId, fields));
   });
 
+  const armoRecords = [];
+  const weapRecords = [];
+  for (const x of renames) {
+    const ref = keyIn(x.masters, x.plugin);
+    const ff = formFieldsOf(x);
+    const isArmor = s.armors.has(x.key);
+    const outFields = [];
+    for (const f of x.raw) {
+      if (f.type === 'FULL') { outFields.push(field('FULL', zstring(x.name.replace(/Stormcloak/g, 'Eastmarch').replace(/STORMCLOAK/g, 'EASTMARCH').replace(/stormcloak/g, 'eastmarch')))); continue; }
+      if (f.type === 'DESC') continue;
+      if (ff.has(f.type) && f.data.length === 4) { outFields.push(field(f.type, u32(fid(ref(f.data.readUInt32LE(0)))))); continue; }
+      if (f.type === 'KWDA') { const d = Buffer.from(f.data); for (let o = 0; o + 4 <= d.length; o += 4) d.writeUInt32LE(fid(ref(d.readUInt32LE(o))), o); outFields.push(field('KWDA', d)); continue; }
+      outFields.push(field(f.type, f.data));
+    }
+    (isArmor ? armoRecords : weapRecords).push(record(isArmor ? 'ARMO' : 'WEAP', x.recFlags & ~0x40000, fid(x.key), outFields));
+  }
+
+  const total = perkRecords.length + cobjRecords.length + armoRecords.length + weapRecords.length;
   const hedr = Buffer.alloc(12);
   hedr.writeFloatLE(1.71, 0);
-  hedr.writeUInt32LE(records.length, 4);
-  hedr.writeUInt32LE(FIRST_LOCAL_ID + records.length, 8);
+  hedr.writeUInt32LE(total, 4);
+  hedr.writeUInt32LE(firstRecipeLocal + added.length, 8);
   const head = [field('HEDR', hedr), field('CNAM', zstring('OATHBOUND')),
-    field('SNAM', zstring('Crafting recipes for the armor and clothing of the OATHBOUND hosted mods. Generated by tools/crafting/build-armor-recipes.js.'))];
+    field('SNAM', zstring('OATHBOUND armor and weapon tiers, crafting recipes and Eastmarch names.'))];
   for (const m of masters) { head.push(field('MAST', zstring(m))); head.push(field('DATA', Buffer.alloc(8))); }
   const tes4 = record('TES4', FLAG_LIGHT, 0, head);
-  const out = Buffer.concat([tes4, group('COBJ', records)]);
+  const groups = [group('PERK', perkRecords), group('COBJ', cobjRecords)];
+  if (armoRecords.length) groups.push(group('ARMO', armoRecords));
+  if (weapRecords.length) groups.push(group('WEAP', weapRecords));
+  const out = Buffer.concat([tes4, ...groups]);
 
   fs.mkdirSync(DIST, { recursive: true });
   fs.writeFileSync(path.join(DIST, PLUGIN), out);
   if (install) fs.copyFileSync(path.join(DIST, PLUGIN), path.join(CLIENT_MODS, PLUGIN));
+  fs.writeFileSync(GEAR_FILE, `${JSON.stringify({ generatedBy: 'tools/crafting/build-armor-recipes.js', items: gear })}\n`);
 
   writeReport({ perMod, added, skipped, masters, kw, s, size: out.length });
-  console.log(`[armor-recipes] ${records.length} recipes, ${masters.length} masters, ${out.length} bytes -> ${path.join(DIST, PLUGIN)}${install ? ' (+ client-mods)' : ''}`);
-  for (const m of perMod.values()) console.log(`  ${m.plugin}: ${m.total} armors, ${m.had} had recipes, ${m.added} added, ${m.skipped} skipped`);
+  console.log(`[armor-recipes] ${perkRecords.length} tier perks, ${overrides.length} recipe overrides, ${added.length} new recipes, ${armoRecords.length + weapRecords.length} renames, ${masters.length} masters, ${out.length} bytes -> ${path.join(DIST, PLUGIN)}${install ? ' (+ client-mods)' : ''}`);
+  console.log(`[armor-recipes] ${Object.keys(gear).length} gear tiers -> ${GEAR_FILE}`, tierCounts);
+  console.log('[armor-recipes] recipes by gate:', gateCounts);
 }
 
 function writeReport({ perMod, added, skipped, masters, kw, s, size }) {
   const nameOf = (k) => { const a = s.armors.get(k); if (a) return a.name || a.edid; for (const [e, key] of s.misc) if (key === k) return e; return k.replace('|', ':'); };
   const lines = [];
   lines.push('# Armor recipes (generated)', '');
-  lines.push(`Generated by \`tools/crafting/build-armor-recipes.js\` into \`OathboundArmorRecipes.esp\` (${added.length} COBJ records, ${size} bytes, light plugin, ${masters.length} masters). Re-run it after changing the hosted armor mods.`, '');
+  lines.push(`Generated by \`tools/crafting/build-armor-recipes.js\` into \`Oathbound_Armor.esp\` (${added.length} COBJ records, ${size} bytes, light plugin, ${masters.length} masters). Re-run it after changing the hosted armor mods.`, '');
   lines.push('| Plugin | Armors | Had a recipe | Added | Skipped |', '|---|---:|---:|---:|---:|');
   const tot = { total: 0, had: 0, added: 0, skipped: 0 };
   for (const m of perMod.values()) {

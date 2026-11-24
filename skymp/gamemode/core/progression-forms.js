@@ -26,6 +26,9 @@ const index = require('./plugin-record-index');
 
 const PROGRESSION_TYPES = new Set(['PERK', 'SPEL']);
 
+/** Plugins that hold tree and tier perks, looked up by editor id. */
+const PERK_PLUGINS = new Set(['skyrim.esm', 'oathbound_armor.esp']);
+
 /** Default plugins whose perks/spells are mirrored. Patches included. */
 const DEFAULT_TRACKED_PLUGINS = Object.freeze(['Mundus.esp', 'MundusUSSEP.esp', 'Pilgrim.esp', 'PilgrimVanillaPatch.esp',
   'Apprentice.esp', 'ApprenticeAetherius.esp']);
@@ -68,7 +71,7 @@ async function buildCatalog(files, { trackedPlugins = DEFAULT_TRACKED_PLUGINS, p
   for (const file of files) {
     const lower = file.name.toLowerCase();
     const isTracked = trackedLower.has(lower);
-    const isMaster = lower === 'skyrim.esm';
+    const isMaster = PERK_PLUGINS.has(lower);
     if (!isTracked && !isMaster) continue;
     let entries;
     try {

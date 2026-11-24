@@ -185,9 +185,9 @@ const TREES = Object.freeze({
   // The tier gates (which ore, which creature) come from the level itself
   // (core/skills.js ORE_TIERS / CREATURE_TIERS); nodes are extras on top.
   outfitter: [
-    perk('elven_smithing', 'Elven Craft', 'Armor', 20, 'ElvenSmithing', [], 'Forge elven light armor.'),
-    perk('advanced_armors', 'Advanced Armors', 'Armor', 40, 'AdvancedArmors', ['elven_smithing'], 'Forge scaled and plate light armor.'),
-    perk('glass_smithing', 'Glass Craft', 'Armor', 60, 'GlassSmithing', ['advanced_armors'], 'Forge glass light armor.'),
+    perk('elven_smithing', 'Elven Craft', 'Armor', 20, 'ElvenSmithing', [], 'Temper elven gear twice as well.'),
+    perk('advanced_armors', 'Advanced Armors', 'Armor', 40, 'AdvancedArmors', ['elven_smithing'], 'Temper scaled and plate gear twice as well.'),
+    perk('glass_smithing', 'Glass Craft', 'Armor', 60, 'GlassSmithing', ['advanced_armors'], 'Temper glass gear twice as well.'),
     unlock('tailoring', 'Tailoring', 'Cloth', 1, 'Sew clothes and robes.'),
     unlock('fine_tailoring', 'Fine Tailoring', 'Cloth', 40, 'Fine and noble clothing (gameplay not built yet).', ['tailoring']),
     unlock('leather_goods', 'Leather Goods', 'Leather', 1, 'Leather strips, belts and bags.'),
@@ -196,7 +196,7 @@ const TREES = Object.freeze({
   metal_worker: [
     unlock('charcoal_smelting', 'Charcoal Smelting', 'Smelting', 1, 'Smelt ore with charcoal.'),
     unlock('efficient_smelting', 'Efficient Smelting', 'Smelting', 40, 'Extra ingot now and then (gameplay not built yet).', ['charcoal_smelting']),
-    perk('steel_smithing', 'Steel Smithing', 'Forge', 1, 'SteelSmithing', [], 'Forge steel and improve weapons and armor.'),
+    perk('steel_smithing', 'Steel Smithing', 'Forge', 1, 'SteelSmithing', [], 'Temper steel gear twice as well.'),
     perk('dwarven_smithing', 'Dwarven Smithing', 'Forge', 20, 'DwarvenSmithing', ['steel_smithing']),
     perk('orcish_smithing', 'Orcish Smithing', 'Forge', 40, 'OrcishSmithing', ['dwarven_smithing']),
     perk('ebony_smithing', 'Ebony Smithing', 'Forge', 60, 'EbonySmithing', ['orcish_smithing']),
