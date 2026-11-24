@@ -629,6 +629,7 @@ moduleRegistry.register({
   initialize: async () => {
     depotService.registerInteractions({ sendModal });
     depotService.registerPhysicalAnchors();
+    uiEventRouter.register('depot', (actorId, uiEvent) => depotService.handleUiEvent(actorId, uiEvent));
   }
 });
 

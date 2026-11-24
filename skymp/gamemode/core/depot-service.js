@@ -80,8 +80,26 @@ function _deps(dependencies = {}) {
     logger: dependencies.logger || console,
     // No-op by default (e.g. direct calls in tests) — whoever actually wires the CEF
     // is `phase0-basic.js`, via `registerInteractions({ sendModal })`.
-    sendModal: dependencies.sendModal || (() => {})
+    sendModal: dependencies.sendModal || (() => {}),
+    // The depot menu needs the mouse: browserFocused gives the in-game browser
+    // the cursor (same as the holdstone, F2 and F8 menus).
+    setBrowserFocus: dependencies.setBrowserFocus || _setBrowserFocus
   };
+}
+
+function _setBrowserFocus(actorId, focused) {
+  if (typeof mp === 'undefined' || !actorId) return;
+  try {
+    if (focused) mp.set(actorId, 'browserVisible', true);
+    mp.set(actorId, 'browserFocused', Boolean(focused));
+  } catch { /* the player left */ }
+}
+
+/** `depot:close` from the CEF gives the mouse back to the game. Nothing else is trusted from it. */
+async function handleUiEvent(actorId, uiEvent, dependencies = {}) {
+  if (!uiEvent || uiEvent.type !== 'depot:close') return false;
+  _deps(dependencies).setBrowserFocus(actorId, false);
+  return true;
 }
 
 function _isModuleEnabled(deps) {
@@ -407,6 +425,7 @@ function registerInteractions(dependencies = {}) {
       // channel that actually opens the screen is `sendModal`, the same one used by
       // `interaction:actions`.
       deps.sendModal(ctx.actorId, 'depot:open', payload);
+      deps.setBrowserFocus(ctx.actorId, true);
       return { message: null };
     }
   });
@@ -487,6 +506,7 @@ function commandDefs() {
 
 module.exports = {
   MODULE_ID,
+  handleUiEvent,
   DEPOT_INTERACT_RANGE,
   getOrCreateDepot,
   getDepotContents,

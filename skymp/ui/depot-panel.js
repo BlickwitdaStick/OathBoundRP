@@ -149,6 +149,8 @@
     const el = $('depot-panel');
     el.classList.remove('open');
     el.setAttribute('aria-hidden', 'true');
+    // Gives the mouse back to the game (core/depot-service.js handleUiEvent).
+    if (typeof sendUiEvent === 'function') sendUiEvent('depot:close', {});
   }
 
   function isOpen() {

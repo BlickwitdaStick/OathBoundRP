@@ -390,10 +390,17 @@ describe('registerInteractions execute -> sendModal (Tarefa 10)', () => {
     });
     h.state.depotInventory.set(`1:${GOLD_APPLE}`, 3);
     const sent = [];
+    const focus = [];
+    const setBrowserFocus = (actorId, focused) => focus.push({ actorId, focused });
 
-    depotService.registerInteractions({ ...h.dependencies, sendModal: (actorId, type, data) => sent.push({ actorId, type, data }) });
+    depotService.registerInteractions({ ...h.dependencies, setBrowserFocus, sendModal: (actorId, type, data) => sent.push({ actorId, type, data }) });
     const entry = interactionRegistry.get('depot.view');
     await entry.execute({ actorId: 777, characterId: CHAR_A, target: { formId: 0xdead }, data: {} });
+    // The menu takes the mouse when it opens and gives it back on depot:close.
+    assert.deepStrictEqual(focus, [{ actorId: 777, focused: true }]);
+    assert.strictEqual(await depotService.handleUiEvent(777, { type: 'depot:close' }, { setBrowserFocus }), true);
+    assert.deepStrictEqual(focus.at(-1), { actorId: 777, focused: false });
+    assert.strictEqual(await depotService.handleUiEvent(777, { type: 'depot:withdraw' }, { setBrowserFocus }), false);
 
     assert.strictEqual(sent.length, 1);
     assert.strictEqual(sent[0].actorId, 777);
