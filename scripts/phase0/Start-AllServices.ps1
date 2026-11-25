@@ -64,6 +64,7 @@ if (Test-Path -LiteralPath $syncScript) {
     & node "scripts\sync-client-mods.js"
     if ($LASTEXITCODE -ne 0) {
       Write-Host "Failed to sync skymp\client-mods. Fix it and run again." -ForegroundColor Red
+      Read-Host "Press Enter to close" | Out-Null
       exit 1
     }
   } finally {
@@ -109,6 +110,7 @@ if ($problems.Count -gt 0) {
 
 if ($ready.Count -eq 0) {
   Write-Host "No service is ready to start. Fix the items above and run again." -ForegroundColor Red
+  Read-Host "Press Enter to close" | Out-Null
   exit 1
 }
 
