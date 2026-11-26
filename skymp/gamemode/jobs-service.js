@@ -45,7 +45,7 @@ const skillActivity = require('./core/skill-activity');
 const MODULE = 'jobs';
 
 // Base IDs of Skyrim items
-const ITEM_FIREWOOD = 0x00033760; // Lenha
+const ITEM_FIREWOOD = 0x0006f993; // Firewood01
 const ITEM_WOODCUTTER_AXE = 0x0002F2F4; // Woodcutter's Axe
 
 const ITEM_PICKAXE = 0x000E3C16; // Picareta

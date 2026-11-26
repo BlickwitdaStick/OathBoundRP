@@ -81,7 +81,8 @@ describe('gear tiers: perks and use', () => {
     assert.deepEqual(gearTiers.tierPerksFor('outfitter', 2), ['OB_Outfitting_Novice', 'OB_Outfitting_Apprentice', 'OB_Outfitting_Adept']);
     assert.equal(gearTiers.tierPerksFor('outfitter', 5).length, 5, 'Legendary owns all five');
     assert.deepEqual(gearTiers.tierPerksFor('hunter', 4), []);
-    assert.equal(gearTiers.allTierPerks().length, 10);
+    assert.equal(gearTiers.allTierPerks().length, 15);
+    assert.deepEqual(gearTiers.tierPerksFor('carpenter', 1), ['OB_Carpentry_Novice', 'OB_Carpentry_Apprentice']);
   });
 
   it('a Novice wears Iron only; no skill means nothing of that kind', () => {

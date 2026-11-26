@@ -4,12 +4,15 @@
 `skymp/client-mods`) and `skymp/gamemode/data/gear-tiers.json`.
 
 The plugin holds:
-- ten tier perks, `OB_Metalworking_<Tier>` and `OB_Outfitting_<Tier>`, granted
-  by `skills-service.js` from the crafter's skill tier;
+- fifteen tier perks, `OB_Metalworking_<Tier>`, `OB_Outfitting_<Tier>` and
+  `OB_Carpentry_<Tier>`, granted by `skills-service.js` from the crafter's
+  skill tier, and the `OB_CraftingCarpentryBench` keyword (the Carpentry Bench
+  furniture is in Oathbound_Core.esp);
 - an override of every forge, smelter, tanning rack, tempering and spinning
   wheel recipe in the load order, gated by the right profession's tier perk
   (heavy armor, weapons, jewelry and smelting: Metalworking; light armor and
-  clothing: Outfitting);
+  clothing: Outfitting; arrows, bows, crossbows, shields and all-wood goods:
+  Carpentry, made at the carpentry bench and tempered where they were);
 - a recipe for every playable armor piece of the hosted mods that had none;
 - Eastmarch names for everything named Stormcloak.
 

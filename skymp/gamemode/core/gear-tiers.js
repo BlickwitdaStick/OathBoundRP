@@ -101,7 +101,7 @@ function armorSkill(armorType) {
 // Tier perks (Oathbound_Armor.esp): crafting recipes require them
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CRAFT_SKILLS = Object.freeze({ metal_worker: 'Metalworking', outfitter: 'Outfitting' });
+const CRAFT_SKILLS = Object.freeze({ metal_worker: 'Metalworking', outfitter: 'Outfitting', carpenter: 'Carpentry' });
 
 function tierPerk(skill, tierKey) {
   return `OB_${CRAFT_SKILLS[skill]}_${TIER_NAMES[tierIndexOf(tierKey)]}`;

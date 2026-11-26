@@ -51,6 +51,10 @@ const FORM_VERSION = 44;
 const FLAG_LIGHT = 0x200;
 
 const FN_HAS_PERK = 448;
+/** Oathbound_Core.esp places the Carpentry Bench furniture that carries this keyword. */
+const CARPENTRY_KEYWORD = 'OB_CraftingCarpentryBench';
+const CARPENTRY_KEYWORD_LOCAL = 0x80f;
+const WOOD_INPUT = /^(Firewood01|BYOHMaterialLog|BYOHMaterialWoodPlanks)$/i;
 const TEMPER_BENCHES = new Set(['CraftingSmithingArmorTable', 'CraftingSmithingSharpeningWheel']);
 /** Benches that exist as furniture in the world; mod-only benches are not reused. */
 const KNOWN_BENCHES = new Set(['CraftingSmithingForge', 'CraftingTanningRack', 'CraftingSmithingSkyforge', 'DLC1CraftingDawnguard']);
@@ -353,7 +357,26 @@ function main() {
 
   // ── Which recipes are gated, and by what ──────────────────────────────────
   const SMITHING_PERKS = new Set(Object.keys(PERK_NAMES).filter((k) => k !== 'skyrim.esm|5218e'));
+  /** Arrows, bows, crossbows, shields and all-wood goods belong to Carpentry. */
+  function carpentryKind(outKey, items) {
+    if (/charcoal/i.test(edidOfKey.get(outKey) || '')) return null;
+    if (s.ammo.has(outKey)) return 'ammo';
+    const w = s.weapons.get(outKey);
+    if (w && (w.anim === 7 || w.anim === 9)) return 'bow';
+    const a = s.armors.get(outKey);
+    if (a && ((a.slots & 0x200) || has(a, 'ArmorShield'))) return 'shield';
+    const inputs = items.map((i) => edidOfKey.get(i.item));
+    if (inputs.length && inputs.every((e) => e && WOOD_INPUT.test(e))) return 'wood';
+    return null;
+  }
   function gateOf(outKey, benchEdid, items) {
+    const kind = carpentryKind(outKey, items);
+    if (kind === 'bow' || kind === 'wood') return { skill: 'carpenter', tier: s.weapons.has(outKey) && kind === 'bow' ? weaponTier(s.weapons.get(outKey)) : 'novice' };
+    if (kind === 'shield') return { skill: 'carpenter', tier: armorTier(s.armors.get(outKey)) };
+    if (kind === 'ammo') {
+      const m = s.ammo.get(outKey);
+      return { skill: 'carpenter', tier: gearTiers.classify({ name: m.name, edid: m.edid }).tier || 'novice' };
+    }
     const a = s.armors.get(outKey);
     if (a) {
       const heavy = a.armorType === 1 || (has(a, 'ArmorJewelry') && benchEdid !== 'CraftingTanningRack' && benchEdid !== 'CoSWheelCrafting');
@@ -379,6 +402,7 @@ function main() {
     TIER_PERK_IDS.set(`${skill}|${tier}`, edid);
   }));
   const firstRecipeLocal = FIRST_LOCAL_ID + 0x10;
+  if (FIRST_LOCAL_ID + perkSpecs.length > CARPENTRY_KEYWORD_LOCAL) throw new Error('tier perks overlap the carpentry keyword');
 
   const renames = [...s.armors.values(), ...s.weapons.values()]
     .filter((x) => x.name && /stormcloak/i.test(x.name) && !x.raw.some((f) => f.type === 'VMAD'));
@@ -438,7 +462,11 @@ function main() {
     return field('CTDA', b);
   };
 
+  // Tempering stays at the grindstone and workbench; making moves to the carpentry bench.
+  const toCarpentry = (g, bench) => g.skill === 'carpenter' && !TEMPER_BENCHES.has(kw(bench));
+
   // ── Records ───────────────────────────────────────────────────────────────
+  const keywordRecords = [record('KYWD', 0, selfId(CARPENTRY_KEYWORD_LOCAL), [field('EDID', zstring(CARPENTRY_KEYWORD))])];
   const perkRecords = perkSpecs.map((p) => record('PERK', 0, selfId(p.local), [
     field('EDID', zstring(p.edid)), field('FULL', zstring(p.name)), field('DESC', zstring('')), field('DATA', Buffer.from([0, 0, 1, 0, 1]))
   ]));
@@ -471,6 +499,7 @@ function main() {
       }
       if (f.type === 'CNAM' && !inserted) { outFields.push(tierCtda(g.skill, g.tier)); inserted = true; }
       if (f.type === 'CNTO') { const d = Buffer.from(f.data); d.writeUInt32LE(remap(d.readUInt32LE(0)), 0); outFields.push(field('CNTO', d)); continue; }
+      if (f.type === 'BNAM' && toCarpentry(g, c.bench)) { outFields.push(field('BNAM', u32(selfId(CARPENTRY_KEYWORD_LOCAL)))); continue; }
       if (f.type === 'CNAM' || f.type === 'BNAM') { outFields.push(field(f.type, u32(remap(f.data.readUInt32LE(0))))); continue; }
       outFields.push(field(f.type, f.data));
     }
@@ -498,7 +527,7 @@ function main() {
     }
     fields.push(tierCtda(g.skill, g.tier));
     fields.push(field('CNAM', u32(fid(a.key))));
-    fields.push(field('BNAM', u32(fid(r.bench))));
+    fields.push(field('BNAM', u32(toCarpentry(g, r.bench) ? selfId(CARPENTRY_KEYWORD_LOCAL) : fid(r.bench))));
     const n1 = Buffer.alloc(2); n1.writeUInt16LE(r.count || 1, 0);
     fields.push(field('NAM1', n1));
     cobjRecords.push(record('COBJ', 0, formId, fields));
@@ -521,7 +550,7 @@ function main() {
     (isArmor ? armoRecords : weapRecords).push(record(isArmor ? 'ARMO' : 'WEAP', x.recFlags & ~0x40000, fid(x.key), outFields));
   }
 
-  const total = perkRecords.length + cobjRecords.length + armoRecords.length + weapRecords.length;
+  const total = keywordRecords.length + perkRecords.length + cobjRecords.length + armoRecords.length + weapRecords.length;
   const hedr = Buffer.alloc(12);
   hedr.writeFloatLE(1.71, 0);
   hedr.writeUInt32LE(total, 4);
@@ -530,7 +559,7 @@ function main() {
     field('SNAM', zstring('OATHBOUND armor and weapon tiers, crafting recipes and Eastmarch names.'))];
   for (const m of masters) { head.push(field('MAST', zstring(m))); head.push(field('DATA', Buffer.alloc(8))); }
   const tes4 = record('TES4', FLAG_LIGHT, 0, head);
-  const groups = [group('PERK', perkRecords), group('COBJ', cobjRecords)];
+  const groups = [group('KYWD', keywordRecords), group('PERK', perkRecords), group('COBJ', cobjRecords)];
   if (armoRecords.length) groups.push(group('ARMO', armoRecords));
   if (weapRecords.length) groups.push(group('WEAP', weapRecords));
   const out = Buffer.concat([tes4, ...groups]);

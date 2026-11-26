@@ -60,12 +60,13 @@ function scan({ exclude = [] } = {}) {
   const leveled = new Set();  // keys in any LVLI
   const outfits = new Set();  // keys in any OTFT
   const misc = new Map();     // edid -> key for MISC / INGR (materials)
+  const ammo = new Map();     // key -> {edid, name}
   const plugins = [];
 
   for (const name of order) {
     const file = locate(name);
     if (!file) { console.warn(`[scan] missing plugin ${name}`); continue; }
-    const types = new Set(['ARMO', 'WEAP', 'COBJ', 'RACE', 'NPC_', 'KYWD', 'LVLI', 'OTFT', 'MISC', 'INGR', 'ARMA']);
+    const types = new Set(['ARMO', 'WEAP', 'COBJ', 'RACE', 'NPC_', 'KYWD', 'LVLI', 'OTFT', 'MISC', 'INGR', 'ARMA', 'AMMO']);
     let strings = null;
     const nameOf = (full, hdr) => {
       if (!full) return null;
@@ -80,6 +81,7 @@ function scan({ exclude = [] } = {}) {
       const edid = edidF ? zstring(edidF.data) : '';
       if (rec.type === 'KYWD') { keywords.set(rec.key, edid); kwByEdid.set(edid, rec.key); return; }
       if (rec.type === 'MISC' || rec.type === 'INGR') { if (edid) misc.set(edid, rec.key); return; }
+      if (rec.type === 'AMMO') { ammo.set(rec.key, { edid, name: nameOf(f('FULL'), hdr) || (ammo.get(rec.key) || {}).name || null }); return; }
       if (rec.type === 'RACE') {
         const w = f('WNAM'); if (w) skins.add(rec.ref(w.data.readUInt32LE(0)));
         return;
@@ -157,7 +159,7 @@ function scan({ exclude = [] } = {}) {
   for (const a of armors.values()) a.kwEdids = a.kw.map((k) => keywords.get(k) || k);
   for (const w of weapons.values()) w.kwEdids = w.kw.map((k) => keywords.get(k) || k);
   const cobjs = [...cobjMap.values()];
-  return { order, plugins, armors, weapons, cobjs, skins, keywords, kwByEdid, leveled, outfits, misc, VANILLA };
+  return { order, plugins, armors, weapons, cobjs, skins, keywords, kwByEdid, leveled, outfits, misc, ammo, VANILLA };
 }
 
 module.exports = { scan, VANILLA, CLIENT_MODS, REPO, GAME_DATA, locate };

@@ -97,7 +97,7 @@ global.mp = {
 
 // FormIDs lidos direto do código-fonte de jobs-service.js — são o contrato
 // que estes testes protegem, não valores inventados pelo teste.
-const ITEM_FIREWOOD = 0x00033760;
+const ITEM_FIREWOOD = 0x0006f993;
 const ITEM_WOODCUTTER_AXE = 0x0002F2F4;
 const ITEM_PICKAXE = 0x000E3C16;
 const ITEM_IRON_ORE = 0x00071CF3;

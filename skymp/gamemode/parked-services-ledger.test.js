@@ -501,7 +501,7 @@ describe('crafting-service — consumo e entrega numa transação só', () => {
 });
 
 describe('jobs-service — coleta com rastro no banco', () => {
-  const ITEM_FIREWOOD = 0x00033760;
+  const ITEM_FIREWOOD = 0x0006f993;
 
   /**
    * O `setTimeout` de 10 s é do serviço, não da regra. O teste exercita o
